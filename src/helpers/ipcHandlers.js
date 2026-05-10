@@ -1,4 +1,5 @@
 const { ipcMain } = require("electron");
+const exportFormatters = require("./exportFormatters");
 
 class IPCHandlers {
   constructor(managers) {
@@ -9,10 +10,10 @@ class IPCHandlers {
     this.windowManager = managers.windowManager;
     this.hotkeyManager = managers.hotkeyManager;
     this.logger = managers.logger; // 添加logger引用
-    
+
     // 跟踪F2热键注册状态
     this.f2RegisteredSenders = new Set();
-    
+
     this.setupHandlers();
   }
 
@@ -54,13 +55,13 @@ class IPCHandlers {
 
     ipcMain.handle("check-funasr-status", async () => {
       const status = await this.funasrManager.checkStatus();
-      
+
       // 添加模型初始化状态信息
       return {
         ...status,
         models_initialized: this.funasrManager.modelsInitialized,
         server_ready: this.funasrManager.serverReady,
-        is_initializing: this.funasrManager.initializationPromise !== null
+        is_initializing: this.funasrManager.initializationPromise !== null,
       };
     });
 
@@ -90,7 +91,7 @@ class IPCHandlers {
     });
 
     // AI文本处理
-    ipcMain.handle("process-text", async (event, text, mode = 'optimize') => {
+    ipcMain.handle("process-text", async (event, text, mode = "optimize") => {
       return await this.processTextWithAI(text, mode);
     });
 
@@ -101,6 +102,167 @@ class IPCHandlers {
     // 音频转录相关
     ipcMain.handle("transcribe-audio", async (event, audioData, options) => {
       return await this.funasrManager.transcribeAudio(audioData, options);
+    });
+
+    // 文件转录相关
+    ipcMain.handle("import-audio-file", async () => {
+      try {
+        const { dialog } = require("electron");
+        const result = await dialog.showOpenDialog({
+          title: "选择音频文件",
+          filters: [
+            {
+              name: "音频文件",
+              extensions: ["wav", "mp3", "m4a", "flac", "ogg", "wma", "aac"],
+            },
+            { name: "所有文件", extensions: ["*"] },
+          ],
+          properties: ["openFile"],
+        });
+        if (result.canceled || result.filePaths.length === 0) {
+          return { success: false, canceled: true };
+        }
+        const filePath = result.filePaths[0];
+        const fs = require("fs");
+        const path = require("path");
+        const stat = fs.statSync(filePath);
+        return {
+          success: true,
+          filePath,
+          fileName: path.basename(filePath),
+          fileSize: stat.size,
+          extension: path.extname(filePath).toLowerCase(),
+        };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle(
+      "transcribe-file",
+      async (event, audioPath, options = {}) => {
+        const path = require("path");
+        const result = await this.funasrManager.transcribeFile(audioPath, {
+          ...options,
+          onProgress: (progress) => {
+            event.sender.send("file-transcription-progress", progress);
+          },
+        });
+
+        if (result.success && result.text) {
+          try {
+            const dbResult = this.databaseManager.saveTranscription({
+              text: result.text,
+              processed_text: result.raw_text || result.text,
+              source_type: "file",
+              source_file_path: path.basename(audioPath),
+              segments: result.segments
+                ? JSON.stringify(result.segments)
+                : null,
+              duration: result.duration || null,
+            });
+            if (dbResult && dbResult.id) {
+              result.id = dbResult.id;
+            }
+          } catch (dbErr) {
+            this.logger.error("保存转录结果到数据库失败:", dbErr);
+          }
+        }
+
+        return result;
+      },
+    );
+
+    ipcMain.handle("cancel-file-transcription", async () => {
+      return await this.funasrManager.cancelTranscription();
+    });
+
+    // 导出转录
+    ipcMain.handle(
+      "export-transcription",
+      async (event, id, format, options = {}) => {
+        try {
+          const fs = require("fs");
+          const path = require("path");
+          const { dialog } = require("electron");
+
+          const row = this.databaseManager.getTranscriptionById(id);
+          if (!row) {
+            return { success: false, error: "转录记录不存在" };
+          }
+
+          let segments = [];
+          if (row.segments) {
+            try {
+              segments = JSON.parse(row.segments);
+            } catch {}
+          }
+          const transcription = { ...row, parsedSegments: segments };
+
+          const fmt = exportFormatters.getFormatInfo(format);
+          if (!fmt) {
+            return { success: false, error: `不支持的格式: ${format}` };
+          }
+
+          const content = await fmt.formatter(transcription);
+          const isBuffer = Buffer.isBuffer(content);
+
+          const defaultName = `转录_${new Date().toISOString().slice(0, 10)}${fmt.ext}`;
+          const saveResult = await dialog.showSaveDialog({
+            title: "导出转录文件",
+            defaultPath: defaultName,
+            filters: [
+              {
+                name: fmt.ext.replace(".", "").toUpperCase(),
+                extensions: [fmt.ext.replace(".", "")],
+              },
+            ],
+          });
+
+          if (saveResult.canceled) {
+            return { success: false, canceled: true };
+          }
+
+          if (isBuffer) {
+            await fs.promises.writeFile(saveResult.filePath, content);
+          } else {
+            await fs.promises.writeFile(saveResult.filePath, content, "utf-8");
+          }
+
+          return { success: true, path: saveResult.filePath };
+        } catch (error) {
+          this.logger.error("导出转录失败:", error);
+          return { success: false, error: error.message };
+        }
+      },
+    );
+
+    // AI创作稿
+    ipcMain.handle("ai-review-transcription", async (event, id, template) => {
+      try {
+        const row = this.databaseManager.getTranscriptionById(id);
+        if (!row) {
+          return { success: false, error: "转录记录不存在" };
+        }
+
+        const prompts = exportFormatters.getAIReviewPrompt(
+          template,
+          row.text || "",
+        );
+        const result = await this.processTextWithAI(
+          prompts.userPrompt,
+          "optimize",
+        );
+
+        if (!result.success) {
+          return result;
+        }
+
+        return { success: true, reviewText: result.text };
+      } catch (error) {
+        this.logger.error("AI创作稿生成失败:", error);
+        return { success: false, error: error.message };
+      }
     });
 
     // 数据库相关
@@ -308,41 +470,48 @@ class IPCHandlers {
 
     // 热键管理 - 添加发送者跟踪机制
     this.hotkeyRegisteredSenders = new Set(); // 跟踪已注册热键的发送者
-    
+
     ipcMain.handle("register-hotkey", (event, hotkey) => {
       try {
         if (this.hotkeyManager) {
           const senderId = event.sender.id;
-          
+
           // 检查是否已经为这个发送者注册过热键
           if (this.hotkeyRegisteredSenders.has(senderId)) {
             this.logger.info(`发送者 ${senderId} 已注册过热键，跳过重复注册`);
             return { success: true };
           }
-          
+
           const success = this.hotkeyManager.registerHotkey(hotkey, () => {
             // 只发送热键触发事件到主窗口，避免重复触发
             this.logger.info(`热键 ${hotkey} 被触发，发送事件到主窗口`);
-            if (this.windowManager && this.windowManager.mainWindow && !this.windowManager.mainWindow.isDestroyed()) {
-              this.windowManager.mainWindow.webContents.send("hotkey-triggered", { hotkey });
+            if (
+              this.windowManager &&
+              this.windowManager.mainWindow &&
+              !this.windowManager.mainWindow.isDestroyed()
+            ) {
+              this.windowManager.mainWindow.webContents.send(
+                "hotkey-triggered",
+                { hotkey },
+              );
             }
           });
-          
+
           if (success) {
             // 添加发送者到跟踪列表
             this.hotkeyRegisteredSenders.add(senderId);
-            
+
             // 监听窗口关闭事件，清理注册记录
-            event.sender.on('destroyed', () => {
+            event.sender.on("destroyed", () => {
               this.hotkeyRegisteredSenders.delete(senderId);
               this.logger.info(`清理发送者 ${senderId} 的热键注册记录`);
             });
-            
+
             this.logger.info(`热键 ${hotkey} 注册成功，发送者: ${senderId}`);
           } else {
             this.logger.error(`热键 ${hotkey} 注册失败`);
           }
-          
+
           return { success };
         }
         return { success: false, error: "热键管理器未初始化" };
@@ -370,7 +539,9 @@ class IPCHandlers {
         if (this.hotkeyManager) {
           const hotkeys = this.hotkeyManager.getRegisteredHotkeys();
           // 返回第一个非F2的热键，或默认热键
-          const mainHotkey = hotkeys.find(key => key !== 'F2') || "CommandOrControl+Shift+Space";
+          const mainHotkey =
+            hotkeys.find((key) => key !== "F2") ||
+            "CommandOrControl+Shift+Space";
           return mainHotkey;
         }
         return "CommandOrControl+Shift+Space";
@@ -384,49 +555,51 @@ class IPCHandlers {
     ipcMain.handle("register-f2-hotkey", (event) => {
       try {
         const senderId = event.sender.id;
-        
+
         // 检查是否已经为这个发送者注册过F2热键
         if (this.f2RegisteredSenders.has(senderId)) {
           this.logger.info(`F2热键已为发送者 ${senderId} 注册过，跳过重复注册`);
           return { success: true };
         }
-        
+
         if (this.hotkeyManager) {
           // 只有在没有任何发送者注册时才注册热键
           const isFirstRegistration = this.f2RegisteredSenders.size === 0;
-          
+
           if (isFirstRegistration) {
             const success = this.hotkeyManager.registerF2DoubleClick((data) => {
               // 发送F2双击事件到所有注册的渲染进程
               this.logger.info("发送F2双击事件到渲染进程:", data);
-              this.f2RegisteredSenders.forEach(id => {
-                const window = require("electron").BrowserWindow.getAllWindows().find(w => w.webContents.id === id);
+              this.f2RegisteredSenders.forEach((id) => {
+                const window = require("electron")
+                  .BrowserWindow.getAllWindows()
+                  .find((w) => w.webContents.id === id);
                 if (window && !window.isDestroyed()) {
                   window.webContents.send("f2-double-click", data);
                 }
               });
             });
-            
+
             if (!success) {
               return { success: false, error: "F2热键注册失败" };
             }
           }
-          
+
           // 添加发送者到跟踪列表
           this.f2RegisteredSenders.add(senderId);
-          
+
           // 监听窗口关闭事件，清理注册记录
-          event.sender.on('destroyed', () => {
+          event.sender.on("destroyed", () => {
             this.f2RegisteredSenders.delete(senderId);
             this.logger.info(`清理发送者 ${senderId} 的F2热键注册记录`);
 
             // 如果没有发送者了，注销热键
             if (this.f2RegisteredSenders.size === 0) {
-              this.hotkeyManager.unregisterHotkey('F2');
-              this.logger.info('所有发送者都已注销，注销F2热键');
+              this.hotkeyManager.unregisterHotkey("F2");
+              this.logger.info("所有发送者都已注销，注销F2热键");
             }
           });
-          
+
           return { success: true };
         }
         return { success: false, error: "热键管理器未初始化" };
@@ -439,17 +612,19 @@ class IPCHandlers {
     ipcMain.handle("unregister-f2-hotkey", (event) => {
       try {
         const senderId = event.sender.id;
-        
+
         if (this.hotkeyManager && this.f2RegisteredSenders.has(senderId)) {
           this.f2RegisteredSenders.delete(senderId);
-          
+
           // 如果没有其他发送者注册F2热键，则注销热键
           if (this.f2RegisteredSenders.size === 0) {
-            const success = this.hotkeyManager.unregisterHotkey('F2');
-            this.logger.info('所有发送者都已注销，注销F2热键');
+            const success = this.hotkeyManager.unregisterHotkey("F2");
+            this.logger.info("所有发送者都已注销，注销F2热键");
             return { success };
           } else {
-            this.logger.info(`发送者 ${senderId} 已注销，但还有其他发送者注册了F2热键`);
+            this.logger.info(
+              `发送者 ${senderId} 已注销，但还有其他发送者注册了F2热键`,
+            );
             return { success: true };
           }
         }
@@ -517,25 +692,26 @@ class IPCHandlers {
         platform: process.platform,
         arch: process.arch,
         nodeVersion: process.version,
-        electronVersion: process.versions.electron
+        electronVersion: process.versions.electron,
       };
     });
 
     ipcMain.handle("check-permissions", async () => {
       try {
         // 检查辅助功能权限
-        const hasAccessibility = await this.clipboardManager.checkAccessibilityPermissions();
-        
+        const hasAccessibility =
+          await this.clipboardManager.checkAccessibilityPermissions();
+
         return {
           microphone: true, // 麦克风权限由前端检查
-          accessibility: hasAccessibility
+          accessibility: hasAccessibility,
         };
       } catch (error) {
         this.logger.error("检查权限失败:", error);
         return {
           microphone: false,
           accessibility: false,
-          error: error.message
+          error: error.message,
         };
       }
     });
@@ -558,7 +734,7 @@ class IPCHandlers {
     ipcMain.handle("test-accessibility-permission", async () => {
       try {
         // 使用测试文本检查权限
-        await this.clipboardManager.pasteText("蛐蛐权限测试");
+        await this.clipboardManager.pasteText("Murmur权限测试");
         return { success: true, message: "辅助功能权限测试成功" };
       } catch (error) {
         this.logger.error("辅助功能权限测试失败:", error);
@@ -607,7 +783,7 @@ class IPCHandlers {
         arch: process.arch,
         nodeVersion: process.version,
         electronVersion: process.versions.electron,
-        appVersion: require("electron").app.getVersion()
+        appVersion: require("electron").app.getVersion(),
       };
     });
 
@@ -661,23 +837,23 @@ class IPCHandlers {
             displayName: "Paraformer Large (ASR)",
             type: "asr",
             size: "840MB",
-            description: "大型中文语音识别模型"
+            description: "大型中文语音识别模型",
           },
           {
             name: "fsmn-vad",
             displayName: "FSMN VAD",
             type: "vad",
             size: "1.6MB",
-            description: "语音活动检测模型"
+            description: "语音活动检测模型",
           },
           {
             name: "ct-transformer-punc",
             displayName: "CT Transformer (标点)",
             type: "punc",
             size: "278MB",
-            description: "标点符号恢复模型"
-          }
-        ]
+            description: "标点符号恢复模型",
+          },
+        ],
       };
     });
 
@@ -686,7 +862,7 @@ class IPCHandlers {
       return {
         model: "paraformer-large",
         status: status.models_downloaded ? "ready" : "not_downloaded",
-        details: status
+        details: status,
       };
     });
 
@@ -694,7 +870,7 @@ class IPCHandlers {
       // FunASR目前使用固定模型组合，暂不支持切换
       return {
         success: false,
-        error: "FunASR使用固定模型组合，暂不支持切换单个模型"
+        error: "FunASR使用固定模型组合，暂不支持切换单个模型",
       };
     });
 
@@ -719,14 +895,18 @@ class IPCHandlers {
     // 开发工具
     if (process.env.NODE_ENV === "development") {
       ipcMain.handle("open-dev-tools", (event) => {
-        const window = require("electron").BrowserWindow.fromWebContents(event.sender);
+        const window = require("electron").BrowserWindow.fromWebContents(
+          event.sender,
+        );
         if (window) {
           window.webContents.openDevTools();
         }
       });
 
       ipcMain.handle("reload-window", (event) => {
-        const window = require("electron").BrowserWindow.fromWebContents(event.sender);
+        const window = require("electron").BrowserWindow.fromWebContents(
+          event.sender,
+        );
         if (window) {
           window.reload();
         }
@@ -739,18 +919,18 @@ class IPCHandlers {
         if (this.logger && this.logger.getRecentLogs) {
           return {
             success: true,
-            logs: this.logger.getRecentLogs(lines)
+            logs: this.logger.getRecentLogs(lines),
           };
         }
         return {
           success: false,
-          error: "日志管理器不可用"
+          error: "日志管理器不可用",
         };
       } catch (error) {
         this.logger.error("获取应用日志失败:", error);
         return {
           success: false,
-          error: error.message
+          error: error.message,
         };
       }
     });
@@ -760,18 +940,18 @@ class IPCHandlers {
         if (this.logger && this.logger.getFunASRLogs) {
           return {
             success: true,
-            logs: this.logger.getFunASRLogs(lines)
+            logs: this.logger.getFunASRLogs(lines),
           };
         }
         return {
           success: false,
-          error: "日志管理器不可用"
+          error: "日志管理器不可用",
         };
       } catch (error) {
         this.logger.error("获取FunASR日志失败:", error);
         return {
           success: false,
-          error: error.message
+          error: error.message,
         };
       }
     });
@@ -782,41 +962,42 @@ class IPCHandlers {
           return {
             success: true,
             appLogPath: this.logger.getLogFilePath(),
-            funasrLogPath: this.logger.getFunASRLogFilePath()
+            funasrLogPath: this.logger.getFunASRLogFilePath(),
           };
         }
         return {
           success: false,
-          error: "日志管理器不可用"
+          error: "日志管理器不可用",
         };
       } catch (error) {
         this.logger.error("获取日志文件路径失败:", error);
         return {
           success: false,
-          error: error.message
+          error: error.message,
         };
       }
     });
 
-    ipcMain.handle("open-log-file", (event, logType = 'app') => {
+    ipcMain.handle("open-log-file", (event, logType = "app") => {
       try {
         if (this.logger) {
-          const logPath = logType === 'funasr'
-            ? this.logger.getFunASRLogFilePath()
-            : this.logger.getLogFilePath();
-          
+          const logPath =
+            logType === "funasr"
+              ? this.logger.getFunASRLogFilePath()
+              : this.logger.getLogFilePath();
+
           require("electron").shell.showItemInFolder(logPath);
           return { success: true };
         }
         return {
           success: false,
-          error: "日志管理器不可用"
+          error: "日志管理器不可用",
         };
       } catch (error) {
         this.logger.error("打开日志文件失败:", error);
         return {
           success: false,
-          error: error.message
+          error: error.message,
         };
       }
     });
@@ -829,22 +1010,22 @@ class IPCHandlers {
             arch: process.arch,
             nodeVersion: process.version,
             electronVersion: process.versions.electron,
-            appVersion: require("electron").app.getVersion()
+            appVersion: require("electron").app.getVersion(),
           },
           environment: {
             NODE_ENV: process.env.NODE_ENV,
             PATH: process.env.PATH,
             PYTHON_PATH: process.env.PYTHON_PATH,
-            AI_API_KEY: '通过控制面板设置',
-            AI_BASE_URL: '通过控制面板设置',
-            AI_MODEL: '通过控制面板设置'
+            AI_API_KEY: "通过控制面板设置",
+            AI_BASE_URL: "通过控制面板设置",
+            AI_MODEL: "通过控制面板设置",
           },
           funasrStatus: {
             isInitialized: this.funasrManager.isInitialized,
             modelsInitialized: this.funasrManager.modelsInitialized,
             serverReady: this.funasrManager.serverReady,
-            pythonCmd: this.funasrManager.pythonCmd
-          }
+            pythonCmd: this.funasrManager.pythonCmd,
+          },
         };
 
         if (this.logger && this.logger.getSystemInfo) {
@@ -853,74 +1034,84 @@ class IPCHandlers {
 
         return {
           success: true,
-          debugInfo
+          debugInfo,
         };
       } catch (error) {
         this.logger.error("获取系统调试信息失败:", error);
         return {
           success: false,
-          error: error.message
+          error: error.message,
         };
       }
     });
 
     ipcMain.handle("test-python-environment", async () => {
       try {
-        this.logger && this.logger.info && this.logger.info('开始测试Python环境');
-        
+        this.logger &&
+          this.logger.info &&
+          this.logger.info("开始测试Python环境");
+
         const pythonCmd = await this.funasrManager.findPythonExecutable();
         const funasrStatus = await this.funasrManager.checkFunASRInstallation();
-        
+
         const testResult = {
           success: true,
           pythonCmd,
           funasrStatus,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         };
 
-        this.logger && this.logger.info && this.logger.info('Python环境测试完成', testResult);
-        
+        this.logger &&
+          this.logger.info &&
+          this.logger.info("Python环境测试完成", testResult);
+
         return testResult;
       } catch (error) {
         const errorResult = {
           success: false,
           error: error.message,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         };
 
-        this.logger && this.logger.error && this.logger.error('Python环境测试失败', errorResult);
-        
+        this.logger &&
+          this.logger.error &&
+          this.logger.error("Python环境测试失败", errorResult);
+
         return errorResult;
       }
     });
 
     ipcMain.handle("restart-funasr-server", async () => {
       try {
-        this.logger && this.logger.info && this.logger.info('手动重启FunASR服务器');
-        
+        this.logger &&
+          this.logger.info &&
+          this.logger.info("手动重启FunASR服务器");
+
         // 使用新的restartServer方法
         const result = await this.funasrManager.restartServer();
-        
+
         return result;
       } catch (error) {
-        this.logger && this.logger.error && this.logger.error('重启FunASR服务器失败', error);
+        this.logger &&
+          this.logger.error &&
+          this.logger.error("重启FunASR服务器失败", error);
         return {
           success: false,
-          error: error.message
+          error: error.message,
         };
       }
     });
   }
 
   // AI文本处理方法
-  async processTextWithAI(text, mode = 'optimize') {
+  async processTextWithAI(text, mode = "optimize") {
     try {
       // 从数据库设置中获取API密钥
-      const apiKey = await this.databaseManager.getSetting('ai_api_key');
+      const apiKey = await this.databaseManager.getSetting("ai_api_key");
       if (!apiKey) {
         return {
           success: false,
-          error: '请先在设置页面配置AI API密钥'
+          error: "请先在设置页面配置AI API密钥",
         };
       }
 
@@ -1005,40 +1196,43 @@ ${text}
 原始文本：
 ${text}
 
-请直接返回优化后的文本，不需要解释过程。`
+请直接返回优化后的文本，不需要解释过程。`,
       };
 
-      const baseUrl = await this.databaseManager.getSetting('ai_base_url') || 'https://api.openai.com/v1';
-      const model = await this.databaseManager.getSetting('ai_model') || 'gpt-3.5-turbo';
+      const baseUrl =
+        (await this.databaseManager.getSetting("ai_base_url")) ||
+        "https://api.openai.com/v1";
+      const model =
+        (await this.databaseManager.getSetting("ai_model")) || "gpt-3.5-turbo";
 
       const requestData = {
         model: model,
         messages: [
           {
-            role: 'user',
-            content: prompts[mode] || prompts.optimize
-          }
+            role: "user",
+            content: prompts[mode] || prompts.optimize,
+          },
         ],
         temperature: 0.3,
         max_tokens: 2000,
-        stream: false
+        stream: false,
       };
 
-      this.logger.info('AI文本处理请求:', {
+      this.logger.info("AI文本处理请求:", {
         baseUrl,
         model,
         mode,
-        inputText: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
-        requestData
+        inputText: text.substring(0, 100) + (text.length > 100 ? "..." : ""),
+        requestData,
       });
 
       const response = await fetch(`${baseUrl}/chat/completions`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify(requestData)
+        body: JSON.stringify(requestData),
       });
 
       if (!response.ok) {
@@ -1049,15 +1243,19 @@ ${text}
         } catch {
           errorData = { error: errorText || response.statusText };
         }
-        throw new Error(errorData.error?.message || errorData.error || `API error: ${response.status}`);
+        throw new Error(
+          errorData.error?.message ||
+            errorData.error ||
+            `API error: ${response.status}`,
+        );
       }
 
       const data = await response.json();
 
-      this.logger.info('AI文本处理响应:', {
+      this.logger.info("AI文本处理响应:", {
         status: response.status,
         data: data,
-        usage: data.usage
+        usage: data.usage,
       });
 
       if (data.choices && data.choices.length > 0) {
@@ -1065,49 +1263,52 @@ ${text}
           success: true,
           text: data.choices[0].message.content.trim(),
           usage: data.usage,
-          model: model
+          model: model,
         };
-        
-        this.logger.info('AI文本处理结果:', {
-          originalText: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
-          optimizedText: result.text.substring(0, 100) + (result.text.length > 100 ? '...' : ''),
-          usage: result.usage
+
+        this.logger.info("AI文本处理结果:", {
+          originalText:
+            text.substring(0, 100) + (text.length > 100 ? "..." : ""),
+          optimizedText:
+            result.text.substring(0, 100) +
+            (result.text.length > 100 ? "..." : ""),
+          usage: result.usage,
         });
-        
+
         return result;
       } else {
-        this.logger.error('AI API返回数据格式错误:', response.data);
+        this.logger.error("AI API返回数据格式错误:", response.data);
         return {
           success: false,
-          error: 'AI API返回数据格式错误'
+          error: "AI API返回数据格式错误",
         };
       }
     } catch (error) {
-      this.logger.error('AI文本处理失败:', error);
-      
-      let errorMessage = '文本处理失败';
+      this.logger.error("AI文本处理失败:", error);
+
+      let errorMessage = "文本处理失败";
       if (error.response) {
         // API错误响应
         if (error.response.status === 401) {
-          errorMessage = 'API密钥无效，请检查配置';
+          errorMessage = "API密钥无效，请检查配置";
         } else if (error.response.status === 429) {
-          errorMessage = 'API调用频率超限，请稍后重试';
+          errorMessage = "API调用频率超限，请稍后重试";
         } else if (error.response.status === 500) {
-          errorMessage = 'AI服务器错误，请稍后重试';
+          errorMessage = "AI服务器错误，请稍后重试";
         } else {
           errorMessage = `API错误: ${error.response.status}`;
         }
-      } else if (error.code === 'ECONNABORTED') {
-        errorMessage = '请求超时，请检查网络连接';
-      } else if (error.code === 'ENOTFOUND') {
-        errorMessage = '无法连接到AI服务器，请检查网络';
+      } else if (error.code === "ECONNABORTED") {
+        errorMessage = "请求超时，请检查网络连接";
+      } else if (error.code === "ENOTFOUND") {
+        errorMessage = "无法连接到AI服务器，请检查网络";
       } else {
-        errorMessage = error.message || '未知错误';
+        errorMessage = error.message || "未知错误";
       }
 
       return {
         success: false,
-        error: errorMessage
+        error: errorMessage,
       };
     }
   }
@@ -1115,132 +1316,150 @@ ${text}
   // 检查AI状态
   async checkAIStatus(testConfig = null) {
     try {
-      this.logger.info('开始测试AI配置...', testConfig ? '使用临时配置' : '使用已保存配置');
-      
+      this.logger.info(
+        "开始测试AI配置...",
+        testConfig ? "使用临时配置" : "使用已保存配置",
+      );
+
       // 如果提供了测试配置，使用测试配置；否则使用已保存的配置
       let apiKey, baseUrl, model;
-      
+
       if (testConfig) {
         apiKey = testConfig.ai_api_key;
-        baseUrl = testConfig.ai_base_url || 'https://api.openai.com/v1';
-        model = testConfig.ai_model || 'gpt-3.5-turbo';
-        this.logger.info('使用临时测试配置:', { baseUrl, model, apiKeyLength: apiKey?.length || 0 });
+        baseUrl = testConfig.ai_base_url || "https://api.openai.com/v1";
+        model = testConfig.ai_model || "gpt-3.5-turbo";
+        this.logger.info("使用临时测试配置:", {
+          baseUrl,
+          model,
+          apiKeyLength: apiKey?.length || 0,
+        });
       } else {
-        apiKey = await this.databaseManager.getSetting('ai_api_key');
-        baseUrl = await this.databaseManager.getSetting('ai_base_url') || 'https://api.openai.com/v1';
-        model = await this.databaseManager.getSetting('ai_model') || 'gpt-3.5-turbo';
-        this.logger.info('使用已保存配置:', { baseUrl, model, apiKeyLength: apiKey?.length || 0 });
+        apiKey = await this.databaseManager.getSetting("ai_api_key");
+        baseUrl =
+          (await this.databaseManager.getSetting("ai_base_url")) ||
+          "https://api.openai.com/v1";
+        model =
+          (await this.databaseManager.getSetting("ai_model")) ||
+          "gpt-3.5-turbo";
+        this.logger.info("使用已保存配置:", {
+          baseUrl,
+          model,
+          apiKeyLength: apiKey?.length || 0,
+        });
       }
-      
+
       if (!apiKey) {
-        this.logger.warn('AI测试失败: 未配置API密钥');
+        this.logger.warn("AI测试失败: 未配置API密钥");
         return {
           available: false,
-          error: '未配置API密钥',
-          details: '请输入AI API密钥'
+          error: "未配置API密钥",
+          details: "请输入AI API密钥",
         };
       }
-      
-      this.logger.info('AI配置信息:', {
+
+      this.logger.info("AI配置信息:", {
         baseUrl: baseUrl,
         model: model,
-        apiKeyLength: apiKey.length
+        apiKeyLength: apiKey.length,
       });
-      
+
       // 发送一个更有意义的测试请求
       const testMessage = '请回复"测试成功"来确认AI服务正常工作';
       const requestData = {
         model: model,
         messages: [
           {
-            role: 'user',
-            content: testMessage
-          }
+            role: "user",
+            content: testMessage,
+          },
         ],
         max_tokens: 50,
-        temperature: 0.1
+        temperature: 0.1,
       };
 
-      this.logger.info('发送AI测试请求:', requestData);
+      this.logger.info("发送AI测试请求:", requestData);
 
       const response = await fetch(`${baseUrl}/chat/completions`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify(requestData)
+        body: JSON.stringify(requestData),
       });
 
-      this.logger.info('AI API响应状态:', response.status);
+      this.logger.info("AI API响应状态:", response.status);
 
       if (!response.ok) {
         const errorText = await response.text();
-        this.logger.error('AI API错误响应:', errorText);
-        
+        this.logger.error("AI API错误响应:", errorText);
+
         let errorData = { error: response.statusText };
         try {
           errorData = JSON.parse(errorText);
         } catch {
           errorData = { error: errorText || response.statusText };
         }
-        
-        let errorMessage = errorData.error?.message || errorData.error || `HTTP ${response.status}`;
+
+        let errorMessage =
+          errorData.error?.message ||
+          errorData.error ||
+          `HTTP ${response.status}`;
         if (response.status === 401) {
-          errorMessage = 'API密钥无效或已过期';
+          errorMessage = "API密钥无效或已过期";
         } else if (response.status === 403) {
-          errorMessage = 'API密钥权限不足';
+          errorMessage = "API密钥权限不足";
         } else if (response.status === 429) {
-          errorMessage = 'API调用频率超限';
+          errorMessage = "API调用频率超限";
         } else if (response.status === 500) {
-          errorMessage = 'AI服务器内部错误';
+          errorMessage = "AI服务器内部错误";
         }
-        
+
         throw new Error(errorMessage);
       }
 
       const data = await response.json();
-      this.logger.info('AI API成功响应:', data);
+      this.logger.info("AI API成功响应:", data);
 
       if (!data.choices || data.choices.length === 0) {
-        throw new Error('AI API返回格式异常：缺少choices字段');
+        throw new Error("AI API返回格式异常：缺少choices字段");
       }
 
-      const aiResponse = data.choices[0].message?.content || '';
-      this.logger.info('AI回复内容:', aiResponse);
+      const aiResponse = data.choices[0].message?.content || "";
+      this.logger.info("AI回复内容:", aiResponse);
 
       return {
         available: true,
         model: model,
-        status: 'connected',
+        status: "connected",
         response: aiResponse,
         usage: data.usage,
-        details: `成功连接到 ${model}，响应时间正常`
+        details: `成功连接到 ${model}，响应时间正常`,
       };
     } catch (error) {
-      this.logger.error('AI配置测试失败:', error);
-      
-      let errorMessage = '连接失败';
-      if (error.message.includes('401')) {
-        errorMessage = 'API密钥无效';
-      } else if (error.message.includes('403')) {
-        errorMessage = 'API密钥权限不足';
-      } else if (error.message.includes('429')) {
-        errorMessage = 'API调用频率超限';
-      } else if (error.message.includes('ENOTFOUND')) {
-        errorMessage = '无法连接到AI服务器，请检查网络和Base URL';
-      } else if (error.message.includes('ECONNREFUSED')) {
-        errorMessage = '连接被拒绝，请检查Base URL是否正确';
-      } else if (error.message.includes('timeout')) {
-        errorMessage = '请求超时，请检查网络连接';
+      this.logger.error("AI配置测试失败:", error);
+
+      let errorMessage = "连接失败";
+      if (error.message.includes("401")) {
+        errorMessage = "API密钥无效";
+      } else if (error.message.includes("403")) {
+        errorMessage = "API密钥权限不足";
+      } else if (error.message.includes("429")) {
+        errorMessage = "API调用频率超限";
+      } else if (error.message.includes("ENOTFOUND")) {
+        errorMessage = "无法连接到AI服务器，请检查网络和Base URL";
+      } else if (error.message.includes("ECONNREFUSED")) {
+        errorMessage = "连接被拒绝，请检查Base URL是否正确";
+      } else if (error.message.includes("timeout")) {
+        errorMessage = "请求超时，请检查网络连接";
       } else {
-        errorMessage = error.message || '未知错误';
+        errorMessage = error.message || "未知错误";
       }
 
       return {
         available: false,
         error: errorMessage,
-        details: `测试失败原因: ${error.message}`
+        details: `测试失败原因: ${error.message}`,
       };
     }
   }

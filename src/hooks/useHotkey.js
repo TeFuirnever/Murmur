@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from "react";
 
 /**
  * 热键管理Hook
  * 处理全局快捷键功能，包括F2双击功能
  */
 export const useHotkey = () => {
-  const [hotkey, setHotkey] = useState('CommandOrControl+Shift+Space');
+  const [hotkey, setHotkey] = useState("CommandOrControl+Shift+Space");
   const [isRegistered, setIsRegistered] = useState(false);
   const registeredHotkeyRef = useRef(null); // 跟踪已注册的热键
 
@@ -21,7 +21,7 @@ export const useHotkey = () => {
         }
       } catch (error) {
         if (window.electronAPI && window.electronAPI.log) {
-          window.electronAPI.log('warn', '获取当前热键失败:', error);
+          window.electronAPI.log("warn", "获取当前热键失败:", error);
         }
       }
     };
@@ -52,7 +52,7 @@ export const useHotkey = () => {
       return false;
     } catch (error) {
       if (window.electronAPI && window.electronAPI.log) {
-        window.electronAPI.log('error', '注册热键失败:', error);
+        window.electronAPI.log("error", "注册热键失败:", error);
       }
       return false;
     }
@@ -62,14 +62,16 @@ export const useHotkey = () => {
   const unregisterHotkey = async (hotkeyToUnregister) => {
     try {
       if (window.electronAPI) {
-        const result = await window.electronAPI.unregisterHotkey(hotkeyToUnregister || hotkey);
+        const result = await window.electronAPI.unregisterHotkey(
+          hotkeyToUnregister || hotkey,
+        );
         if (result.success) {
           setIsRegistered(false);
         }
       }
     } catch (error) {
       if (window.electronAPI && window.electronAPI.log) {
-        window.electronAPI.log('error', '注销热键失败:', error);
+        window.electronAPI.log("error", "注销热键失败:", error);
       }
     }
   };
@@ -82,7 +84,7 @@ export const useHotkey = () => {
       }
     } catch (error) {
       if (window.electronAPI && window.electronAPI.log) {
-        window.electronAPI.log('error', '同步录音状态失败:', error);
+        window.electronAPI.log("error", "同步录音状态失败:", error);
       }
     }
   }, []);
@@ -90,12 +92,15 @@ export const useHotkey = () => {
   // 格式化热键显示
   const formatHotkey = (hotkeyString) => {
     return hotkeyString
-      .replace('CommandOrControl', navigator.platform.includes('Mac') ? '⌘' : 'Ctrl')
-      .replace('Shift', '⇧')
-      .replace('Alt', '⌥')
-      .replace('Space', '空格')
-      .replace('F2', 'F2')
-      .replace('+', ' + ');
+      .replace(
+        "CommandOrControl",
+        navigator.platform.includes("Mac") ? "⌘" : "Ctrl",
+      )
+      .replace("Shift", "⇧")
+      .replace("Alt", "⌥")
+      .replace("Space", "空格")
+      .replace("F2", "F2")
+      .replace("+", " + ");
   };
 
   return {
@@ -104,6 +109,6 @@ export const useHotkey = () => {
     isRegistered,
     registerHotkey,
     unregisterHotkey,
-    syncRecordingState
+    syncRecordingState,
   };
 };

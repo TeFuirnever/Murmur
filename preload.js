@@ -17,7 +17,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
 
   // FunASR语音识别
-  transcribeAudio: (audioData) => ipcRenderer.invoke("transcribe-audio", audioData),
+  transcribeAudio: (audioData) =>
+    ipcRenderer.invoke("transcribe-audio", audioData),
   checkFunASRStatus: () => ipcRenderer.invoke("check-funasr-status"),
   installFunASR: () => ipcRenderer.invoke("install-funasr"),
   restartFunasrServer: () => ipcRenderer.invoke("restart-funasr-server"),
@@ -29,7 +30,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // AI文本处理
   processText: (text, mode) => ipcRenderer.invoke("process-text", text, mode),
-  checkAIStatus: (testConfig) => ipcRenderer.invoke("check-ai-status", testConfig),
+  checkAIStatus: (testConfig) =>
+    ipcRenderer.invoke("check-ai-status", testConfig),
 
   // 剪贴板操作
   pasteText: (text) => ipcRenderer.invoke("paste-text", text),
@@ -38,19 +40,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
   writeClipboard: (text) => ipcRenderer.invoke("write-clipboard", text),
 
   // 数据库操作
-  saveTranscription: (text, processedText) => 
+  saveTranscription: (text, processedText) =>
     ipcRenderer.invoke("save-transcription", text, processedText),
-  getTranscriptions: (limit, offset) => 
+  getTranscriptions: (limit, offset) =>
     ipcRenderer.invoke("get-transcriptions", limit, offset),
-  deleteTranscription: (id) => 
-    ipcRenderer.invoke("delete-transcription", id),
-  clearAllTranscriptions: () => 
-    ipcRenderer.invoke("clear-all-transcriptions"),
+  deleteTranscription: (id) => ipcRenderer.invoke("delete-transcription", id),
+  clearAllTranscriptions: () => ipcRenderer.invoke("clear-all-transcriptions"),
 
   // 设置管理
   getSettings: () => ipcRenderer.invoke("get-settings"),
   getAllSettings: () => ipcRenderer.invoke("get-all-settings"),
-  getSetting: (key, defaultValue) => ipcRenderer.invoke("get-setting", key, defaultValue),
+  getSetting: (key, defaultValue) =>
+    ipcRenderer.invoke("get-setting", key, defaultValue),
   setSetting: (key, value) => ipcRenderer.invoke("set-setting", key, value),
   saveSetting: (key, value) => ipcRenderer.invoke("save-setting", key, value),
   resetSettings: () => ipcRenderer.invoke("reset-settings"),
@@ -59,19 +60,20 @@ contextBridge.exposeInMainWorld("electronAPI", {
   registerHotkey: (hotkey) => ipcRenderer.invoke("register-hotkey", hotkey),
   unregisterHotkey: (hotkey) => ipcRenderer.invoke("unregister-hotkey", hotkey),
   getCurrentHotkey: () => ipcRenderer.invoke("get-current-hotkey"),
-  
+
   // F2热键管理
   registerF2Hotkey: () => ipcRenderer.invoke("register-f2-hotkey"),
   unregisterF2Hotkey: () => ipcRenderer.invoke("unregister-f2-hotkey"),
-  setRecordingState: (isRecording) => ipcRenderer.invoke("set-recording-state", isRecording),
+  setRecordingState: (isRecording) =>
+    ipcRenderer.invoke("set-recording-state", isRecording),
   getRecordingState: () => ipcRenderer.invoke("get-recording-state"),
-  
+
   // F2双击事件监听
   onF2DoubleClick: (callback) => {
     ipcRenderer.on("f2-double-click", callback);
     return () => ipcRenderer.removeListener("f2-double-click", callback);
   },
-  
+
   // 热键触发事件监听
   onHotkeyTriggered: (callback) => {
     ipcRenderer.on("hotkey-triggered", callback);
@@ -79,7 +81,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
 
   // 文件操作
-  exportTranscriptions: (format) => ipcRenderer.invoke("export-transcriptions", format),
+  exportTranscriptions: (format) =>
+    ipcRenderer.invoke("export-transcriptions", format),
   importSettings: () => ipcRenderer.invoke("import-settings"),
   exportSettings: () => ipcRenderer.invoke("export-settings"),
 
@@ -87,7 +90,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getSystemInfo: () => ipcRenderer.invoke("get-system-info"),
   checkPermissions: () => ipcRenderer.invoke("check-permissions"),
   requestPermissions: () => ipcRenderer.invoke("request-permissions"),
-  testAccessibilityPermission: () => ipcRenderer.invoke("test-accessibility-permission"),
+  testAccessibilityPermission: () =>
+    ipcRenderer.invoke("test-accessibility-permission"),
   openSystemPermissions: () => ipcRenderer.invoke("open-system-permissions"),
 
   // 应用信息
@@ -136,7 +140,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   addPunctuation: (text) => ipcRenderer.invoke("add-punctuation", text),
 
   // 音频处理
-  convertAudioFormat: (audioData, targetFormat) => 
+  convertAudioFormat: (audioData, targetFormat) =>
     ipcRenderer.invoke("convert-audio-format", audioData, targetFormat),
   enhanceAudio: (audioData) => ipcRenderer.invoke("enhance-audio", audioData),
 
@@ -149,24 +153,45 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // 模型下载进度监听
   onModelDownloadProgress: (callback) => {
     ipcRenderer.on("model-download-progress", callback);
-    return () => ipcRenderer.removeListener("model-download-progress", callback);
+    return () =>
+      ipcRenderer.removeListener("model-download-progress", callback);
   },
+
+  // 文件转录相关
+  importAudioFile: () => ipcRenderer.invoke("import-audio-file"),
+  transcribeFile: (audioPath, options) =>
+    ipcRenderer.invoke("transcribe-file", audioPath, options),
+  cancelFileTranscription: () =>
+    ipcRenderer.invoke("cancel-file-transcription"),
+  onFileTranscriptionProgress: (callback) => {
+    ipcRenderer.on("file-transcription-progress", (event, data) =>
+      callback(data),
+    );
+    return () =>
+      ipcRenderer.removeListener("file-transcription-progress", callback);
+  },
+
+  // 导出与AI创作
+  exportTranscription: (id, format, options) =>
+    ipcRenderer.invoke("export-transcription", id, format, options),
+  aiReviewTranscription: (id, template) =>
+    ipcRenderer.invoke("ai-review-transcription", id, template),
 
   // 性能监控
   getPerformanceStats: () => ipcRenderer.invoke("get-performance-stats"),
-  clearPerformanceStats: () => ipcRenderer.invoke("clear-performance-stats")
+  clearPerformanceStats: () => ipcRenderer.invoke("clear-performance-stats"),
 });
 
 // 添加一些实用的常量
 contextBridge.exposeInMainWorld("constants", {
-  APP_NAME: "蛐蛐 (QuQu)",
+  APP_NAME: "Murmur",
   VERSION: "1.0.0",
   SUPPORTED_AUDIO_FORMATS: ["wav", "mp3", "m4a", "flac"],
   SUPPORTED_EXPORT_FORMATS: ["txt", "docx", "pdf", "json"],
   DEFAULT_HOTKEY: "CommandOrControl+Shift+Space",
   MAX_RECORDING_DURATION: 300000, // 5分钟
   MAX_TEXT_LENGTH: 10000,
-  CHINESE_LANGUAGE_CODES: ["zh", "zh-CN", "zh-TW", "zh-HK"]
+  CHINESE_LANGUAGE_CODES: ["zh", "zh-CN", "zh-TW", "zh-HK"],
 });
 
 // 添加调试信息（仅在开发模式下）
@@ -176,6 +201,6 @@ if (process.env.NODE_ENV === "development") {
     getNodeVersion: () => process.versions.node,
     getChromeVersion: () => process.versions.chrome,
     getPlatform: () => process.platform,
-    getArch: () => process.arch
+    getArch: () => process.arch,
   });
 }

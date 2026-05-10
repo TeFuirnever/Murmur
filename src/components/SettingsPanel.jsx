@@ -19,7 +19,6 @@ const SettingsPanel = ({ onClose }) => {
     testAccessibilityPermission,
   } = usePermissions(showAlert);
 
-
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
@@ -27,7 +26,9 @@ const SettingsPanel = ({ onClose }) => {
         <div className="flex items-center justify-between p-6 border-b">
           <div className="flex items-center gap-3">
             <Settings className="w-6 h-6 text-blue-600" />
-            <h2 className="text-xl font-bold text-gray-900 chinese-title">设置</h2>
+            <h2 className="text-xl font-bold text-gray-900 chinese-title">
+              设置
+            </h2>
           </div>
           <button
             onClick={onClose}
@@ -47,7 +48,7 @@ const SettingsPanel = ({ onClose }) => {
             <p className="text-sm text-gray-600 mb-6">
               测试和管理应用权限，确保麦克风和辅助功能正常工作。
             </p>
-            
+
             <div className="space-y-4">
               <PermissionCard
                 icon={Mic}
@@ -72,17 +73,19 @@ const SettingsPanel = ({ onClose }) => {
           {/* 应用信息部分 */}
           <div className="border-t pt-8">
             <h3 className="text-lg font-semibold text-gray-900 mb-4 chinese-title">
-              关于蛐蛐
+              关于 Murmur
             </h3>
             <div className="bg-gradient-to-r from-blue-50 to-green-50 p-4 rounded-lg">
               <p className="text-sm text-gray-700 mb-2">
-                🎤 <strong>蛐蛐 (QuQu)</strong> - 基于FunASR和AI的中文语音转文字应用
+                🎤 <strong>Murmur</strong> - 基于FunASR和AI的中文语音转文字应用
               </p>
               <p className="text-xs text-gray-600">
-                • 高精度中文语音识别<br/>
-                • AI智能文本优化<br/>
-                • 实时语音处理<br/>
-                • 隐私保护设计
+                • 高精度中文语音识别
+                <br />
+                • AI智能文本优化
+                <br />
+                • 实时语音处理
+                <br />• 隐私保护设计
               </p>
             </div>
           </div>

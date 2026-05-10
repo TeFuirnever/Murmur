@@ -24,7 +24,7 @@ class TrayManager {
       // 创建托盘图标
       const iconPath = this.getTrayIconPath();
       let trayIcon;
-      
+
       if (iconPath && require("fs").existsSync(iconPath)) {
         trayIcon = nativeImage.createFromPath(iconPath);
         if (process.platform === "darwin") {
@@ -37,7 +37,7 @@ class TrayManager {
       }
 
       this.tray = new Tray(trayIcon);
-      this.tray.setToolTip("蛐蛐 - 中文语音转文字");
+      this.tray.setToolTip("Murmur - 中文语音转文字");
 
       // 创建上下文菜单
       this.updateContextMenu();
@@ -57,7 +57,6 @@ class TrayManager {
       this.tray.on("right-click", () => {
         this.tray.popUpContextMenu();
       });
-
     } catch (error) {
       if (this.logger && this.logger.error) {
         this.logger.error("创建托盘失败:", error);
@@ -67,7 +66,7 @@ class TrayManager {
 
   getTrayIconPath() {
     const isDev = process.env.NODE_ENV === "development";
-    
+
     if (isDev) {
       return path.join(__dirname, "..", "..", "assets", "icon.png");
     } else {
@@ -87,7 +86,7 @@ class TrayManager {
             this.mainWindow.show();
             this.mainWindow.focus();
           }
-        }
+        },
       },
       {
         label: "控制面板",
@@ -102,22 +101,22 @@ class TrayManager {
               }
             });
           }
-        }
+        },
       },
       { type: "separator" },
       {
         label: "关于",
         click: () => {
           // TODO: 显示关于对话框
-        }
+        },
       },
       { type: "separator" },
       {
         label: "退出",
         click: () => {
           require("electron").app.quit();
-        }
-      }
+        },
+      },
     ]);
 
     this.tray.setContextMenu(contextMenu);
@@ -135,14 +134,14 @@ class TrayManager {
 
     switch (status) {
       case "recording":
-        this.tray.setToolTip("蛐蛐 - 正在录音...");
+        this.tray.setToolTip("Murmur - 正在录音...");
         break;
       case "processing":
-        this.tray.setToolTip("蛐蛐 - 正在处理...");
+        this.tray.setToolTip("Murmur - 正在处理...");
         break;
       case "ready":
       default:
-        this.tray.setToolTip("蛐蛐 - 中文语音转文字");
+        this.tray.setToolTip("Murmur - 中文语音转文字");
         break;
     }
   }

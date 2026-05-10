@@ -5,6 +5,7 @@ const crypto = require("crypto");
 const os = require("os");
 const PythonInstaller = require("./pythonInstaller");
 const { runCommand, TIMEOUTS } = require("../utils/process");
+const ServerMessageRouter = require("./serverMessageRouter");
 
 // 简单的全局缓存，避免频繁检查
 let globalModelCheckCache = null;
@@ -23,31 +24,34 @@ class FunASRManager {
     this.serverProcess = null; // FunASR服务器进程
     this.serverReady = false; // 服务器是否就绪
     this.modelsDownloaded = null; // 缓存模型下载状态
-    
+
     // 简化缓存
     this._cachedPythonEnv = null;
     this._lastEmbeddedCheck = null;
-    
+
+    // 消息路由器（Request ID 协议）
+    this.messageRouter = new ServerMessageRouter(logger || console);
+
     // 模型配置
     this.modelConfigs = {
-      "asr": {
-        "name": "damo/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
-        "cache_path": "speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
-        "expected_size": 840 * 1024 * 1024  // 840MB
+      asr: {
+        name: "damo/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+        cache_path:
+          "speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+        expected_size: 840 * 1024 * 1024, // 840MB
       },
-      "vad": {
-        "name": "damo/speech_fsmn_vad_zh-cn-16k-common-pytorch",
-        "cache_path": "speech_fsmn_vad_zh-cn-16k-common-pytorch",
-        "expected_size": 1.6 * 1024 * 1024  // 1.6MB
+      vad: {
+        name: "damo/speech_fsmn_vad_zh-cn-16k-common-pytorch",
+        cache_path: "speech_fsmn_vad_zh-cn-16k-common-pytorch",
+        expected_size: 1.6 * 1024 * 1024, // 1.6MB
       },
-      "punc": {
-        "name": "damo/punc_ct-transformer_zh-cn-common-vocab272727-pytorch",
-        "cache_path": "punc_ct-transformer_zh-cn-common-vocab272727-pytorch",
-        "expected_size": 278 * 1024 * 1024  // 278MB
-      }
+      punc: {
+        name: "damo/punc_ct-transformer_zh-cn-common-vocab272727-pytorch",
+        cache_path: "punc_ct-transformer_zh-cn-common-vocab272727-pytorch",
+        expected_size: 278 * 1024 * 1024, // 278MB
+      },
     };
   }
-
 
   getFunASRServerPath() {
     // 获取FunASR服务器脚本路径
@@ -57,7 +61,7 @@ class FunASRManager {
       return path.join(
         process.resourcesPath,
         "app.asar.unpacked",
-        "funasr_server.py"
+        "funasr_server.py",
       );
     }
   }
@@ -72,7 +76,7 @@ class FunASRManager {
         "app.asar.unpacked",
         "python",
         "bin",
-        "python3.11"
+        "python3.11",
       );
     }
   }
@@ -81,39 +85,46 @@ class FunASRManager {
     // 设置Python环境变量，根据实际使用的Python来决定
     const embeddedPythonPath = this.getEmbeddedPythonPath();
     const isUsingEmbedded = fs.existsSync(embeddedPythonPath);
-    
+
     if (isUsingEmbedded) {
       // 使用嵌入式Python时设置完全隔离的环境变量
       const pythonHome = path.dirname(path.dirname(embeddedPythonPath));
-      const sitePackages = path.join(pythonHome, 'lib', 'python3.11', 'site-packages');
-      
+      const sitePackages = path.join(
+        pythonHome,
+        "lib",
+        "python3.11",
+        "site-packages",
+      );
+
       process.env.PYTHONHOME = pythonHome;
       process.env.PYTHONPATH = sitePackages;
-      process.env.PYTHONDONTWRITEBYTECODE = '1';
-      process.env.PYTHONIOENCODING = 'utf-8';
-      process.env.PYTHONUNBUFFERED = '1';
-      
-      this.logger.info && this.logger.info('设置嵌入式Python环境', {
-        PYTHONHOME: process.env.PYTHONHOME,
-        PYTHONPATH: process.env.PYTHONPATH,
-        pythonExecutable: embeddedPythonPath
-      });
+      process.env.PYTHONDONTWRITEBYTECODE = "1";
+      process.env.PYTHONIOENCODING = "utf-8";
+      process.env.PYTHONUNBUFFERED = "1";
+
+      this.logger.info &&
+        this.logger.info("设置嵌入式Python环境", {
+          PYTHONHOME: process.env.PYTHONHOME,
+          PYTHONPATH: process.env.PYTHONPATH,
+          pythonExecutable: embeddedPythonPath,
+        });
     } else {
       // 使用系统Python时，清除可能干扰的嵌入式Python环境变量
       delete process.env.PYTHONHOME;
       delete process.env.PYTHONPATH;
-      
+
       // 设置基础环境变量
-      process.env.PYTHONDONTWRITEBYTECODE = '1';
-      process.env.PYTHONIOENCODING = 'utf-8';
-      process.env.PYTHONUNBUFFERED = '1';
-      
-      this.logger.info && this.logger.info('设置系统Python环境', {
-        note: '清除嵌入式Python环境变量，使用系统Python默认环境',
-        pythonExecutable: this.pythonCmd || '未确定'
-      });
+      process.env.PYTHONDONTWRITEBYTECODE = "1";
+      process.env.PYTHONIOENCODING = "utf-8";
+      process.env.PYTHONUNBUFFERED = "1";
+
+      this.logger.info &&
+        this.logger.info("设置系统Python环境", {
+          note: "清除嵌入式Python环境变量，使用系统Python默认环境",
+          pythonExecutable: this.pythonCmd || "未确定",
+        });
     }
-    
+
     // 清除可能干扰的系统Python环境变量
     delete process.env.PYTHONUSERBASE;
     delete process.env.PYTHONSTARTUP;
@@ -124,63 +135,76 @@ class FunASRManager {
     // 构建完整的Python环境变量，根据实际使用的Python路径来配置
     const embeddedPythonPath = this.getEmbeddedPythonPath();
     const isUsingEmbedded = fs.existsSync(embeddedPythonPath);
-    
+
     // 缓存环境变量，避免重复构建和日志输出
     if (this._cachedPythonEnv && this._lastEmbeddedCheck === isUsingEmbedded) {
       return this._cachedPythonEnv;
     }
-    
+
     let env = {
       ...process.env,
       // 基础Python环境变量
-      PYTHONDONTWRITEBYTECODE: '1',
-      PYTHONIOENCODING: 'utf-8',
-      PYTHONUNBUFFERED: '1',
-      
+      PYTHONDONTWRITEBYTECODE: "1",
+      PYTHONIOENCODING: "utf-8",
+      PYTHONUNBUFFERED: "1",
+
       // 设置用户数据目录用于日志
-      ELECTRON_USER_DATA: require('electron').app.getPath('userData')
+      ELECTRON_USER_DATA: require("electron").app.getPath("userData"),
     };
-    
+
     if (isUsingEmbedded) {
       // 使用嵌入式Python时的完整隔离环境
       const pythonHome = path.dirname(path.dirname(embeddedPythonPath));
-      const sitePackages = path.join(pythonHome, 'lib', 'python3.11', 'site-packages');
-      
+      const sitePackages = path.join(
+        pythonHome,
+        "lib",
+        "python3.11",
+        "site-packages",
+      );
+
       env.PYTHONHOME = pythonHome;
       env.PYTHONPATH = sitePackages;
-      env.LD_LIBRARY_PATH = path.join(pythonHome, 'lib');
-      env.DYLD_LIBRARY_PATH = path.join(pythonHome, 'lib'); // macOS
-      
+      env.LD_LIBRARY_PATH = path.join(pythonHome, "lib");
+      env.DYLD_LIBRARY_PATH = path.join(pythonHome, "lib"); // macOS
+
       // 只在首次构建或环境变化时记录日志
-      if (!this._cachedPythonEnv || this._lastEmbeddedCheck !== isUsingEmbedded) {
-        this.logger.info && this.logger.info('构建嵌入式Python环境变量', {
-          PYTHONHOME: env.PYTHONHOME,
-          PYTHONPATH: env.PYTHONPATH,
-          LD_LIBRARY_PATH: env.LD_LIBRARY_PATH,
-          DYLD_LIBRARY_PATH: env.DYLD_LIBRARY_PATH,
-          pythonExecutable: embeddedPythonPath
-        });
+      if (
+        !this._cachedPythonEnv ||
+        this._lastEmbeddedCheck !== isUsingEmbedded
+      ) {
+        this.logger.info &&
+          this.logger.info("构建嵌入式Python环境变量", {
+            PYTHONHOME: env.PYTHONHOME,
+            PYTHONPATH: env.PYTHONPATH,
+            LD_LIBRARY_PATH: env.LD_LIBRARY_PATH,
+            DYLD_LIBRARY_PATH: env.DYLD_LIBRARY_PATH,
+            pythonExecutable: embeddedPythonPath,
+          });
       }
     } else {
       // 使用系统Python时，清除可能干扰的嵌入式Python环境变量
       // 不设置PYTHONHOME和PYTHONPATH，让系统Python使用自己的环境
-      if (!this._cachedPythonEnv || this._lastEmbeddedCheck !== isUsingEmbedded) {
-        this.logger.info && this.logger.info('构建系统Python环境变量', {
-          note: '使用系统Python默认环境',
-          pythonExecutable: this.pythonCmd || '未确定'
-        });
+      if (
+        !this._cachedPythonEnv ||
+        this._lastEmbeddedCheck !== isUsingEmbedded
+      ) {
+        this.logger.info &&
+          this.logger.info("构建系统Python环境变量", {
+            note: "使用系统Python默认环境",
+            pythonExecutable: this.pythonCmd || "未确定",
+          });
       }
     }
-    
+
     // 清除可能干扰的系统Python环境变量
     delete env.PYTHONUSERBASE;
     delete env.PYTHONSTARTUP;
     delete env.VIRTUAL_ENV;
-    
+
     // 缓存结果
     this._cachedPythonEnv = env;
     this._lastEmbeddedCheck = isUsingEmbedded;
-    
+
     return env;
   }
 
@@ -195,25 +219,27 @@ class FunASRManager {
       for (const entry of entries) {
         if (entry.isDirectory()) {
           const fullPath = path.join(startDir, entry.name);
-          
-          if (entry.name === 'damo') {
+
+          if (entry.name === "damo") {
             // 检查是否包含至少一个目标模型子目录
             try {
               const models = fs.readdirSync(fullPath);
-              const hasExpectedModel = models.some(m =>
-                m.startsWith('speech_paraformer-') ||
-                m.startsWith('speech_fsmn_vad-') ||
-                m.startsWith('punc_ct-transformer-')
+              const hasExpectedModel = models.some(
+                (m) =>
+                  m.startsWith("speech_paraformer-") ||
+                  m.startsWith("speech_fsmn_vad-") ||
+                  m.startsWith("punc_ct-transformer-"),
               );
               if (hasExpectedModel) {
                 return fullPath;
               }
             } catch (error) {
               // 忽略无法读取的目录
-              this.logger.debug && this.logger.debug('无法读取目录:', fullPath, error.message);
+              this.logger.debug &&
+                this.logger.debug("无法读取目录:", fullPath, error.message);
             }
           }
-          
+
           // 递归继续查找 - 修复：添加 this 关键字
           const found = this.findDamoRoot(fullPath, depth + 1, maxDepth);
           if (found) return found;
@@ -221,9 +247,10 @@ class FunASRManager {
       }
     } catch (error) {
       // 处理权限错误或其他文件系统错误
-      this.logger.debug && this.logger.debug('搜索目录时出错:', startDir, error.message);
+      this.logger.debug &&
+        this.logger.debug("搜索目录时出错:", startDir, error.message);
     }
-    
+
     return null;
   }
 
@@ -232,89 +259,95 @@ class FunASRManager {
    */
   getModelCachePath() {
     const baseCachePath =
-      process.env.MODELSCOPE_CACHE || path.join(os.homedir(), '.cache', 'modelscope');
+      process.env.MODELSCOPE_CACHE ||
+      path.join(os.homedir(), ".cache", "modelscope");
 
     // 可能的候选路径 - 添加 hub/models/damo 路径
     const candidates = [
-      path.join(baseCachePath, 'damo'),
-      path.join(baseCachePath, 'hub', 'damo'),
-      path.join(baseCachePath, 'hub', 'models', 'damo'),  // 新增：支持 hub/models/damo 结构
-      path.join(baseCachePath, 'models', 'damo'),
+      path.join(baseCachePath, "damo"),
+      path.join(baseCachePath, "hub", "damo"),
+      path.join(baseCachePath, "hub", "models", "damo"), // 新增：支持 hub/models/damo 结构
+      path.join(baseCachePath, "models", "damo"),
     ];
 
     // 先检查常见路径
     for (const candidate of candidates) {
       if (fs.existsSync(candidate)) {
-        this.logger.info && this.logger.info('找到模型缓存路径:', candidate);
+        this.logger.info && this.logger.info("找到模型缓存路径:", candidate);
         return candidate;
       }
     }
 
     // 如果没找到，则递归搜索 - 修复：添加 this 关键字
-    this.logger.info && this.logger.info('常见路径未找到，开始递归搜索:', baseCachePath);
+    this.logger.info &&
+      this.logger.info("常见路径未找到，开始递归搜索:", baseCachePath);
     const found = this.findDamoRoot(baseCachePath);
     if (found) {
-      this.logger.info && this.logger.info('递归搜索找到模型路径:', found);
+      this.logger.info && this.logger.info("递归搜索找到模型路径:", found);
       return found;
     }
 
-    throw new Error(`未找到有效的 damo 模型目录，请检查 MODELSCOPE_CACHE 或模型安装路径`);
+    throw new Error(
+      `未找到有效的 damo 模型目录，请检查 MODELSCOPE_CACHE 或模型安装路径`,
+    );
   }
-
 
   async checkModelFiles() {
     /**
      * 检查所有模型文件是否存在（使用简单缓存避免频繁检查）
      */
     const now = Date.now();
-    
+
     // 使用全局缓存避免频繁检查，但如果服务器状态可能已变化则强制检查
-    if (globalModelCheckCache &&
-        (now - globalModelCheckTime) < GLOBAL_CACHE_TIME &&
-        !this.serverReady) { // 如果服务器已就绪，允许重新检查
+    if (
+      globalModelCheckCache &&
+      now - globalModelCheckTime < GLOBAL_CACHE_TIME &&
+      !this.serverReady
+    ) {
+      // 如果服务器已就绪，允许重新检查
       return globalModelCheckCache;
     }
-    
+
     try {
       const cachePath = this.getModelCachePath();
-      this.logger.info && this.logger.info('检查模型缓存路径:', cachePath);
-      
+      this.logger.info && this.logger.info("检查模型缓存路径:", cachePath);
+
       if (!fs.existsSync(cachePath)) {
-        this.logger.info && this.logger.info('模型缓存目录不存在');
+        this.logger.info && this.logger.info("模型缓存目录不存在");
         this.modelsDownloaded = false;
         const result = {
           success: true,
           models_downloaded: false,
           missing_models: ["asr", "vad", "punc"],
-          details: {}
+          details: {},
         };
-        
+
         // 更新全局缓存
         globalModelCheckCache = result;
         globalModelCheckTime = now;
         return result;
       }
-      
+
       const results = {};
       const missingModels = [];
-      
+
       for (const [modelType, config] of Object.entries(this.modelConfigs)) {
         const modelDir = path.join(cachePath, config.cache_path);
         const modelFile = path.join(modelDir, "model.pt");
-        
+
         if (fs.existsSync(modelFile)) {
           const stats = fs.statSync(modelFile);
           const fileSize = stats.size;
           const isComplete = fileSize >= config.expected_size * 0.95; // 允许5%误差
-          
+
           results[modelType] = {
             exists: true,
             path: modelFile,
             size: fileSize,
             expected_size: config.expected_size,
-            complete: isComplete
+            complete: isComplete,
           };
-          
+
           if (!isComplete) {
             missingModels.push(modelType);
           }
@@ -324,44 +357,44 @@ class FunASRManager {
             path: modelFile,
             size: 0,
             expected_size: config.expected_size,
-            complete: false
+            complete: false,
           };
           missingModels.push(modelType);
         }
       }
-      
+
       const allDownloaded = missingModels.length === 0;
       this.modelsDownloaded = allDownloaded;
-      
-      this.logger.info && this.logger.info('模型检查完成:', {
-        allDownloaded,
-        missingModels,
-        details: results
-      });
-      
+
+      this.logger.info &&
+        this.logger.info("模型检查完成:", {
+          allDownloaded,
+          missingModels,
+          details: results,
+        });
+
       const result = {
         success: true,
         models_downloaded: allDownloaded,
         missing_models: missingModels,
-        details: results
+        details: results,
       };
-      
+
       // 更新全局缓存
       globalModelCheckCache = result;
       globalModelCheckTime = now;
       return result;
-      
     } catch (error) {
-      this.logger.error && this.logger.error('检查模型文件失败:', error);
+      this.logger.error && this.logger.error("检查模型文件失败:", error);
       this.modelsDownloaded = false;
       const result = {
         success: false,
         error: error.message,
         models_downloaded: false,
         missing_models: ["asr", "vad", "punc"],
-        details: {}
+        details: {},
       };
-      
+
       // 错误情况下不缓存，允许重试
       return result;
     }
@@ -373,58 +406,75 @@ class FunASRManager {
      */
     try {
       const cachePath = this.getModelCachePath();
-      
+
       if (!fs.existsSync(cachePath)) {
         return {
           success: true,
           overall_progress: 0,
           models: {
-            "asr": { progress: 0, downloaded: 0, total: this.modelConfigs.asr.expected_size },
-            "vad": { progress: 0, downloaded: 0, total: this.modelConfigs.vad.expected_size },
-            "punc": { progress: 0, downloaded: 0, total: this.modelConfigs.punc.expected_size }
-          }
+            asr: {
+              progress: 0,
+              downloaded: 0,
+              total: this.modelConfigs.asr.expected_size,
+            },
+            vad: {
+              progress: 0,
+              downloaded: 0,
+              total: this.modelConfigs.vad.expected_size,
+            },
+            punc: {
+              progress: 0,
+              downloaded: 0,
+              total: this.modelConfigs.punc.expected_size,
+            },
+          },
         };
       }
-      
-      const totalExpected = Object.values(this.modelConfigs).reduce((sum, config) => sum + config.expected_size, 0);
+
+      const totalExpected = Object.values(this.modelConfigs).reduce(
+        (sum, config) => sum + config.expected_size,
+        0,
+      );
       let totalDownloaded = 0;
       const modelProgress = {};
-      
+
       for (const [modelType, config] of Object.entries(this.modelConfigs)) {
         const modelDir = path.join(cachePath, config.cache_path);
         const modelFile = path.join(modelDir, "model.pt");
-        
+
         let fileSize = 0;
         if (fs.existsSync(modelFile)) {
           const stats = fs.statSync(modelFile);
           fileSize = stats.size;
           totalDownloaded += fileSize;
         }
-        
+
         const progress = Math.min(100, (fileSize / config.expected_size) * 100);
-        
+
         modelProgress[modelType] = {
           progress: Math.round(progress * 10) / 10, // 保留1位小数
           downloaded: fileSize,
-          total: config.expected_size
+          total: config.expected_size,
         };
       }
-      
-      const overallProgress = Math.min(100, (totalDownloaded / totalExpected) * 100);
-      
+
+      const overallProgress = Math.min(
+        100,
+        (totalDownloaded / totalExpected) * 100,
+      );
+
       return {
         success: true,
         overall_progress: Math.round(overallProgress * 10) / 10,
-        models: modelProgress
+        models: modelProgress,
       };
-      
     } catch (error) {
-      this.logger.error && this.logger.error('获取下载进度失败:', error);
+      this.logger.error && this.logger.error("获取下载进度失败:", error);
       return {
         success: false,
         error: error.message,
         overall_progress: 0,
-        models: {}
+        models: {},
       };
     }
   }
@@ -439,7 +489,7 @@ class FunASRManager {
       return path.join(
         process.resourcesPath,
         "app.asar.unpacked",
-        "download_models.py"
+        "download_models.py",
       );
     }
   }
@@ -449,53 +499,57 @@ class FunASRManager {
      * 下载模型文件（使用独立的Python脚本并行下载）
      */
     try {
-      this.logger.info && this.logger.info('开始下载FunASR模型...');
-      
+      this.logger.info && this.logger.info("开始下载FunASR模型...");
+
       // 先检查模型状态
       const checkResult = await this.checkModelFiles();
       if (checkResult.models_downloaded) {
-        this.logger.info && this.logger.info('模型已存在，无需下载');
+        this.logger.info && this.logger.info("模型已存在，无需下载");
         return { success: true, message: "模型已存在，无需下载" };
       }
-      
+
       const pythonCmd = await this.findPythonExecutable();
       const scriptPath = this.getDownloadScriptPath();
-      
-      this.logger.info && this.logger.info('启动模型下载脚本:', {
-        pythonCmd,
-        scriptPath,
-        scriptExists: fs.existsSync(scriptPath)
-      });
-      
+
+      this.logger.info &&
+        this.logger.info("启动模型下载脚本:", {
+          pythonCmd,
+          scriptPath,
+          scriptExists: fs.existsSync(scriptPath),
+        });
+
       if (!fs.existsSync(scriptPath)) {
         throw new Error(`下载脚本未找到: ${scriptPath}`);
       }
-      
+
       return new Promise((resolve, reject) => {
         // 确保使用正确的Python环境
         const pythonEnv = this.buildPythonEnvironment();
-        
+
         const downloadProcess = spawn(pythonCmd, [scriptPath], {
           stdio: ["pipe", "pipe", "pipe"],
           windowsHide: true,
-          env: pythonEnv
+          env: pythonEnv,
         });
-        
+
         let hasError = false;
-        
+
         downloadProcess.stdout.on("data", (data) => {
-          const lines = data.toString().split('\n').filter(line => line.trim());
-          
+          const lines = data
+            .toString()
+            .split("\n")
+            .filter((line) => line.trim());
+
           for (const line of lines) {
             try {
               const result = JSON.parse(line);
-              
+
               if (result.error) {
                 hasError = true;
                 reject(new Error(result.error));
                 return;
               }
-              
+
               // 处理进度更新
               if (result.stage && progressCallback) {
                 progressCallback({
@@ -504,34 +558,38 @@ class FunASRManager {
                   progress: result.progress,
                   overall_progress: result.overall_progress,
                   completed: result.completed,
-                  total: result.total
+                  total: result.total,
                 });
               }
-              
+
               // 处理最终结果
               if (result.success !== undefined) {
                 if (result.success) {
                   this.modelsDownloaded = true;
-                  resolve({ success: true, message: result.message || "模型下载完成" });
+                  resolve({
+                    success: true,
+                    message: result.message || "模型下载完成",
+                  });
                 } else {
                   hasError = true;
                   reject(new Error(result.error || "模型下载失败"));
                 }
                 return;
               }
-              
             } catch (parseError) {
               // 忽略非JSON输出
-              this.logger.debug && this.logger.debug('下载脚本非JSON输出:', line);
+              this.logger.debug &&
+                this.logger.debug("下载脚本非JSON输出:", line);
             }
           }
         });
-        
+
         downloadProcess.stderr.on("data", (data) => {
           const errorOutput = data.toString();
-          this.logger.error && this.logger.error('模型下载错误输出:', errorOutput);
+          this.logger.error &&
+            this.logger.error("模型下载错误输出:", errorOutput);
         });
-        
+
         downloadProcess.on("close", (code) => {
           if (!hasError) {
             if (code === 0) {
@@ -542,24 +600,26 @@ class FunASRManager {
             }
           }
         });
-        
+
         downloadProcess.on("error", (error) => {
           if (!hasError) {
             reject(new Error(`启动下载进程失败: ${error.message}`));
           }
         });
-        
+
         // 设置超时（30分钟）
-        setTimeout(() => {
-          if (!hasError) {
-            downloadProcess.kill();
-            reject(new Error('模型下载超时'));
-          }
-        }, 30 * 60 * 1000);
+        setTimeout(
+          () => {
+            if (!hasError) {
+              downloadProcess.kill();
+              reject(new Error("模型下载超时"));
+            }
+          },
+          30 * 60 * 1000,
+        );
       });
-      
     } catch (error) {
-      this.logger.error && this.logger.error('模型下载失败:', error);
+      this.logger.error && this.logger.error("模型下载失败:", error);
       throw error;
     }
   }
@@ -569,35 +629,34 @@ class FunASRManager {
      * 重启FunASR服务器（用于模型下载完成后）
      */
     try {
-      this.logger.info && this.logger.info('重启FunASR服务器...');
-      
+      this.logger.info && this.logger.info("重启FunASR服务器...");
+
       // 停止现有服务器
       if (this.serverProcess) {
         await this._stopFunASRServer();
-        this.logger.info && this.logger.info('已停止现有FunASR服务器');
+        this.logger.info && this.logger.info("已停止现有FunASR服务器");
       }
-      
+
       // 重置状态并清除缓存
       this.serverReady = false;
       this.modelsInitialized = false;
       this.initializationPromise = null;
       this._clearModelCache();
-      
+
       // 检查模型文件状态
       const modelStatus = await this.checkModelFiles();
       if (!modelStatus.models_downloaded) {
-        throw new Error('模型文件未下载，无法启动服务器');
+        throw new Error("模型文件未下载，无法启动服务器");
       }
-      
+
       // 重新启动服务器
       this.initializationPromise = this._startFunASRServer();
       await this.initializationPromise;
-      
-      this.logger.info && this.logger.info('FunASR服务器重启完成');
-      return { success: true, message: 'FunASR服务器重启成功' };
-      
+
+      this.logger.info && this.logger.info("FunASR服务器重启完成");
+      return { success: true, message: "FunASR服务器重启成功" };
     } catch (error) {
-      this.logger.error && this.logger.error('重启FunASR服务器失败:', error);
+      this.logger.error && this.logger.error("重启FunASR服务器失败:", error);
       return { success: false, error: error.message };
     }
   }
@@ -612,22 +671,25 @@ class FunASRManager {
 
   async initializeAtStartup() {
     try {
-      this.logger.info && this.logger.info('FunASR管理器启动初始化开始');
-      
+      this.logger.info && this.logger.info("FunASR管理器启动初始化开始");
+
       const pythonCmd = await this.findPythonExecutable();
-      this.logger.info && this.logger.info('Python可执行文件找到', { pythonCmd });
-      
+      this.logger.info &&
+        this.logger.info("Python可执行文件找到", { pythonCmd });
+
       const funasrStatus = await this.checkFunASRInstallation();
-      this.logger.info && this.logger.info('FunASR安装状态检查完成', funasrStatus);
-      
+      this.logger.info &&
+        this.logger.info("FunASR安装状态检查完成", funasrStatus);
+
       this.isInitialized = true;
-      
+
       // 预初始化模型（异步进行，不阻塞启动）
       this.preInitializeModels();
-      this.logger.info && this.logger.info('FunASR管理器启动初始化完成');
+      this.logger.info && this.logger.info("FunASR管理器启动初始化完成");
     } catch (error) {
       // FunASR 在启动时不可用不是关键问题
-      this.logger.warn && this.logger.warn('FunASR启动初始化失败，但不影响应用启动', error);
+      this.logger.warn &&
+        this.logger.warn("FunASR启动初始化失败，但不影响应用启动", error);
       this.isInitialized = true;
     }
   }
@@ -644,39 +706,44 @@ class FunASRManager {
 
   async _startFunASRServer() {
     try {
-      this.logger.info && this.logger.info('启动FunASR服务器...');
-      
+      this.logger.info && this.logger.info("启动FunASR服务器...");
+
       const status = await this.checkFunASRInstallation();
       if (!status.installed) {
-        this.logger.warn && this.logger.warn('FunASR未安装，跳过服务器启动');
+        this.logger.warn && this.logger.warn("FunASR未安装，跳过服务器启动");
         return;
       }
 
       const pythonCmd = await this.findPythonExecutable();
       const serverPath = this.getFunASRServerPath();
-      this.logger.info && this.logger.info('FunASR服务器配置', {
-        pythonCmd,
-        serverPath,
-        serverExists: fs.existsSync(serverPath)
-      });
-      
+      this.logger.info &&
+        this.logger.info("FunASR服务器配置", {
+          pythonCmd,
+          serverPath,
+          serverExists: fs.existsSync(serverPath),
+        });
+
       if (!fs.existsSync(serverPath)) {
-        this.logger.error && this.logger.error('FunASR服务器脚本未找到，跳过服务器启动', { serverPath });
+        this.logger.error &&
+          this.logger.error("FunASR服务器脚本未找到，跳过服务器启动", {
+            serverPath,
+          });
         return;
       }
 
       // 确保环境变量正确设置
       this.setupIsolatedEnvironment();
-      
+
       // 构建完整的环境变量
       const pythonEnv = this.buildPythonEnvironment();
 
       return new Promise((resolve) => {
-        this.logger.info && this.logger.info('启动FunASR Python进程', {
-          command: pythonCmd,
-          args: [serverPath],
-          env: pythonEnv
-        });
+        this.logger.info &&
+          this.logger.info("启动FunASR Python进程", {
+            command: pythonCmd,
+            args: [serverPath],
+            env: pythonEnv,
+          });
         const cachePath = this.getModelCachePath();
         // this.serverProcess = spawn(pythonCmd, [serverPath], {
         //   stdio: ["pipe", "pipe", "pipe"],
@@ -686,24 +753,28 @@ class FunASRManager {
 
         this.serverProcess = spawn(
           pythonCmd,
-          [serverPath, "--damo-root", cachePath],   // <== 这里加上参数
+          [serverPath, "--damo-root", cachePath], // <== 这里加上参数
           {
             stdio: ["pipe", "pipe", "pipe"],
             windowsHide: true,
-            env: pythonEnv // 保持你原来的 Python 环境
-          }
+            env: pythonEnv, // 保持你原来的 Python 环境
+          },
         );
 
         let initResponseReceived = false;
 
-        this.serverProcess.stdout.on("data", (data) => {
-          const lines = data.toString().split('\n').filter(line => line.trim());
-          
+        const initListener = (data) => {
+          const lines = data
+            .toString()
+            .split("\n")
+            .filter((line) => line.trim());
+
           for (const line of lines) {
-            this.logger.debug && this.logger.debug('FunASR服务器输出', { line });
+            this.logger.debug &&
+              this.logger.debug("FunASR服务器输出", { line });
             try {
               const result = JSON.parse(line);
-              
+
               if (!initResponseReceived) {
                 // 这是初始化响应
                 initResponseReceived = true;
@@ -711,44 +782,57 @@ class FunASRManager {
                   this.serverReady = true;
                   this.modelsInitialized = true;
                   this._clearModelCache(); // 清除缓存，确保状态更新
-                  this.logger.info && this.logger.info('FunASR服务器启动成功，模型已初始化');
+                  this.logger.info &&
+                    this.logger.info("FunASR服务器启动成功，模型已初始化");
                 } else {
-                  this.logger.error && this.logger.error('FunASR服务器初始化失败', result);
+                  this.logger.error &&
+                    this.logger.error("FunASR服务器初始化失败", result);
                 }
+
+                // 初始化完成后，移除临时监听器，挂载 Router
+                this.serverProcess.stdout.removeListener("data", initListener);
+                this.messageRouter.attach(this.serverProcess);
                 resolve();
               }
             } catch (parseError) {
               // 忽略非JSON输出，但记录到日志
-              this.logger.debug && this.logger.debug('FunASR服务器非JSON输出', { line });
+              this.logger.debug &&
+                this.logger.debug("FunASR服务器非JSON输出", { line });
             }
           }
-        });
+        };
+
+        this.serverProcess.stdout.on("data", initListener);
 
         this.serverProcess.stderr.on("data", (data) => {
           const errorOutput = data.toString();
-          this.logger.error && this.logger.error('FunASR服务器错误输出', { errorOutput });
+          this.logger.error &&
+            this.logger.error("FunASR服务器错误输出", { errorOutput });
           // 同时记录到FunASR专用日志
           if (this.logger.logFunASR) {
-            this.logger.logFunASR('error', 'Python stderr', { errorOutput });
+            this.logger.logFunASR("error", "Python stderr", { errorOutput });
           }
         });
 
         this.serverProcess.on("close", (code) => {
-          this.logger.warn && this.logger.warn('FunASR服务器进程退出', { code });
+          this.logger.warn &&
+            this.logger.warn("FunASR服务器进程退出", { code });
+          this.messageRouter.detach();
           this.serverProcess = null;
           this.serverReady = false;
           this.modelsInitialized = false;
-          
+
           if (!initResponseReceived) {
             resolve();
           }
         });
 
         this.serverProcess.on("error", (error) => {
-          this.logger.error && this.logger.error('FunASR服务器进程错误', error);
+          this.logger.error && this.logger.error("FunASR服务器进程错误", error);
+          this.messageRouter.detach();
           this.serverProcess = null;
           this.serverReady = false;
-          
+
           if (!initResponseReceived) {
             resolve();
           }
@@ -757,7 +841,7 @@ class FunASRManager {
         // 设置超时
         setTimeout(() => {
           if (!initResponseReceived) {
-            this.logger.warn && this.logger.warn('FunASR服务器启动超时');
+            this.logger.warn && this.logger.warn("FunASR服务器启动超时");
             if (this.serverProcess) {
               this.serverProcess.kill();
             }
@@ -766,62 +850,29 @@ class FunASRManager {
         }, 120000); // 2分钟超时
       });
     } catch (error) {
-      this.logger.error && this.logger.error('启动FunASR服务器异常', error);
+      this.logger.error && this.logger.error("启动FunASR服务器异常", error);
     }
   }
 
-  async _sendServerCommand(command) {
+  async _sendServerCommand(command, options = {}) {
     if (!this.serverProcess || !this.serverReady) {
-      throw new Error('FunASR服务器未就绪');
+      throw new Error("FunASR服务器未就绪");
     }
 
-    return new Promise((resolve, reject) => {
-      let responseReceived = false;
-      
-      const onData = (data) => {
-        if (responseReceived) return;
-        
-        const lines = data.toString().split('\n').filter(line => line.trim());
-        
-        for (const line of lines) {
-          try {
-            const result = JSON.parse(line);
-            responseReceived = true;
-            this.serverProcess.stdout.removeListener('data', onData);
-            resolve(result);
-            return;
-          } catch (parseError) {
-            // 忽略非JSON输出
-          }
-        }
-      };
-
-      this.serverProcess.stdout.on('data', onData);
-      
-      // 发送命令
-      this.serverProcess.stdin.write(JSON.stringify(command) + '\n');
-      
-      // 设置超时
-      setTimeout(() => {
-        if (!responseReceived) {
-          responseReceived = true;
-          this.serverProcess.stdout.removeListener('data', onData);
-          reject(new Error('服务器响应超时'));
-        }
-      }, 60000); // 1分钟超时
-    });
+    return this.messageRouter.sendRaw(command);
   }
 
   async _stopFunASRServer() {
     if (this.serverProcess) {
       try {
         // 发送退出命令
-        await this._sendServerCommand({ action: 'exit' });
+        await this._sendServerCommand({ action: "exit" });
       } catch (error) {
         // 如果发送退出命令失败，直接杀死进程
         this.serverProcess.kill();
       }
-      
+
+      this.messageRouter.detach();
       this.serverProcess = null;
       this.serverReady = false;
       this.modelsInitialized = false;
@@ -836,53 +887,59 @@ class FunASRManager {
 
     // 优先使用嵌入式Python（完全隔离策略）
     const embeddedPython = this.getEmbeddedPythonPath();
-    
-    this.logger.info && this.logger.info('检查嵌入式Python', {
-      path: embeddedPython,
-      exists: fs.existsSync(embeddedPython)
-    });
+
+    this.logger.info &&
+      this.logger.info("检查嵌入式Python", {
+        path: embeddedPython,
+        exists: fs.existsSync(embeddedPython),
+      });
 
     if (fs.existsSync(embeddedPython)) {
       try {
         // 设置隔离环境
         this.setupIsolatedEnvironment();
-        
+
         // 验证嵌入式Python是否可用
         const version = await this.getPythonVersion(embeddedPython);
         if (this.isPythonVersionSupported(version)) {
           this.pythonCmd = embeddedPython;
-          this.logger.info && this.logger.info('使用嵌入式Python', {
-            path: embeddedPython,
-            version: `${version.major}.${version.minor}`
-          });
+          this.logger.info &&
+            this.logger.info("使用嵌入式Python", {
+              path: embeddedPython,
+              version: `${version.major}.${version.minor}`,
+            });
           return embeddedPython;
         }
       } catch (error) {
-        this.logger.warn && this.logger.warn('嵌入式Python不可用', error);
+        this.logger.warn && this.logger.warn("嵌入式Python不可用", error);
       }
     }
 
     // 如果嵌入式Python不可用，在开发模式下回退到系统Python
     if (process.env.NODE_ENV === "development") {
-      this.logger.warn && this.logger.warn('开发模式：回退到系统Python');
+      this.logger.warn && this.logger.warn("开发模式：回退到系统Python");
       return await this.findPythonExecutableWithFallback();
     }
 
     // 生产模式下不回退，确保完全隔离
     throw new Error(
-      "嵌入式Python环境不可用。请重新安装应用或运行构建脚本准备Python环境。"
+      "嵌入式Python环境不可用。请重新安装应用或运行构建脚本准备Python环境。",
     );
   }
 
   async findPythonExecutableWithFallback() {
     // 保留原有的查找逻辑作为开发时的回退方案
     const projectRoot = path.join(__dirname, "..", "..");
-      
+
     const possiblePaths = [
       // 优先使用 uv 虚拟环境中的 Python
       path.join(projectRoot, ".venv", "bin", "python3.11"),
       path.join(projectRoot, ".venv", "bin", "python3"),
       path.join(projectRoot, ".venv", "bin", "python"),
+      // Windows: uv venv uses Scripts/ directory
+      path.join(projectRoot, ".venv", "Scripts", "python.exe"),
+      path.join(projectRoot, ".venv", "Scripts", "python3.11.exe"),
+      path.join(projectRoot, ".venv", "Scripts", "python3.exe"),
       // 然后尝试系统路径
       "python3.11",
       "python3",
@@ -909,9 +966,7 @@ class FunASRManager {
       }
     }
 
-    throw new Error(
-      "未找到 Python 3.x。使用 installPython() 自动安装。"
-    );
+    throw new Error("未找到 Python 3.x。使用 installPython() 自动安装。");
   }
 
   async getPythonVersion(pythonPath) {
@@ -919,15 +974,15 @@ class FunASRManager {
       // 如果是嵌入式Python，使用完整的环境变量
       const isEmbedded = pythonPath === this.getEmbeddedPythonPath();
       const env = isEmbedded ? this.buildPythonEnvironment() : process.env;
-      
+
       const testProcess = spawn(pythonPath, ["--version"], {
-        env: env
+        env: env,
       });
       let output = "";
-      
-      testProcess.stdout.on("data", (data) => output += data);
-      testProcess.stderr.on("data", (data) => output += data);
-      
+
+      testProcess.stdout.on("data", (data) => (output += data));
+      testProcess.stderr.on("data", (data) => (output += data));
+
       testProcess.on("close", (code) => {
         if (code === 0) {
           const match = output.match(/Python (\d+)\.(\d+)/i);
@@ -936,7 +991,7 @@ class FunASRManager {
           resolve(null);
         }
       });
-      
+
       testProcess.on("error", () => resolve(null));
     });
   }
@@ -950,9 +1005,9 @@ class FunASRManager {
     try {
       // 清除缓存的 Python 命令，因为我们正在安装新的
       this.pythonCmd = null;
-      
+
       const result = await this.pythonInstaller.installPython(progressCallback);
-      
+
       // 安装后，尝试重新找到 Python
       try {
         await this.findPythonExecutable();
@@ -960,7 +1015,6 @@ class FunASRManager {
       } catch (findError) {
         throw new Error("Python 已安装但在 PATH 中未找到。请重启应用程序。");
       }
-      
     } catch (error) {
       this.logger.error && this.logger.error("Python 安装失败:", error);
       throw error;
@@ -983,21 +1037,22 @@ class FunASRManager {
       const result = await new Promise((resolve) => {
         // 确保使用正确的Python环境
         const pythonEnv = this.buildPythonEnvironment();
-        
-        const checkProcess = spawn(pythonCmd, [
-          "-c",
-          'import funasr; print("OK")',
-        ], {
-          env: pythonEnv
-        });
+
+        const checkProcess = spawn(
+          pythonCmd,
+          ["-c", 'import funasr; print("OK")'],
+          {
+            env: pythonEnv,
+          },
+        );
 
         let output = "";
         let errorOutput = "";
-        
+
         checkProcess.stdout.on("data", (data) => {
           output += data.toString();
         });
-        
+
         checkProcess.stderr.on("data", (data) => {
           errorOutput += data.toString();
         });
@@ -1006,12 +1061,17 @@ class FunASRManager {
           if (code === 0 && output.includes("OK")) {
             resolve({ installed: true, working: true });
           } else {
-            this.logger.error && this.logger.error('FunASR检查失败', {
-              code,
-              output,
-              errorOutput
+            this.logger.error &&
+              this.logger.error("FunASR检查失败", {
+                code,
+                output,
+                errorOutput,
+              });
+            resolve({
+              installed: false,
+              working: false,
+              error: errorOutput || output,
             });
-            resolve({ installed: false, working: false, error: errorOutput || output });
           }
         });
 
@@ -1034,81 +1094,103 @@ class FunASRManager {
   }
 
   async upgradePip(pythonCmd) {
-    return runCommand(pythonCmd, ["-m", "pip", "install", "--upgrade", "pip"], { timeout: TIMEOUTS.PIP_UPGRADE });
+    return runCommand(pythonCmd, ["-m", "pip", "install", "--upgrade", "pip"], {
+      timeout: TIMEOUTS.PIP_UPGRADE,
+    });
   }
 
   async installFunASR(progressCallback = null) {
     const pythonCmd = await this.findPythonExecutable();
-    
+
     if (progressCallback) {
       progressCallback({ stage: "升级 pip...", percentage: 10 });
     }
-    
+
     // 首先升级 pip 以避免版本问题
     try {
       await this.upgradePip(pythonCmd);
     } catch (error) {
-      this.logger.warn && this.logger.warn("第一次 pip 升级尝试失败:", error.message);
-      
+      this.logger.warn &&
+        this.logger.warn("第一次 pip 升级尝试失败:", error.message);
+
       // 尝试用户安装方式升级 pip
       try {
-        await runCommand(pythonCmd, ["-m", "pip", "install", "--user", "--upgrade", "pip"], { timeout: TIMEOUTS.PIP_UPGRADE });
+        await runCommand(
+          pythonCmd,
+          ["-m", "pip", "install", "--user", "--upgrade", "pip"],
+          { timeout: TIMEOUTS.PIP_UPGRADE },
+        );
       } catch (userError) {
         this.logger.warn && this.logger.warn("pip 升级完全失败，尝试继续");
       }
     }
-    
+
     if (progressCallback) {
       progressCallback({ stage: "安装 FunASR...", percentage: 30 });
     }
-    
+
     // 安装 FunASR 和相关依赖
     try {
       // 首先尝试常规安装
-      await runCommand(pythonCmd, ["-m", "pip", "install", "-U", "funasr"], { timeout: TIMEOUTS.DOWNLOAD });
-      
+      await runCommand(pythonCmd, ["-m", "pip", "install", "-U", "funasr"], {
+        timeout: TIMEOUTS.DOWNLOAD,
+      });
+
       if (progressCallback) {
         progressCallback({ stage: "安装 librosa...", percentage: 60 });
       }
-      
+
       // 安装 librosa（音频处理库）
-      await runCommand(pythonCmd, ["-m", "pip", "install", "-U", "librosa"], { timeout: TIMEOUTS.DOWNLOAD });
-      
+      await runCommand(pythonCmd, ["-m", "pip", "install", "-U", "librosa"], {
+        timeout: TIMEOUTS.DOWNLOAD,
+      });
+
       if (progressCallback) {
         progressCallback({ stage: "安装完成！", percentage: 100 });
       }
-      
+
       // 清除缓存状态
       this.funasrInstalled = null;
-      
+
       return { success: true, message: "FunASR 安装成功" };
-      
     } catch (error) {
-      if (error.message.includes("Permission denied") || error.message.includes("access is denied")) {
+      if (
+        error.message.includes("Permission denied") ||
+        error.message.includes("access is denied")
+      ) {
         // 使用用户安装方式重试
         try {
-          await runCommand(pythonCmd, ["-m", "pip", "install", "--user", "-U", "funasr"], { timeout: TIMEOUTS.DOWNLOAD });
-          await runCommand(pythonCmd, ["-m", "pip", "install", "--user", "-U", "librosa"], { timeout: TIMEOUTS.DOWNLOAD });
-          
+          await runCommand(
+            pythonCmd,
+            ["-m", "pip", "install", "--user", "-U", "funasr"],
+            { timeout: TIMEOUTS.DOWNLOAD },
+          );
+          await runCommand(
+            pythonCmd,
+            ["-m", "pip", "install", "--user", "-U", "librosa"],
+            { timeout: TIMEOUTS.DOWNLOAD },
+          );
+
           if (progressCallback) {
             progressCallback({ stage: "安装完成！", percentage: 100 });
           }
-          
+
           this.funasrInstalled = null;
           return { success: true, message: "FunASR 安装成功（用户模式）" };
         } catch (userError) {
           throw new Error(`FunASR 安装失败: ${userError.message}`);
         }
       }
-      
+
       // 增强常见问题的错误消息
       let message = error.message;
       if (message.includes("Microsoft Visual C++")) {
-        message = "需要 Microsoft Visual C++ 构建工具。请安装 Visual Studio Build Tools。";
+        message =
+          "需要 Microsoft Visual C++ 构建工具。请安装 Visual Studio Build Tools。";
       } else if (message.includes("No matching distribution")) {
         message = "Python 版本不兼容。FunASR 需要 Python 3.8-3.11。";
       }
-      
+
       throw new Error(message);
     }
   }
@@ -1122,35 +1204,35 @@ class FunASRManager {
 
     // 如果服务器还未就绪，等待初始化完成
     if (!this.serverReady && this.initializationPromise) {
-      this.logger.info && this.logger.info('等待FunASR服务器就绪...');
+      this.logger.info && this.logger.info("等待FunASR服务器就绪...");
       await this.initializationPromise;
     }
 
     const tempAudioPath = await this.createTempAudioFile(audioBlob);
-    
+
     try {
       if (!this.serverReady) {
-        throw new Error('FunASR服务器未就绪，请稍后重试');
+        throw new Error("FunASR服务器未就绪，请稍后重试");
       }
-      
+
       // 使用服务器模式
-      this.logger.info && this.logger.info('使用FunASR服务器模式进行转录');
+      this.logger.info && this.logger.info("使用FunASR服务器模式进行转录");
       const result = await this._sendServerCommand({
-        action: 'transcribe',
+        action: "transcribe",
         audio_path: tempAudioPath,
-        options: options
+        options: options,
       });
-      
+
       if (!result.success) {
-        throw new Error(result.error || '转录失败');
+        throw new Error(result.error || "转录失败");
       }
-      
+
       return {
         success: true,
         text: result.text.trim(),
         raw_text: result.raw_text,
         confidence: result.confidence || 0.0,
-        language: result.language || "zh-CN"
+        language: result.language || "zh-CN",
       };
     } catch (error) {
       throw error;
@@ -1163,8 +1245,8 @@ class FunASRManager {
     const tempDir = os.tmpdir();
     const filename = `funasr_audio_${crypto.randomUUID()}.wav`;
     const tempAudioPath = path.join(tempDir, filename);
-    
-    this.logger.info && this.logger.info('创建临时文件:', tempAudioPath);
+
+    this.logger.info && this.logger.info("创建临时文件:", tempAudioPath);
 
     let buffer;
     if (audioBlob instanceof ArrayBuffer) {
@@ -1178,26 +1260,26 @@ class FunASRManager {
     } else {
       throw new Error(`不支持的音频数据类型: ${typeof audioBlob}`);
     }
-    
-    this.logger.debug && this.logger.debug('缓冲区创建，大小:', buffer.length);
+
+    this.logger.debug && this.logger.debug("缓冲区创建，大小:", buffer.length);
 
     await fs.promises.writeFile(tempAudioPath, buffer);
-    
+
     // 验证文件是否正确写入
     const stats = await fs.promises.stat(tempAudioPath);
-    this.logger.info && this.logger.info('临时音频文件创建:', {
-      path: tempAudioPath,
-      size: stats.size,
-      isFile: stats.isFile()
-    });
-    
+    this.logger.info &&
+      this.logger.info("临时音频文件创建:", {
+        path: tempAudioPath,
+        size: stats.size,
+        isFile: stats.isFile(),
+      });
+
     if (stats.size === 0) {
       throw new Error("音频文件为空");
     }
-    
+
     return tempAudioPath;
   }
-
 
   async cleanupTempFile(tempAudioPath) {
     try {
@@ -1207,15 +1289,194 @@ class FunASRManager {
     }
   }
 
+  _getFFmpegPath() {
+    try {
+      const ffmpegStatic = require("ffmpeg-static");
+      if (ffmpegStatic && fs.existsSync(ffmpegStatic)) {
+        return ffmpegStatic;
+      }
+    } catch {}
+    return "ffmpeg";
+  }
+
+  async convertAudioFile(inputPath) {
+    const ext = path.extname(inputPath).toLowerCase();
+    const directFormats = [".wav", ".flac"];
+    if (directFormats.includes(ext)) {
+      return inputPath;
+    }
+
+    const ffmpegPath = this._getFFmpegPath();
+    const outputName = `funasr_conv_${crypto.randomUUID()}.wav`;
+    const outputPath = path.join(os.tmpdir(), outputName);
+
+    return new Promise((resolve, reject) => {
+      const args = [
+        "-i",
+        inputPath,
+        "-ar",
+        "16000",
+        "-ac",
+        "1",
+        "-f",
+        "wav",
+        outputPath,
+      ];
+      const proc = spawn(ffmpegPath, args, { windowsHide: true });
+
+      let stderrOutput = "";
+      proc.stderr.on("data", (d) => {
+        stderrOutput += d.toString();
+      });
+
+      const timeout = setTimeout(
+        () => {
+          proc.kill("SIGKILL");
+          reject(new Error("ffmpeg 转换超时（5分钟）"));
+        },
+        5 * 60 * 1000,
+      );
+
+      proc.on("error", (err) => {
+        clearTimeout(timeout);
+        reject(new Error(`ffmpeg 启动失败: ${err.message}`));
+      });
+
+      proc.on("close", (code) => {
+        clearTimeout(timeout);
+        if (code === 0 && fs.existsSync(outputPath)) {
+          resolve(outputPath);
+        } else {
+          if (fs.existsSync(outputPath)) {
+            try {
+              fs.unlinkSync(outputPath);
+            } catch {}
+          }
+          reject(
+            new Error(
+              `ffmpeg 转换失败 (code=${code}): ${stderrOutput.slice(-200)}`,
+            ),
+          );
+        }
+      });
+    });
+  }
+
+  async transcribeFile(audioPath, options = {}) {
+    const MAX_FILE_SIZE = 500 * 1024 * 1024;
+    const ALLOWED_EXT = [
+      ".wav",
+      ".mp3",
+      ".m4a",
+      ".flac",
+      ".ogg",
+      ".wma",
+      ".aac",
+    ];
+
+    if (!audioPath || typeof audioPath !== "string") {
+      return { success: false, error: "无效的文件路径", code: "INVALID_PATH" };
+    }
+
+    const ext = path.extname(audioPath).toLowerCase();
+    if (!ALLOWED_EXT.includes(ext)) {
+      return {
+        success: false,
+        error: `不支持的格式: ${ext}`,
+        code: "FORMAT_NOT_SUPPORTED",
+      };
+    }
+
+    let stats;
+    try {
+      stats = fs.statSync(audioPath);
+    } catch {
+      return {
+        success: false,
+        error: "文件不存在或无法访问",
+        code: "FILE_NOT_FOUND",
+      };
+    }
+
+    if (stats.size > MAX_FILE_SIZE) {
+      return {
+        success: false,
+        error: "文件超过500MB限制",
+        code: "FILE_TOO_LARGE",
+      };
+    }
+
+    if (!this.serverReady) {
+      if (this.initializationPromise) {
+        await this.initializationPromise;
+      }
+      if (!this.serverReady) {
+        return {
+          success: false,
+          error: "FunASR服务器未就绪",
+          code: "SERVER_NOT_READY",
+        };
+      }
+    }
+
+    let wavPath = audioPath;
+    let converted = false;
+    try {
+      if (ext !== ".wav" && ext !== ".flac") {
+        wavPath = await this.convertAudioFile(audioPath);
+        converted = true;
+      }
+
+      const result = await this.messageRouter.sendCommand(
+        "transcribe_file",
+        { audio_path: wavPath, options },
+        {
+          timeout: 600000,
+          timeoutError: "文件转录超时（10分钟）",
+          onProgress: options.onProgress || null,
+        },
+      );
+
+      return result;
+    } catch (err) {
+      return {
+        success: false,
+        error: err.message,
+        code: "TRANSCRIPTION_FAILED",
+      };
+    } finally {
+      if (converted && wavPath !== audioPath) {
+        try {
+          fs.unlinkSync(wavPath);
+        } catch {}
+      }
+    }
+  }
+
+  async cancelTranscription() {
+    if (!this.serverReady) {
+      return { success: false, error: "服务器未就绪" };
+    }
+    try {
+      return await this.messageRouter.sendCommand(
+        "cancel_transcription",
+        {},
+        { timeout: 5000 },
+      );
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  }
+
   async checkStatus() {
     try {
       if (this.serverReady) {
-        return await this._sendServerCommand({ action: 'status' });
+        return await this._sendServerCommand({ action: "status" });
       } else {
         // 检查FunASR是否已安装
         const installStatus = await this.checkFunASRInstallation();
         const modelStatus = await this.checkModelFiles();
-        
+
         let error = "FunASR未安装";
         if (installStatus.installed) {
           if (!modelStatus.models_downloaded) {
@@ -1224,14 +1485,14 @@ class FunASRManager {
             error = "FunASR服务器正在启动中...";
           }
         }
-        
+
         return {
           success: installStatus.installed && modelStatus.models_downloaded,
           error: error,
           installed: installStatus.installed,
           models_downloaded: modelStatus.models_downloaded,
           missing_models: modelStatus.missing_models || [],
-          initializing: this.initializationPromise !== null
+          initializing: this.initializationPromise !== null,
         };
       }
     } catch (error) {
@@ -1239,7 +1500,7 @@ class FunASRManager {
         success: false,
         error: error.message,
         installed: false,
-        models_downloaded: false
+        models_downloaded: false,
       };
     }
   }

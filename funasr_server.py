@@ -15,11 +15,12 @@ import contextlib
 import io
 import argparse
 import glob
+import threading
+import queue
 from pathlib import Path
 
 # 设置日志
 import tempfile
-import os
 
 
 # 获取日志文件路径
@@ -29,7 +30,7 @@ def get_log_path():
         log_dir = os.path.join(os.environ["ELECTRON_USER_DATA"], "logs")
     else:
         # 回退到临时目录
-        log_dir = os.path.join(tempfile.gettempdir(), "ququ_logs")
+        log_dir = os.path.join(tempfile.gettempdir(), "murmur_logs")
 
     # 确保日志目录存在
     os.makedirs(log_dir, exist_ok=True)
@@ -75,6 +76,12 @@ class FunASRServer:
         self.transcription_count = 0
         self.total_audio_duration = 0.0
 
+        self.request_queue = queue.Queue()
+        self.response_queue = queue.Queue()
+        self.cancel_event = threading.Event()
+        self._inference_thread = None
+        self._output_thread = None
+
         # 外部传入的 damo 根目录（例如 /Volumes/APFS/AI/models/damo）
         self.damo_root = damo_root or os.environ.get("DAMO_ROOT")
 
@@ -92,6 +99,57 @@ class FunASRServer:
             logger.info("运行时环境变量设置完成")
         except Exception as e:
             logger.warning(f"环境设置失败: {str(e)}")
+
+    ALLOWED_EXTENSIONS = {'.wav', '.mp3', '.m4a', '.flac', '.ogg', '.wma', '.aac'}
+
+    def _validate_audio_path(self, audio_path):
+        """验证音频文件路径安全性"""
+        if not audio_path or not isinstance(audio_path, str):
+            return False, "无效的音频路径"
+
+        # 解析符号链接
+        real_path = os.path.realpath(audio_path)
+
+        # 检查扩展名
+        ext = os.path.splitext(real_path)[1].lower()
+        if ext not in self.ALLOWED_EXTENSIONS:
+            return False, f"不支持的音频格式: {ext}"
+
+        # 检查文件存在且可读
+        if not os.path.isfile(real_path):
+            return False, f"文件不存在: {audio_path}"
+
+        if not os.access(real_path, os.R_OK):
+            return False, f"文件不可读: {audio_path}"
+
+        return True, real_path
+
+    def _merge_segments(self, raw_segments):
+        """基于标点合并短segments为完整句子"""
+        if not raw_segments:
+            return []
+
+        merged = []
+        current = None
+
+        for seg in raw_segments:
+            if current is None:
+                current = {"start_ms": seg["start_ms"], "end_ms": seg["end_ms"], "text": seg["text"]}
+            else:
+                text = current["text"]
+                # 如果当前文本以句末标点结尾，或者是长segment，开始新的
+                if (text and text[-1] in '。！？；\n') or (current["end_ms"] - current["start_ms"]) >= 5000:
+                    merged.append(current)
+                    current = {"start_ms": seg["start_ms"], "end_ms": seg["end_ms"], "text": seg["text"]}
+                else:
+                    # 合并
+                    current["text"] = text + seg["text"]
+                    current["end_ms"] = seg["end_ms"]
+
+        if current:
+            merged.append(current)
+
+        return merged
 
     def _signal_handler(self, signum, frame):
         """处理退出信号"""
@@ -350,6 +408,158 @@ class FunASRServer:
             logger.error(traceback.format_exc())
             return {"success": False, "error": error_msg, "type": "transcription_error"}
 
+    def transcribe_file_audio(self, audio_path, options=None):
+        """带时间戳的文件转录，用于 transcribe_file 命令"""
+        if options is None:
+            options = {}
+
+        request_id = options.get("request_id", "")
+        self.cancel_event.clear()  # 开始新转录前重置取消信号
+
+        try:
+            # 路径验证
+            valid, result = self._validate_audio_path(audio_path)
+            if not valid:
+                return {"success": False, "error": result}
+            audio_path = result
+
+            # 获取音频时长
+            duration = self._get_audio_duration(audio_path)
+
+            # 发送进度：VAD阶段
+            self.response_queue.put({
+                "request_id": request_id,
+                "type": "progress",
+                "phase": "vad",
+                "message": "语音检测中..."
+            })
+
+            # VAD 处理
+            use_vad = options.get("use_vad", True)
+            raw_text = ""
+            raw_segments = []
+
+            vad_segments = []
+            if use_vad and self.vad_model:
+                vad_result = self.vad_model.generate(input=audio_path)
+                if vad_result and len(vad_result) > 0:
+                    vad_segments = vad_result[0].get("value", [])
+
+            # ASR 阶段 — 单次全文件推理（VAD 仅用于进度估算和备用分段）
+            total_ms = int(duration * 1000) if duration else 0
+            self.response_queue.put({
+                "request_id": request_id,
+                "type": "progress",
+                "phase": "asr",
+                "message": "语音识别中...",
+                "processed_ms": 0,
+                "total_ms": total_ms
+            })
+
+            if self.cancel_event.is_set():
+                return {"success": False, "error": "转录已取消", "request_id": request_id}
+
+            asr_result = self.asr_model.generate(
+                input=audio_path,
+                batch_size_s=60
+            )
+            if asr_result and len(asr_result) > 0:
+                raw_text = asr_result[0].get("text", "")
+
+                # 使用 ASR 返回的时间戳构建 segments
+                timestamps = asr_result[0].get("timestamp")
+                if timestamps and raw_text:
+                    # timestamps 是 [[start_ms, end_ms], ...]，对应每个字/词
+                    chars = list(raw_text.replace(" ", ""))
+                    seg_text = ""
+                    seg_start = timestamps[0][0] if timestamps else 0
+                    seg_end = timestamps[0][1] if timestamps else 0
+                    char_idx = 0
+
+                    for ts in timestamps:
+                        seg_end = ts[1]
+                        if char_idx < len(chars):
+                            seg_text += chars[char_idx]
+                            char_idx += 1
+                        # 每当遇到句末标点或累积超过一定长度，切分一个 segment
+                        if seg_text and (seg_text[-1] in "。！？；\n" or len(seg_text) >= 20):
+                            raw_segments.append({
+                                "start_ms": seg_start,
+                                "end_ms": seg_end,
+                                "text": seg_text
+                            })
+                            seg_text = ""
+                            seg_start = ts[1] if char_idx < len(timestamps) else seg_end
+                    if seg_text:
+                        raw_segments.append({
+                            "start_ms": seg_start,
+                            "end_ms": seg_end,
+                            "text": seg_text
+                        })
+                elif vad_segments:
+                    # ASR 未返回时间戳，用 VAD 段落作为分段，文本为完整转录
+                    total_vad_ms = sum(e - s for s, e in vad_segments)
+                    per_ms_text = len(raw_text) / total_vad_ms if total_vad_ms > 0 else 0
+                    offset = 0
+                    for start_ms, end_ms in vad_segments:
+                        seg_len = max(1, int((end_ms - start_ms) * per_ms_text))
+                        seg_text = raw_text[offset:offset + seg_len]
+                        if seg_text:
+                            raw_segments.append({
+                                "start_ms": start_ms,
+                                "end_ms": end_ms,
+                                "text": seg_text
+                            })
+                        offset += seg_len
+
+            self.response_queue.put({
+                "request_id": request_id,
+                "type": "progress",
+                "phase": "asr",
+                "message": "语音识别中...",
+                "processed_ms": total_ms,
+                "total_ms": total_ms
+            })
+            # 标点恢复
+            self.response_queue.put({
+                "request_id": request_id,
+                "type": "progress",
+                "phase": "punc",
+                "message": "标点恢复中..."
+            })
+
+            text = raw_text
+            if self.punc_model and text:
+                punc_result = self.punc_model.generate(input=text)
+                if punc_result and len(punc_result) > 0:
+                    text = punc_result[0].get("text", raw_text)
+
+            # 智能合并 segments
+            segments = self._merge_segments(raw_segments) if raw_segments else []
+
+            # GC
+            self.transcription_count += 1
+            if self.transcription_count % 5 == 0:
+                self._cleanup_memory()
+
+            return {
+                "success": True,
+                "text": text,
+                "raw_text": raw_text,
+                "segments": segments,
+                "raw_segments": raw_segments,
+                "duration": duration,
+                "confidence": 0.9,
+                "language": "zh-CN"
+            }
+        except Exception as e:
+            logger.error(f"文件转录异常: {str(e)}\n{traceback.format_exc()}")
+            return {
+                "success": False,
+                "error": str(e),
+                "request_id": request_id
+            }
+
     def _get_audio_duration(self, audio_path):
         """获取音频时长"""
         try:
@@ -358,7 +568,7 @@ class FunASRServer:
             duration = librosa.get_duration(filename=audio_path)
             self.total_audio_duration += duration  # 累计音频时长
             return duration
-        except:
+        except Exception:
             return 0.0
 
     def _cleanup_memory(self):
@@ -410,6 +620,53 @@ class FunASRServer:
                 "initialized": False,
                 "error": "FunASR未安装",
             }
+
+    def _inference_worker(self):
+        """推理线程：从 request_queue 取任务，执行推理"""
+        while self.running:
+            try:
+                task = self.request_queue.get(timeout=1.0)
+                if task is None:
+                    break
+
+                request_id = task.get("request_id", "")
+                action = task.get("action")
+
+                try:
+                    if action == "transcribe_file":
+                        result = self.transcribe_file_audio(
+                            task.get("audio_path"),
+                            task.get("options", {})
+                        )
+                    else:
+                        result = {"success": False, "error": f"推理线程不支持的动作: {action}"}
+
+                    result["request_id"] = request_id
+                    result["type"] = "result"
+                    self.response_queue.put(result)
+                except Exception as e:
+                    self.response_queue.put({
+                        "request_id": request_id,
+                        "type": "result",
+                        "success": False,
+                        "error": str(e)
+                    })
+            except queue.Empty:
+                continue
+
+        logger.info("推理线程退出")
+
+    def _output_worker(self):
+        """输出线程：从 response_queue 取结果，写入 stdout"""
+        while self.running:
+            try:
+                msg = self.response_queue.get(timeout=0.5)
+                print(json.dumps(msg, ensure_ascii=False))
+                sys.stdout.flush()
+            except queue.Empty:
+                continue
+
+        logger.info("输出线程退出")
 
     def run(self):
         """运行服务器主循环"""
@@ -471,6 +728,12 @@ class FunASRServer:
         print(json.dumps(init_result, ensure_ascii=False))
         sys.stdout.flush()
 
+        # 启动推理线程和输出线程
+        self._inference_thread = threading.Thread(target=self._inference_worker, daemon=True)
+        self._output_thread = threading.Thread(target=self._output_worker, daemon=True)
+        self._inference_thread.start()
+        self._output_thread.start()
+
         while self.running:
             try:
                 # 读取命令
@@ -490,6 +753,9 @@ class FunASRServer:
                     sys.stdout.flush()
                     continue
 
+                # 提取 request_id 用于响应关联
+                request_id = command.get("request_id", "")
+
                 # 处理命令
                 if command.get("action") == "transcribe":
                     audio_path = command.get("audio_path")
@@ -502,8 +768,23 @@ class FunASRServer:
                 elif command.get("action") == "cleanup":
                     self._cleanup_memory()
                     result = {"success": True, "message": "内存清理完成"}
+                elif command.get("action") == "transcribe_file":
+                    # 放入推理队列，不立即返回确认
+                    # 推理结果和进度通过 response_queue → output_worker → stdout 发送
+                    self.request_queue.put({
+                        "request_id": request_id,
+                        "action": "transcribe_file",
+                        "audio_path": command.get("audio_path"),
+                        "options": command.get("options", {})
+                    })
+                    continue
+                elif command.get("action") == "cancel_transcription":
+                    self.cancel_event.set()
+                    result = {"success": True, "message": "取消信号已发送"}
                 elif command.get("action") == "exit":
                     result = {"success": True, "message": "服务器退出"}
+                    if request_id:
+                        result["request_id"] = request_id
                     print(json.dumps(result, ensure_ascii=False))
                     sys.stdout.flush()
                     break
@@ -513,7 +794,9 @@ class FunASRServer:
                         "error": f"未知命令: {command.get('action')}",
                     }
 
-                # 输出结果
+                # 输出结果（附带 request_id）
+                if request_id:
+                    result["request_id"] = request_id
                 print(json.dumps(result, ensure_ascii=False))
                 sys.stdout.flush()
 

@@ -36,7 +36,9 @@ class WindowManager {
     if (isDev) {
       await this.mainWindow.loadURL("http://localhost:5173");
     } else {
-      await this.mainWindow.loadFile(path.join(__dirname, "..", "dist", "index.html"));
+      await this.mainWindow.loadFile(
+        path.join(__dirname, "..", "dist", "index.html"),
+      );
     }
 
     this.mainWindow.on("closed", () => {
@@ -66,11 +68,13 @@ class WindowManager {
     const isDev = process.env.NODE_ENV === "development";
 
     if (isDev) {
-      await this.controlPanelWindow.loadURL("http://localhost:5173?panel=control");
+      await this.controlPanelWindow.loadURL(
+        "http://localhost:5173?panel=control",
+      );
     } else {
       await this.controlPanelWindow.loadFile(
         path.join(__dirname, "..", "dist", "index.html"),
-        { query: { panel: "control" } }
+        { query: { panel: "control" } },
       );
     }
 
@@ -91,7 +95,7 @@ class WindowManager {
       width: 1000,
       height: 700,
       show: false,
-      title: "转录历史 - 蛐蛐",
+      title: "转录历史 - Murmur",
       alwaysOnTop: true,
       webPreferences: {
         nodeIntegration: false,
@@ -106,7 +110,7 @@ class WindowManager {
       await this.historyWindow.loadURL("http://localhost:5173/history.html");
     } else {
       await this.historyWindow.loadFile(
-        path.join(__dirname, "..", "dist", "history.html")
+        path.join(__dirname, "..", "dist", "history.html"),
       );
     }
 
@@ -127,7 +131,7 @@ class WindowManager {
       width: 700,
       height: 600,
       show: false,
-      title: "设置 - 蛐蛐",
+      title: "设置 - Murmur",
       alwaysOnTop: true,
       webPreferences: {
         nodeIntegration: false,
@@ -142,7 +146,7 @@ class WindowManager {
       await this.settingsWindow.loadURL("http://localhost:5173?page=settings");
     } else {
       await this.settingsWindow.loadFile(
-        path.join(__dirname, "..", "dist", "settings.html")
+        path.join(__dirname, "..", "dist", "settings.html"),
       );
     }
 

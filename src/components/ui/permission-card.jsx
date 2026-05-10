@@ -15,8 +15,12 @@ const PermissionCard = ({
         <div className="flex items-center gap-1.5">
           <Icon className="w-3 h-3 text-blue-600 dark:text-blue-400 flex-shrink-0" />
           <div className="min-w-0">
-            <h3 className="text-xs font-medium text-gray-900 dark:text-gray-100 chinese-title truncate">{title}</h3>
-            <p className="text-xs text-gray-600 dark:text-gray-400 truncate">{description}</p>
+            <h3 className="text-xs font-medium text-gray-900 dark:text-gray-100 chinese-title truncate">
+              {title}
+            </h3>
+            <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+              {description}
+            </p>
           </div>
         </div>
         {granted ? (

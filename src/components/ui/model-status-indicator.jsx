@@ -1,24 +1,38 @@
-import React from 'react';
-import { CheckCircle, AlertCircle, Loader2, Download, Clock } from 'lucide-react';
+import React from "react";
+import {
+  CheckCircle,
+  AlertCircle,
+  Loader2,
+  Download,
+  Clock,
+} from "lucide-react";
 
 /**
  * 模型状态指示器组件
  * 显示FunASR模型的下载、加载状态
  */
-export const ModelStatusIndicator = ({ modelStatus, className = "", onDownload = null }) => {
+export const ModelStatusIndicator = ({
+  modelStatus,
+  className = "",
+  onDownload = null,
+}) => {
   const getStatusIcon = () => {
     switch (modelStatus.stage) {
-      case 'checking':
-        return <Loader2 className="w-4 h-4 animate-spin text-blue-500 model-loading" />;
-      case 'need_download':
+      case "checking":
+        return (
+          <Loader2 className="w-4 h-4 animate-spin text-blue-500 model-loading" />
+        );
+      case "need_download":
         return <Download className="w-4 h-4 text-orange-500" />;
-      case 'downloading':
-        return <Loader2 className="w-4 h-4 animate-spin text-blue-500 model-downloading" />;
-      case 'loading':
+      case "downloading":
+        return (
+          <Loader2 className="w-4 h-4 animate-spin text-blue-500 model-downloading" />
+        );
+      case "loading":
         return <Clock className="w-4 h-4 text-blue-500 model-loading" />;
-      case 'ready':
+      case "ready":
         return <CheckCircle className="w-4 h-4 text-green-500 model-ready" />;
-      case 'error':
+      case "error":
         return <AlertCircle className="w-4 h-4 text-red-500 model-error" />;
       default:
         return <Download className="w-4 h-4 text-gray-500" />;
@@ -27,17 +41,17 @@ export const ModelStatusIndicator = ({ modelStatus, className = "", onDownload =
 
   const getStatusText = () => {
     switch (modelStatus.stage) {
-      case 'checking':
+      case "checking":
         return "检查模型状态...";
-      case 'need_download':
+      case "need_download":
         return "需要下载模型";
-      case 'downloading':
+      case "downloading":
         return "正在下载模型...";
-      case 'loading':
+      case "loading":
         return "模型加载中...";
-      case 'ready':
+      case "ready":
         return "模型已就绪";
-      case 'error':
+      case "error":
         return "模型错误";
       default:
         return "模型状态未知";
@@ -46,15 +60,15 @@ export const ModelStatusIndicator = ({ modelStatus, className = "", onDownload =
 
   const getStatusColor = () => {
     switch (modelStatus.stage) {
-      case 'checking':
-      case 'downloading':
-      case 'loading':
+      case "checking":
+      case "downloading":
+      case "loading":
         return "text-blue-600";
-      case 'need_download':
+      case "need_download":
         return "text-orange-600";
-      case 'ready':
+      case "ready":
         return "text-green-600";
-      case 'error':
+      case "error":
         return "text-red-600";
       default:
         return "text-gray-600";
@@ -78,11 +92,9 @@ export const ModelStatusIndicator = ({ modelStatus, className = "", onDownload =
         {getStatusText()}
       </span>
       {getProgressText() && (
-        <span className="text-xs text-gray-500">
-          ({getProgressText()})
-        </span>
+        <span className="text-xs text-gray-500">({getProgressText()})</span>
       )}
-      {modelStatus.stage === 'need_download' && onDownload && (
+      {modelStatus.stage === "need_download" && onDownload && (
         <button
           onClick={onDownload}
           className="ml-2 px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
@@ -98,20 +110,32 @@ export const ModelStatusIndicator = ({ modelStatus, className = "", onDownload =
  * 简化的模型状态图标组件
  * 仅显示图标，用于空间受限的地方
  */
-export const ModelStatusIcon = ({ modelStatus, size = "w-5 h-5", showTooltip = true }) => {
+export const ModelStatusIcon = ({
+  modelStatus,
+  size = "w-5 h-5",
+  showTooltip = true,
+}) => {
   const getStatusIcon = () => {
     switch (modelStatus.stage) {
-      case 'checking':
-        return <Loader2 className={`${size} animate-spin text-blue-500 model-loading`} />;
-      case 'need_download':
+      case "checking":
+        return (
+          <Loader2
+            className={`${size} animate-spin text-blue-500 model-loading`}
+          />
+        );
+      case "need_download":
         return <Download className={`${size} text-orange-500`} />;
-      case 'downloading':
-        return <Loader2 className={`${size} animate-spin text-blue-500 model-downloading`} />;
-      case 'loading':
+      case "downloading":
+        return (
+          <Loader2
+            className={`${size} animate-spin text-blue-500 model-downloading`}
+          />
+        );
+      case "loading":
         return <Clock className={`${size} text-blue-500 model-loading`} />;
-      case 'ready':
+      case "ready":
         return <CheckCircle className={`${size} text-green-500 model-ready`} />;
-      case 'error':
+      case "error":
         return <AlertCircle className={`${size} text-red-500 model-error`} />;
       default:
         return <Download className={`${size} text-gray-500`} />;
@@ -120,18 +144,18 @@ export const ModelStatusIcon = ({ modelStatus, size = "w-5 h-5", showTooltip = t
 
   const getTooltipText = () => {
     switch (modelStatus.stage) {
-      case 'checking':
+      case "checking":
         return "🔍 正在检查模型状态...";
-      case 'need_download':
+      case "need_download":
         return "📥 需要下载AI模型文件（约1.1GB）";
-      case 'downloading':
+      case "downloading":
         return `⬇️ 正在下载模型文件... ${modelStatus.downloadProgress || 0}%`;
-      case 'loading':
+      case "loading":
         return "🤖 AI模型加载中，请稍候...";
-      case 'ready':
+      case "ready":
         return "✅ AI模型已就绪，可以开始语音识别";
-      case 'error':
-        return `❌ 模型错误: ${modelStatus.error || '未知错误'}`;
+      case "error":
+        return `❌ 模型错误: ${modelStatus.error || "未知错误"}`;
       default:
         return "⏳ 模型状态未知";
     }
@@ -158,8 +182,12 @@ export const ModelStatusIcon = ({ modelStatus, size = "w-5 h-5", showTooltip = t
  * 模型下载进度组件
  * 显示详细的下载进度信息
  */
-export const ModelDownloadProgress = ({ modelStatus, onDownload, onCancel }) => {
-  if (modelStatus.stage === 'need_download') {
+export const ModelDownloadProgress = ({
+  modelStatus,
+  onDownload,
+  onCancel,
+}) => {
+  if (modelStatus.stage === "need_download") {
     return (
       <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700 rounded-lg p-4">
         <div className="flex items-center justify-between">
@@ -179,18 +207,18 @@ export const ModelDownloadProgress = ({ modelStatus, onDownload, onCancel }) => 
             disabled={modelStatus.isDownloading}
             className={`px-4 py-2 text-white rounded-lg transition-colors text-sm font-medium ${
               modelStatus.isDownloading
-                ? 'bg-gray-400 cursor-not-allowed'
-                : 'bg-orange-500 hover:bg-orange-600'
+                ? "bg-gray-400 cursor-not-allowed"
+                : "bg-orange-500 hover:bg-orange-600"
             }`}
           >
-            {modelStatus.isDownloading ? '准备下载...' : '开始下载'}
+            {modelStatus.isDownloading ? "准备下载..." : "开始下载"}
           </button>
         </div>
       </div>
     );
   }
 
-  if (modelStatus.stage === 'downloading') {
+  if (modelStatus.stage === "downloading") {
     return (
       <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
         <div className="space-y-3">
@@ -215,7 +243,7 @@ export const ModelDownloadProgress = ({ modelStatus, onDownload, onCancel }) => 
               </button>
             )}
           </div>
-          
+
           {/* 进度条 */}
           <div className="space-y-2">
             <div className="flex justify-between text-xs text-blue-600 dark:text-blue-300">

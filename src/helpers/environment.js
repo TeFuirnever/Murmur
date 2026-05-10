@@ -101,13 +101,18 @@ class EnvironmentManager {
   }
 
   getDataDirectory() {
-    const appName = "蛐蛐";
-    
+    const appName = "Murmur";
+
     switch (process.platform) {
       case "win32":
         return path.join(os.homedir(), "AppData", "Roaming", appName);
       case "darwin":
-        return path.join(os.homedir(), "Library", "Application Support", appName);
+        return path.join(
+          os.homedir(),
+          "Library",
+          "Application Support",
+          appName,
+        );
       case "linux":
         return path.join(os.homedir(), ".config", appName);
       default:
@@ -152,25 +157,25 @@ class EnvironmentManager {
 
   validateEnvironment() {
     const issues = [];
-    
+
     // 检查目录权限
     try {
       this.ensureDataDirectory();
     } catch (error) {
       issues.push(`无法创建数据目录: ${error.message}`);
     }
-    
+
     // 检查系统要求
     const systemInfo = this.getSystemInfo();
     const nodeVersion = parseInt(systemInfo.nodeVersion.substring(1));
     if (nodeVersion < 18) {
       issues.push(`Node.js 版本过低: ${systemInfo.nodeVersion}，需要 18+`);
     }
-    
+
     return {
       valid: issues.length === 0,
       issues,
-      systemInfo
+      systemInfo,
     };
   }
 
@@ -189,7 +194,7 @@ class EnvironmentManager {
         logs: this.getLogDirectory(),
         cache: this.getCacheDirectory(),
         models: this.getModelsDirectory(),
-      }
+      },
     };
   }
 }

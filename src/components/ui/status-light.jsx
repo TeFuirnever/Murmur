@@ -1,23 +1,27 @@
-import React from 'react';
+import React from "react";
 
 /**
  * 状态灯组件
  * 使用三种颜色的圆形指示灯显示模型状态
  */
-export const StatusLight = ({ modelStatus, size = "w-3 h-3", showTooltip = true }) => {
+export const StatusLight = ({
+  modelStatus,
+  size = "w-3 h-3",
+  showTooltip = true,
+}) => {
   const getLightColor = () => {
     if (modelStatus.isLoading) {
       return "bg-yellow-500"; // 黄灯 - 加载中
     }
-    
+
     if (modelStatus.error) {
       return "bg-red-500"; // 红灯 - 错误
     }
-    
+
     if (modelStatus.isReady) {
       return "bg-green-500"; // 绿灯 - 就绪
     }
-    
+
     return "bg-gray-400"; // 灰灯 - 未知状态
   };
 
@@ -25,15 +29,15 @@ export const StatusLight = ({ modelStatus, size = "w-3 h-3", showTooltip = true 
     if (modelStatus.isLoading) {
       return "animate-pulse"; // 黄灯闪烁
     }
-    
+
     if (modelStatus.error) {
       return "model-error"; // 红灯闪烁
     }
-    
+
     if (modelStatus.isReady) {
       return "model-ready"; // 绿灯脉冲
     }
-    
+
     return "";
   };
 
@@ -41,20 +45,20 @@ export const StatusLight = ({ modelStatus, size = "w-3 h-3", showTooltip = true 
     if (modelStatus.isLoading) {
       return "🟡 模型加载中";
     }
-    
+
     if (modelStatus.error) {
       return "🔴 模型加载失败";
     }
-    
+
     if (modelStatus.isReady) {
       return "🟢 模型已就绪";
     }
-    
+
     return "⚪ 模型状态未知";
   };
 
   const lightElement = (
-    <div 
+    <div
       className={`${size} rounded-full ${getLightColor()} ${getLightAnimation()} border border-white/30 shadow-sm`}
     />
   );

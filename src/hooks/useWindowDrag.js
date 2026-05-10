@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef } from "react";
 
 /**
  * 窗口拖拽Hook
@@ -13,7 +13,7 @@ export const useWindowDrag = () => {
     setIsDragging(true);
     hasMoved.current = false;
     dragStartPos.current = { x: e.clientX, y: e.clientY };
-    
+
     // 在Electron环境中启用窗口拖拽
     if (window.electronAPI) {
       // CSS的-webkit-app-region: drag已经在draggable类中设置
@@ -21,21 +21,24 @@ export const useWindowDrag = () => {
     }
   }, []);
 
-  const handleMouseMove = useCallback((e) => {
-    if (isDragging) {
-      const deltaX = Math.abs(e.clientX - dragStartPos.current.x);
-      const deltaY = Math.abs(e.clientY - dragStartPos.current.y);
-      
-      // 如果鼠标移动超过5像素，认为是拖拽
-      if (deltaX > 5 || deltaY > 5) {
-        hasMoved.current = true;
+  const handleMouseMove = useCallback(
+    (e) => {
+      if (isDragging) {
+        const deltaX = Math.abs(e.clientX - dragStartPos.current.x);
+        const deltaY = Math.abs(e.clientY - dragStartPos.current.y);
+
+        // 如果鼠标移动超过5像素，认为是拖拽
+        if (deltaX > 5 || deltaY > 5) {
+          hasMoved.current = true;
+        }
       }
-    }
-  }, [isDragging]);
+    },
+    [isDragging],
+  );
 
   const handleMouseUp = useCallback((e) => {
     setIsDragging(false);
-    
+
     // 重置拖拽状态
     setTimeout(() => {
       hasMoved.current = false;
@@ -57,6 +60,6 @@ export const useWindowDrag = () => {
     handleMouseDown,
     handleMouseMove,
     handleMouseUp,
-    handleClick
+    handleClick,
   };
 };

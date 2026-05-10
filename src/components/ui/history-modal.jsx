@@ -11,7 +11,7 @@ const HistoryModal = ({ isOpen, onClose, onCopy }) => {
   // 加载转录历史
   const loadTranscriptions = async () => {
     if (!window.electronAPI) return;
-    
+
     setLoading(true);
     try {
       const result = await window.electronAPI.getTranscriptions(100, 0);
@@ -30,9 +30,12 @@ const HistoryModal = ({ isOpen, onClose, onCopy }) => {
     if (!searchQuery.trim()) {
       setFilteredTranscriptions(transcriptions);
     } else {
-      const filtered = transcriptions.filter(item => 
-        item.text?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.processed_text?.toLowerCase().includes(searchQuery.toLowerCase())
+      const filtered = transcriptions.filter(
+        (item) =>
+          item.text?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          item.processed_text
+            ?.toLowerCase()
+            .includes(searchQuery.toLowerCase()),
       );
       setFilteredTranscriptions(filtered);
     }
@@ -48,10 +51,10 @@ const HistoryModal = ({ isOpen, onClose, onCopy }) => {
   // 删除转录记录
   const handleDelete = async (id) => {
     if (!window.electronAPI) return;
-    
+
     try {
       await window.electronAPI.deleteTranscription(id);
-      setTranscriptions(prev => prev.filter(item => item.id !== id));
+      setTranscriptions((prev) => prev.filter((item) => item.id !== id));
       toast.success("记录已删除");
     } catch (error) {
       console.error("删除记录失败:", error);
@@ -81,17 +84,17 @@ const HistoryModal = ({ isOpen, onClose, onCopy }) => {
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
     if (diffDays === 1) {
-      return `今天 ${date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`;
+      return `今天 ${date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`;
     } else if (diffDays === 2) {
-      return `昨天 ${date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`;
+      return `昨天 ${date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`;
     } else if (diffDays <= 7) {
       return `${diffDays - 1}天前`;
     } else {
-      return date.toLocaleDateString('zh-CN', { 
-        month: 'short', 
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
+      return date.toLocaleDateString("zh-CN", {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
       });
     }
   };
@@ -105,7 +108,9 @@ const HistoryModal = ({ isOpen, onClose, onCopy }) => {
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div className="flex items-center space-x-3">
             <FileText className="w-6 h-6 text-gray-700" />
-            <h2 className="text-xl font-semibold text-gray-900 chinese-title">转录历史</h2>
+            <h2 className="text-xl font-semibold text-gray-900 chinese-title">
+              转录历史
+            </h2>
             <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-sm">
               {filteredTranscriptions.length} 条记录
             </span>
@@ -165,7 +170,9 @@ const HistoryModal = ({ isOpen, onClose, onCopy }) => {
                     </div>
                     <div className="flex space-x-2">
                       <button
-                        onClick={() => handleCopy(item.processed_text || item.text)}
+                        onClick={() =>
+                          handleCopy(item.processed_text || item.text)
+                        }
                         className="p-1 hover:bg-gray-200 rounded transition-colors"
                         title="复制文本"
                       >
@@ -184,7 +191,9 @@ const HistoryModal = ({ isOpen, onClose, onCopy }) => {
                   {/* 原始文本 */}
                   {item.text && (
                     <div className="mb-3">
-                      <h4 className="text-sm font-medium text-gray-700 mb-1">原始识别:</h4>
+                      <h4 className="text-sm font-medium text-gray-700 mb-1">
+                        原始识别:
+                      </h4>
                       <p className="text-gray-900 chinese-content leading-relaxed bg-white p-3 rounded border">
                         {item.text}
                       </p>
@@ -194,7 +203,9 @@ const HistoryModal = ({ isOpen, onClose, onCopy }) => {
                   {/* AI优化文本 */}
                   {item.processed_text && item.processed_text !== item.text && (
                     <div>
-                      <h4 className="text-sm font-medium text-emerald-700 mb-1">AI优化:</h4>
+                      <h4 className="text-sm font-medium text-emerald-700 mb-1">
+                        AI优化:
+                      </h4>
                       <p className="text-gray-900 chinese-content leading-relaxed bg-emerald-50 p-3 rounded border border-emerald-200">
                         {item.processed_text}
                       </p>
@@ -216,7 +227,7 @@ const HistoryModal = ({ isOpen, onClose, onCopy }) => {
               <button
                 onClick={() => {
                   if (window.electronAPI) {
-                    window.electronAPI.exportTranscriptions('txt');
+                    window.electronAPI.exportTranscriptions("txt");
                     toast.success("导出功能已触发");
                   }
                 }}

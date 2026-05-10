@@ -54,7 +54,14 @@
   body {
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
-    font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'WenQuanYi Micro Hei', system-ui, -apple-system, sans-serif;
+    font-family:
+      "PingFang SC",
+      "Hiragino Sans GB",
+      "Microsoft YaHei",
+      "WenQuanYi Micro Hei",
+      system-ui,
+      -apple-system,
+      sans-serif;
     font-size: 16px;
     line-height: 1.6;
   }
@@ -65,7 +72,8 @@
   box-sizing: border-box;
 }
 
-html, body {
+html,
+body {
   margin: 0;
   padding: 0;
   height: 100%;
@@ -82,7 +90,14 @@ html, body {
 
 /* 中文文本优化 - 基于WCAG 2.1标准 */
 .chinese-text {
-  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'WenQuanYi Micro Hei', system-ui, -apple-system, sans-serif;
+  font-family:
+    "PingFang SC",
+    "Hiragino Sans GB",
+    "Microsoft YaHei",
+    "WenQuanYi Micro Hei",
+    system-ui,
+    -apple-system,
+    sans-serif;
   line-height: 1.8;
   letter-spacing: 0.05em;
   word-break: break-word;
@@ -92,7 +107,14 @@ html, body {
 
 /* 中文标题优化 */
 .chinese-title {
-  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'WenQuanYi Micro Hei', system-ui, -apple-system, sans-serif;
+  font-family:
+    "PingFang SC",
+    "Hiragino Sans GB",
+    "Microsoft YaHei",
+    "WenQuanYi Micro Hei",
+    system-ui,
+    -apple-system,
+    sans-serif;
   line-height: 1.4;
   letter-spacing: 0.1em;
   font-weight: 600;
@@ -100,7 +122,14 @@ html, body {
 
 /* 中文内容文本优化 */
 .chinese-content {
-  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'WenQuanYi Micro Hei', system-ui, -apple-system, sans-serif;
+  font-family:
+    "PingFang SC",
+    "Hiragino Sans GB",
+    "Microsoft YaHei",
+    "WenQuanYi Micro Hei",
+    system-ui,
+    -apple-system,
+    sans-serif;
   line-height: 2;
   letter-spacing: 0.08em;
   font-size: 16px;
@@ -109,7 +138,14 @@ html, body {
 
 /* 状态文本优化 */
 .status-text {
-  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'WenQuanYi Micro Hei', system-ui, -apple-system, sans-serif;
+  font-family:
+    "PingFang SC",
+    "Hiragino Sans GB",
+    "Microsoft YaHei",
+    "WenQuanYi Micro Hei",
+    system-ui,
+    -apple-system,
+    sans-serif;
   line-height: 1.6;
   letter-spacing: 0.05em;
   font-weight: 500;
@@ -134,7 +170,8 @@ html, body {
 
 /* 录音按钮动画 */
 @keyframes pulse-recording {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
     transform: scale(1);
   }
@@ -150,7 +187,8 @@ html, body {
 
 /* 波形动画 */
 @keyframes wave {
-  0%, 100% {
+  0%,
+  100% {
     height: 0.5rem;
   }
   50% {
@@ -162,10 +200,18 @@ html, body {
   animation: wave 1s ease-in-out infinite;
 }
 
-.wave-bar:nth-child(1) { animation-delay: 0s; }
-.wave-bar:nth-child(2) { animation-delay: 0.1s; }
-.wave-bar:nth-child(3) { animation-delay: 0.2s; }
-.wave-bar:nth-child(4) { animation-delay: 0.3s; }
+.wave-bar:nth-child(1) {
+  animation-delay: 0s;
+}
+.wave-bar:nth-child(2) {
+  animation-delay: 0.1s;
+}
+.wave-bar:nth-child(3) {
+  animation-delay: 0.2s;
+}
+.wave-bar:nth-child(4) {
+  animation-delay: 0.3s;
+}
 
 /* 处理中动画 */
 @keyframes processing {
@@ -287,12 +333,12 @@ html, body {
     line-height: 1.8;
     letter-spacing: 0.06em;
   }
-  
+
   .chinese-title {
     font-size: 18px;
     line-height: 1.3;
   }
-  
+
   .status-text {
     font-size: 13px;
   }
@@ -304,12 +350,12 @@ html, body {
     line-height: 1.9;
     letter-spacing: 0.07em;
   }
-  
+
   .chinese-title {
     font-size: 20px;
     line-height: 1.35;
   }
-  
+
   .status-text {
     font-size: 14px;
   }
@@ -321,12 +367,12 @@ html, body {
     line-height: 2.1;
     letter-spacing: 0.08em;
   }
-  
+
   .chinese-title {
     font-size: 24px;
     line-height: 1.4;
   }
-  
+
   .status-text {
     font-size: 16px;
   }
@@ -340,12 +386,12 @@ html, body {
     color: #000000;
     font-weight: 500;
   }
-  
+
   .chinese-title {
     color: #000000;
     font-weight: 700;
   }
-  
+
   .status-text {
     color: #000000;
     font-weight: 600;
@@ -357,12 +403,12 @@ html, body {
     color: #ffffff;
     font-weight: 500;
   }
-  
+
   .dark .chinese-title {
     color: #ffffff;
     font-weight: 700;
   }
-  
+
   .dark .status-text {
     color: #ffffff;
     font-weight: 600;
@@ -377,7 +423,7 @@ html, body {
   .processing-spin {
     animation: none;
   }
-  
+
   .btn-hover {
     transition: none;
   }
@@ -465,10 +511,12 @@ html, body {
 
 /* 模型错误状态的闪烁效果 */
 @keyframes model-error-blink {
-  0%, 50% {
+  0%,
+  50% {
     opacity: 1;
   }
-  25%, 75% {
+  25%,
+  75% {
     opacity: 0.5;
   }
 }
@@ -488,7 +536,8 @@ html, body {
 
 /* FunASR准备状态动画 */
 @keyframes preparing-wave {
-  0%, 100% {
+  0%,
+  100% {
     transform: scaleY(0.3);
     opacity: 0.6;
   }
@@ -500,7 +549,8 @@ html, body {
 
 /* FunASR加载状态动画 */
 @keyframes loading-dots {
-  0%, 20% {
+  0%,
+  20% {
     transform: scaleY(0.4);
     opacity: 0.5;
   }
@@ -508,7 +558,8 @@ html, body {
     transform: scaleY(1);
     opacity: 1;
   }
-  60%, 100% {
+  60%,
+  100% {
     transform: scaleY(0.4);
     opacity: 0.5;
   }
@@ -516,7 +567,8 @@ html, body {
 
 /* FunASR错误状态动画 */
 @keyframes error-pulse {
-  0%, 100% {
+  0%,
+  100% {
     transform: scale(1);
     opacity: 0.8;
   }
@@ -534,14 +586,14 @@ html, body {
   .processing-spin {
     animation: none;
   }
-  
+
   /* 为新的FunASR状态动画添加减少动画支持 */
   *[style*="preparing-wave"],
   *[style*="loading-dots"],
   *[style*="error-pulse"] {
     animation: none !important;
   }
-  
+
   .btn-hover {
     transition: none;
   }

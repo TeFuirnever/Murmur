@@ -11,9 +11,12 @@ import { usePermissions } from "./hooks/usePermissions";
 import { Mic, MicOff, Settings, History, Copy, Download } from "lucide-react";
 import SettingsPanel from "./components/SettingsPanel";
 import { ModelDownloadProgress } from "./components/ui/model-status-indicator";
+import FileImport from "./components/FileImport";
 
 // 动态导入设置页面组件
-const SettingsPage = React.lazy(() => import('./settings.jsx').then(module => ({ default: module.SettingsPage })));
+const SettingsPage = React.lazy(() =>
+  import("./settings.jsx").then((module) => ({ default: module.SettingsPage })),
+);
 
 // 声波图标组件（空闲/悬停状态）
 const SoundWaveIcon = ({ size = 16, isActive = false }) => {
@@ -82,14 +85,18 @@ const Tooltip = ({ children, content, position = "top" }) => {
   const getPositionClasses = () => {
     if (position === "bottom") {
       return {
-        tooltip: "absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 text-white bg-gradient-to-r from-neutral-800 to-neutral-700 rounded-md whitespace-nowrap z-50 transition-opacity duration-150",
-        arrow: "absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-2 border-r-2 border-b-2 border-transparent border-b-neutral-800"
+        tooltip:
+          "absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 text-white bg-gradient-to-r from-neutral-800 to-neutral-700 rounded-md whitespace-nowrap z-50 transition-opacity duration-150",
+        arrow:
+          "absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-2 border-r-2 border-b-2 border-transparent border-b-neutral-800",
       };
     }
     // 默认为顶部
     return {
-      tooltip: "absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 text-white bg-gradient-to-r from-neutral-800 to-neutral-700 rounded-md whitespace-nowrap z-50 transition-opacity duration-150",
-      arrow: "absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-2 border-r-2 border-t-2 border-transparent border-t-neutral-800"
+      tooltip:
+        "absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 text-white bg-gradient-to-r from-neutral-800 to-neutral-700 rounded-md whitespace-nowrap z-50 transition-opacity duration-150",
+      arrow:
+        "absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-2 border-r-2 border-t-2 border-transparent border-t-neutral-800",
     };
   };
 
@@ -104,10 +111,7 @@ const Tooltip = ({ children, content, position = "top" }) => {
         {children}
       </div>
       {isVisible && (
-        <div
-          className={tooltip}
-          style={{ fontSize: "10px" }}
-        >
+        <div className={tooltip} style={{ fontSize: "10px" }}>
           {content}
           <div className={arrow}></div>
         </div>
@@ -117,7 +121,14 @@ const Tooltip = ({ children, content, position = "top" }) => {
 };
 
 // 文本显示区域组件
-const TextDisplay = ({ originalText, processedText, isProcessing, onCopy, onExport, onPaste }) => {
+const TextDisplay = ({
+  originalText,
+  processedText,
+  isProcessing,
+  onCopy,
+  onExport,
+  onPaste,
+}) => {
   if (!originalText && !processedText) {
     return null; // 当没有文本时不显示任何内容，避免重复
   }
@@ -146,7 +157,9 @@ const TextDisplay = ({ originalText, processedText, isProcessing, onCopy, onExpo
       {(processedText || isProcessing) && (
         <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/20 dark:to-emerald-800/20 rounded-xl p-5 border-l-4 border-emerald-400 dark:border-emerald-500 shadow-lg border border-emerald-200/50 dark:border-emerald-700/50">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-base font-semibold chinese-title text-emerald-700 dark:text-emerald-400">AI优化后</h3>
+            <h3 className="text-base font-semibold chinese-title text-emerald-700 dark:text-emerald-400">
+              AI优化后
+            </h3>
             <div className="flex space-x-2">
               {processedText && (
                 <>
@@ -155,8 +168,18 @@ const TextDisplay = ({ originalText, processedText, isProcessing, onCopy, onExpo
                     className="p-2 hover:bg-emerald-200/70 dark:hover:bg-emerald-700/30 rounded-lg transition-colors shadow-sm"
                     title="粘贴优化文本"
                   >
-                    <svg className="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    <svg
+                      className="w-5 h-5 text-emerald-600 dark:text-emerald-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                      />
                     </svg>
                   </button>
                   <button
@@ -196,19 +219,23 @@ const TextDisplay = ({ originalText, processedText, isProcessing, onCopy, onExpo
 export default function App() {
   // 检查URL参数来决定渲染哪个页面
   const urlParams = new URLSearchParams(window.location.search);
-  const page = urlParams.get('page');
-  
+  const page = urlParams.get("page");
+
   // 如果是设置页面，直接渲染设置组件
-  if (page === 'settings') {
+  if (page === "settings") {
     return (
-      <React.Suspense fallback={
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
-          <div className="flex items-center space-x-3">
-            <LoadingDots />
-            <span className="text-gray-700 dark:text-gray-300">加载设置页面...</span>
+      <React.Suspense
+        fallback={
+          <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
+            <div className="flex items-center space-x-3">
+              <LoadingDots />
+              <span className="text-gray-700 dark:text-gray-300">
+                加载设置页面...
+              </span>
+            </div>
           </div>
-        </div>
-      }>
+        }
+      >
         <SettingsPage />
       </React.Suspense>
     );
@@ -219,43 +246,53 @@ export default function App() {
   const [processedText, setProcessedText] = useState("");
   const [showTextArea, setShowTextArea] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  
-  const { isDragging, handleMouseDown, handleMouseMove, handleMouseUp, handleClick } = useWindowDrag();
+  const [appMode, setAppMode] = useState("recording"); // recording | file-import
+
+  const {
+    isDragging,
+    handleMouseDown,
+    handleMouseMove,
+    handleMouseUp,
+    handleClick,
+  } = useWindowDrag();
   const modelStatus = useModelStatus();
-  
+
   const {
     isRecording,
     isProcessing: isRecordingProcessing,
     isOptimizing,
     startRecording,
     stopRecording,
-    error: recordingError
+    error: recordingError,
   } = useRecording();
-  
+
   const {
     processText,
     isProcessing: isTextProcessing,
-    error: textProcessingError
+    error: textProcessingError,
   } = useTextProcessing();
 
   // 防重复粘贴的引用
-  const lastPasteRef = useRef({ text: '', timestamp: 0 });
+  const lastPasteRef = useRef({ text: "", timestamp: 0 });
   const PASTE_DEBOUNCE_TIME = 1000; // 1秒内相同文本不重复粘贴
 
   // 安全粘贴函数
   const safePaste = useCallback(async (text) => {
     const now = Date.now();
     const lastPaste = lastPasteRef.current;
-    
+
     // 防重复粘贴：如果是相同文本且在防抖时间内，则跳过
-    if (lastPaste.text === text && (now - lastPaste.timestamp) < PASTE_DEBOUNCE_TIME) {
+    if (
+      lastPaste.text === text &&
+      now - lastPaste.timestamp < PASTE_DEBOUNCE_TIME
+    ) {
       console.log("🚫 跳过重复粘贴，文本:", text.substring(0, 50) + "...");
       return;
     }
-    
+
     // 更新最后粘贴记录
     lastPasteRef.current = { text, timestamp: now };
-    
+
     console.log("🔄 safePaste 被调用，文本:", text.substring(0, 50) + "...");
     try {
       if (window.electronAPI) {
@@ -272,7 +309,8 @@ export default function App() {
     } catch (error) {
       console.error("❌ 粘贴文本失败:", error);
       toast.error("粘贴失败", {
-        description: "请检查辅助功能权限。文本已复制到剪贴板 - 请手动使用 Cmd+V 粘贴。"
+        description:
+          "请检查辅助功能权限。文本已复制到剪贴板 - 请手动使用 Cmd+V 粘贴。",
       });
     }
   }, []);
@@ -285,13 +323,13 @@ export default function App() {
       // 立即显示FunASR识别的原始文本
       setOriginalText(transcriptionResult.text);
       setShowTextArea(true);
-      
+
       // 清空之前的处理结果，等待AI优化
       setProcessedText("");
 
       // 不立即粘贴，等待AI优化完成后再粘贴
       console.log("⏳ 等待AI优化完成后再进行粘贴...");
-      
+
       // 注意：不在这里保存到数据库，由 useRecording.js 统一处理保存逻辑
 
       toast.success("🎤 语音识别完成，AI正在优化文本...");
@@ -301,44 +339,51 @@ export default function App() {
   }, []);
 
   // 处理AI优化完成
-  const handleAIOptimizationComplete = useCallback(async (optimizedResult) => {
-    console.log('AI优化完成回调被触发:', optimizedResult);
-    if (optimizedResult.success && optimizedResult.enhanced_by_ai && optimizedResult.text) {
-      // 显示AI优化后的文本
-      setProcessedText(optimizedResult.text);
-      
-      // 自动粘贴AI优化后的文本
-      console.log("📋 准备粘贴AI优化后的文本:", optimizedResult.text);
-      await safePaste(optimizedResult.text);
-      console.log("✅ AI优化文本粘贴完成");
-      
-      toast.success("🤖 AI文本优化完成并已自动粘贴！");
-      console.log('AI优化文本已设置:', optimizedResult.text);
-    } else {
-      console.warn('AI优化结果无效，使用原始文本:', optimizedResult);
-      // 如果AI优化失败，则粘贴原始文本
-      if (originalText) {
-        console.log("📋 AI优化失败，粘贴原始文本:", originalText);
-        await safePaste(originalText);
-        toast.info("AI优化失败，已粘贴原始识别文本");
+  const handleAIOptimizationComplete = useCallback(
+    async (optimizedResult) => {
+      console.log("AI优化完成回调被触发:", optimizedResult);
+      if (
+        optimizedResult.success &&
+        optimizedResult.enhanced_by_ai &&
+        optimizedResult.text
+      ) {
+        // 显示AI优化后的文本
+        setProcessedText(optimizedResult.text);
+
+        // 自动粘贴AI优化后的文本
+        console.log("📋 准备粘贴AI优化后的文本:", optimizedResult.text);
+        await safePaste(optimizedResult.text);
+        console.log("✅ AI优化文本粘贴完成");
+
+        toast.success("🤖 AI文本优化完成并已自动粘贴！");
+        console.log("AI优化文本已设置:", optimizedResult.text);
+      } else {
+        console.warn("AI优化结果无效，使用原始文本:", optimizedResult);
+        // 如果AI优化失败，则粘贴原始文本
+        if (originalText) {
+          console.log("📋 AI优化失败，粘贴原始文本:", originalText);
+          await safePaste(originalText);
+          toast.info("AI优化失败，已粘贴原始识别文本");
+        }
       }
-    }
-  }, [safePaste, originalText]);
+    },
+    [safePaste, originalText],
+  );
 
   // 设置转录完成回调
   useEffect(() => {
-    console.log('设置回调函数');
+    console.log("设置回调函数");
     window.onTranscriptionComplete = handleRecordingComplete;
     window.onAIOptimizationComplete = handleAIOptimizationComplete;
-    
+
     // 验证回调函数是否正确设置
-    console.log('回调函数设置完成:', {
+    console.log("回调函数设置完成:", {
       onTranscriptionComplete: typeof window.onTranscriptionComplete,
-      onAIOptimizationComplete: typeof window.onAIOptimizationComplete
+      onAIOptimizationComplete: typeof window.onAIOptimizationComplete,
     });
-    
+
     return () => {
-      console.log('清理回调函数');
+      console.log("清理回调函数");
       window.onTranscriptionComplete = null;
       window.onAIOptimizationComplete = null;
     };
@@ -364,20 +409,19 @@ export default function App() {
     }
   };
 
-
   // 处理导出文本
   const handleExportText = async (text) => {
     try {
       if (window.electronAPI) {
-        await window.electronAPI.exportTranscriptions('txt');
+        await window.electronAPI.exportTranscriptions("txt");
         toast.success("文本已导出到文件");
       } else {
         // Web环境下载文件
-        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+        const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
+        const a = document.createElement("a");
         a.href = url;
-        a.download = `蛐蛐转录_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.txt`;
+        a.download = `Murmur转录_${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}.txt`;
         a.click();
         URL.revokeObjectURL(url);
       }
@@ -391,7 +435,7 @@ export default function App() {
     try {
       // 显示开始下载的提示
       toast.info("📥 开始下载模型文件...");
-      
+
       const result = await modelStatus.downloadModels();
       if (result.success) {
         toast.success("🎉 模型下载完成，正在加载...");
@@ -399,7 +443,7 @@ export default function App() {
         toast.error(`❌ 模型下载失败: ${result.error}`);
       }
     } catch (error) {
-      console.error('下载模型失败:', error);
+      console.error("下载模型失败:", error);
       toast.error(`❌ 模型下载失败: ${error.message}`);
     }
   }, [modelStatus]);
@@ -407,26 +451,26 @@ export default function App() {
   // 切换录音状态
   const toggleRecording = useCallback(() => {
     // 检查模型状态
-    if (modelStatus.stage === 'need_download') {
+    if (modelStatus.stage === "need_download") {
       toast.warning("📥 请先下载AI模型文件");
       return;
     }
-    
-    if (modelStatus.stage === 'downloading') {
+
+    if (modelStatus.stage === "downloading") {
       toast.warning("⬇️ 模型正在下载中，请稍候...");
       return;
     }
-    
-    if (modelStatus.stage === 'loading') {
+
+    if (modelStatus.stage === "loading") {
       toast.warning("🤖 模型正在加载中，请稍候...");
       return;
     }
-    
-    if (modelStatus.stage === 'error') {
+
+    if (modelStatus.stage === "error") {
       toast.error(`❌ 模型错误: ${modelStatus.error}`);
       return;
     }
-    
+
     if (!modelStatus.isReady) {
       toast.warning("⏳ 模型未就绪，请稍候...");
       return;
@@ -437,7 +481,13 @@ export default function App() {
     } else if (isRecording) {
       stopRecording();
     }
-  }, [modelStatus, isRecording, isRecordingProcessing, startRecording, stopRecording]);
+  }, [
+    modelStatus,
+    isRecording,
+    isRecordingProcessing,
+    startRecording,
+    stopRecording,
+  ]);
 
   // 使用热键Hook，不再使用F2双击功能
   const { hotkey, syncRecordingState, registerHotkey } = useHotkey();
@@ -446,25 +496,25 @@ export default function App() {
   useEffect(() => {
     // 检查是否为控制面板窗口
     const urlParams = new URLSearchParams(window.location.search);
-    const isControlPanel = urlParams.get('panel') === 'control';
-    
+    const isControlPanel = urlParams.get("panel") === "control";
+
     // 只有主窗口才注册热键
     if (isControlPanel) {
-      console.log('控制面板窗口，跳过热键注册');
+      console.log("控制面板窗口，跳过热键注册");
       return;
     }
 
     const initializeHotkey = async () => {
       try {
         // 注册默认热键 CommandOrControl+Shift+Space
-        const success = await registerHotkey('CommandOrControl+Shift+Space');
+        const success = await registerHotkey("CommandOrControl+Shift+Space");
         if (success) {
-          console.log('主窗口热键注册成功');
+          console.log("主窗口热键注册成功");
         } else {
-          console.error('主窗口热键注册失败');
+          console.error("主窗口热键注册失败");
         }
       } catch (error) {
-        console.error('主窗口热键注册异常:', error);
+        console.error("主窗口热键注册异常:", error);
       }
     };
 
@@ -497,21 +547,32 @@ export default function App() {
     }
   };
 
-
   // 监听全局热键触发事件
   useEffect(() => {
     if (window.electronAPI) {
       // 监听传统热键触发
-      const unsubscribeHotkey = window.electronAPI.onHotkeyTriggered((event, data) => {
-        console.log('收到热键触发事件:', data);
-        console.log('当前录音状态:', isRecording, '处理状态:', isRecordingProcessing);
-        toggleRecording();
-      });
+      const unsubscribeHotkey = window.electronAPI.onHotkeyTriggered(
+        (event, data) => {
+          console.log("收到热键触发事件:", data);
+          console.log(
+            "当前录音状态:",
+            isRecording,
+            "处理状态:",
+            isRecordingProcessing,
+          );
+          toggleRecording();
+        },
+      );
 
       // 监听旧的toggle事件（保持兼容性）
       const unsubscribeToggle = window.electronAPI.onToggleDictation(() => {
-        console.log('收到旧版toggle事件');
-        console.log('当前录音状态:', isRecording, '处理状态:', isRecordingProcessing);
+        console.log("收到旧版toggle事件");
+        console.log(
+          "当前录音状态:",
+          isRecording,
+          "处理状态:",
+          isRecordingProcessing,
+        );
         toggleRecording();
       });
 
@@ -559,7 +620,8 @@ export default function App() {
     if (isRecording) return "recording";
     if (isRecordingProcessing) return "processing";
     if (isOptimizing) return "optimizing";
-    if (isHovered && !isRecording && !isRecordingProcessing && !isOptimizing) return "hover";
+    if (isHovered && !isRecording && !isRecordingProcessing && !isOptimizing)
+      return "hover";
     return "idle";
   };
 
@@ -578,12 +640,17 @@ export default function App() {
     if (!modelStatus.isReady) {
       return {
         className: `${baseClasses} bg-gradient-to-br from-gray-300 to-gray-400 dark:from-gray-600 dark:to-gray-700 cursor-not-allowed opacity-70`,
-        tooltip: modelStatus.stage === 'need_download' ? "请先下载AI模型文件" :
-                 modelStatus.stage === 'downloading' ? `模型下载中... ${modelStatus.downloadProgress || 0}%` :
-                 modelStatus.stage === 'loading' ? "模型加载中，请稍候..." :
-                 modelStatus.stage === 'error' ? `模型错误: ${modelStatus.error}` :
-                 "模型未就绪，请稍候...",
-        disabled: true
+        tooltip:
+          modelStatus.stage === "need_download"
+            ? "请先下载AI模型文件"
+            : modelStatus.stage === "downloading"
+              ? `模型下载中... ${modelStatus.downloadProgress || 0}%`
+              : modelStatus.stage === "loading"
+                ? "模型加载中，请稍候..."
+                : modelStatus.stage === "error"
+                  ? `模型错误: ${modelStatus.error}`
+                  : "模型未就绪，请稍候...",
+        disabled: true,
       };
     }
 
@@ -592,37 +659,37 @@ export default function App() {
         return {
           className: `${buttonStyle} cursor-pointer`,
           tooltip: `按 [${hotkey}] 开始录音`,
-          disabled: false
+          disabled: false,
         };
       case "hover":
         return {
           className: `${buttonStyle} scale-105 shadow-2xl cursor-pointer`,
           tooltip: `按 [${hotkey}] 开始录音`,
-          disabled: false
+          disabled: false,
         };
       case "recording":
         return {
           className: `${buttonStyle} recording-pulse cursor-pointer`,
           tooltip: "正在录音...",
-          disabled: false
+          disabled: false,
         };
       case "processing":
         return {
           className: `${buttonStyle} cursor-not-allowed opacity-70`,
           tooltip: "正在识别语音...",
-          disabled: true
+          disabled: true,
         };
       case "optimizing":
         return {
           className: `${buttonStyle} cursor-not-allowed opacity-70`,
           tooltip: "AI正在优化文本...",
-          disabled: true
+          disabled: true,
         };
       default:
         return {
           className: `${buttonStyle} cursor-pointer`,
           tooltip: "点击开始录音",
-          disabled: false
+          disabled: false,
         };
     }
   };
@@ -641,7 +708,7 @@ export default function App() {
           onMouseUp={handleMouseUp}
         >
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 chinese-title">
-            蛐蛐
+            Murmur
           </h1>
           <div className="flex items-center space-x-3 non-draggable">
             <Tooltip content="历史记录" position="bottom">
@@ -663,96 +730,147 @@ export default function App() {
           </div>
         </div>
 
-        {/* 录音控制区域 */}
-        <div className="text-center mb-8 flex-shrink-0">
-          <Tooltip content={micProps.tooltip}>
+        {/* 模式切换标签 */}
+        <div className="flex justify-center mb-6">
+          <div className="inline-flex bg-slate-100 dark:bg-gray-800 rounded-lg p-1">
             <button
-              onClick={(e) => {
-                if (handleClick(e) && !micProps.disabled) {
-                  toggleRecording();
+              onClick={() => {
+                if (!isRecording && !isRecordingProcessing) {
+                  setAppMode("recording");
                 }
               }}
-              onMouseEnter={() => {
-                if (!micProps.disabled) {
-                  setIsHovered(true);
-                }
-              }}
-              onMouseLeave={() => setIsHovered(false)}
-              className={`${micProps.className} non-draggable shadow-lg`}
-              disabled={micProps.disabled}
+              className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                appMode === "recording"
+                  ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm"
+                  : isRecording || isRecordingProcessing
+                    ? "text-gray-400 dark:text-gray-500 cursor-not-allowed"
+                    : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+              }`}
+              disabled={isRecording || isRecordingProcessing}
             >
-              {/* 动态内容基于状态 */}
-              {modelStatus.stage === 'downloading' ? (
-                <LoadingIndicator size={20} />
-              ) : modelStatus.stage === 'loading' || !modelStatus.isReady ? (
-                <LoadingIndicator size={20} />
-              ) : micState === "idle" ? (
-                <SoundWaveIcon size={20} isActive={false} />
-              ) : micState === "hover" ? (
-                <SoundWaveIcon size={20} isActive={false} />
-              ) : micState === "recording" ? (
-                <SoundWaveIcon size={20} isActive={true} />
-              ) : micState === "processing" ? (
-                <VoiceWaveIndicator isListening={true} />
-              ) : micState === "optimizing" ? (
-                <LoadingIndicator size={20} />
-              ) : null}
-
-              {/* 移除所有状态指示环，保持简洁 */}
+              实时录音
             </button>
-          </Tooltip>
-          
-          <p className="mt-4 status-text text-gray-700 dark:text-gray-300">
-            {modelStatus.stage === 'need_download' ? (
-              "需要下载AI模型文件才能开始使用"
-            ) : modelStatus.stage === 'downloading' ? (
-              `正在下载模型文件... ${modelStatus.downloadProgress || 0}%`
-            ) : modelStatus.stage === 'loading' ? (
-              "模型加载中，请稍候..."
-            ) : modelStatus.stage === 'error' ? (
-              `模型错误: ${modelStatus.error}`
-            ) : !modelStatus.isReady ? (
-              "模型未就绪，请稍候..."
-            ) : micState === "recording" ? (
-              "正在录音，再次点击停止"
-            ) : micState === "processing" ? (
-              "正在识别语音..."
-            ) : micState === "optimizing" ? (
-              "AI正在优化文本，请稍候..."
-            ) : (
-              `点击麦克风或按 ${hotkey} 开始录音`
-            )}
-          </p>
+            <button
+              onClick={() => setAppMode("file-import")}
+              className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                appMode === "file-import"
+                  ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm"
+                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+              }`}
+            >
+              文件导入
+            </button>
+          </div>
         </div>
 
-        {/* 模型下载进度显示 */}
-        {(modelStatus.stage === 'need_download' || modelStatus.stage === 'downloading') && (
-          <div className="mb-6">
-            <ModelDownloadProgress
-              modelStatus={modelStatus}
-              onDownload={handleDownloadModels}
-            />
-          </div>
+        {/* 实时录音模式 */}
+        {appMode === "recording" && (
+          <>
+            {/* 录音控制区域 */}
+            <div className="text-center mb-8 flex-shrink-0">
+              <Tooltip content={micProps.tooltip}>
+                <button
+                  onClick={(e) => {
+                    if (handleClick(e) && !micProps.disabled) {
+                      toggleRecording();
+                    }
+                  }}
+                  onMouseEnter={() => {
+                    if (!micProps.disabled) {
+                      setIsHovered(true);
+                    }
+                  }}
+                  onMouseLeave={() => setIsHovered(false)}
+                  className={`${micProps.className} non-draggable shadow-lg`}
+                  disabled={micProps.disabled}
+                >
+                  {/* 动态内容基于状态 */}
+                  {modelStatus.stage === "downloading" ? (
+                    <LoadingIndicator size={20} />
+                  ) : modelStatus.stage === "loading" ||
+                    !modelStatus.isReady ? (
+                    <LoadingIndicator size={20} />
+                  ) : micState === "idle" ? (
+                    <SoundWaveIcon size={20} isActive={false} />
+                  ) : micState === "hover" ? (
+                    <SoundWaveIcon size={20} isActive={false} />
+                  ) : micState === "recording" ? (
+                    <SoundWaveIcon size={20} isActive={true} />
+                  ) : micState === "processing" ? (
+                    <VoiceWaveIndicator isListening={true} />
+                  ) : micState === "optimizing" ? (
+                    <LoadingIndicator size={20} />
+                  ) : null}
+
+                  {/* 移除所有状态指示环，保持简洁 */}
+                </button>
+              </Tooltip>
+
+              <p className="mt-4 status-text text-gray-700 dark:text-gray-300">
+                {modelStatus.stage === "need_download"
+                  ? "需要下载AI模型文件才能开始使用"
+                  : modelStatus.stage === "downloading"
+                    ? `正在下载模型文件... ${modelStatus.downloadProgress || 0}%`
+                    : modelStatus.stage === "loading"
+                      ? "模型加载中，请稍候..."
+                      : modelStatus.stage === "error"
+                        ? `模型错误: ${modelStatus.error}`
+                        : !modelStatus.isReady
+                          ? "模型未就绪，请稍候..."
+                          : micState === "recording"
+                            ? "正在录音，再次点击停止"
+                            : micState === "processing"
+                              ? "正在识别语音..."
+                              : micState === "optimizing"
+                                ? "AI正在优化文本，请稍候..."
+                                : `点击麦克风或按 ${hotkey} 开始录音`}
+              </p>
+            </div>
+
+            {/* 模型下载进度显示 */}
+            {(modelStatus.stage === "need_download" ||
+              modelStatus.stage === "downloading") && (
+              <div className="mb-6">
+                <ModelDownloadProgress
+                  modelStatus={modelStatus}
+                  onDownload={handleDownloadModels}
+                />
+              </div>
+            )}
+
+            {/* 文本显示区域 - 可滚动 */}
+            <div className="flex-1 text-area-scroll">
+              <TextDisplay
+                originalText={originalText}
+                processedText={processedText}
+                isProcessing={isTextProcessing || isOptimizing}
+                onCopy={handleCopyText}
+                onExport={handleExportText}
+                onPaste={safePaste}
+              />
+            </div>
+          </>
         )}
 
-        {/* 文本显示区域 - 可滚动 */}
-        <div className="flex-1 text-area-scroll">
-          <TextDisplay
-            originalText={originalText}
-            processedText={processedText}
-            isProcessing={isTextProcessing || isOptimizing}
-            onCopy={handleCopyText}
-            onExport={handleExportText}
-            onPaste={safePaste}
-          />
-        </div>
+        {/* 文件导入模式 */}
+        {appMode === "file-import" && (
+          <div className="flex-1">
+            {/* 录音进行中提示 */}
+            {(isRecording || isRecordingProcessing) && (
+              <div className="mb-4 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                <span className="text-xs text-amber-700 dark:text-amber-400">
+                  录音进行中，录音完成后可切换回实时录音模式
+                </span>
+              </div>
+            )}
+            <FileImport />
+          </div>
+        )}
       </div>
 
       {/* 设置面板 */}
-      {showSettings && (
-        <SettingsPanel onClose={() => setShowSettings(false)} />
-      )}
-
+      {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
     </div>
   );
 }

@@ -5,7 +5,7 @@ class ClipboardManager {
   constructor(logger) {
     // 初始化剪贴板管理器
     this.logger = logger;
-    
+
     // 尝试加载 osascript 模块（仅在 macOS 上）
     this.osascript = null;
     if (process.platform === "darwin") {
@@ -13,7 +13,10 @@ class ClipboardManager {
         this.osascript = require("osascript");
         this.safeLog("✅ osascript 模块加载成功");
       } catch (error) {
-        this.safeLog("⚠️ osascript 模块加载失败，将使用备用方法", error.message);
+        this.safeLog(
+          "⚠️ osascript 模块加载失败，将使用备用方法",
+          error.message,
+        );
       }
     }
   }
@@ -35,10 +38,10 @@ class ClipboardManager {
   // 简化的 macOS accessibility 检查
   async enableMacOSAccessibility() {
     if (process.platform !== "darwin") return true;
-    
+
     try {
       this.safeLog("🔧 检查 macOS accessibility 权限");
-      
+
       // 简化为基本的权限检查，不设置复杂的AXManualAccessibility
       const script = `
         tell application "System Events"
@@ -46,9 +49,9 @@ class ClipboardManager {
           return frontApp
         end tell
       `;
-      
+
       const testProcess = spawn("osascript", ["-e", script]);
-      
+
       return new Promise((resolve) => {
         testProcess.on("close", (code) => {
           if (code === 0) {
@@ -59,7 +62,7 @@ class ClipboardManager {
             resolve(false);
           }
         });
-        
+
         testProcess.on("error", () => {
           this.safeLog("❌ accessibility 权限检查失败");
           resolve(false);
@@ -84,15 +87,12 @@ class ClipboardManager {
       const originalClipboard = clipboard.readText();
       this.safeLog(
         "💾 已保存原始剪贴板内容",
-        originalClipboard.substring(0, 50) + "..."
+        originalClipboard.substring(0, 50) + "...",
       );
 
       // 将文本复制到剪贴板 - 这总是有效的
       clipboard.writeText(text);
-      this.safeLog(
-        "📋 文本已复制到剪贴板",
-        text.substring(0, 50) + "..."
-      );
+      this.safeLog("📋 文本已复制到剪贴板", text.substring(0, 50) + "...");
 
       if (process.platform === "darwin") {
         // 简化权限检查，直接尝试粘贴
@@ -191,18 +191,14 @@ class ClipboardManager {
           resolve();
         } else {
           reject(
-            new Error(
-              `Windows 粘贴失败，代码 ${code}。文本已复制到剪贴板。`
-            )
+            new Error(`Windows 粘贴失败，代码 ${code}。文本已复制到剪贴板。`),
           );
         }
       });
 
       pasteProcess.on("error", (error) => {
         reject(
-          new Error(
-            `Windows 粘贴失败: ${error.message}。文本已复制到剪贴板。`
-          )
+          new Error(`Windows 粘贴失败: ${error.message}。文本已复制到剪贴板。`),
         );
       });
     });
@@ -221,18 +217,14 @@ class ClipboardManager {
           resolve();
         } else {
           reject(
-            new Error(
-              `Linux 粘贴失败，代码 ${code}。文本已复制到剪贴板。`
-            )
+            new Error(`Linux 粘贴失败，代码 ${code}。文本已复制到剪贴板。`),
           );
         }
       });
 
       pasteProcess.on("error", (error) => {
         reject(
-          new Error(
-            `Linux 粘贴失败: ${error.message}。文本已复制到剪贴板。`
-          )
+          new Error(`Linux 粘贴失败: ${error.message}。文本已复制到剪贴板。`),
         );
       });
     });
@@ -282,17 +274,17 @@ class ClipboardManager {
 
     let dialogMessage;
     if (isStuckPermission) {
-      dialogMessage = `🔒 蛐蛐需要辅助功能权限，但看起来您可能有来自先前版本的旧权限。
+      dialogMessage = `🔒 Murmur 需要辅助功能权限，但看起来您可能有来自先前版本的旧权限。
 
-❗ 常见问题：如果您重新构建/重新安装了蛐蛐，旧权限可能"卡住"并阻止新权限。
+❗ 常见问题：如果您重新构建/重新安装了 Murmur，旧权限可能"卡住"并阻止新权限。
 
 🔧 解决方法：
 1. 打开系统设置 → 隐私与安全性 → 辅助功能
-2. 查找任何旧的"蛐蛐"条目并删除它们（点击 - 按钮）
+2. 查找任何旧的"Murmur"条目并删除它们（点击 - 按钮）
 3. 同时删除任何显示"Electron"或名称不明确的条目
-4. 点击 + 按钮并手动添加新的蛐蛐应用
+4. 点击 + 按钮并手动添加新的 Murmur 应用
 5. 确保复选框已启用
-6. 重启蛐蛐
+6. 重启 Murmur
 
 ⚠️ 这在开发期间重新构建应用时特别常见。
 
@@ -300,7 +292,7 @@ class ClipboardManager {
 
 您想现在打开系统设置吗？`;
     } else {
-      dialogMessage = `🔒 蛐蛐需要辅助功能权限才能将文本粘贴到其他应用程序中。
+      dialogMessage = `🔒 Murmur 需要辅助功能权限才能将文本粘贴到其他应用程序中。
 
 📋 当前状态：剪贴板复制有效，但粘贴（Cmd+V 模拟）失败。
 
@@ -308,8 +300,8 @@ class ClipboardManager {
 1. 打开系统设置（或较旧 macOS 上的系统偏好设置）
 2. 转到隐私与安全性 → 辅助功能
 3. 点击锁图标并输入您的密码
-4. 将蛐蛐添加到列表中并勾选复选框
-5. 重启蛐蛐
+4. 将 Murmur 添加到列表中并勾选复选框
+5. 重启 Murmur
 
 ⚠️ 没有此权限，听写文本将只复制到剪贴板但不会自动粘贴。
 

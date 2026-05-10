@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback } from "react";
 
 /**
  * 文本处理Hook
@@ -9,8 +9,8 @@ export const useTextProcessing = () => {
   const [error, setError] = useState(null);
 
   // 根据文本长度自动选择处理模式
-  const determineProcessingMode = useCallback((text, userMode = 'auto') => {
-    if (userMode !== 'auto') {
+  const determineProcessingMode = useCallback((text, userMode = "auto") => {
+    if (userMode !== "auto") {
       return userMode;
     }
 
@@ -19,112 +19,126 @@ export const useTextProcessing = () => {
 
     // 长文本阈值：超过150字符或30个词
     if (textLength > 150 || wordCount > 30) {
-      return 'optimize_long';
+      return "optimize_long";
     } else {
-      return 'optimize';
+      return "optimize";
     }
   }, []);
 
   // 处理并保存转录的函数
-  const handleTranscription = useCallback(async (transcriptionData, useAI) => {
-    const { raw_text, duration, file_size } = transcriptionData;
+  const handleTranscription = useCallback(
+    async (transcriptionData, useAI) => {
+      const { raw_text, duration, file_size } = transcriptionData;
 
-    if (!raw_text || raw_text.trim().length === 0) {
-      setError('转录文本内容不能为空');
-      return null;
-    }
+      if (!raw_text || raw_text.trim().length === 0) {
+        setError("转录文本内容不能为空");
+        return null;
+      }
 
-    setIsProcessing(true);
-    setError(null);
+      setIsProcessing(true);
+      setError(null);
 
-    let processed_text = null;
-    let finalData = { ...transcriptionData, text: raw_text };
+      let processed_text = null;
+      let finalData = { ...transcriptionData, text: raw_text };
 
-    if (useAI) {
-      try {
-        const actualMode = determineProcessingMode(raw_text, 'auto');
-        if (window.electronAPI && window.electronAPI.log) {
-          window.electronAPI.log('info', '开始AI文本优化:', {
-            text: raw_text.substring(0, 50) + '...',
-            mode: actualMode,
-          });
+      if (useAI) {
+        try {
+          const actualMode = determineProcessingMode(raw_text, "auto");
+          if (window.electronAPI && window.electronAPI.log) {
+            window.electronAPI.log("info", "开始AI文本优化:", {
+              text: raw_text.substring(0, 50) + "...",
+              mode: actualMode,
+            });
+          }
+
+          const result = await window.electronAPI.processText(
+            raw_text,
+            actualMode,
+          );
+
+          if (result && result.success) {
+            processed_text = result.text;
+            finalData.processed_text = processed_text;
+            // 如果AI优化后的文本与原始文本不同，则将优化后的文本作为主文本
+            if (processed_text && processed_text.trim() !== raw_text.trim()) {
+              finalData.text = processed_text;
+            }
+            if (window.electronAPI && window.electronAPI.log) {
+              window.electronAPI.log("info", "AI文本优化成功", {
+                processed_text: processed_text.substring(0, 50) + "...",
+              });
+            }
+          } else {
+            if (window.electronAPI && window.electronAPI.log) {
+              window.electronAPI.log("error", "AI文本优化失败:", result);
+            }
+            setError(result?.error || "AI文本优化失败");
+          }
+        } catch (err) {
+          const errorMessage = err.message || "AI处理过程中发生未知错误";
+          setError(errorMessage);
+          if (window.electronAPI && window.electronAPI.log) {
+            window.electronAPI.log("error", "AI文本优化捕获到错误:", err);
+          }
         }
-        
-        const result = await window.electronAPI.processText(raw_text, actualMode);
+      }
 
-        if (result && result.success) {
-          processed_text = result.text;
-          finalData.processed_text = processed_text;
-          // 如果AI优化后的文本与原始文本不同，则将优化后的文本作为主文本
-          if (processed_text && processed_text.trim() !== raw_text.trim()) {
-            finalData.text = processed_text;
-          }
+      try {
+        if (window.electronAPI) {
           if (window.electronAPI && window.electronAPI.log) {
-            window.electronAPI.log('info', 'AI文本优化成功', { processed_text: processed_text.substring(0, 50) + '...' });
+            window.electronAPI.log("info", "准备保存转录数据:", finalData);
           }
-        } else {
+          const savedResult =
+            await window.electronAPI.saveTranscription(finalData);
           if (window.electronAPI && window.electronAPI.log) {
-            window.electronAPI.log('error', 'AI文本优化失败:', result);
+            window.electronAPI.log("info", "转录数据保存成功:", savedResult);
           }
-          setError(result?.error || 'AI文本优化失败');
+          return { ...finalData, id: savedResult.lastInsertRowid };
         }
       } catch (err) {
-        const errorMessage = err.message || 'AI处理过程中发生未知错误';
+        const errorMessage = err.message || "保存转录数据时发生未知错误";
         setError(errorMessage);
         if (window.electronAPI && window.electronAPI.log) {
-          window.electronAPI.log('error', 'AI文本优化捕获到错误:', err);
+          window.electronAPI.log("error", "保存转录数据失败:", err);
         }
+        return null;
+      } finally {
+        setIsProcessing(false);
       }
-    }
-
-    try {
-      if (window.electronAPI) {
-        if (window.electronAPI && window.electronAPI.log) {
-          window.electronAPI.log('info', '准备保存转录数据:', finalData);
-        }
-        const savedResult = await window.electronAPI.saveTranscription(finalData);
-        if (window.electronAPI && window.electronAPI.log) {
-          window.electronAPI.log('info', '转录数据保存成功:', savedResult);
-        }
-        return { ...finalData, id: savedResult.lastInsertRowid };
-      }
-    } catch (err) {
-      const errorMessage = err.message || '保存转录数据时发生未知错误';
-      setError(errorMessage);
-      if (window.electronAPI && window.electronAPI.log) {
-        window.electronAPI.log('error', '保存转录数据失败:', err);
-      }
-      return null;
-    } finally {
-      setIsProcessing(false);
-    }
-  }, [determineProcessingMode]);
+    },
+    [determineProcessingMode],
+  );
 
   // 直接调用AI API
   const callAIAPI = useCallback(async (text, mode) => {
     // 优先从Electron API获取设置，然后是localStorage，最后是环境变量
     let apiKey, baseUrl, model;
-    
+
     if (window.electronAPI) {
       try {
-        apiKey = await window.electronAPI.getSetting('ai_api_key');
-        baseUrl = await window.electronAPI.getSetting('ai_base_url') || 'https://api.openai.com/v1';
-        model = await window.electronAPI.getSetting('ai_model') || 'gpt-3.5-turbo';
+        apiKey = await window.electronAPI.getSetting("ai_api_key");
+        baseUrl =
+          (await window.electronAPI.getSetting("ai_base_url")) ||
+          "https://api.openai.com/v1";
+        model =
+          (await window.electronAPI.getSetting("ai_model")) || "gpt-3.5-turbo";
       } catch (error) {
         // 如果获取设置失败，回退到localStorage
-        apiKey = localStorage.getItem('ai_api_key');
-        baseUrl = localStorage.getItem('ai_base_url') || 'https://api.openai.com/v1';
-        model = localStorage.getItem('ai_model') || 'gpt-3.5-turbo';
+        apiKey = localStorage.getItem("ai_api_key");
+        baseUrl =
+          localStorage.getItem("ai_base_url") || "https://api.openai.com/v1";
+        model = localStorage.getItem("ai_model") || "gpt-3.5-turbo";
       }
     } else {
       // Web环境下使用localStorage
-      apiKey = localStorage.getItem('ai_api_key');
-      baseUrl = localStorage.getItem('ai_base_url') || 'https://api.openai.com/v1';
-      model = localStorage.getItem('ai_model') || 'gpt-3.5-turbo';
+      apiKey = localStorage.getItem("ai_api_key");
+      baseUrl =
+        localStorage.getItem("ai_base_url") || "https://api.openai.com/v1";
+      model = localStorage.getItem("ai_model") || "gpt-3.5-turbo";
     }
-    
+
     if (!apiKey) {
-      throw new Error('请先在设置页面配置AI API密钥');
+      throw new Error("请先在设置页面配置AI API密钥");
     }
 
     const prompts = {
@@ -208,7 +222,7 @@ ${text}
 原始文本：
 ${text}
 
-请直接返回优化后的文本，不需要解释过程。`
+请直接返回优化后的文本，不需要解释过程。`,
     };
 
     // baseUrl和model已经在上面获取了
@@ -217,83 +231,88 @@ ${text}
       model: model,
       messages: [
         {
-          role: 'user',
-          content: prompts[mode] || prompts.optimize
-        }
+          role: "user",
+          content: prompts[mode] || prompts.optimize,
+        },
       ],
       temperature: 0.3,
       max_tokens: 2000,
-      stream: false
+      stream: false,
     };
 
     if (window.electronAPI && window.electronAPI.log) {
-      window.electronAPI.log('info', '前端AI文本处理请求:', {
+      window.electronAPI.log("info", "前端AI文本处理请求:", {
         baseUrl,
         model,
         mode,
-        inputText: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
-        requestData
+        inputText: text.substring(0, 100) + (text.length > 100 ? "..." : ""),
+        requestData,
       });
     }
 
     const response = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify(requestData)
+      body: JSON.stringify(requestData),
     });
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       if (window.electronAPI && window.electronAPI.log) {
-        window.electronAPI.log('error', '前端AI API请求失败:', {
+        window.electronAPI.log("error", "前端AI API请求失败:", {
           status: response.status,
           statusText: response.statusText,
-          errorData
+          errorData,
         });
       }
-      throw new Error(errorData.error?.message || `API请求失败: ${response.status}`);
+      throw new Error(
+        errorData.error?.message || `API请求失败: ${response.status}`,
+      );
     }
 
     const data = await response.json();
-    
+
     if (window.electronAPI && window.electronAPI.log) {
-      window.electronAPI.log('info', '前端AI文本处理响应:', {
+      window.electronAPI.log("info", "前端AI文本处理响应:", {
         status: response.status,
         data: data,
-        usage: data.usage
+        usage: data.usage,
       });
     }
-    
+
     if (data.choices && data.choices.length > 0) {
       const result = {
         success: true,
         text: data.choices[0].message.content.trim(),
-        usage: data.usage
+        usage: data.usage,
       };
-      
+
       if (window.electronAPI && window.electronAPI.log) {
-        window.electronAPI.log('info', '前端AI文本处理结果:', {
-          originalText: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
-          optimizedText: result.text.substring(0, 100) + (result.text.length > 100 ? '...' : ''),
-          usage: result.usage
+        window.electronAPI.log("info", "前端AI文本处理结果:", {
+          originalText:
+            text.substring(0, 100) + (text.length > 100 ? "..." : ""),
+          optimizedText:
+            result.text.substring(0, 100) +
+            (result.text.length > 100 ? "..." : ""),
+          usage: result.usage,
         });
       }
-      
+
       return result;
     } else {
       if (window.electronAPI && window.electronAPI.log) {
-        window.electronAPI.log('error', '前端AI API返回数据格式错误:', data);
+        window.electronAPI.log("error", "前端AI API返回数据格式错误:", data);
       }
-      throw new Error('API返回数据格式错误');
+      throw new Error("API返回数据格式错误");
     }
   }, []);
 
   return {
     handleTranscription,
     isProcessing,
-    error
+    error,
   };
 };

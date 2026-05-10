@@ -11,7 +11,7 @@ class DatabaseManager {
 
   initialize(dataDirectory) {
     this.dbPath = path.join(dataDirectory, "transcriptions.db");
-    
+
     // 确保数据目录存在
     const dir = path.dirname(this.dbPath);
     if (!fs.existsSync(dir)) {
@@ -20,6 +20,7 @@ class DatabaseManager {
 
     this.db = new Database(this.dbPath);
     this.createTables();
+    this._migrateSchema();
   }
 
   createTables() {
@@ -55,23 +56,58 @@ class DatabaseManager {
     `);
   }
 
+  _migrateSchema() {
+    const columns = this.db
+      .prepare("PRAGMA table_info(transcriptions)")
+      .all()
+      .map((col) => col.name);
+
+    const migrations = [
+      {
+        column: "source_type",
+        sql: "ALTER TABLE transcriptions ADD COLUMN source_type TEXT DEFAULT 'recording'",
+      },
+      {
+        column: "source_file_path",
+        sql: "ALTER TABLE transcriptions ADD COLUMN source_file_path TEXT",
+      },
+      {
+        column: "segments",
+        sql: "ALTER TABLE transcriptions ADD COLUMN segments TEXT",
+      },
+    ];
+
+    for (const migration of migrations) {
+      if (!columns.includes(migration.column)) {
+        try {
+          this.db.exec(migration.sql);
+        } catch (error) {
+          if (this.logger && this.logger.warn) {
+            this.logger.warn(`Schema迁移失败: ${migration.column}`, error);
+          }
+        }
+      }
+    }
+  }
+
   saveTranscription(data) {
     // 验证必需的数据
-    if (!data || typeof data !== 'object') {
-      throw new Error('转录数据无效');
+    if (!data || typeof data !== "object") {
+      throw new Error("转录数据无效");
     }
 
     // 确保text字段存在且不为空
-    const text = data.text || data.raw_text || '';
+    const text = data.text || data.raw_text || "";
     if (!text || text.trim().length === 0) {
-      throw new Error('转录文本不能为空');
+      throw new Error("转录文本不能为空");
     }
 
     const stmt = this.db.prepare(`
       INSERT INTO transcriptions (
         text, raw_text, processed_text, confidence,
-        language, duration, file_size
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        language, duration, file_size, source_type,
+        source_file_path, segments
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     return stmt.run(
@@ -79,9 +115,12 @@ class DatabaseManager {
       data.raw_text || null,
       data.processed_text || null,
       data.confidence || 0,
-      data.language || 'zh-CN',
+      data.language || "zh-CN",
       data.duration || 0,
-      data.file_size || 0
+      data.file_size || 0,
+      data.source_type || "recording",
+      data.source_file_path || null,
+      data.segments || null,
     );
   }
 
@@ -97,6 +136,29 @@ class DatabaseManager {
   getTranscriptionById(id) {
     const stmt = this.db.prepare("SELECT * FROM transcriptions WHERE id = ?");
     return stmt.get(id);
+  }
+
+  getTranscriptionWithSegments(id) {
+    try {
+      const row = this.db
+        .prepare("SELECT * FROM transcriptions WHERE id = ?")
+        .get(id);
+      if (row && row.segments) {
+        try {
+          row.parsedSegments = JSON.parse(row.segments);
+        } catch (e) {
+          this.logger.warn &&
+            this.logger.warn("segments JSON解析失败", { id, error: e.message });
+          row.parsedSegments = [];
+        }
+      } else if (row) {
+        row.parsedSegments = [];
+      }
+      return row;
+    } catch (error) {
+      this.logger.error && this.logger.error("获取转录详情失败", error);
+      return null;
+    }
   }
 
   deleteTranscription(id) {
@@ -121,7 +183,9 @@ class DatabaseManager {
   }
 
   getTranscriptionStats() {
-    const totalStmt = this.db.prepare("SELECT COUNT(*) as total FROM transcriptions");
+    const totalStmt = this.db.prepare(
+      "SELECT COUNT(*) as total FROM transcriptions",
+    );
     const todayStmt = this.db.prepare(`
       SELECT COUNT(*) as today FROM transcriptions 
       WHERE date(created_at) = date('now')
@@ -134,7 +198,7 @@ class DatabaseManager {
     return {
       total: totalStmt.get().total,
       today: todayStmt.get().today,
-      week: weekStmt.get().week
+      week: weekStmt.get().week,
     };
   }
 
@@ -149,7 +213,7 @@ class DatabaseManager {
   getSetting(key, defaultValue = null) {
     const stmt = this.db.prepare("SELECT value FROM settings WHERE key = ?");
     const result = stmt.get(key);
-    
+
     if (result) {
       try {
         return JSON.parse(result.value);
@@ -157,14 +221,14 @@ class DatabaseManager {
         return result.value;
       }
     }
-    
+
     return defaultValue;
   }
 
   getAllSettings() {
     const stmt = this.db.prepare("SELECT key, value FROM settings");
     const rows = stmt.all();
-    
+
     const settings = {};
     for (const row of rows) {
       try {
@@ -173,7 +237,7 @@ class DatabaseManager {
         settings[row.key] = row.value;
       }
     }
-    
+
     return settings;
   }
 
@@ -184,7 +248,7 @@ class DatabaseManager {
 
   backup(backupPath) {
     if (!this.db) return false;
-    
+
     try {
       this.db.backup(backupPath);
       return true;

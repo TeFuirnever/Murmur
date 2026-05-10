@@ -1,5 +1,5 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { useModelStatus } from './useModelStatus';
+import { useState, useRef, useCallback, useEffect } from "react";
+import { useModelStatus } from "./useModelStatus";
 
 /**
  * 录音功能Hook
@@ -15,9 +15,12 @@ export const useRecording = () => {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const streamRef = useRef(null);
-  
+
   // 添加防重复处理机制
-  const processingRef = useRef({ isProcessingAudio: false, lastProcessTime: 0 });
+  const processingRef = useRef({
+    isProcessingAudio: false,
+    lastProcessTime: 0,
+  });
 
   // 使用模型状态Hook
   const modelStatus = useModelStatus();
@@ -30,17 +33,17 @@ export const useRecording = () => {
       // 检查FunASR是否就绪
       if (!modelStatus.isReady) {
         if (modelStatus.isLoading) {
-          throw new Error('FunASR服务器正在启动中，请稍候...');
+          throw new Error("FunASR服务器正在启动中，请稍候...");
         } else if (modelStatus.error) {
-          throw new Error('FunASR服务器未就绪，请检查配置');
+          throw new Error("FunASR服务器未就绪，请检查配置");
         } else {
-          throw new Error('正在准备FunASR服务器，请稍候...');
+          throw new Error("正在准备FunASR服务器，请稍候...");
         }
       }
 
       // 检查浏览器支持
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error('您的浏览器不支持录音功能');
+        throw new Error("您的浏览器不支持录音功能");
       }
 
       // 请求麦克风权限
@@ -50,8 +53,8 @@ export const useRecording = () => {
           channelCount: 1,
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: true
-        }
+          autoGainControl: true,
+        },
       });
 
       streamRef.current = stream;
@@ -59,7 +62,7 @@ export const useRecording = () => {
 
       // 创建MediaRecorder
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm;codecs=opus'
+        mimeType: "audio/webm;codecs=opus",
       });
 
       mediaRecorderRef.current = mediaRecorder;
@@ -78,7 +81,7 @@ export const useRecording = () => {
         try {
           // 创建音频Blob
           const audioBlob = new Blob(audioChunksRef.current, {
-            type: 'audio/webm;codecs=opus'
+            type: "audio/webm;codecs=opus",
           });
 
           setAudioData(audioBlob);
@@ -93,7 +96,7 @@ export const useRecording = () => {
       };
 
       mediaRecorder.onerror = (event) => {
-        setError(`录音错误: ${event.error?.message || '未知错误'}`);
+        setError(`录音错误: ${event.error?.message || "未知错误"}`);
         setIsRecording(false);
         setIsProcessing(false);
       };
@@ -101,7 +104,6 @@ export const useRecording = () => {
       // 开始录音
       mediaRecorder.start(1000); // 每秒收集一次数据
       setIsRecording(true);
-
     } catch (err) {
       setError(`无法开始录音: ${err.message}`);
       setIsRecording(false);
@@ -115,7 +117,7 @@ export const useRecording = () => {
 
       // 停止所有音频轨道
       if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
       }
     }
@@ -124,7 +126,7 @@ export const useRecording = () => {
   // 处理音频
   const processAudio = useCallback(async (audioBlob) => {
     processingRef.current.isProcessingAudio = true;
-    
+
     try {
       const wavBlob = await convertToWav(audioBlob);
 
@@ -132,24 +134,28 @@ export const useRecording = () => {
         const arrayBuffer = await wavBlob.arrayBuffer();
         const uint8Array = new Uint8Array(arrayBuffer);
 
-        const transcriptionResult = await window.electronAPI.transcribeAudio(uint8Array);
+        const transcriptionResult =
+          await window.electronAPI.transcribeAudio(uint8Array);
 
         if (transcriptionResult.success) {
           const raw_text = transcriptionResult.text;
-          
+
           // 准备转录数据
           const transcriptionData = {
             raw_text: raw_text,
             text: raw_text, // 初始文本设为原始文本
             confidence: transcriptionResult.confidence || 0,
-            language: transcriptionResult.language || 'zh-CN',
+            language: transcriptionResult.language || "zh-CN",
             duration: transcriptionResult.duration || 0,
             file_size: uint8Array.length,
           };
 
           // 立即显示初步结果
           if (window.onTranscriptionComplete) {
-            window.onTranscriptionComplete({ ...transcriptionResult, enhanced_by_ai: false });
+            window.onTranscriptionComplete({
+              ...transcriptionResult,
+              enhanced_by_ai: false,
+            });
           }
 
           // 异步处理AI优化和保存（只保存一次）
@@ -157,36 +163,61 @@ export const useRecording = () => {
           setTimeout(async () => {
             try {
               // 从设置中读取是否启用AI优化
-              const useAI = await window.electronAPI.getSetting('enable_ai_optimization', true);
+              const useAI = await window.electronAPI.getSetting(
+                "enable_ai_optimization",
+                true,
+              );
 
               let finalData = { ...transcriptionData };
 
               if (useAI) {
                 try {
                   if (window.electronAPI && window.electronAPI.log) {
-                    window.electronAPI.log('info', '开始AI文本优化:', raw_text.substring(0, 50) + '...');
+                    window.electronAPI.log(
+                      "info",
+                      "开始AI文本优化:",
+                      raw_text.substring(0, 50) + "...",
+                    );
                   }
-                  
-                  const result = await window.electronAPI.processText(raw_text, 'optimize');
+
+                  const result = await window.electronAPI.processText(
+                    raw_text,
+                    "optimize",
+                  );
 
                   if (result && result.success) {
                     const processed_text = result.text;
                     finalData.processed_text = processed_text;
                     // 如果AI优化后的文本与原始文本不同，则将优化后的文本作为主文本
-                    if (processed_text && processed_text.trim() !== raw_text.trim()) {
+                    if (
+                      processed_text &&
+                      processed_text.trim() !== raw_text.trim()
+                    ) {
                       finalData.text = processed_text;
                     }
                     if (window.electronAPI && window.electronAPI.log) {
-                      window.electronAPI.log('info', 'AI文本优化成功', processed_text.substring(0, 50) + '...');
+                      window.electronAPI.log(
+                        "info",
+                        "AI文本优化成功",
+                        processed_text.substring(0, 50) + "...",
+                      );
                     }
                   } else {
                     if (window.electronAPI && window.electronAPI.log) {
-                      window.electronAPI.log('error', 'AI文本优化失败:', result);
+                      window.electronAPI.log(
+                        "error",
+                        "AI文本优化失败:",
+                        result,
+                      );
                     }
                   }
                 } catch (err) {
                   if (window.electronAPI && window.electronAPI.log) {
-                    window.electronAPI.log('error', 'AI文本优化捕获到错误:', err);
+                    window.electronAPI.log(
+                      "error",
+                      "AI文本优化捕获到错误:",
+                      err,
+                    );
                   }
                 }
               }
@@ -194,15 +225,28 @@ export const useRecording = () => {
               // 保存转录数据（只保存一次）
               if (window.electronAPI) {
                 if (window.electronAPI && window.electronAPI.log) {
-                  window.electronAPI.log('info', '准备保存转录数据:', finalData);
+                  window.electronAPI.log(
+                    "info",
+                    "准备保存转录数据:",
+                    finalData,
+                  );
                 }
-                const savedResult = await window.electronAPI.saveTranscription(finalData);
+                const savedResult =
+                  await window.electronAPI.saveTranscription(finalData);
                 if (window.electronAPI && window.electronAPI.log) {
-                  window.electronAPI.log('info', '转录数据保存成功:', savedResult);
+                  window.electronAPI.log(
+                    "info",
+                    "转录数据保存成功:",
+                    savedResult,
+                  );
                 }
 
                 // 通知UI更新并触发复制操作
-                if (useAI && finalData.processed_text && finalData.processed_text !== raw_text) {
+                if (
+                  useAI &&
+                  finalData.processed_text &&
+                  finalData.processed_text !== raw_text
+                ) {
                   // 有AI优化结果时
                   const enhancedResult = {
                     ...transcriptionResult,
@@ -227,7 +271,7 @@ export const useRecording = () => {
               }
             } catch (err) {
               if (window.electronAPI && window.electronAPI.log) {
-                window.electronAPI.log('error', '处理和保存转录时出错:', err);
+                window.electronAPI.log("error", "处理和保存转录时出错:", err);
               }
             } finally {
               setIsOptimizing(false);
@@ -236,12 +280,18 @@ export const useRecording = () => {
 
           return { ...transcriptionResult, enhanced_by_ai: false };
         } else {
-          throw new Error(transcriptionResult.error || '语音识别失败');
+          throw new Error(transcriptionResult.error || "语音识别失败");
         }
       } else {
         // Web环境模拟
-        const mockResult = { success: true, text: '模拟识别结果。', confidence: 0.95, duration: 3.5 };
-        if (window.onTranscriptionComplete) window.onTranscriptionComplete(mockResult);
+        const mockResult = {
+          success: true,
+          text: "模拟识别结果。",
+          confidence: 0.95,
+          duration: 3.5,
+        };
+        if (window.onTranscriptionComplete)
+          window.onTranscriptionComplete(mockResult);
         return mockResult;
       }
     } catch (err) {
@@ -261,8 +311,10 @@ export const useRecording = () => {
           const arrayBuffer = reader.result;
 
           // 创建AudioContext
-          const audioContext = new (window.AudioContext || window.webkitAudioContext)({
-            sampleRate: 16000
+          const audioContext = new (
+            window.AudioContext || window.webkitAudioContext
+          )({
+            sampleRate: 16000,
           });
 
           // 解码音频数据
@@ -270,7 +322,7 @@ export const useRecording = () => {
 
           // 转换为WAV格式
           const wavBuffer = audioBufferToWav(audioBuffer);
-          const wavBlob = new Blob([wavBuffer], { type: 'audio/wav' });
+          const wavBlob = new Blob([wavBuffer], { type: "audio/wav" });
 
           // 关闭AudioContext释放资源
           audioContext.close();
@@ -282,7 +334,7 @@ export const useRecording = () => {
       };
 
       reader.onerror = () => {
-        reject(new Error('读取音频文件失败'));
+        reject(new Error("读取音频文件失败"));
       };
 
       reader.readAsArrayBuffer(audioBlob);
@@ -310,10 +362,10 @@ export const useRecording = () => {
       }
     };
 
-    writeString(0, 'RIFF');
+    writeString(0, "RIFF");
     view.setUint32(4, bufferSize - 8, true);
-    writeString(8, 'WAVE');
-    writeString(12, 'fmt ');
+    writeString(8, "WAVE");
+    writeString(12, "fmt ");
     view.setUint32(16, 16, true);
     view.setUint16(20, 1, true);
     view.setUint16(22, numberOfChannels, true);
@@ -321,15 +373,18 @@ export const useRecording = () => {
     view.setUint32(28, byteRate, true);
     view.setUint16(32, blockAlign, true);
     view.setUint16(34, bytesPerSample * 8, true);
-    writeString(36, 'data');
+    writeString(36, "data");
     view.setUint32(40, dataSize, true);
 
     // 音频数据
     let offset = 44;
     for (let i = 0; i < length; i++) {
       for (let channel = 0; channel < numberOfChannels; channel++) {
-        const sample = Math.max(-1, Math.min(1, audioBuffer.getChannelData(channel)[i]));
-        view.setInt16(offset, sample * 0x7FFF, true);
+        const sample = Math.max(
+          -1,
+          Math.min(1, audioBuffer.getChannelData(channel)[i]),
+        );
+        view.setInt16(offset, sample * 0x7fff, true);
         offset += 2;
       }
     }
@@ -344,7 +399,7 @@ export const useRecording = () => {
     }
 
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
 
@@ -357,16 +412,15 @@ export const useRecording = () => {
   // 获取录音权限状态
   const checkPermissions = useCallback(async () => {
     try {
-      const result = await navigator.permissions.query({ name: 'microphone' });
+      const result = await navigator.permissions.query({ name: "microphone" });
       return result.state; // 'granted', 'denied', 'prompt'
     } catch (err) {
       if (window.electronAPI && window.electronAPI.log) {
-        window.electronAPI.log('warn', '无法检查麦克风权限:', err);
+        window.electronAPI.log("warn", "无法检查麦克风权限:", err);
       }
-      return 'unknown';
+      return "unknown";
     }
   }, []);
-
 
   return {
     isRecording,
@@ -377,6 +431,6 @@ export const useRecording = () => {
     startRecording,
     stopRecording,
     cancelRecording,
-    checkPermissions
+    checkPermissions,
   };
 };
