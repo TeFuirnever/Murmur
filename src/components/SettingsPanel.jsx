@@ -20,13 +20,13 @@ const SettingsPanel = ({ onClose }) => {
   } = usePermissions(showAlert);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-xl flex items-center justify-center z-50">
+      <div className="bg-white dark:bg-[#2c2c2e] rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
         {/* 标题栏 */}
         <div className="flex items-center justify-between p-6 border-b">
           <div className="flex items-center gap-3">
-            <Settings className="w-6 h-6 text-blue-600" />
-            <h2 className="text-xl font-bold text-gray-900 chinese-title">
+            <Settings className="w-6 h-6 text-[#0071e3]" />
+            <h2 className="text-xl font-bold text-[#1d1d1f] text-heading">
               设置
             </h2>
           </div>
@@ -42,10 +42,10 @@ const SettingsPanel = ({ onClose }) => {
         <div className="p-6 space-y-8">
           {/* 权限部分 */}
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-4 chinese-title">
+            <h3 className="text-lg font-semibold text-[#1d1d1f] mb-4 text-heading">
               权限管理
             </h3>
-            <p className="text-sm text-gray-600 mb-6">
+            <p className="text-sm text-[#86868b] mb-6">
               测试和管理应用权限，确保麦克风和辅助功能正常工作。
             </p>
 
@@ -72,14 +72,14 @@ const SettingsPanel = ({ onClose }) => {
 
           {/* 应用信息部分 */}
           <div className="border-t pt-8">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4 chinese-title">
+            <h3 className="text-lg font-semibold text-[#1d1d1f] mb-4 text-heading">
               关于 Murmur
             </h3>
-            <div className="bg-gradient-to-r from-blue-50 to-green-50 p-4 rounded-lg">
-              <p className="text-sm text-gray-700 mb-2">
+            <div className="bg-[#f5f5f7] dark:bg-[#1c1c1e] p-4 rounded-lg">
+              <p className="text-sm text-[#1d1d1f] dark:text-[#f5f5f7] mb-2">
                 🎤 <strong>Murmur</strong> - 基于FunASR和AI的中文语音转文字应用
               </p>
-              <p className="text-xs text-gray-600">
+              <p className="text-xs text-[#86868b]">
                 • 高精度中文语音识别
                 <br />
                 • AI智能文本优化

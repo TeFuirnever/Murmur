@@ -25,7 +25,7 @@ const SoundWaveIcon = ({ size = 16, isActive = false }) => {
       {[...Array(4)].map((_, i) => (
         <div
           key={i}
-          className={`bg-slate-600 dark:bg-gray-300 rounded-full transition-all duration-150 shadow-sm ${
+          className={`bg-[#86868b] dark:bg-[#86868b] rounded-full transition-all duration-150 shadow-sm ${
             isActive ? "wave-bar" : ""
           }`}
           style={{
@@ -86,7 +86,7 @@ const Tooltip = ({ children, content, position = "top" }) => {
     if (position === "bottom") {
       return {
         tooltip:
-          "absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 text-white bg-gradient-to-r from-neutral-800 to-neutral-700 rounded-md whitespace-nowrap z-50 transition-opacity duration-150",
+          "absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-2 py-1 text-white bg-black/80 backdrop-blur-xl rounded-md whitespace-nowrap z-50 transition-opacity duration-150",
         arrow:
           "absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-2 border-r-2 border-b-2 border-transparent border-b-neutral-800",
       };
@@ -94,7 +94,7 @@ const Tooltip = ({ children, content, position = "top" }) => {
     // 默认为顶部
     return {
       tooltip:
-        "absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 text-white bg-gradient-to-r from-neutral-800 to-neutral-700 rounded-md whitespace-nowrap z-50 transition-opacity duration-150",
+        "absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 text-white bg-black/80 backdrop-blur-xl rounded-md whitespace-nowrap z-50 transition-opacity duration-150",
       arrow:
         "absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-2 border-r-2 border-t-2 border-transparent border-t-neutral-800",
     };
@@ -137,17 +137,17 @@ const TextDisplay = ({
     <div className="space-y-4">
       {/* 原始识别文本 - 简化设计，单行显示 */}
       {originalText && (
-        <div className="bg-slate-100/80 dark:bg-gray-800/80 rounded-lg p-3 shadow-sm">
+        <div className="bg-[#f5f5f7] dark:bg-[#2c2c2e] rounded-lg p-3 shadow-sm">
           <div className="flex items-center justify-between">
-            <p className="chinese-content text-gray-800 dark:text-gray-200 flex-1 truncate pr-2">
+            <p className="text-content text-gray-800 dark:text-gray-200 flex-1 truncate pr-2">
               {originalText}
             </p>
             <button
               onClick={() => onCopy(originalText)}
-              className="p-1.5 hover:bg-slate-200/70 dark:hover:bg-gray-700/70 rounded-md transition-colors flex-shrink-0"
+              className="p-1.5 hover:bg-[#e8e8ed] dark:hover:bg-[#3a3a3c] rounded-md transition-colors flex-shrink-0"
               title="复制识别文本"
             >
-              <Copy className="w-4 h-4 text-slate-600 dark:text-gray-400" />
+              <Copy className="w-4 h-4 text-[#0071e3] dark:text-[#2997ff]" />
             </button>
           </div>
         </div>
@@ -155,9 +155,9 @@ const TextDisplay = ({
 
       {/* AI处理后文本 */}
       {(processedText || isProcessing) && (
-        <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/20 dark:to-emerald-800/20 rounded-xl p-5 border-l-4 border-emerald-400 dark:border-emerald-500 shadow-lg border border-emerald-200/50 dark:border-emerald-700/50">
+        <div className="bg-[#e8f4fd] dark:bg-[#0a2540] rounded-xl p-5 border-l-4 border-[#0071e3] shadow-lg">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-base font-semibold chinese-title text-emerald-700 dark:text-emerald-400">
+            <h3 className="text-base font-semibold text-heading text-[#0071e3] dark:text-[#2997ff]">
               AI优化后
             </h3>
             <div className="flex space-x-2">
@@ -165,11 +165,11 @@ const TextDisplay = ({
                 <>
                   <button
                     onClick={() => onPaste(processedText)}
-                    className="p-2 hover:bg-emerald-200/70 dark:hover:bg-emerald-700/30 rounded-lg transition-colors shadow-sm"
+                    className="p-2 hover:bg-[#d1e8f8] dark:hover:bg-[#0a2540]/70 rounded-lg transition-colors shadow-sm"
                     title="粘贴优化文本"
                   >
                     <svg
-                      className="w-5 h-5 text-emerald-600 dark:text-emerald-400"
+                      className="w-5 h-5 text-[#0071e3] dark:text-[#2997ff]"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -184,29 +184,29 @@ const TextDisplay = ({
                   </button>
                   <button
                     onClick={() => onCopy(processedText)}
-                    className="p-2 hover:bg-emerald-200/70 dark:hover:bg-emerald-700/30 rounded-lg transition-colors shadow-sm"
+                    className="p-2 hover:bg-[#d1e8f8] dark:hover:bg-[#0a2540]/70 rounded-lg transition-colors shadow-sm"
                     title="复制优化文本"
                   >
-                    <Copy className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                    <Copy className="w-5 h-5 text-[#0071e3] dark:text-[#2997ff]" />
                   </button>
                   <button
                     onClick={() => onExport(processedText)}
-                    className="p-2 hover:bg-emerald-200/70 dark:hover:bg-emerald-700/30 rounded-lg transition-colors shadow-sm"
+                    className="p-2 hover:bg-[#d1e8f8] dark:hover:bg-[#0a2540]/70 rounded-lg transition-colors shadow-sm"
                     title="导出文本"
                   >
-                    <Download className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                    <Download className="w-5 h-5 text-[#0071e3] dark:text-[#2997ff]" />
                   </button>
                 </>
               )}
             </div>
           </div>
           {isProcessing ? (
-            <div className="flex items-center space-x-3 text-emerald-700 dark:text-emerald-400">
+            <div className="flex items-center space-x-3 text-[#0071e3] dark:text-[#2997ff]">
               <LoadingDots />
-              <span className="status-text">AI正在优化文本...</span>
+              <span className="text-content">AI正在优化文本...</span>
             </div>
           ) : (
-            <p className="chinese-content leading-loose fade-in text-gray-800 dark:text-gray-200">
+            <p className="text-content leading-loose fade-in text-gray-800 dark:text-gray-200">
               {processedText}
             </p>
           )}
@@ -226,10 +226,10 @@ export default function App() {
     return (
       <React.Suspense
         fallback={
-          <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
+          <div className="min-h-screen bg-[#f5f5f7] dark:bg-[#1c1c1e] flex items-center justify-center">
             <div className="flex items-center space-x-3">
               <LoadingDots />
-              <span className="text-gray-700 dark:text-gray-300">
+              <span className="text-content text-[#1d1d1f]/80 dark:text-[#f5f5f7]/80">
                 加载设置页面...
               </span>
             </div>
@@ -286,28 +286,22 @@ export default function App() {
       lastPaste.text === text &&
       now - lastPaste.timestamp < PASTE_DEBOUNCE_TIME
     ) {
-      console.log("🚫 跳过重复粘贴，文本:", text.substring(0, 50) + "...");
       return;
     }
 
     // 更新最后粘贴记录
     lastPasteRef.current = { text, timestamp: now };
 
-    console.log("🔄 safePaste 被调用，文本:", text.substring(0, 50) + "...");
     try {
       if (window.electronAPI) {
-        console.log("📱 使用 Electron API 进行粘贴");
         await window.electronAPI.pasteText(text);
-        console.log("✅ 粘贴成功");
         toast.success("文本已自动粘贴到当前输入框");
       } else {
         // Web环境下只能复制到剪贴板
-        console.log("🌐 Web环境，仅复制到剪贴板");
         await navigator.clipboard.writeText(text);
         toast.info("文本已复制到剪贴板，请手动粘贴");
       }
     } catch (error) {
-      console.error("❌ 粘贴文本失败:", error);
       toast.error("粘贴失败", {
         description:
           "请检查辅助功能权限。文本已复制到剪贴板 - 请手动使用 Cmd+V 粘贴。",
@@ -317,9 +311,7 @@ export default function App() {
 
   // 处理录音完成（FunASR识别完成）
   const handleRecordingComplete = useCallback(async (transcriptionResult) => {
-    console.log("🎤 handleRecordingComplete 被调用:", transcriptionResult);
     if (transcriptionResult.success && transcriptionResult.text) {
-      console.log("✅ 转录成功，文本:", transcriptionResult.text);
       // 立即显示FunASR识别的原始文本
       setOriginalText(transcriptionResult.text);
       setShowTextArea(true);
@@ -327,21 +319,15 @@ export default function App() {
       // 清空之前的处理结果，等待AI优化
       setProcessedText("");
 
-      // 不立即粘贴，等待AI优化完成后再粘贴
-      console.log("⏳ 等待AI优化完成后再进行粘贴...");
-
       // 注意：不在这里保存到数据库，由 useRecording.js 统一处理保存逻辑
 
       toast.success("🎤 语音识别完成，AI正在优化文本...");
-    } else {
-      console.log("❌ 转录失败或无文本:", transcriptionResult);
     }
   }, []);
 
   // 处理AI优化完成
   const handleAIOptimizationComplete = useCallback(
     async (optimizedResult) => {
-      console.log("AI优化完成回调被触发:", optimizedResult);
       if (
         optimizedResult.success &&
         optimizedResult.enhanced_by_ai &&
@@ -351,17 +337,12 @@ export default function App() {
         setProcessedText(optimizedResult.text);
 
         // 自动粘贴AI优化后的文本
-        console.log("📋 准备粘贴AI优化后的文本:", optimizedResult.text);
         await safePaste(optimizedResult.text);
-        console.log("✅ AI优化文本粘贴完成");
 
         toast.success("🤖 AI文本优化完成并已自动粘贴！");
-        console.log("AI优化文本已设置:", optimizedResult.text);
       } else {
-        console.warn("AI优化结果无效，使用原始文本:", optimizedResult);
         // 如果AI优化失败，则粘贴原始文本
         if (originalText) {
-          console.log("📋 AI优化失败，粘贴原始文本:", originalText);
           await safePaste(originalText);
           toast.info("AI优化失败，已粘贴原始识别文本");
         }
@@ -372,18 +353,10 @@ export default function App() {
 
   // 设置转录完成回调
   useEffect(() => {
-    console.log("设置回调函数");
     window.onTranscriptionComplete = handleRecordingComplete;
     window.onAIOptimizationComplete = handleAIOptimizationComplete;
 
-    // 验证回调函数是否正确设置
-    console.log("回调函数设置完成:", {
-      onTranscriptionComplete: typeof window.onTranscriptionComplete,
-      onAIOptimizationComplete: typeof window.onAIOptimizationComplete,
-    });
-
     return () => {
-      console.log("清理回调函数");
       window.onTranscriptionComplete = null;
       window.onAIOptimizationComplete = null;
     };
@@ -404,7 +377,6 @@ export default function App() {
         toast.success("文本已复制到剪贴板");
       }
     } catch (error) {
-      console.error("复制文本失败:", error);
       toast.error(`无法复制文本到剪贴板: ${error.message}`);
     }
   };
@@ -433,7 +405,6 @@ export default function App() {
   // 处理模型下载
   const handleDownloadModels = useCallback(async () => {
     try {
-      // 显示开始下载的提示
       toast.info("📥 开始下载模型文件...");
 
       const result = await modelStatus.downloadModels();
@@ -443,7 +414,6 @@ export default function App() {
         toast.error(`❌ 模型下载失败: ${result.error}`);
       }
     } catch (error) {
-      console.error("下载模型失败:", error);
       toast.error(`❌ 模型下载失败: ${error.message}`);
     }
   }, [modelStatus]);
@@ -500,21 +470,15 @@ export default function App() {
 
     // 只有主窗口才注册热键
     if (isControlPanel) {
-      console.log("控制面板窗口，跳过热键注册");
       return;
     }
 
     const initializeHotkey = async () => {
       try {
         // 注册默认热键 CommandOrControl+Shift+Space
-        const success = await registerHotkey("CommandOrControl+Shift+Space");
-        if (success) {
-          console.log("主窗口热键注册成功");
-        } else {
-          console.error("主窗口热键注册失败");
-        }
-      } catch (error) {
-        console.error("主窗口热键注册异常:", error);
+        await registerHotkey("CommandOrControl+Shift+Space");
+      } catch {
+        // 热键注册失败时静默处理，不影响应用功能
       }
     };
 
@@ -553,26 +517,12 @@ export default function App() {
       // 监听传统热键触发
       const unsubscribeHotkey = window.electronAPI.onHotkeyTriggered(
         (event, data) => {
-          console.log("收到热键触发事件:", data);
-          console.log(
-            "当前录音状态:",
-            isRecording,
-            "处理状态:",
-            isRecordingProcessing,
-          );
           toggleRecording();
         },
       );
 
       // 监听旧的toggle事件（保持兼容性）
       const unsubscribeToggle = window.electronAPI.onToggleDictation(() => {
-        console.log("收到旧版toggle事件");
-        console.log(
-          "当前录音状态:",
-          isRecording,
-          "处理状态:",
-          isRecordingProcessing,
-        );
         toggleRecording();
       });
 
@@ -634,12 +584,12 @@ export default function App() {
       "rounded-full w-16 h-16 flex items-center justify-center relative overflow-hidden border-2 border-white/80 transition-all duration-300 shadow-xl";
 
     // 统一的按钮样式，不再根据状态变色
-    const buttonStyle = `${baseClasses} bg-gradient-to-br from-slate-100 to-slate-200 dark:from-gray-700 dark:to-gray-600 hover:from-slate-200 hover:to-slate-300 dark:hover:from-gray-600 dark:hover:to-gray-500 hover:shadow-2xl transform hover:scale-105`;
+    const buttonStyle = `${baseClasses} bg-[#f5f5f7] dark:bg-[#2c2c2e] hover:bg-[#e8e8ed] dark:hover:bg-[#3a3a3c] hover:shadow-2xl transform hover:scale-105`;
 
     // 如果模型未就绪，显示禁用状态（统一的灰色）
     if (!modelStatus.isReady) {
       return {
-        className: `${baseClasses} bg-gradient-to-br from-gray-300 to-gray-400 dark:from-gray-600 dark:to-gray-700 cursor-not-allowed opacity-70`,
+        className: `${baseClasses} bg-[#e8e8ed] dark:bg-[#2c2c2e] cursor-not-allowed opacity-50`,
         tooltip:
           modelStatus.stage === "need_download"
             ? "请先下载AI模型文件"
@@ -669,7 +619,7 @@ export default function App() {
         };
       case "recording":
         return {
-          className: `${buttonStyle} recording-pulse cursor-pointer`,
+          className: `${baseClasses} bg-[#0071e3] hover:bg-[#0077ed] recording-pulse cursor-pointer hover:shadow-2xl transform hover:scale-105`,
           tooltip: "正在录音...",
           disabled: false,
         };
@@ -697,34 +647,34 @@ export default function App() {
   const micProps = getMicButtonProps();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-4 pb-4">
+    <div className="min-h-screen bg-[#f5f5f7] dark:bg-[#1c1c1e] p-4 pb-4">
       {/* 主界面 */}
       <div className="max-w-2xl mx-auto min-h-screen flex flex-col">
         {/* 标题栏 */}
         <div
-          className="flex items-center justify-between mb-8 draggable"
+          className="flex items-center justify-between mb-6 px-2 py-3 -mx-2 rounded-xl glass-effect draggable"
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
         >
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 chinese-title">
+          <h1 className="text-3xl font-bold text-[#1d1d1f] dark:text-[#f5f5f7] text-heading">
             Murmur
           </h1>
           <div className="flex items-center space-x-3 non-draggable">
             <Tooltip content="历史记录" position="bottom">
               <button
                 onClick={handleOpenHistory}
-                className="p-3 hover:bg-white/70 dark:hover:bg-gray-700/70 rounded-xl transition-colors shadow-sm"
+                className="p-3 hover:bg-[#f5f5f7] dark:hover:bg-[#2c2c2e] rounded-xl transition-colors shadow-sm"
               >
-                <History className="w-6 h-6 text-gray-700 dark:text-gray-300" />
+                <History className="w-6 h-6 text-[#1d1d1f]/80 dark:text-[#f5f5f7]/80" />
               </button>
             </Tooltip>
             <Tooltip content="设置" position="bottom">
               <button
                 onClick={handleOpenSettings}
-                className="p-3 hover:bg-white/70 dark:hover:bg-gray-700/70 rounded-xl transition-colors shadow-sm"
+                className="p-3 hover:bg-[#f5f5f7] dark:hover:bg-[#2c2c2e] rounded-xl transition-colors shadow-sm"
               >
-                <Settings className="w-6 h-6 text-gray-700 dark:text-gray-300" />
+                <Settings className="w-6 h-6 text-[#1d1d1f]/80 dark:text-[#f5f5f7]/80" />
               </button>
             </Tooltip>
           </div>
@@ -732,7 +682,7 @@ export default function App() {
 
         {/* 模式切换标签 */}
         <div className="flex justify-center mb-6">
-          <div className="inline-flex bg-slate-100 dark:bg-gray-800 rounded-lg p-1">
+          <div className="inline-flex bg-[#f5f5f7] dark:bg-[#2c2c2e] rounded-lg p-1">
             <button
               onClick={() => {
                 if (!isRecording && !isRecordingProcessing) {
@@ -741,7 +691,7 @@ export default function App() {
               }}
               className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
                 appMode === "recording"
-                  ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm"
+                  ? "bg-white dark:bg-[#3a3a3c] text-gray-900 dark:text-gray-100 shadow-sm"
                   : isRecording || isRecordingProcessing
                     ? "text-gray-400 dark:text-gray-500 cursor-not-allowed"
                     : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
@@ -754,7 +704,7 @@ export default function App() {
               onClick={() => setAppMode("file-import")}
               className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
                 appMode === "file-import"
-                  ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm"
+                  ? "bg-white dark:bg-[#3a3a3c] text-gray-900 dark:text-gray-100 shadow-sm"
                   : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
               }`}
             >
@@ -806,7 +756,7 @@ export default function App() {
                 </button>
               </Tooltip>
 
-              <p className="mt-4 status-text text-gray-700 dark:text-gray-300">
+              <p className="mt-4 text-content text-[#1d1d1f]/80 dark:text-[#f5f5f7]/80">
                 {modelStatus.stage === "need_download"
                   ? "需要下载AI模型文件才能开始使用"
                   : modelStatus.stage === "downloading"
@@ -857,9 +807,9 @@ export default function App() {
           <div className="flex-1">
             {/* 录音进行中提示 */}
             {(isRecording || isRecordingProcessing) && (
-              <div className="mb-4 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                <span className="text-xs text-amber-700 dark:text-amber-400">
+              <div className="mb-4 px-3 py-2 bg-[#fff8f0] dark:bg-[#3a2c1c] border border-[#ff9500]/40 rounded-lg flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-[#ff9500] animate-pulse" />
+                <span className="text-xs text-[#c07800] dark:text-[#ff9500]">
                   录音进行中，录音完成后可切换回实时录音模式
                 </span>
               </div>

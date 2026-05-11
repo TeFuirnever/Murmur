@@ -20,22 +20,22 @@ export const ModelStatusIndicator = ({
     switch (modelStatus.stage) {
       case "checking":
         return (
-          <Loader2 className="w-4 h-4 animate-spin text-blue-500 model-loading" />
+          <Loader2 className="w-4 h-4 animate-spin text-[#0071e3] model-loading" />
         );
       case "need_download":
         return <Download className="w-4 h-4 text-orange-500" />;
       case "downloading":
         return (
-          <Loader2 className="w-4 h-4 animate-spin text-blue-500 model-downloading" />
+          <Loader2 className="w-4 h-4 animate-spin text-[#0071e3] model-downloading" />
         );
       case "loading":
-        return <Clock className="w-4 h-4 text-blue-500 model-loading" />;
+        return <Clock className="w-4 h-4 text-[#0071e3] model-loading" />;
       case "ready":
-        return <CheckCircle className="w-4 h-4 text-green-500 model-ready" />;
+        return <CheckCircle className="w-4 h-4 text-[#34c759] model-ready" />;
       case "error":
-        return <AlertCircle className="w-4 h-4 text-red-500 model-error" />;
+        return <AlertCircle className="w-4 h-4 text-[#ff3b30] model-error" />;
       default:
-        return <Download className="w-4 h-4 text-gray-500" />;
+        return <Download className="w-4 h-4 text-[#86868b]" />;
     }
   };
 
@@ -63,15 +63,15 @@ export const ModelStatusIndicator = ({
       case "checking":
       case "downloading":
       case "loading":
-        return "text-blue-600";
+        return "text-[#0071e3]";
       case "need_download":
         return "text-orange-600";
       case "ready":
-        return "text-green-600";
+        return "text-[#34c759]";
       case "error":
-        return "text-red-600";
+        return "text-[#ff3b30]";
       default:
-        return "text-gray-600";
+        return "text-[#86868b]";
     }
   };
 
@@ -92,12 +92,12 @@ export const ModelStatusIndicator = ({
         {getStatusText()}
       </span>
       {getProgressText() && (
-        <span className="text-xs text-gray-500">({getProgressText()})</span>
+        <span className="text-xs text-[#86868b]">({getProgressText()})</span>
       )}
       {modelStatus.stage === "need_download" && onDownload && (
         <button
           onClick={onDownload}
-          className="ml-2 px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+          className="ml-2 px-2 py-1 text-xs bg-[#0071e3] text-white rounded hover:bg-[#0077ed] transition-colors"
         >
           下载
         </button>
@@ -120,7 +120,7 @@ export const ModelStatusIcon = ({
       case "checking":
         return (
           <Loader2
-            className={`${size} animate-spin text-blue-500 model-loading`}
+            className={`${size} animate-spin text-[#0071e3] model-loading`}
           />
         );
       case "need_download":
@@ -128,17 +128,17 @@ export const ModelStatusIcon = ({
       case "downloading":
         return (
           <Loader2
-            className={`${size} animate-spin text-blue-500 model-downloading`}
+            className={`${size} animate-spin text-[#0071e3] model-downloading`}
           />
         );
       case "loading":
-        return <Clock className={`${size} text-blue-500 model-loading`} />;
+        return <Clock className={`${size} text-[#0071e3] model-loading`} />;
       case "ready":
-        return <CheckCircle className={`${size} text-green-500 model-ready`} />;
+        return <CheckCircle className={`${size} text-[#34c759] model-ready`} />;
       case "error":
-        return <AlertCircle className={`${size} text-red-500 model-error`} />;
+        return <AlertCircle className={`${size} text-[#ff3b30] model-error`} />;
       default:
-        return <Download className={`${size} text-gray-500`} />;
+        return <Download className={`${size} text-[#86868b]`} />;
     }
   };
 
@@ -207,7 +207,7 @@ export const ModelDownloadProgress = ({
             disabled={modelStatus.isDownloading}
             className={`px-4 py-2 text-white rounded-lg transition-colors text-sm font-medium ${
               modelStatus.isDownloading
-                ? "bg-gray-400 cursor-not-allowed"
+                ? "bg-[#86868b] cursor-not-allowed"
                 : "bg-orange-500 hover:bg-orange-600"
             }`}
           >
@@ -220,16 +220,16 @@ export const ModelDownloadProgress = ({
 
   if (modelStatus.stage === "downloading") {
     return (
-      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
+      <div className="bg-[#0071e3]/5 dark:bg-[#0071e3]/10 border border-[#0071e3]/20 dark:border-[#0071e3]/30 rounded-lg p-4">
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+              <Loader2 className="w-5 h-5 animate-spin text-[#0071e3]" />
               <div>
-                <h3 className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                <h3 className="text-sm font-medium text-[#0071e3] dark:text-[#0071e3]">
                   正在下载模型文件
                 </h3>
-                <p className="text-xs text-blue-600 dark:text-blue-300">
+                <p className="text-xs text-[#0071e3]/80 dark:text-[#0071e3]/70">
                   请保持网络连接，下载可能需要几分钟
                 </p>
               </div>
@@ -237,7 +237,7 @@ export const ModelDownloadProgress = ({
             {onCancel && (
               <button
                 onClick={onCancel}
-                className="px-3 py-1 text-xs text-blue-600 hover:text-blue-800 transition-colors"
+                className="px-3 py-1 text-xs text-[#0071e3] hover:text-[#0071e3]/80 transition-colors"
               >
                 取消
               </button>
@@ -246,13 +246,13 @@ export const ModelDownloadProgress = ({
 
           {/* 进度条 */}
           <div className="space-y-2">
-            <div className="flex justify-between text-xs text-blue-600 dark:text-blue-300">
+            <div className="flex justify-between text-xs text-[#0071e3]/80 dark:text-[#0071e3]/70">
               <span>下载进度</span>
               <span>{modelStatus.downloadProgress || 0}%</span>
             </div>
-            <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2">
+            <div className="w-full bg-[#0071e3]/20 dark:bg-[#0071e3]/30 rounded-full h-2">
               <div
-                className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                className="bg-[#0071e3] h-2 rounded-full transition-all duration-300"
                 style={{ width: `${modelStatus.downloadProgress || 0}%` }}
               />
             </div>

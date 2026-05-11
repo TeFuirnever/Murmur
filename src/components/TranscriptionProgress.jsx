@@ -31,13 +31,12 @@ export default function TranscriptionProgress({
   const currentPhaseIndex = PHASES.findIndex((p) => p.key === phase);
 
   return (
-    <div className="bg-slate-50 dark:bg-gray-800 rounded-xl p-6 border border-slate-200 dark:border-gray-700">
+    <div className="bg-[#f5f5f7] dark:bg-[#2c2c2e] rounded-xl p-6 border border-[#d2d2d7] dark:border-[#383838]">
       {/* 阶段指示器 */}
       <div className="flex items-center justify-center gap-2 mb-6">
         {PHASES.map((p, index) => {
           const isCompleted = currentPhaseIndex > index;
           const isCurrent = currentPhaseIndex === index;
-          const isPending = currentPhaseIndex < index;
 
           return (
             <React.Fragment key={p.key}>
@@ -45,8 +44,8 @@ export default function TranscriptionProgress({
                 <div
                   className={`w-8 h-0.5 ${
                     isCompleted
-                      ? "bg-blue-500"
-                      : "bg-slate-200 dark:bg-gray-600"
+                      ? "bg-[#0071e3]"
+                      : "bg-[#e8e8ed] dark:bg-[#383838]"
                   }`}
                 />
               )}
@@ -54,19 +53,19 @@ export default function TranscriptionProgress({
                 <div
                   className={`w-3 h-3 rounded-full ${
                     isCompleted
-                      ? "bg-blue-500"
+                      ? "bg-[#0071e3]"
                       : isCurrent
-                        ? "bg-blue-500 animate-pulse"
-                        : "bg-slate-200 dark:bg-gray-600"
+                        ? "bg-[#0071e3] animate-pulse"
+                        : "bg-[#d2d2d7] dark:bg-[#383838]"
                   }`}
                 />
                 <span
                   className={`text-xs font-medium ${
                     isCompleted
-                      ? "text-blue-600 dark:text-blue-400"
+                      ? "text-[#0071e3]"
                       : isCurrent
-                        ? "text-gray-900 dark:text-gray-100"
-                        : "text-gray-400 dark:text-gray-500"
+                        ? "text-[#1d1d1f] dark:text-[#f5f5f7]"
+                        : "text-[#86868b]"
                   }`}
                 >
                   {p.label}
@@ -80,7 +79,7 @@ export default function TranscriptionProgress({
       {/* 旋转加载图标 + 状态消息 */}
       <div className="flex items-center justify-center gap-3 mb-4">
         <svg
-          className="w-5 h-5 text-blue-500 animate-spin"
+          className="w-5 h-5 text-[#0071e3] animate-spin"
           fill="none"
           viewBox="0 0 24 24"
         >
@@ -98,7 +97,7 @@ export default function TranscriptionProgress({
             d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
           />
         </svg>
-        <span className="text-sm text-gray-700 dark:text-gray-300 status-text">
+        <span className="text-sm text-[#1d1d1f]/80 dark:text-[#f5f5f7]/80 text-content">
           {message || "正在处理..."}
         </span>
       </div>
@@ -106,12 +105,12 @@ export default function TranscriptionProgress({
       {/* ASR阶段时间进度 */}
       {phase === "asr" && totalMs > 0 && (
         <div className="text-center mb-4">
-          <span className="text-sm text-gray-500 dark:text-gray-400">
+          <span className="text-sm text-[#86868b]">
             已处理 {formatMs(processedMs)} / {formatMs(totalMs)}
           </span>
-          <div className="w-full h-1.5 bg-slate-200 dark:bg-gray-600 rounded-full mt-2 overflow-hidden">
+          <div className="w-full h-1.5 bg-[#e8e8ed] dark:bg-[#383838] rounded-full mt-2 overflow-hidden">
             <div
-              className="h-full bg-blue-500 rounded-full transition-all duration-300"
+              className="h-full bg-[#0071e3] rounded-full transition-all duration-300"
               style={{
                 width: `${totalMs > 0 ? Math.min((processedMs / totalMs) * 100, 100) : 0}%`,
               }}
@@ -124,7 +123,7 @@ export default function TranscriptionProgress({
       <div className="flex justify-center">
         <button
           onClick={onCancel}
-          className="px-4 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors border border-red-200 dark:border-red-800"
+          className="px-4 py-1.5 text-sm font-medium text-[#ff3b30] hover:bg-[#ff3b30]/10 rounded-lg transition-colors border border-[#ff3b30]/40"
         >
           取消转录
         </button>

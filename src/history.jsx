@@ -33,19 +33,19 @@ const HistoryPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+    <div className="min-h-screen bg-[#f5f5f7] dark:bg-[#1c1c1e]">
       {/* 使用历史记录组件，但作为全屏页面而不是模态框 */}
       <div className="h-screen flex flex-col">
         {/* 标题栏 */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
+        <div className="glass-effect flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-[#2c2c2e] shadow-sm sticky top-0">
           <div className="flex items-center space-x-3">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 chinese-title">
+            <h1 className="text-2xl font-bold text-[#1d1d1f] dark:text-[#f5f5f7]/80 text-heading">
               Murmur - 转录历史
             </h1>
           </div>
           <button
             onClick={handleClose}
-            className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            className="px-4 py-2 text-[#86868b] dark:text-[#86868b] hover:text-[#1d1d1f] dark:hover:text-[#f5f5f7]/80 hover:bg-[#f5f5f7] dark:hover:bg-[#3a3a3c] rounded-lg transition-colors"
           >
             关闭窗口
           </button>
@@ -144,11 +144,11 @@ const HistoryContent = ({ onCopy }) => {
   return (
     <div className="h-full flex flex-col">
       {/* 搜索栏 */}
-      <div className="p-6 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">
+      <div className="p-6 bg-white dark:bg-[#2c2c2e] border-b border-gray-100 dark:border-gray-700">
         <div className="max-w-4xl mx-auto">
           <div className="relative">
             <svg
-              className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500"
+              className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-[#86868b] dark:text-[#86868b]"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -165,11 +165,11 @@ const HistoryContent = ({ onCopy }) => {
               placeholder="搜索转录内容..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent chinese-text text-lg"
+              className="w-full pl-10 pr-4 py-3 border border-[#d2d2d7] dark:border-gray-600 bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-white rounded-lg focus:ring-2 focus:ring-[#0071e3] focus:border-transparent text-content text-lg"
             />
           </div>
           <div className="mt-3 flex items-center justify-between">
-            <span className="text-sm text-gray-600 dark:text-gray-400">
+            <span className="text-sm text-[#86868b] dark:text-[#86868b]">
               共 {filteredTranscriptions.length} 条记录
             </span>
             <button
@@ -178,7 +178,7 @@ const HistoryContent = ({ onCopy }) => {
                   window.electronAPI.exportTranscriptions("txt");
                 }
               }}
-              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white rounded-lg transition-colors text-sm"
+              className="px-4 py-2 bg-[#0071e3] hover:bg-[#0077ed] dark:bg-[#0071e3] dark:hover:bg-[#0077ed] text-white rounded-lg transition-colors text-sm"
             >
               导出全部
             </button>
@@ -191,15 +191,15 @@ const HistoryContent = ({ onCopy }) => {
         <div className="max-w-4xl mx-auto">
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-              <span className="ml-3 text-gray-600 dark:text-gray-400">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0071e3]"></div>
+              <span className="ml-3 text-[#86868b] dark:text-[#86868b]">
                 加载中...
               </span>
             </div>
           ) : filteredTranscriptions.length === 0 ? (
             <div className="text-center py-12">
               <svg
-                className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4"
+                className="w-12 h-12 text-[#86868b] dark:text-[#86868b] mx-auto mb-4"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -211,7 +211,7 @@ const HistoryContent = ({ onCopy }) => {
                   d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                 />
               </svg>
-              <p className="text-gray-500 dark:text-gray-400 chinese-text text-lg">
+              <p className="text-[#86868b] dark:text-[#86868b] text-content text-lg">
                 {searchQuery ? "没有找到匹配的记录" : "暂无转录历史"}
               </p>
             </div>
@@ -220,10 +220,10 @@ const HistoryContent = ({ onCopy }) => {
               {filteredTranscriptions.map((item) => (
                 <div
                   key={item.id}
-                  className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow border border-gray-200 dark:border-gray-700"
+                  className="bg-white dark:bg-[#2c2c2e] rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow border border-gray-200 dark:border-gray-700"
                 >
                   <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center space-x-3 text-sm text-gray-500 dark:text-gray-400">
+                    <div className="flex items-center space-x-3 text-sm text-[#86868b] dark:text-[#86868b]">
                       <svg
                         className="w-4 h-4"
                         fill="none"
@@ -239,7 +239,7 @@ const HistoryContent = ({ onCopy }) => {
                       </svg>
                       <span>{formatDate(item.created_at)}</span>
                       {item.confidence && (
-                        <span className="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2 py-1 rounded text-xs">
+                        <span className="bg-blue-100 dark:bg-blue-900/50 text-[#0071e3] dark:text-[#2997ff] px-2 py-1 rounded text-xs">
                           置信度: {Math.round(item.confidence * 100)}%
                         </span>
                       )}
@@ -247,11 +247,11 @@ const HistoryContent = ({ onCopy }) => {
                     <div className="flex space-x-2">
                       <button
                         onClick={() => onCopy(item.processed_text || item.text)}
-                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                        className="p-2 hover:bg-[#f5f5f7] dark:hover:bg-[#3a3a3c] rounded-lg transition-colors"
                         title="复制文本"
                       >
                         <svg
-                          className="w-4 h-4 text-gray-600 dark:text-gray-400"
+                          className="w-4 h-4 text-[#86868b] dark:text-[#86868b]"
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
@@ -288,10 +288,10 @@ const HistoryContent = ({ onCopy }) => {
 
                   {/* 最终文本 */}
                   <div className="mb-4">
-                    <h4 className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">
+                    <h4 className="text-sm font-medium text-[#1d1d1f]/80 dark:text-[#f5f5f7]/80 mb-2">
                       最终结果:
                     </h4>
-                    <p className="chinese-content leading-relaxed bg-gray-50 dark:bg-gray-700/60 p-4 rounded-lg border dark:border-gray-600/30">
+                    <p className="text-content leading-relaxed bg-[#f5f5f7] dark:bg-[#3a3a3c] p-4 rounded-lg border dark:border-gray-600/30">
                       {item.text}
                     </p>
                   </div>
@@ -301,10 +301,10 @@ const HistoryContent = ({ onCopy }) => {
                     item.processed_text.trim() !==
                       (item.raw_text || "").trim() && (
                       <div className="mb-4">
-                        <h4 className="text-sm font-medium text-emerald-700 dark:text-emerald-400 mb-2">
+                        <h4 className="text-sm font-medium text-[#0071e3] dark:text-[#2997ff] mb-2">
                           AI优化:
                         </h4>
-                        <p className="chinese-content leading-relaxed bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-lg border border-emerald-200 dark:border-emerald-700">
+                        <p className="text-content leading-relaxed bg-[#e8f4fd] dark:bg-[#0a2540] p-4 rounded-lg border border-[#b3d7f5] dark:border-[#1a3a5c]">
                           {item.processed_text}
                         </p>
                       </div>
@@ -314,10 +314,10 @@ const HistoryContent = ({ onCopy }) => {
                   {item.raw_text &&
                     item.raw_text.trim() !== item.text.trim() && (
                       <div>
-                        <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+                        <h4 className="text-sm font-medium text-[#86868b] dark:text-[#86868b] mb-2">
                           原始识别:
                         </h4>
-                        <p className="text-xs chinese-content leading-relaxed bg-gray-100 dark:bg-gray-700/40 p-3 rounded-lg border dark:border-gray-600/20 text-gray-600 dark:text-gray-200">
+                        <p className="text-xs text-content leading-relaxed bg-[#f5f5f7] dark:bg-[#3a3a3c] p-3 rounded-lg border dark:border-gray-600/20 text-[#86868b] dark:text-[#f5f5f7]/80">
                           {item.raw_text}
                         </p>
                       </div>

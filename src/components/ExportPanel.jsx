@@ -43,7 +43,7 @@ export default function ExportPanel({ transcriptionId }) {
 
   return (
     <div className="space-y-2">
-      <h4 className="text-xs font-medium text-gray-500 dark:text-gray-400">
+      <h4 className="text-xs font-medium text-[#86868b]">
         导出格式
       </h4>
       <div className="flex gap-2">
@@ -54,7 +54,7 @@ export default function ExportPanel({ transcriptionId }) {
               key={fmt.key}
               onClick={() => handleExport(fmt.key)}
               disabled={isExporting || !!exportingFormat}
-              className="flex-1 px-3 py-2 text-xs font-medium rounded-lg border border-slate-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-3 py-2 text-xs font-medium rounded-lg border border-[#d2d2d7] dark:border-[#383838] bg-[#f5f5f7] dark:bg-[#2c2c2e] text-[#1d1d1f]/80 dark:text-[#f5f5f7]/60 hover:bg-[#e8e8ed] dark:hover:bg-[#383838] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               title={fmt.desc}
             >
               {isExporting ? (

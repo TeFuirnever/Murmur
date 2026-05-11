@@ -207,10 +207,10 @@ const SettingsPage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
+      <div className="min-h-screen bg-[#f5f5f7] dark:bg-[#1c1c1e] flex items-center justify-center">
         <div className="flex items-center space-x-3">
-          <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
-          <span className="text-gray-700 dark:text-gray-300">
+          <Loader2 className="w-6 h-6 animate-spin text-[#0071e3]" />
+          <span className="text-[#1d1d1f]/80 dark:text-[#f5f5f7]/80">
             加载设置中...
           </span>
         </div>
@@ -219,21 +219,21 @@ const SettingsPage = () => {
   }
 
   return (
-    <div className="h-screen bg-gradient-to-br from-slate-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex flex-col">
+    <div className="h-screen bg-[#f5f5f7] dark:bg-[#1c1c1e] flex flex-col">
       {/* 标题栏 - 固定 */}
-      <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex-shrink-0">
+      <div className="bg-white/80 dark:bg-[#1c1c1e]/80 backdrop-blur-sm border-b border-[#d2d2d7] dark:border-[#3a3a3c] px-6 py-4 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <Settings className="w-5 h-5 text-blue-600" />
-            <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100 chinese-title">
+            <Settings className="w-5 h-5 text-[#0071e3]" />
+            <h1 className="text-lg font-bold text-[#1d1d1f] dark:text-[#f5f5f7] text-heading">
               设置
             </h1>
           </div>
           <button
             onClick={handleClose}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            className="p-2 hover:bg-[#f5f5f7] dark:hover:bg-[#2c2c2e] rounded-lg transition-colors"
           >
-            <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+            <X className="w-5 h-5 text-[#86868b]" />
           </button>
         </div>
       </div>
@@ -242,13 +242,13 @@ const SettingsPage = () => {
       <div className="flex-1 overflow-y-auto min-h-0">
         <div className="max-w-2xl mx-auto p-6 pb-8">
           {/* 权限管理部分 */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 mb-6">
+          <div className="bg-white dark:bg-[#2c2c2e] rounded-xl shadow-lg border border-[#d2d2d7] dark:border-[#3a3a3c] mb-6">
             <div className="p-6">
               <div className="mb-4">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 chinese-title">
+                <h2 className="text-lg font-semibold text-[#1d1d1f] dark:text-[#f5f5f7] text-heading">
                   权限管理
                 </h2>
-                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                <p className="text-xs text-[#86868b] mt-1">
                   测试和管理应用权限，确保麦克风和辅助功能正常工作。
                 </p>
               </div>
@@ -276,13 +276,13 @@ const SettingsPage = () => {
           </div>
 
           {/* AI配置部分 */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700">
+          <div className="bg-white dark:bg-[#2c2c2e] rounded-xl shadow-lg border border-[#d2d2d7] dark:border-[#3a3a3c]">
             <div className="p-6">
               <div className="mb-4">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 chinese-title">
+                <h2 className="text-lg font-semibold text-[#1d1d1f] dark:text-[#f5f5f7] text-heading">
                   AI配置
                 </h2>
-                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                <p className="text-xs text-[#86868b] mt-1">
                   配置AI模型以优化和增强语音识别结果。如果API
                   Key无效或未填写，优化功能将自动禁用。
                 </p>
@@ -293,7 +293,7 @@ const SettingsPage = () => {
                 <div className="flex items-center justify-between pt-4">
                   <label
                     htmlFor="ai-optimization-toggle"
-                    className="text-sm font-medium text-gray-800 dark:text-gray-200"
+                    className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]"
                   >
                     启用AI文本优化
                   </label>
@@ -309,9 +309,9 @@ const SettingsPage = () => {
                     }
                     className={`${
                       settings.enable_ai_optimization
-                        ? "bg-blue-600"
-                        : "bg-gray-300 dark:bg-gray-600"
-                    } relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2`}
+                        ? "bg-[#0071e3]"
+                        : "bg-[#d2d2d7] dark:bg-[#3a3a3c]"
+                    } relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-2`}
                   >
                     <span
                       aria-hidden="true"
@@ -326,7 +326,7 @@ const SettingsPage = () => {
 
                 {/* API Key */}
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label className="block text-xs font-medium text-[#1d1d1f]/80 dark:text-[#f5f5f7]/80 mb-1">
                     API Key *
                   </label>
                   <div className="relative">
@@ -337,12 +337,12 @@ const SettingsPage = () => {
                         handleInputChange("ai_api_key", e.target.value)
                       }
                       placeholder="请输入您的AI API Key"
-                      className="w-full px-3 py-2 pr-10 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                      className="w-full px-3 py-2 pr-10 text-sm border border-[#d2d2d7] dark:border-[#3a3a3c] rounded-lg focus:ring-2 focus:ring-[#0071e3] focus:border-transparent bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7]"
                     />
                     <button
                       type="button"
                       onClick={() => setShowApiKey(!showApiKey)}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#86868b] hover:text-[#1d1d1f] dark:hover:text-[#f5f5f7]"
                     >
                       {showApiKey ? (
                         <EyeOff className="w-5 h-5" />
@@ -351,14 +351,14 @@ const SettingsPage = () => {
                       )}
                     </button>
                   </div>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  <p className="mt-1 text-xs text-[#86868b]">
                     用于AI文本优化功能的API密钥
                   </p>
                 </div>
 
                 {/* Base URL */}
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label className="block text-xs font-medium text-[#1d1d1f]/80 dark:text-[#f5f5f7]/80 mb-1">
                     API Base URL
                   </label>
                   <input
@@ -368,9 +368,9 @@ const SettingsPage = () => {
                       handleInputChange("ai_base_url", e.target.value)
                     }
                     placeholder="https://api.openai.com/v1"
-                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    className="w-full px-3 py-2 text-sm border border-[#d2d2d7] dark:border-[#3a3a3c] rounded-lg focus:ring-2 focus:ring-[#0071e3] focus:border-transparent bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7]"
                   />
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  <p className="mt-1 text-xs text-[#86868b]">
                     AI服务的API端点地址，支持OpenAI兼容的API
                   </p>
                 </div>
@@ -378,7 +378,7 @@ const SettingsPage = () => {
                 {/* Model */}
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">
+                    <label className="block text-xs font-medium text-[#1d1d1f]/80 dark:text-[#f5f5f7]/80">
                       AI模型
                     </label>
                     <div className="flex items-center space-x-2">
@@ -392,7 +392,7 @@ const SettingsPage = () => {
                       <button
                         type="button"
                         onClick={resetToOpenAI}
-                        className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                        className="text-xs px-2 py-0.5 bg-[#e8f4fd] text-[#0071e3] dark:bg-blue-900/30 dark:text-blue-400 rounded hover:bg-[#d0eafb] dark:hover:bg-blue-900/50 transition-colors"
                       >
                         OpenAI
                       </button>
@@ -407,11 +407,11 @@ const SettingsPage = () => {
                         name="model-type"
                         checked={!customModel}
                         onChange={() => setCustomModel(false)}
-                        className="w-3 h-3 text-blue-600 border-gray-300 focus:ring-blue-500"
+                        className="w-3 h-3 text-[#0071e3] border-[#d2d2d7] focus:ring-[#0071e3]"
                       />
                       <label
                         htmlFor="predefined-model"
-                        className="text-xs text-gray-700 dark:text-gray-300"
+                        className="text-xs text-[#1d1d1f]/80 dark:text-[#f5f5f7]/80"
                       >
                         预定义模型
                       </label>
@@ -423,7 +423,7 @@ const SettingsPage = () => {
                         onChange={(e) =>
                           handleInputChange("ai_model", e.target.value)
                         }
-                        className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                        className="w-full px-3 py-2 text-sm border border-[#d2d2d7] dark:border-[#3a3a3c] rounded-lg focus:ring-2 focus:ring-[#0071e3] focus:border-transparent bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7]"
                       >
                         <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
                         <option value="gpt-4">GPT-4</option>
@@ -443,11 +443,11 @@ const SettingsPage = () => {
                         name="model-type"
                         checked={customModel}
                         onChange={() => setCustomModel(true)}
-                        className="w-3 h-3 text-blue-600 border-gray-300 focus:ring-blue-500"
+                        className="w-3 h-3 text-[#0071e3] border-[#d2d2d7] focus:ring-[#0071e3]"
                       />
                       <label
                         htmlFor="custom-model"
-                        className="text-xs text-gray-700 dark:text-gray-300"
+                        className="text-xs text-[#1d1d1f]/80 dark:text-[#f5f5f7]/80"
                       >
                         自定义模型
                       </label>
@@ -461,12 +461,12 @@ const SettingsPage = () => {
                           handleInputChange("ai_model", e.target.value)
                         }
                         placeholder="输入自定义模型名称，如：qwen3-30b-a3b-instruct-2507"
-                        className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                        className="w-full px-3 py-2 text-sm border border-[#d2d2d7] dark:border-[#3a3a3c] rounded-lg focus:ring-2 focus:ring-[#0071e3] focus:border-transparent bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7]"
                       />
                     )}
                   </div>
 
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  <p className="mt-1 text-xs text-[#86868b]">
                     选择用于文本优化的AI模型。推荐使用阿里云Qwen3模型获得更好的中文处理效果。
                   </p>
                 </div>
@@ -543,12 +543,12 @@ const SettingsPage = () => {
               )}
 
               {/* 操作按钮 */}
-              <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between mt-6 pt-4 border-t border-[#d2d2d7] dark:border-[#3a3a3c]">
                 <div className="flex flex-col">
                   <button
                     onClick={testAIConfiguration}
                     disabled={testing}
-                    className="flex items-center space-x-2 px-3 py-1.5 text-sm bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center space-x-2 px-3 py-1.5 text-sm bg-[#0071e3] hover:bg-[#0077ed] text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {testing ? (
                       <Loader2 className="w-3 h-3 animate-spin" />
@@ -557,7 +557,7 @@ const SettingsPage = () => {
                     )}
                     <span>{testing ? "测试中..." : "测试配置"}</span>
                   </button>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  <p className="mt-1 text-xs text-[#86868b]">
                     测试当前编辑的配置（无需保存）
                   </p>
                 </div>
@@ -565,7 +565,7 @@ const SettingsPage = () => {
                 <button
                   onClick={saveSettings}
                   disabled={saving || !settings.ai_api_key}
-                  className="flex items-center space-x-2 px-4 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center space-x-2 px-4 py-1.5 text-sm bg-[#0071e3] hover:bg-[#0077ed] text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {saving ? (
                     <Loader2 className="w-3 h-3 animate-spin" />
@@ -579,17 +579,17 @@ const SettingsPage = () => {
           </div>
 
           {/* 其他设置部分 */}
-          <div className="mt-4 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700">
+          <div className="mt-4 bg-white dark:bg-[#2c2c2e] rounded-xl shadow-lg border border-[#d2d2d7] dark:border-[#3a3a3c]">
             <div className="p-4">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 chinese-title mb-3">
+              <h2 className="text-lg font-semibold text-[#1d1d1f] dark:text-[#f5f5f7] text-heading mb-3">
                 关于 Murmur
               </h2>
-              <div className="bg-gradient-to-r from-blue-50 to-green-50 dark:from-blue-900/20 dark:to-green-900/20 p-3 rounded-lg">
-                <p className="text-xs text-gray-700 dark:text-gray-300 mb-1">
+              <div className="bg-[#f5f5f7] dark:bg-[#2c2c2e] p-3 rounded-lg">
+                <p className="text-xs text-[#1d1d1f]/80 dark:text-[#f5f5f7]/80 mb-1">
                   🎤 <strong>Murmur</strong> -
                   基于FunASR和AI的中文语音转文字应用
                 </p>
-                <p className="text-xs text-gray-600 dark:text-gray-400">
+                <p className="text-xs text-[#86868b]">
                   • 高精度中文语音识别
                   <br />
                   • AI智能文本优化

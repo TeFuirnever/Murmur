@@ -11,18 +11,18 @@ export const StatusLight = ({
 }) => {
   const getLightColor = () => {
     if (modelStatus.isLoading) {
-      return "bg-yellow-500"; // 黄灯 - 加载中
+      return "bg-[#ff9500]"; // 黄灯 - 加载中
     }
 
     if (modelStatus.error) {
-      return "bg-red-500"; // 红灯 - 错误
+      return "bg-[#ff3b30]"; // 红灯 - 错误
     }
 
     if (modelStatus.isReady) {
-      return "bg-green-500"; // 绿灯 - 就绪
+      return "bg-[#34c759]"; // 绿灯 - 就绪
     }
 
-    return "bg-gray-400"; // 灰灯 - 未知状态
+    return "bg-[#86868b]"; // 灰灯 - 未知状态
   };
 
   const getLightAnimation = () => {

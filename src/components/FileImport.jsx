@@ -30,7 +30,7 @@ export default function FileImport() {
         {state === "selected" && (
           <button
             onClick={startTranscription}
-            className="w-full py-2.5 px-4 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 rounded-lg transition-colors shadow-sm"
+            className="w-full py-2.5 px-4 text-sm font-medium text-white bg-[#0071e3] hover:bg-[#0077ed] rounded-lg transition-colors shadow-sm"
           >
             开始转录
           </button>
@@ -64,7 +64,7 @@ export default function FileImport() {
         <ExportPanel transcriptionId={result.id} />
         <button
           onClick={reset}
-          className="w-full py-2 px-4 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-slate-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+          className="w-full py-2 px-4 text-sm font-medium text-[#86868b] hover:text-[#1d1d1f] dark:hover:text-[#f5f5f7] hover:bg-[#f5f5f7] dark:hover:bg-[#2c2c2e] rounded-lg transition-colors"
         >
           导入新文件
         </button>
@@ -76,10 +76,10 @@ export default function FileImport() {
   if (state === "error") {
     return (
       <div className="space-y-4">
-        <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-4 border border-red-200 dark:border-red-800">
+        <div className="bg-[#ff3b30]/5 dark:bg-[#3a1c1c] rounded-xl p-4 border border-[#ff3b30]/40">
           <div className="flex items-start gap-3">
             <svg
-              className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5"
+              className="w-5 h-5 text-[#ff3b30] flex-shrink-0 mt-0.5"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -92,10 +92,10 @@ export default function FileImport() {
               />
             </svg>
             <div>
-              <p className="text-sm font-medium text-red-700 dark:text-red-400">
+              <p className="text-sm font-medium text-[#ff3b30]">
                 转录失败
               </p>
-              <p className="text-sm text-red-600 dark:text-red-400/80 mt-1">
+              <p className="text-sm text-[#ff3b30]/80 mt-1">
                 {error || "未知错误"}
               </p>
             </div>
@@ -103,7 +103,7 @@ export default function FileImport() {
         </div>
         <button
           onClick={reset}
-          className="w-full py-2 px-4 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 rounded-lg transition-colors shadow-sm"
+          className="w-full py-2 px-4 text-sm font-medium text-white bg-[#0071e3] hover:bg-[#0077ed] rounded-lg transition-colors shadow-sm"
         >
           重新选择文件
         </button>
@@ -115,10 +115,10 @@ export default function FileImport() {
   if (state === "cancelled") {
     return (
       <div className="space-y-4">
-        <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-4 border border-amber-200 dark:border-amber-800">
+        <div className="bg-[#ff9500]/5 dark:bg-[#3a2c1c] rounded-xl p-4 border border-[#ff9500]/40">
           <div className="flex items-center gap-3">
             <svg
-              className="w-5 h-5 text-amber-500 flex-shrink-0"
+              className="w-5 h-5 text-[#ff9500] flex-shrink-0"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -130,14 +130,14 @@ export default function FileImport() {
                 d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
               />
             </svg>
-            <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+            <p className="text-sm font-medium text-[#ff9500]">
               转录已取消
             </p>
           </div>
         </div>
         <button
           onClick={reset}
-          className="w-full py-2 px-4 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 rounded-lg transition-colors shadow-sm"
+          className="w-full py-2 px-4 text-sm font-medium text-white bg-[#0071e3] hover:bg-[#0077ed] rounded-lg transition-colors shadow-sm"
         >
           重新选择文件
         </button>

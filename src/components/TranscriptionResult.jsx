@@ -35,7 +35,7 @@ export default function TranscriptionResult({ text, segments, duration }) {
     <div className="space-y-4">
       {/* 头部：时长信息 */}
       {duration > 0 && (
-        <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+        <div className="flex items-center gap-2 text-sm text-[#86868b]">
           <svg
             className="w-4 h-4"
             fill="none"
@@ -55,11 +55,11 @@ export default function TranscriptionResult({ text, segments, duration }) {
 
       {/* 完整文本 */}
       {text && (
-        <div className="bg-slate-100/80 dark:bg-gray-800/80 rounded-lg p-4 max-h-48 overflow-y-auto custom-scrollbar">
-          <h4 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
+        <div className="bg-[#f5f5f7] dark:bg-[#2c2c2e] rounded-lg p-4 max-h-48 overflow-y-auto custom-scrollbar">
+          <h4 className="text-xs font-medium text-[#86868b] mb-2">
             转录文本
           </h4>
-          <p className="chinese-content text-gray-800 dark:text-gray-200 text-sm whitespace-pre-wrap">
+          <p className="text-content text-[#1d1d1f] dark:text-[#f5f5f7]/80 text-sm whitespace-pre-wrap">
             {text}
           </p>
         </div>
@@ -72,7 +72,7 @@ export default function TranscriptionResult({ text, segments, duration }) {
             onClick={() =>
               setExpandedSegment(expandedSegment === "all" ? null : "all")
             }
-            className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors mb-2"
+            className="text-xs font-medium text-[#0071e3] hover:text-[#0077ed] transition-colors mb-2"
           >
             {expandedSegment === "all" ? "收起分段详情" : "查看分段详情"}
           </button>
@@ -84,15 +84,15 @@ export default function TranscriptionResult({ text, segments, duration }) {
                   key={index}
                   className={`flex gap-3 p-2 rounded-lg text-sm transition-colors ${
                     expandedSegment === index
-                      ? "bg-blue-50 dark:bg-blue-900/20"
-                      : "hover:bg-slate-50 dark:hover:bg-gray-700/50"
+                      ? "bg-[#e8f4fd] dark:bg-[#0a2540]"
+                      : "hover:bg-[#f5f5f7] dark:hover:bg-[#383838]/50"
                   }`}
                 >
-                  <span className="text-xs text-gray-400 dark:text-gray-500 font-mono whitespace-nowrap pt-0.5 flex-shrink-0">
+                  <span className="text-xs text-[#86868b] font-mono whitespace-nowrap pt-0.5 flex-shrink-0">
                     {formatTimestamp(segment.start_ms)} -{" "}
                     {formatTimestamp(segment.end_ms)}
                   </span>
-                  <span className="chinese-content text-gray-700 dark:text-gray-300">
+                  <span className="text-content text-[#1d1d1f]/80 dark:text-[#f5f5f7]/60">
                     {segment.text}
                   </span>
                 </div>
