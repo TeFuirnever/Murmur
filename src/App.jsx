@@ -7,8 +7,7 @@ import { useWindowDrag } from "./hooks/useWindowDrag";
 import { useRecording } from "./hooks/useRecording";
 import { useTextProcessing } from "./hooks/useTextProcessing";
 import { useModelStatus } from "./hooks/useModelStatus";
-import { usePermissions } from "./hooks/usePermissions";
-import { Mic, MicOff, Settings, History, Copy, Download } from "lucide-react";
+import { Settings, History, Copy, Download, Minus, Square, X, Maximize2 } from "lucide-react";
 import SettingsPanel from "./components/SettingsPanel";
 import { ModelDownloadProgress } from "./components/ui/model-status-indicator";
 import FileImport from "./components/FileImport";
@@ -221,41 +220,24 @@ export default function App() {
   const urlParams = new URLSearchParams(window.location.search);
   const page = urlParams.get("page");
 
-  // 如果是设置页面，直接渲染设置组件
-  if (page === "settings") {
-    return (
-      <React.Suspense
-        fallback={
-          <div className="min-h-screen bg-[#f5f5f7] dark:bg-[#1c1c1e] flex items-center justify-center">
-            <div className="flex items-center space-x-3">
-              <LoadingDots />
-              <span className="text-content text-[#1d1d1f]/80 dark:text-[#f5f5f7]/80">
-                加载设置页面...
-              </span>
-            </div>
-          </div>
-        }
-      >
-        <SettingsPage />
-      </React.Suspense>
-    );
-  }
-
   const [isHovered, setIsHovered] = useState(false);
   const [originalText, setOriginalText] = useState("");
   const [processedText, setProcessedText] = useState("");
-  const [showTextArea, setShowTextArea] = useState(false);
+  const [, setShowTextArea] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [appMode, setAppMode] = useState("recording"); // recording | file-import
+  const [isMaximized, setIsMaximized] = useState(false);
 
   const {
-    isDragging,
     handleMouseDown,
     handleMouseMove,
     handleMouseUp,
     handleClick,
   } = useWindowDrag();
   const modelStatus = useModelStatus();
+
+  const handleRecordingCompleteRef = useRef(null);
+  const handleAIOptimizationCompleteRef = useRef(null);
 
   const {
     isRecording,
@@ -264,10 +246,14 @@ export default function App() {
     startRecording,
     stopRecording,
     error: recordingError,
-  } = useRecording();
+  } = useRecording({
+    onTranscriptionComplete: (...args) =>
+      handleRecordingCompleteRef.current?.(...args),
+    onAIOptimizationComplete: (...args) =>
+      handleAIOptimizationCompleteRef.current?.(...args),
+  });
 
   const {
-    processText,
     isProcessing: isTextProcessing,
     error: textProcessingError,
   } = useTextProcessing();
@@ -301,7 +287,7 @@ export default function App() {
         await navigator.clipboard.writeText(text);
         toast.info("文本已复制到剪贴板，请手动粘贴");
       }
-    } catch (error) {
+    } catch {
       toast.error("粘贴失败", {
         description:
           "请检查辅助功能权限。文本已复制到剪贴板 - 请手动使用 Cmd+V 粘贴。",
@@ -351,16 +337,8 @@ export default function App() {
     [safePaste, originalText],
   );
 
-  // 设置转录完成回调
-  useEffect(() => {
-    window.onTranscriptionComplete = handleRecordingComplete;
-    window.onAIOptimizationComplete = handleAIOptimizationComplete;
-
-    return () => {
-      window.onTranscriptionComplete = null;
-      window.onAIOptimizationComplete = null;
-    };
-  }, [handleRecordingComplete, handleAIOptimizationComplete]);
+  handleRecordingCompleteRef.current = handleRecordingComplete;
+  handleAIOptimizationCompleteRef.current = handleAIOptimizationComplete;
 
   // 处理复制文本
   const handleCopyText = async (text) => {
@@ -397,7 +375,7 @@ export default function App() {
         a.click();
         URL.revokeObjectURL(url);
       }
-    } catch (error) {
+    } catch {
       toast.error("无法导出文本文件");
     }
   };
@@ -494,6 +472,27 @@ export default function App() {
     }
   };
 
+  const handleMinimize = () => {
+    if (window.electronAPI) {
+      window.electronAPI.minimizeWindow();
+    }
+  };
+
+  const handleMaximize = () => {
+    if (window.electronAPI) {
+      window.electronAPI.maximizeWindow();
+    }
+  };
+
+  useEffect(() => {
+    if (window.electronAPI?.onWindowMaximizeChange) {
+      const unsub = window.electronAPI.onWindowMaximizeChange((maximized) => {
+        setIsMaximized(maximized);
+      });
+      return unsub;
+    }
+  }, []);
+
   // 处理打开设置
   const handleOpenSettings = () => {
     if (window.electronAPI) {
@@ -516,7 +515,7 @@ export default function App() {
     if (window.electronAPI) {
       // 监听传统热键触发
       const unsubscribeHotkey = window.electronAPI.onHotkeyTriggered(
-        (event, data) => {
+        (_event, _data) => {
           toggleRecording();
         },
       );
@@ -576,7 +575,6 @@ export default function App() {
   };
 
   const micState = getMicState();
-  const isListening = isRecording || isRecordingProcessing;
 
   // 获取麦克风按钮属性
   const getMicButtonProps = () => {
@@ -646,6 +644,25 @@ export default function App() {
 
   const micProps = getMicButtonProps();
 
+  if (page === "settings") {
+    return (
+      <React.Suspense
+        fallback={
+          <div className="min-h-screen bg-[#f5f5f7] dark:bg-[#1c1c1e] flex items-center justify-center">
+            <div className="flex items-center space-x-3">
+              <LoadingDots />
+              <span className="text-content text-[#1d1d1f]/80 dark:text-[#f5f5f7]/80">
+                加载设置页面...
+              </span>
+            </div>
+          </div>
+        }
+      >
+        <SettingsPage />
+      </React.Suspense>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#f5f5f7] dark:bg-[#1c1c1e] p-4 pb-4">
       {/* 主界面 */}
@@ -660,7 +677,36 @@ export default function App() {
           <h1 className="text-3xl font-bold text-[#1d1d1f] dark:text-[#f5f5f7] text-heading">
             Murmur
           </h1>
-          <div className="flex items-center space-x-3 non-draggable">
+          <div className="flex items-center space-x-2 non-draggable">
+            <Tooltip content="最小化" position="bottom">
+              <button
+                onClick={handleMinimize}
+                className="p-2 hover:bg-[#e8e8ed] dark:hover:bg-[#3a3a3c] rounded-lg transition-colors"
+              >
+                <Minus className="w-4 h-4 text-[#1d1d1f]/60 dark:text-[#f5f5f7]/60" />
+              </button>
+            </Tooltip>
+            <Tooltip content={isMaximized ? "还原" : "最大化"} position="bottom">
+              <button
+                onClick={handleMaximize}
+                className="p-2 hover:bg-[#e8e8ed] dark:hover:bg-[#3a3a3c] rounded-lg transition-colors"
+              >
+                {isMaximized ? (
+                  <Square className="w-3.5 h-3.5 text-[#1d1d1f]/60 dark:text-[#f5f5f7]/60" strokeWidth={2.5} />
+                ) : (
+                  <Maximize2 className="w-4 h-4 text-[#1d1d1f]/60 dark:text-[#f5f5f7]/60" />
+                )}
+              </button>
+            </Tooltip>
+            <Tooltip content="关闭" position="bottom">
+              <button
+                onClick={handleClose}
+                className="p-2 hover:bg-[#ff5f57] rounded-lg transition-colors group"
+              >
+                <X className="w-4 h-4 text-[#1d1d1f]/60 dark:text-[#f5f5f7]/60 group-hover:text-white" />
+              </button>
+            </Tooltip>
+            <div className="w-px h-5 bg-[#d2d2d7] dark:bg-[#48484a] mx-1" />
             <Tooltip content="历史记录" position="bottom">
               <button
                 onClick={handleOpenHistory}

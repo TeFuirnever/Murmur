@@ -1,9 +1,8 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
-import HistoryModal from "./components/ui/history-modal";
-
 // 历史记录页面组件
+// eslint-disable-next-line react-refresh/only-export-components
 const HistoryPage = () => {
   const handleCopy = async (text) => {
     try {
@@ -61,6 +60,7 @@ const HistoryPage = () => {
 };
 
 // 历史记录内容组件
+// eslint-disable-next-line react-refresh/only-export-components
 const HistoryContent = ({ onCopy }) => {
   const [transcriptions, setTranscriptions] = React.useState([]);
   const [loading, setLoading] = React.useState(false);

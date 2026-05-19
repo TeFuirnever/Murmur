@@ -6,11 +6,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
   hideWindow: () => ipcRenderer.invoke("hide-window"),
   showWindow: () => ipcRenderer.invoke("show-window"),
   minimizeWindow: () => ipcRenderer.invoke("minimize-window"),
+  maximizeWindow: () => ipcRenderer.invoke("maximize-window"),
+  isWindowMaximized: () => ipcRenderer.invoke("is-window-maximized"),
+  onWindowMaximizeChange: (callback) => {
+    const handler = (event, data) => callback(data);
+    ipcRenderer.on("window-maximize-change", handler);
+    return () => ipcRenderer.removeListener("window-maximize-change", handler);
+  },
   closeWindow: () => ipcRenderer.invoke("close-window"),
 
   // 录音相关
-  startRecording: () => ipcRenderer.invoke("start-recording"),
-  stopRecording: () => ipcRenderer.invoke("stop-recording"),
   onToggleDictation: (callback) => {
     ipcRenderer.on("toggle-dictation", callback);
     return () => ipcRenderer.removeListener("toggle-dictation", callback);
@@ -134,16 +139,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   closeSettingsWindow: () => ipcRenderer.invoke("close-settings-window"),
   hideSettingsWindow: () => ipcRenderer.invoke("hide-settings-window"),
 
-  // 中文特定功能
-  detectLanguage: (text) => ipcRenderer.invoke("detect-language", text),
-  segmentChinese: (text) => ipcRenderer.invoke("segment-chinese", text),
-  addPunctuation: (text) => ipcRenderer.invoke("add-punctuation", text),
-
-  // 音频处理
-  convertAudioFormat: (audioData, targetFormat) =>
-    ipcRenderer.invoke("convert-audio-format", audioData, targetFormat),
-  enhanceAudio: (audioData) => ipcRenderer.invoke("enhance-audio", audioData),
-
   // 模型管理
   downloadModel: (modelName) => ipcRenderer.invoke("download-model", modelName),
   getAvailableModels: () => ipcRenderer.invoke("get-available-models"),
@@ -177,9 +172,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   aiReviewTranscription: (id, template) =>
     ipcRenderer.invoke("ai-review-transcription", id, template),
 
-  // 性能监控
-  getPerformanceStats: () => ipcRenderer.invoke("get-performance-stats"),
-  clearPerformanceStats: () => ipcRenderer.invoke("clear-performance-stats"),
 });
 
 // 添加一些实用的常量
@@ -187,7 +179,7 @@ contextBridge.exposeInMainWorld("constants", {
   APP_NAME: "Murmur",
   VERSION: "1.0.0",
   SUPPORTED_AUDIO_FORMATS: ["wav", "mp3", "m4a", "flac"],
-  SUPPORTED_EXPORT_FORMATS: ["txt", "docx", "pdf", "json"],
+  SUPPORTED_EXPORT_FORMATS: ["txt", "docx", "srt", "vtt", "md"],
   DEFAULT_HOTKEY: "CommandOrControl+Shift+Space",
   MAX_RECORDING_DURATION: 300000, // 5分钟
   MAX_TEXT_LENGTH: 10000,

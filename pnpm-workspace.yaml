@@ -1,3 +1,9 @@
+allowBuilds:
+  '@tailwindcss/oxide': true
+  better-sqlite3: true
+  electron: true
+  esbuild: true
+  ffmpeg-static: true
 onlyBuiltDependencies:
   - better-sqlite3
   - electron

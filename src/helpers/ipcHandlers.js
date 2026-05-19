@@ -27,23 +27,12 @@ class IPCHandlers {
       return this.environmentManager.validateEnvironment();
     });
 
-    // 录音相关
-    ipcMain.handle("start-recording", async () => {
-      // TODO: 实现录音开始功能
-      return { success: true };
-    });
-
-    ipcMain.handle("stop-recording", async () => {
-      // TODO: 实现录音停止功能
-      return { success: true };
-    });
-
     // Python 和 FunASR 相关
     ipcMain.handle("check-python", async () => {
       return await this.funasrManager.checkPythonInstallation();
     });
 
-    ipcMain.handle("install-python", async (event, progressCallback) => {
+    ipcMain.handle("install-python", async (event, _progressCallback) => {
       return await this.funasrManager.installPython((progress) => {
         event.sender.send("python-install-progress", progress);
       });
@@ -180,10 +169,9 @@ class IPCHandlers {
     // 导出转录
     ipcMain.handle(
       "export-transcription",
-      async (event, id, format, options = {}) => {
+      async (event, id, format, _options = {}) => {
         try {
           const fs = require("fs");
-          const path = require("path");
           const { dialog } = require("electron");
 
           const row = this.databaseManager.getTranscriptionById(id);
@@ -304,7 +292,13 @@ class IPCHandlers {
     });
 
     ipcMain.handle("get-all-settings", () => {
-      return this.databaseManager.getAllSettings();
+      const settings = this.databaseManager.getAllSettings();
+      if (settings.ai_api_key && typeof settings.ai_api_key === "string") {
+        const key = settings.ai_api_key;
+        settings.ai_api_key =
+          key.length > 4 ? `****${key.slice(-4)}` : "****";
+      }
+      return settings;
     });
 
     ipcMain.handle("get-settings", () => {
@@ -316,7 +310,6 @@ class IPCHandlers {
     });
 
     ipcMain.handle("reset-settings", () => {
-      // TODO: 实现重置设置功能
       return this.databaseManager.resetSettings();
     });
 
@@ -375,16 +368,6 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("get-clipboard-history", () => {
-      // TODO: 实现剪贴板历史功能
-      return [];
-    });
-
-    ipcMain.handle("clear-clipboard-history", () => {
-      // TODO: 实现清除剪贴板历史功能
-      return true;
-    });
-
     // 窗口管理相关
     ipcMain.handle("hide-window", () => {
       if (this.windowManager.mainWindow) {
@@ -405,6 +388,25 @@ class IPCHandlers {
         this.windowManager.mainWindow.minimize();
       }
       return true;
+    });
+
+    ipcMain.handle("maximize-window", () => {
+      if (this.windowManager.mainWindow) {
+        const win = this.windowManager.mainWindow;
+        if (win.isMaximized()) {
+          win.unmaximize();
+        } else {
+          win.maximize();
+        }
+      }
+      return true;
+    });
+
+    ipcMain.handle("is-window-maximized", () => {
+      if (this.windowManager.mainWindow) {
+        return this.windowManager.mainWindow.isMaximized();
+      }
+      return false;
     });
 
     ipcMain.handle("close-window", () => {
@@ -662,19 +664,106 @@ class IPCHandlers {
     });
 
     // 文件操作
-    ipcMain.handle("export-transcriptions", (event, format) => {
-      // TODO: 实现导出转录功能
-      return { success: true, path: "" };
+    ipcMain.handle("export-transcriptions", async (_event, format) => {
+      try {
+        const { dialog } = require("electron");
+        const fs = require("fs");
+
+        const transcriptions = this.databaseManager.getTranscriptions(10000, 0);
+        if (!transcriptions || transcriptions.length === 0) {
+          return { success: false, error: "没有转录记录可导出" };
+        }
+
+        const formatInfo = exportFormatters.getFormatInfo(format || "txt");
+        const filters = [{ name: formatInfo.label, extensions: [formatInfo.ext] }];
+
+        const result = await dialog.showSaveDialog({
+          title: "导出转录记录",
+          defaultPath: `transcriptions.${formatInfo.ext}`,
+          filters,
+        });
+
+        if (result.canceled || !result.filePath) {
+          return { success: false, canceled: true };
+        }
+
+        let content;
+        if (format === "docx") {
+          content = await exportFormatters.formatDOCX(transcriptions);
+          fs.writeFileSync(result.filePath, Buffer.from(content));
+        } else {
+          const formatter =
+            format === "srt"
+              ? exportFormatters.formatSRT
+              : format === "vtt"
+                ? exportFormatters.formatVTT
+                : format === "md"
+                  ? exportFormatters.formatMD
+                  : exportFormatters.formatTXT;
+          content = transcriptions.map((t) => formatter(t)).join("\n\n");
+          fs.writeFileSync(result.filePath, content, "utf-8");
+        }
+
+        return { success: true, path: result.filePath };
+      } catch (error) {
+        this.logger.error("导出转录失败:", error);
+        return { success: false, error: error.message };
+      }
     });
 
-    ipcMain.handle("import-settings", () => {
-      // TODO: 实现导入设置功能
-      return { success: true };
+    ipcMain.handle("import-settings", async () => {
+      try {
+        const { dialog } = require("electron");
+        const fs = require("fs");
+
+        const result = await dialog.showOpenDialog({
+          title: "导入设置",
+          filters: [{ name: "JSON", extensions: ["json"] }],
+          properties: ["openFile"],
+        });
+
+        if (result.canceled || result.filePaths.length === 0) {
+          return { success: false, canceled: true };
+        }
+
+        const content = fs.readFileSync(result.filePaths[0], "utf-8");
+        const settings = JSON.parse(content);
+
+        for (const [key, value] of Object.entries(settings)) {
+          this.databaseManager.setSetting(key, value);
+        }
+
+        return { success: true, count: Object.keys(settings).length };
+      } catch (error) {
+        this.logger.error("导入设置失败:", error);
+        return { success: false, error: error.message };
+      }
     });
 
-    ipcMain.handle("export-settings", () => {
-      // TODO: 实现导出设置功能
-      return { success: true, path: "" };
+    ipcMain.handle("export-settings", async () => {
+      try {
+        const { dialog } = require("electron");
+        const fs = require("fs");
+
+        const settings = this.databaseManager.getAllSettings();
+        const content = JSON.stringify(settings, null, 2);
+
+        const result = await dialog.showSaveDialog({
+          title: "导出设置",
+          defaultPath: "murmur-settings.json",
+          filters: [{ name: "JSON", extensions: ["json"] }],
+        });
+
+        if (result.canceled || !result.filePath) {
+          return { success: false, canceled: true };
+        }
+
+        fs.writeFileSync(result.filePath, content, "utf-8");
+        return { success: true, path: result.filePath };
+      } catch (error) {
+        this.logger.error("导出设置失败:", error);
+        return { success: false, error: error.message };
+      }
     });
 
     // 文件系统相关
@@ -683,7 +772,12 @@ class IPCHandlers {
     });
 
     ipcMain.handle("open-external", (event, url) => {
+      if (!url || typeof url !== "string" || !url.startsWith("https:")) {
+        this.logger.warn("阻止打开非HTTPS链接:", url);
+        return { success: false, error: "只允许打开HTTPS链接" };
+      }
       require("electron").shell.openExternal(url);
+      return { success: true };
     });
 
     // 系统信息
@@ -767,8 +861,12 @@ class IPCHandlers {
     });
 
     ipcMain.handle("check-for-updates", () => {
-      // TODO: 实现更新检查功能
-      return { hasUpdate: false };
+      const { app } = require("electron");
+      return {
+        hasUpdate: false,
+        currentVersion: app.getVersion(),
+        message: "当前已是最新版本",
+      };
     });
 
     // 调试和日志
@@ -793,35 +891,9 @@ class IPCHandlers {
       return true;
     });
 
-    // 中文特定功能
-    ipcMain.handle("detect-language", (event, text) => {
-      // TODO: 实现语言检测功能
-      return { language: "zh-CN", confidence: 0.95 };
-    });
-
-    ipcMain.handle("segment-chinese", (event, text) => {
-      // TODO: 实现中文分词功能
-      return { segments: text.split("") };
-    });
-
-    ipcMain.handle("add-punctuation", (event, text) => {
-      // TODO: 实现标点符号添加功能
-      return { text: text };
-    });
-
-    // 音频处理
-    ipcMain.handle("convert-audio-format", (event, audioData, targetFormat) => {
-      // TODO: 实现音频格式转换功能
-      return { success: true, data: audioData };
-    });
-
-    ipcMain.handle("enhance-audio", (event, audioData) => {
-      // TODO: 实现音频增强功能
-      return { success: true, data: audioData };
-    });
 
     // 模型管理 - 更新为实际功能
-    ipcMain.handle("download-model", async (event, modelName) => {
+    ipcMain.handle("download-model", async (event, _modelName) => {
       // 使用统一的模型下载功能
       return await this.funasrManager.downloadModels((progress) => {
         event.sender.send("model-download-progress", progress);
@@ -866,7 +938,7 @@ class IPCHandlers {
       };
     });
 
-    ipcMain.handle("switch-model", (event, modelName) => {
+    ipcMain.handle("switch-model", (_event, _modelName) => {
       // FunASR目前使用固定模型组合，暂不支持切换
       return {
         success: false,
@@ -874,21 +946,29 @@ class IPCHandlers {
       };
     });
 
-    // 性能监控
-    ipcMain.handle("get-performance-stats", () => {
-      // TODO: 实现性能统计功能
-      return { stats: {} };
-    });
-
-    ipcMain.handle("clear-performance-stats", () => {
-      // TODO: 实现清除性能统计功能
-      return { success: true };
-    });
 
     // 错误报告
     ipcMain.handle("report-error", (event, error) => {
       this.logger.error("渲染进程错误:", error);
-      // TODO: 实现错误报告功能
+      const { shell, app } = require("electron");
+      const os = require("os");
+      const body = encodeURIComponent(
+        [
+          "## 错误报告",
+          "",
+          `**版本**: ${app.getVersion()}`,
+          `**平台**: ${os.platform()} ${os.release()} (${os.arch()})`,
+          `**Electron**: ${process.versions.electron}`,
+          `**Node**: ${process.version}`,
+          "",
+          "### 错误信息",
+          "",
+          typeof error === "string" ? error : JSON.stringify(error, null, 2),
+        ].join("\n"),
+      );
+      shell.openExternal(
+        `https://github.com/anthropics/murmur/issues/new?body=${body}`,
+      );
       return true;
     });
 

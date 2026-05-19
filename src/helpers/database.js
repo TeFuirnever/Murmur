@@ -217,7 +217,7 @@ class DatabaseManager {
     if (result) {
       try {
         return JSON.parse(result.value);
-      } catch (error) {
+      } catch (_error) {
         return result.value;
       }
     }
@@ -233,7 +233,7 @@ class DatabaseManager {
     for (const row of rows) {
       try {
         settings[row.key] = JSON.parse(row.value);
-      } catch (error) {
+      } catch (_error) {
         settings[row.key] = row.value;
       }
     }

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 
 /**
  * 格式化毫秒为 MM:SS

@@ -1,4 +1,4 @@
-import React from "react";
+
 import { useFileTranscription } from "../hooks/useFileTranscription";
 import FileDropZone from "./FileDropZone";
 import TranscriptionProgress from "./TranscriptionProgress";

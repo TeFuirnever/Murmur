@@ -89,7 +89,7 @@ class PythonInstaller {
         }
 
         return { success: true, method: "homebrew" };
-      } catch (brewError) {
+      } catch (_brewError) {
         if (this.logger && this.logger.info) {
           this.logger.info("Homebrew 不可用，使用官方安装包...");
         }
@@ -144,7 +144,7 @@ class PythonInstaller {
         timeout: TIMEOUTS.QUICK_CHECK,
       });
       return true;
-    } catch (error) {
+    } catch (_error) {
       return false;
     }
   }
@@ -269,7 +269,7 @@ class PythonInstaller {
         }
 
         return { success: true, method: "apt" };
-      } catch (aptError) {
+      } catch (_aptError) {
         try {
           // 尝试 yum (RHEL/CentOS/Fedora)
           await runCommand("yum", ["--version"], {
@@ -301,7 +301,7 @@ class PythonInstaller {
           }
 
           return { success: true, method: "yum" };
-        } catch (yumError) {
+        } catch (_yumError) {
           try {
             // 尝试 pacman (Arch Linux)
             await runCommand("pacman", ["--version"], {
@@ -326,7 +326,7 @@ class PythonInstaller {
             }
 
             return { success: true, method: "pacman" };
-          } catch (pacmanError) {
+          } catch (_pacmanError) {
             throw new Error("未找到支持的包管理器 (apt, yum, 或 pacman)");
           }
         }
@@ -391,7 +391,7 @@ class PythonInstaller {
             return { installed: true, command: cmd, version: version };
           }
         }
-      } catch (error) {
+      } catch (_error) {
         continue;
       }
     }
@@ -411,7 +411,7 @@ class PythonInstaller {
             }
           }
         }
-      } catch (error) {
+      } catch (_error) {
         continue;
       }
     }

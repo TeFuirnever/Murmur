@@ -1,4 +1,4 @@
-import React from "react";
+
 
 /**
  * 状态灯组件

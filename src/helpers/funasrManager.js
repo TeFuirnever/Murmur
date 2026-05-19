@@ -32,6 +32,10 @@ class FunASRManager {
     // 消息路由器（Request ID 协议）
     this.messageRouter = new ServerMessageRouter(logger || console);
 
+    this.healthMonitorInterval = null;
+    this.restartCount = 0;
+    this.maxRestarts = 3;
+
     // 模型配置
     this.modelConfigs = {
       asr: {
@@ -576,7 +580,7 @@ class FunASRManager {
                 }
                 return;
               }
-            } catch (parseError) {
+            } catch (_parseError) {
               // 忽略非JSON输出
               this.logger.debug &&
                 this.logger.debug("下载脚本非JSON输出:", line);
@@ -654,6 +658,7 @@ class FunASRManager {
       await this.initializationPromise;
 
       this.logger.info && this.logger.info("FunASR服务器重启完成");
+      this.restartCount = 0;
       return { success: true, message: "FunASR服务器重启成功" };
     } catch (error) {
       this.logger.error && this.logger.error("重启FunASR服务器失败:", error);
@@ -784,6 +789,7 @@ class FunASRManager {
                   this._clearModelCache(); // 清除缓存，确保状态更新
                   this.logger.info &&
                     this.logger.info("FunASR服务器启动成功，模型已初始化");
+                  this._startHealthMonitor();
                 } else {
                   this.logger.error &&
                     this.logger.error("FunASR服务器初始化失败", result);
@@ -794,7 +800,7 @@ class FunASRManager {
                 this.messageRouter.attach(this.serverProcess);
                 resolve();
               }
-            } catch (parseError) {
+            } catch (_parseError) {
               // 忽略非JSON输出，但记录到日志
               this.logger.debug &&
                 this.logger.debug("FunASR服务器非JSON输出", { line });
@@ -817,6 +823,7 @@ class FunASRManager {
         this.serverProcess.on("close", (code) => {
           this.logger.warn &&
             this.logger.warn("FunASR服务器进程退出", { code });
+          this._stopHealthMonitor();
           this.messageRouter.detach();
           this.serverProcess = null;
           this.serverReady = false;
@@ -854,7 +861,67 @@ class FunASRManager {
     }
   }
 
-  async _sendServerCommand(command, options = {}) {
+  _startHealthMonitor() {
+    this._stopHealthMonitor();
+    this.restartCount = 0;
+
+    this.healthMonitorInterval = setInterval(async () => {
+      if (!this.serverProcess || !this.serverReady) return;
+
+      try {
+        const result = await Promise.race([
+          this._sendServerCommand({ action: "ping" }),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("ping timeout")), 5000),
+          ),
+        ]);
+
+        if (result && result.success && result.action === "pong") {
+          return;
+        }
+        this.logger.warn && this.logger.warn("Health check: unexpected response", result);
+        await this._handleServerCrash();
+      } catch (err) {
+        this.logger.error && this.logger.error("Health check failed", err.message);
+        await this._handleServerCrash();
+      }
+    }, 30000);
+  }
+
+  _stopHealthMonitor() {
+    if (this.healthMonitorInterval) {
+      clearInterval(this.healthMonitorInterval);
+      this.healthMonitorInterval = null;
+    }
+  }
+
+  async _handleServerCrash() {
+    this._stopHealthMonitor();
+    this.restartCount++;
+
+    if (this.restartCount > this.maxRestarts) {
+      this.logger.error &&
+        this.logger.error(
+          `FunASR server crashed ${this.restartCount} times, giving up`,
+        );
+      this.serverReady = false;
+      return;
+    }
+
+    this.logger.warn &&
+      this.logger.warn(
+        `FunASR server crash detected, restart attempt ${this.restartCount}/${this.maxRestarts}`,
+      );
+
+    try {
+      await this.restartServer();
+    } catch (err) {
+      this.logger.error &&
+        this.logger.error("Failed to restart FunASR server", err);
+    }
+  }
+
+  async _sendServerCommand(command, _options = {}) {
     if (!this.serverProcess || !this.serverReady) {
       throw new Error("FunASR服务器未就绪");
     }
@@ -863,11 +930,12 @@ class FunASRManager {
   }
 
   async _stopFunASRServer() {
+    this._stopHealthMonitor();
     if (this.serverProcess) {
       try {
         // 发送退出命令
         await this._sendServerCommand({ action: "exit" });
-      } catch (error) {
+      } catch (_error) {
         // 如果发送退出命令失败，直接杀死进程
         this.serverProcess.kill();
       }
@@ -877,6 +945,39 @@ class FunASRManager {
       this.serverReady = false;
       this.modelsInitialized = false;
     }
+  }
+
+  async gracefulShutdown() {
+    this._stopHealthMonitor();
+
+    if (!this.serverProcess) return;
+
+    const proc = this.serverProcess;
+
+    try {
+      proc.stdin.write(JSON.stringify({ action: "exit" }) + "\n");
+    } catch (_e) {
+      // stdin may already be closed
+    }
+
+    await new Promise((resolve) => {
+      const timeout = setTimeout(() => {
+        try {
+          proc.kill("SIGKILL");
+        } catch (_e) {}
+        resolve();
+      }, 5000);
+
+      proc.on("close", () => {
+        clearTimeout(timeout);
+        resolve();
+      });
+    });
+
+    this.messageRouter.detach();
+    this.serverProcess = null;
+    this.serverReady = false;
+    this.modelsInitialized = false;
   }
 
   async findPythonExecutable() {
@@ -961,7 +1062,7 @@ class FunASRManager {
           this.pythonCmd = pythonPath;
           return pythonPath;
         }
-      } catch (error) {
+      } catch (_error) {
         continue;
       }
     }
@@ -1012,7 +1113,7 @@ class FunASRManager {
       try {
         await this.findPythonExecutable();
         return result;
-      } catch (findError) {
+      } catch (_findError) {
         throw new Error("Python 已安装但在 PATH 中未找到。请重启应用程序。");
       }
     } catch (error) {
@@ -1120,7 +1221,7 @@ class FunASRManager {
           ["-m", "pip", "install", "--user", "--upgrade", "pip"],
           { timeout: TIMEOUTS.PIP_UPGRADE },
         );
-      } catch (userError) {
+      } catch (_userError) {
         this.logger.warn && this.logger.warn("pip 升级完全失败，尝试继续");
       }
     }
@@ -1284,7 +1385,7 @@ class FunASRManager {
   async cleanupTempFile(tempAudioPath) {
     try {
       await fs.promises.unlink(tempAudioPath);
-    } catch (cleanupError) {
+    } catch (_cleanupError) {
       // 临时文件清理错误不是关键问题
     }
   }

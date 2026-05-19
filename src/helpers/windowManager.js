@@ -1,4 +1,4 @@
-const { BrowserWindow } = require("electron");
+const { BrowserWindow, session } = require("electron");
 const path = require("path");
 
 class WindowManager {
@@ -7,6 +7,20 @@ class WindowManager {
     this.controlPanelWindow = null;
     this.historyWindow = null;
     this.settingsWindow = null;
+    this._setupCSP();
+  }
+
+  _setupCSP() {
+    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          "Content-Security-Policy": [
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.aliyuncs.com https://api.openai.com https://*.openai.com https://*.bigmodel.cn https://api.bigmodel.cn",
+          ],
+        },
+      });
+    });
   }
 
   async createMainWindow() {
@@ -16,12 +30,14 @@ class WindowManager {
     }
 
     this.mainWindow = new BrowserWindow({
-      width: 400,
-      height: 500,
+      width: 520,
+      height: 640,
       frame: false,
       transparent: true,
       alwaysOnTop: true,
-      resizable: false,
+      resizable: true,
+      minWidth: 400,
+      minHeight: 500,
       skipTaskbar: true,
       movable: true,
       webPreferences: {
@@ -43,6 +59,14 @@ class WindowManager {
 
     this.mainWindow.on("closed", () => {
       this.mainWindow = null;
+    });
+
+    this.mainWindow.on("maximize", () => {
+      this.mainWindow.webContents.send("window-maximize-change", true);
+    });
+
+    this.mainWindow.on("unmaximize", () => {
+      this.mainWindow.webContents.send("window-maximize-change", false);
     });
 
     return this.mainWindow;

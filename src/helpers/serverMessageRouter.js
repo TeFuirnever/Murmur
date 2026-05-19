@@ -137,7 +137,7 @@ class ServerMessageRouter {
   }
 
   _rejectAll(reason) {
-    for (const [id, entry] of this.pending) {
+    for (const [_id, entry] of this.pending) {
       clearTimeout(entry.timer);
       entry.reject(new Error(reason));
     }

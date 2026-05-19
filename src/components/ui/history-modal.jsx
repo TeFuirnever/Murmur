@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { X, Copy, Trash2, Search, Calendar, FileText } from "lucide-react";
 import { toast } from "sonner";
 
@@ -71,7 +71,7 @@ const HistoryModal = ({ isOpen, onClose, onCopy }) => {
         await window.electronAPI.copyText(text);
         toast.success("文本已复制到剪贴板");
       }
-    } catch (error) {
+    } catch {
       toast.error("复制失败");
     }
   };

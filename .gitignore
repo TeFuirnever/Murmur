@@ -153,3 +153,7 @@ temp/
 .gyprc
 
 python
+
+# OMC
+.omc/
+src/.omc/

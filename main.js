@@ -236,8 +236,17 @@ app.on("activate", () => {
   }
 });
 
-app.on("will-quit", () => {
+app.on("will-quit", async (e) => {
+  e.preventDefault();
   globalShortcut.unregisterAll();
+
+  try {
+    await funasrManager.gracefulShutdown();
+  } catch (err) {
+    logger.error("Error during FunASR shutdown:", err);
+  }
+
+  app.exit();
 });
 
 // 导出管理器供其他模块使用

@@ -1,11 +1,14 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useModelStatus } from "./useModelStatus";
 
 /**
  * 录音功能Hook
  * 提供录音、停止录音、音频处理等功能
  */
-export const useRecording = () => {
+export const useRecording = ({
+  onTranscriptionComplete,
+  onAIOptimizationComplete,
+} = {}) => {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isOptimizing, setIsOptimizing] = useState(false);
@@ -21,6 +24,11 @@ export const useRecording = () => {
     isProcessingAudio: false,
     lastProcessTime: 0,
   });
+
+  const onTranscriptionCompleteRef = useRef();
+  const onAIOptimizationCompleteRef = useRef();
+  onTranscriptionCompleteRef.current = onTranscriptionComplete;
+  onAIOptimizationCompleteRef.current = onAIOptimizationComplete;
 
   // 使用模型状态Hook
   const modelStatus = useModelStatus();
@@ -108,6 +116,7 @@ export const useRecording = () => {
       setError(`无法开始录音: ${err.message}`);
       setIsRecording(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelStatus.isReady, modelStatus.isLoading, modelStatus.error]);
 
   // 停止录音
@@ -151,8 +160,8 @@ export const useRecording = () => {
           };
 
           // 立即显示初步结果
-          if (window.onTranscriptionComplete) {
-            window.onTranscriptionComplete({
+          if (onTranscriptionCompleteRef.current) {
+            onTranscriptionCompleteRef.current({
               ...transcriptionResult,
               enhanced_by_ai: false,
             });
@@ -254,8 +263,8 @@ export const useRecording = () => {
                     processed_text: finalData.processed_text,
                     enhanced_by_ai: true,
                   };
-                  if (window.onAIOptimizationComplete) {
-                    window.onAIOptimizationComplete(enhancedResult);
+                  if (onAIOptimizationCompleteRef.current) {
+                    onAIOptimizationCompleteRef.current(enhancedResult);
                   }
                 } else {
                   // 没有AI优化或AI优化失败时，使用原始文本
@@ -264,8 +273,8 @@ export const useRecording = () => {
                     text: raw_text,
                     enhanced_by_ai: false,
                   };
-                  if (window.onAIOptimizationComplete) {
-                    window.onAIOptimizationComplete(finalResult);
+                  if (onAIOptimizationCompleteRef.current) {
+                    onAIOptimizationCompleteRef.current(finalResult);
                   }
                 }
               }
@@ -290,8 +299,8 @@ export const useRecording = () => {
           confidence: 0.95,
           duration: 3.5,
         };
-        if (window.onTranscriptionComplete)
-          window.onTranscriptionComplete(mockResult);
+        if (onTranscriptionCompleteRef.current)
+          onTranscriptionCompleteRef.current(mockResult);
         return mockResult;
       }
     } catch (err) {
@@ -299,6 +308,7 @@ export const useRecording = () => {
     } finally {
       processingRef.current.isProcessingAudio = false;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 转换音频格式为WAV

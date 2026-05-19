@@ -1,4 +1,3 @@
-import React from "react";
 
 /**
  * 格式化文件大小为可读字符串

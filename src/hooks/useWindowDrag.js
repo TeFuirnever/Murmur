@@ -36,7 +36,7 @@ export const useWindowDrag = () => {
     [isDragging],
   );
 
-  const handleMouseUp = useCallback((e) => {
+  const handleMouseUp = useCallback((_e) => {
     setIsDragging(false);
 
     // 重置拖拽状态

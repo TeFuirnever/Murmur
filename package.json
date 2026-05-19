@@ -26,6 +26,8 @@
     "build:linux": "electron-builder --linux",
     "pack": "npm run build:renderer && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --dir",
     "dist": "npm run prepare:python:embedded && npm run build:renderer && electron-builder",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "lint": "cd src && eslint .",
     "preview": "cd src && vite preview",
     "clean": "node cleanup.js && rm -rf python"
@@ -44,7 +46,7 @@
     "name": "yan5xu",
     "email": "lueco.x@gmail.com"
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "devDependencies": {
     "@electron/notarize": "^3.0.1",
     "@eslint/js": "^9.25.0",
@@ -59,13 +61,15 @@
     "electron": "36.5.0",
     "electron-builder": "^24.6.4",
     "eslint": "^9.25.0",
+    "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.19",
     "globals": "^16.0.0",
     "node-gyp": "^11.4.2",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.10",
-    "vite": "^6.3.5"
+    "vite": "^6.3.5",
+    "vitest": "^4.1.6"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.14",

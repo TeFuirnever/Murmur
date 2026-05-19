@@ -781,6 +781,8 @@ class FunASRServer:
                 elif command.get("action") == "cancel_transcription":
                     self.cancel_event.set()
                     result = {"success": True, "message": "取消信号已发送"}
+                elif command.get("action") == "ping":
+                    result = {"success": True, "action": "pong"}
                 elif command.get("action") == "exit":
                     result = {"success": True, "message": "服务器退出"}
                     if request_id:

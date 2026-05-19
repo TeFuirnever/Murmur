@@ -126,11 +126,11 @@ class ClipboardManager {
           'tell application "System Events" to keystroke "v" using command down',
         ]);
 
-        let errorOutput = "";
+        let _errorOutput = "";
         let hasTimedOut = false;
 
         pasteProcess.stderr.on("data", (data) => {
-          errorOutput += data.toString();
+          _errorOutput += data.toString();
         });
 
         pasteProcess.on("close", (code) => {
@@ -240,11 +240,11 @@ class ClipboardManager {
         'tell application "System Events" to get name of first process',
       ]);
 
-      let testOutput = "";
+      let _testOutput = "";
       let testError = "";
 
       testProcess.stdout.on("data", (data) => {
-        testOutput += data.toString();
+        _testOutput += data.toString();
       });
 
       testProcess.stderr.on("data", (data) => {
@@ -260,7 +260,7 @@ class ClipboardManager {
         }
       });
 
-      testProcess.on("error", (error) => {
+      testProcess.on("error", (_error) => {
         resolve(false);
       });
     });
@@ -321,7 +321,7 @@ class ClipboardManager {
       }
     });
 
-    permissionDialog.on("error", (error) => {
+    permissionDialog.on("error", (_error) => {
       // 权限对话框错误 - 用户需要手动授予权限
     });
   }
@@ -344,7 +344,7 @@ class ClipboardManager {
         const [cmd, args] = settingsCommands[commandIndex];
         const settingsProcess = spawn(cmd, args);
 
-        settingsProcess.on("error", (error) => {
+        settingsProcess.on("error", (_error) => {
           commandIndex++;
           tryNextCommand();
         });

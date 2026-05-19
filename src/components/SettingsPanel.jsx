@@ -1,4 +1,3 @@
-import React, { useState } from "react";
 import { Mic, Shield, Settings } from "lucide-react";
 import { usePermissions } from "../hooks/usePermissions";
 import PermissionCard from "./ui/permission-card";
