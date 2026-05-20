@@ -7,6 +7,16 @@ export default defineConfig({
     root: '.',
     include: ['tests/**/*.test.{js,ts}'],
     globals: true,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'text-summary'],
+      thresholds: {
+        statements: 95,
+        branches: 90,
+        functions: 100,
+        lines: 97,
+      },
+    },
   },
   resolve: {
     alias: {
