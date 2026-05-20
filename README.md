@@ -198,23 +198,139 @@ Murmur is a desktop voice input tool that lets you **type by speaking**. It uses
 - 💾 **History & export** — SQLite storage, search, export to TXT/SRT/VTT/MD/DOCX
 - 🎯 **China-friendly** — Optimized for Qwen, Kimi, Zhipu AI models
 
-### Install
+## Install
 
-Download from [Releases](https://github.com/TeFuirnever/Murmur/releases).
+Download from [Releases](https://github.com/TeFuirnever/Murmur/releases):
 
-### Build from Source
+| Platform | File | Notes |
+|----------|------|-------|
+| macOS (Apple Silicon) | `Murmur-*.dmg` | Double-click to install |
+| Windows | `Murmur-Setup-*.exe` | Double-click to install |
+| Linux | Build from source | See below |
+
+> **First install tips**:
+> - **macOS**: If you see "cannot verify developer", right-click the app → "Open"
+> - **Windows**: If SmartScreen blocks it, click "More info" → "Run anyway"
+
+### First Run
+
+1. Launch Murmur and wait for model download (~1GB on first run)
+2. Open Settings and enter your AI model's API Key (optional — voice recognition works without it)
+3. Press `Cmd+Shift+Space` and start speaking
+
+## Build from Source
+
+### Prerequisites
+
+- **Node.js** 18+ and [pnpm](https://pnpm.io)
+- **Python** 3.8+ (for FunASR)
+- **Git**
+
+### Quick Start
 
 ```bash
 git clone https://github.com/TeFuirnever/Murmur.git
 cd Murmur
 pnpm install
+
+# Python setup (choose one)
+
+# Option A: uv (recommended)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv sync
+uv run python download_models.py
+
+# Option B: System Python
 pip install funasr modelscope torch torchaudio librosa numpy
 python download_models.py
+
+# Start dev mode
 pnpm dev
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for full development guide.
+### Build Installers
 
-### License
+```bash
+# Prepare embedded Python
+pnpm run prepare:python:embedded
+
+# Build macOS DMG (unsigned)
+CSC_IDENTITY_AUTO_DISCOVERY=false pnpm electron-builder --mac
+
+# Build Windows EXE (requires Windows machine)
+pnpm electron-builder --win
+```
+
+### Dev Commands
+
+```bash
+pnpm dev          # Start dev mode
+pnpm test         # Run tests
+pnpm lint         # Lint check
+pnpm run build    # Production build
+```
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| Desktop | Electron 36 |
+| Frontend | React 19, Tailwind CSS 4, Vite |
+| Speech Recognition | FunASR (Paraformer-large + FSMN-VAD + CT-Transformer) |
+| AI Optimization | Any OpenAI API-compatible model |
+| Storage | SQLite (better-sqlite3) |
+| IPC | Electron contextBridge + ipcMain/ipcRenderer |
+
+## Project Structure
+
+```
+├── main.js                    # Electron main process
+├── preload.js                 # Preload script (IPC bridge)
+├── funasr_server.py           # FunASR Python service
+├── src/
+│   ├── App.jsx                # Main UI
+│   ├── settings.jsx           # Settings page
+│   ├── history.jsx            # History page
+│   ├── components/            # UI components
+│   ├── hooks/                 # React Hooks
+│   ├── helpers/               # Main process modules
+│   │   ├── funasrManager.js   # FunASR process management
+│   │   ├── ipcHandlers.js     # IPC handlers
+│   │   ├── database.js        # Database management
+│   │   └── windowManager.js   # Window management
+│   └── utils/                 # Utilities
+├── tests/                     # Test files
+├── scripts/                   # Build scripts
+└── assets/                    # Icons and resources
+```
+
+## Contributing
+
+We welcome all contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for:
+
+- Development environment setup
+- Code standards and commit format
+- PR submission process
+
+## Roadmap
+
+- [x] Local FunASR speech recognition
+- [x] AI text optimization
+- [x] Audio file transcription
+- [x] History search and export
+- [x] Global hotkey
+- [x] Health monitor with auto-restart
+- [ ] Real-time streaming transcription (200ms latency)
+- [ ] Custom AI Prompt templates
+- [ ] Multi-language support (Chinese/English/Japanese)
+- [ ] Auto-update
+
+## Acknowledgments
+
+- [FunASR](https://github.com/modelscope/FunASR) — Alibaba open-source speech recognition toolkit
+- [OpenWhispr](https://github.com/HeroTools/open-whispr) — Architecture reference
+- [shadcn/ui](https://ui.shadcn.com/) — UI components
+
+## License
 
 [Apache License 2.0](LICENSE)
