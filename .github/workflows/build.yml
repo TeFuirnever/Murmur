@@ -1,0 +1,104 @@
+name: Build Installers
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Prepare embedded Python
+        run: pnpm run prepare:python:embedded
+
+      - name: Build renderer
+        run: pnpm run build:renderer
+
+      - name: Build macOS DMG
+        run: CSC_IDENTITY_AUTO_DISCOVERY=false pnpm electron-builder --mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Murmur-macOS
+          path: |
+            dist/*.dmg
+            dist/*.zip
+
+  build-win:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Prepare embedded Python
+        run: pnpm run prepare:python:embedded
+
+      - name: Build renderer
+        run: pnpm run build:renderer
+
+      - name: Build Windows EXE
+        run: pnpm electron-builder --win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Murmur-Windows
+          path: |
+            dist/*.exe
+            dist/*.zip
+
+  release:
+    needs: [build-mac, build-win]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            Murmur-macOS/*
+            Murmur-Windows/*
+          generate_release_notes: true
