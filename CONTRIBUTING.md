@@ -1,0 +1,135 @@
+# Contributing to Murmur
+
+感谢你对 Murmur 的关注！本文档帮助你快速上手开发。
+
+## 开发环境
+
+### 必要条件
+
+- **Node.js** 18+（推荐 22 LTS）
+- **pnpm** 9+（`npm install -g pnpm`）
+- **Python** 3.8+（推荐 3.11）
+- **Git**
+- macOS / Windows / Linux
+
+### 搭建步骤
+
+```bash
+git clone https://github.com/TeFuirnever/Murmur.git
+cd Murmur
+pnpm install
+
+# Python 环境（推荐 uv）
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv sync
+uv run python download_models.py
+
+# 启动
+pnpm dev
+```
+
+### 常用命令
+
+| 命令 | 说明 |
+|------|------|
+| `pnpm dev` | 启动开发模式（Electron + Vite HMR） |
+| `pnpm test` | 运行所有测试 |
+| `pnpm test:watch` | 监听模式运行测试 |
+| `pnpm lint` | ESLint 代码检查 |
+| `pnpm run build` | 构建生产版本 |
+| `pnpm run prepare:python:embedded` | 准备嵌入式 Python 环境 |
+
+## 项目结构
+
+```
+main.js                  # Electron 主进程入口
+preload.js               # 渲染进程 ↔ 主进程桥接
+funasr_server.py         # FunASR Python 服务（stdin/stdout IPC）
+src/
+  App.jsx                # 主界面
+  settings.jsx           # 设置页面
+  history.jsx            # 历史记录页面
+  main.jsx               # React 入口
+  components/            # UI 组件
+  hooks/                 # React Hooks（useRecording, useHotkey 等）
+  helpers/               # 主进程模块（Node.js）
+  utils/                 # 工具函数
+tests/                   # 测试文件（Vitest）
+```
+
+## 代码规范
+
+### 提交格式
+
+使用 [Conventional Commits](https://www.conventionalcommits.org/)：
+
+```
+feat: 添加音频预处理功能
+fix: 修复录音中断后未保存的问题
+docs: 更新 API 文档
+test: 添加数据库 CRUD 测试
+refactor: 提取转录逻辑到独立 hook
+chore: 升级 Electron 到 v37
+```
+
+### 代码风格
+
+- ESLint 配置在 `src/eslint.config.js`
+- 运行 `pnpm lint` 检查，确保 0 errors
+- 未使用的变量/参数用 `_` 前缀
+
+### 测试
+
+- 测试框架：Vitest
+- 位置：`tests/unit/`
+- 修改代码后运行 `pnpm test` 确保不引入回归
+
+## PR 流程
+
+1. **Fork** 仓库
+2. 创建分支：`git checkout -b feat/your-feature`
+3. 开发 + 测试：确保 `pnpm lint` 和 `pnpm test` 通过
+4. 提交：使用 conventional commit 格式
+5. 推送：`git push origin feat/your-feature`
+6. 创建 **Pull Request** 到 `main` 分支
+7. 等待 review
+
+### PR 检查清单
+
+- [ ] `pnpm lint` 通过（0 errors）
+- [ ] `pnpm test` 通过
+- [ ] 新功能有对应测试
+- [ ] 提交信息符合 conventional commits
+
+## 架构概览
+
+### 主进程 ↔ 渲染进程通信
+
+```
+渲染进程 (React)
+    ↕ contextBridge (preload.js)
+主进程 (Electron)
+    ↕ stdin/stdout
+FunASR Python 进程
+```
+
+- **IPC 通道**：定义在 `ipcHandlers.js`，通过 `preload.js` 暴露为 `window.electronAPI`
+- **FunASR 通信**：Node.js spawn Python 子进程，通过 JSON over stdin/stdout 通信
+- **消息路由**：`ServerMessageRouter` 管理 UUID 请求-响应匹配
+
+### 数据流
+
+1. 用户按热键 → MediaRecorder 录音
+2. 录音结束 → WAV 音频数据通过 IPC 发送到主进程
+3. 主进程发送给 Python FunASR 服务 → 返回转录文本
+4. 可选：AI API 优化文本
+5. 结果保存到 SQLite + 自动粘贴到光标位置
+
+## 报告问题
+
+- **Bug**: [创建 Issue](https://github.com/TeFuirnever/Murmur/issues/new?template=bug_report.md)
+- **功能建议**: [创建 Issue](https://github.com/TeFuirnever/Murmur/issues/new?template=feature_request.md)
+
+## 行为准则
+
+请遵守 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)。尊重每一位贡献者。
