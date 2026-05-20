@@ -19,7 +19,7 @@ function runCommand(command, args = [], options = {}) {
   const { timeout = TIMEOUTS.QUICK_CHECK, cwd, env } = options;
 
   return new Promise((resolve, reject) => {
-    const process = spawn(command, args, {
+    const child = spawn(command, args, {
       cwd,
       env: env || process.env,
       stdio: ["ignore", "pipe", "pipe"],
@@ -34,7 +34,7 @@ function runCommand(command, args = [], options = {}) {
     const timeoutId = setTimeout(() => {
       if (!isResolved) {
         isResolved = true;
-        process.kill("SIGTERM");
+        child.kill("SIGTERM");
         reject(
           new Error(
             `Command timed out after ${timeout}ms: ${command} ${args.join(" ")}`,
@@ -43,15 +43,15 @@ function runCommand(command, args = [], options = {}) {
       }
     }, timeout);
 
-    process.stdout.on("data", (data) => {
+    child.stdout.on("data", (data) => {
       stdout += data.toString();
     });
 
-    process.stderr.on("data", (data) => {
+    child.stderr.on("data", (data) => {
       stderr += data.toString();
     });
 
-    process.on("close", (code) => {
+    child.on("close", (code) => {
       if (isResolved) return;
       isResolved = true;
       clearTimeout(timeoutId);
@@ -67,7 +67,7 @@ function runCommand(command, args = [], options = {}) {
       }
     });
 
-    process.on("error", (error) => {
+    child.on("error", (error) => {
       if (isResolved) return;
       isResolved = true;
       clearTimeout(timeoutId);

@@ -1391,12 +1391,6 @@ class FunASRManager {
   }
 
   _getFFmpegPath() {
-    try {
-      const ffmpegStatic = require("ffmpeg-static");
-      if (ffmpegStatic && fs.existsSync(ffmpegStatic)) {
-        return ffmpegStatic;
-      }
-    } catch {}
     return "ffmpeg";
   }
 
