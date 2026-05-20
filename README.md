@@ -22,7 +22,7 @@
 
 ## Murmur 是什么？
 
-Murmur 是一款桌面端语音输入工具，让你**说话就能打字**。内置阿里巴巴 FunASR 语音识别引擎，所有音频在**本地处理**，不上传任何数据。支持连接 AI 模型（通义千问、Kimi、智谱、OpenAI 等）自动润色文本。
+Murmur 是一款桌面端语音输入工具，让你**说话就能打字**。基于 [蛐蛐(QuQu)](https://github.com/yan5xu/ququ) 二次开发，内置阿里巴巴 FunASR 语音识别引擎，所有音频在**本地处理**，不上传任何数据。支持连接 AI 模型（通义千问、Kimi、智谱、OpenAI 等）自动润色文本。
 
 ### 核心特性
 
@@ -34,6 +34,16 @@ Murmur 是一款桌面端语音输入工具，让你**说话就能打字**。内
 - 🎯 **国产模型优先** — 适配通义千问、Kimi、智谱 AI 等，延迟更低
 
 ## 安装
+
+### 包管理器安装（推荐）
+
+```bash
+# macOS (Homebrew)
+brew install --cask murmur
+
+# Windows (Winget)
+winget install TeFuirnever.Murmur
+```
 
 ### 下载安装包
 
@@ -48,6 +58,8 @@ Murmur 是一款桌面端语音输入工具，让你**说话就能打字**。内
 > **首次安装提示**：
 > - **macOS**: 如遇"无法验证开发者"，右键点击应用 → 选择"打开"
 > - **Windows**: 如遇 SmartScreen 拦截，点击"更多信息" → "仍要运行"
+
+遇到问题？查看 [FAQ](docs/faq.md) 和 [故障排除](docs/troubleshooting.md)。
 
 ### 首次运行
 
@@ -64,6 +76,7 @@ Murmur 是一款桌面端语音输入工具，让你**说话就能打字**。内
 - **Node.js** 18+ 和 [pnpm](https://pnpm.io)
 - **Python** 3.8+（用于 FunASR）
 - **Git**
+- **ffmpeg**（用于音频格式转换，macOS: `brew install ffmpeg`）
 
 ### 快速开始
 
@@ -173,6 +186,7 @@ pnpm run build    # 构建生产版本
 
 ## 致谢
 
+- [蛐蛐(QuQu)](https://github.com/yan5xu/ququ) — 本项目的上游项目，由 yan5xu 发起
 - [FunASR](https://github.com/modelscope/FunASR) — 阿里巴巴开源语音识别工具包
 - [OpenWhispr](https://github.com/HeroTools/open-whispr) — 架构参考
 - [shadcn/ui](https://ui.shadcn.com/) — UI 组件
@@ -187,7 +201,7 @@ pnpm run build    # 构建生产版本
 
 ## What is Murmur?
 
-Murmur is a desktop voice input tool that lets you **type by speaking**. It uses Alibaba's FunASR speech recognition engine with all audio processed **locally** — no data ever leaves your machine. Optionally connect an AI model (Qwen, Kimi, Zhipu, OpenAI, etc.) to auto-polish your text.
+Murmur is a desktop voice input tool that lets you **type by speaking**. It is a derivative of [QuQu](https://github.com/yan5xu/ququ), using Alibaba's FunASR speech recognition engine with all audio processed **locally** — no data ever leaves your machine. Optionally connect an AI model (Qwen, Kimi, Zhipu, OpenAI, etc.) to auto-polish your text.
 
 ### Key Features
 
@@ -200,7 +214,19 @@ Murmur is a desktop voice input tool that lets you **type by speaking**. It uses
 
 ## Install
 
-Download from [Releases](https://github.com/TeFuirnever/Murmur/releases):
+### Package Manager (Recommended)
+
+```bash
+# macOS (Homebrew)
+brew install --cask murmur
+
+# Windows (Winget)
+winget install TeFuirnever.Murmur
+```
+
+### Download
+
+Get the latest version from [Releases](https://github.com/TeFuirnever/Murmur/releases):
 
 | Platform | File | Notes |
 |----------|------|-------|
@@ -211,6 +237,8 @@ Download from [Releases](https://github.com/TeFuirnever/Murmur/releases):
 > **First install tips**:
 > - **macOS**: If you see "cannot verify developer", right-click the app → "Open"
 > - **Windows**: If SmartScreen blocks it, click "More info" → "Run anyway"
+
+Having issues? Check the [FAQ](docs/faq.md) and [Troubleshooting](docs/troubleshooting.md) guides.
 
 ### First Run
 
@@ -225,6 +253,7 @@ Download from [Releases](https://github.com/TeFuirnever/Murmur/releases):
 - **Node.js** 18+ and [pnpm](https://pnpm.io)
 - **Python** 3.8+ (for FunASR)
 - **Git**
+- **ffmpeg** (for audio format conversion, macOS: `brew install ffmpeg`)
 
 ### Quick Start
 
@@ -327,6 +356,7 @@ We welcome all contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for:
 
 ## Acknowledgments
 
+- [QuQu](https://github.com/yan5xu/ququ) — The upstream project, created by yan5xu
 - [FunASR](https://github.com/modelscope/FunASR) — Alibaba open-source speech recognition toolkit
 - [OpenWhispr](https://github.com/HeroTools/open-whispr) — Architecture reference
 - [shadcn/ui](https://ui.shadcn.com/) — UI components

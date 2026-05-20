@@ -104,4 +104,23 @@ jobs:
           files: |
             Murmur-macOS/*
             Murmur-Windows/*
-          generate_release_notes: true
+          generate_release_notes: false
+          body: |
+            ## What's Changed
+
+            See [CHANGELOG.md](https://github.com/TeFuirnever/Murmur/blob/main/CHANGELOG.md) for details.
+
+            ## Installation
+
+            | Platform | File |
+            |----------|------|
+            | macOS (Apple Silicon) | `Murmur-*.dmg` |
+            | Windows | `Murmur-Setup-*.exe` |
+
+            **Prerequisites**: Install [ffmpeg](https://ffmpeg.org) for audio format conversion (mp3/m4a support).
+            - macOS: `brew install ffmpeg`
+            - Windows: `winget install ffmpeg`
+
+            **First launch**: Murmur downloads the FunASR model (~1GB) on first run.
+
+            **macOS**: If you see "cannot verify developer", right-click the app → "Open".

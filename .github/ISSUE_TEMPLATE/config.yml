@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: "\U0001F4DA Documentation"
+    url: https://github.com/TeFuirnever/Murmur#readme
+    about: Check the README for setup instructions and usage guide.
+  - name: "❓ FAQ"
+    url: https://github.com/TeFuirnever/Murmur/blob/main/docs/faq.md
+    about: Check the FAQ for answers to common questions.
+  - name: "\U0001F4AC Discussion"
+    url: https://github.com/TeFuirnever/Murmur/discussions
+    about: Ask questions and share ideas in GitHub Discussions.

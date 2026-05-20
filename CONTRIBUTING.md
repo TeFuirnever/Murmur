@@ -9,6 +9,7 @@
 - **Node.js** 18+（推荐 22 LTS）
 - **pnpm** 9+（`npm install -g pnpm`）
 - **Python** 3.8+（推荐 3.11）
+- **ffmpeg**（音频格式转换，macOS: `brew install ffmpeg`）
 - **Git**
 - macOS / Windows / Linux
 
@@ -74,7 +75,7 @@ chore: 升级 Electron 到 v37
 
 ### 代码风格
 
-- ESLint 配置在 `src/eslint.config.js`
+- ESLint 配置在项目根目录 `eslint.config.js`
 - 运行 `pnpm lint` 检查，确保 0 errors
 - 未使用的变量/参数用 `_` 前缀
 
@@ -124,6 +125,57 @@ FunASR Python 进程
 3. 主进程发送给 Python FunASR 服务 → 返回转录文本
 4. 可选：AI API 优化文本
 5. 结果保存到 SQLite + 自动粘贴到光标位置
+
+### Python 子进程生命周期
+
+FunASR 以 Python 子进程方式运行，生命周期由 `FunASRManager`（`src/helpers/funasrManager.js`）管理：
+
+1. **启动（spawn）**：Electron 主进程通过 `child_process.spawn` 启动 `funasr_server.py`，传入模型路径和配置参数
+2. **通信（stdin/stdout JSON IPC）**：Node.js 通过 stdin 向 Python 发送 JSON 请求（含 UUID），Python 处理后通过 stdout 返回 JSON 响应。`ServerMessageRouter` 通过 UUID 匹配请求与响应
+3. **健康监控（health check）**：每 30 秒发送 ping 消息，Python 返回 pong。若超时未收到响应，自动触发重启
+4. **自动重启（auto-restart）**：健康检查失败时自动重启 Python 进程，最多重试 3 次（`maxRestarts = 3`）
+5. **优雅关闭（graceful shutdown）**：应用退出时发送关闭信号，等待 Python 进程退出，超时后强制 kill
+
+### 数据库 Schema
+
+使用 SQLite（`better-sqlite3`），数据库文件位于 `src/helpers/database.js` 管理：
+
+**transcriptions 表**：
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | INTEGER | 主键自增 |
+| text | TEXT | 最终文本（经 AI 优化后的） |
+| raw_text | TEXT | 原始识别文本 |
+| processed_text | TEXT | AI 处理后的文本 |
+| confidence | REAL | 识别置信度 |
+| language | TEXT | 语言（默认 `zh-CN`） |
+| duration | REAL | 录音时长（秒） |
+| file_size | INTEGER | 音频文件大小 |
+| source_type | TEXT | 来源类型：`recording`（录音）/ `file`（文件导入） |
+| source_file_path | TEXT | 导入文件的原始路径 |
+| segments | TEXT | 分段信息（JSON） |
+| created_at | DATETIME | 创建时间 |
+| updated_at | DATETIME | 更新时间 |
+
+**settings 表**：
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| key | TEXT | 设置键（主键） |
+| value | TEXT | 设置值（JSON 字符串） |
+| updated_at | DATETIME | 更新时间 |
+
+### 关键模块
+
+| 模块 | 文件 | 职责 |
+|------|------|------|
+| FunASRManager | `src/helpers/funasrManager.js` | Python 子进程管理、模型检查、音频转录、健康监控 |
+| IPC Handlers | `src/helpers/ipcHandlers.js` | Electron IPC 消息处理，桥接渲染进程与主进程 |
+| DatabaseManager | `src/helpers/database.js` | SQLite CRUD、schema 迁移、数据查询分页 |
+| WindowManager | `src/helpers/windowManager.js` | 窗口创建、大小管理、浮动控件 |
+| ClipboardManager | `src/helpers/clipboard.js` | 自动粘贴到光标位置（macOS osascript / Electron clipboard） |
+| HotkeyManager | `src/helpers/hotkeyManager.js` | 全局热键注册、F2 双击检测 |
+| PythonInstaller | `src/helpers/pythonInstaller.js` | 嵌入式 Python 环境准备 |
+| ServerMessageRouter | `src/helpers/serverMessageRouter.js` | UUID 请求-响应匹配路由 |
 
 ## 报告问题
 

@@ -1,0 +1,18 @@
+Murmur
+Copyright 2025-2026 Murmur Contributors
+
+This project is a derivative work of 蛐蛐(QuQu) by yan5xu.
+Upstream project: https://github.com/yan5xu/ququ
+Original work Copyright 2025 蛐蛐(QuQu)开发团队
+
+This product includes software developed by third parties.
+See THIRD-PARTY-LICENSES for details.
+
+---
+
+Murmur bundles the following key components:
+
+- FunASR (Apache 2.0) — https://github.com/modelscope/FunASR
+- Electron (MIT) — https://github.com/electron/electron
+- React (MIT) — https://github.com/facebook/react
+- better-sqlite3 (MIT) — https://github.com/WiseLibs/better-sqlite3

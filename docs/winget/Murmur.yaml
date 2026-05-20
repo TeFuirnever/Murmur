@@ -1,0 +1,30 @@
+# Winget manifest for Murmur
+# Submit to: https://github.com/microsoft/winget-pkgs
+
+PackageIdentifier: TeFuirnever.Murmur
+PackageVersion: 1.0.0
+PackageName: Murmur
+Publisher: Murmur Contributors
+License: Apache-2.0
+LicenseUrl: https://github.com/TeFuirnever/Murmur/blob/main/LICENSE
+ShortDescription: Open-source voice-to-text desktop app with local FunASR speech recognition
+Description: |
+  Murmur is a desktop voice input tool that lets you type by speaking.
+  It uses FunASR speech recognition with all audio processed locally.
+  Optionally connect an AI model to auto-polish your text.
+Tags:
+  - speech-to-text
+  - voice-input
+  - funasr
+  - electron
+  - chinese
+  - desktop-app
+PackageUrl: https://github.com/TeFuirnever/Murmur
+Installers:
+  - Architecture: x64
+    InstallerType: exe
+    InstallerUrl: https://github.com/TeFuirnever/Murmur/releases/download/v1.0.0/Murmur-Setup-1.0.0.exe
+    InstallerSha256: TBD
+    Scope: user
+ManifestType: singleton
+ManifestVersion: 1.6.0
