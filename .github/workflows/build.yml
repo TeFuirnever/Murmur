@@ -64,7 +64,10 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --ignore-scripts
+
+      - name: Rebuild native modules
+        run: npx electron-rebuild
 
       - name: Prepare embedded Python
         run: pnpm run prepare:python:embedded
