@@ -512,6 +512,16 @@ class FunASRManager {
         return { success: true, message: "模型已存在，无需下载" };
       }
 
+      const hasPartial = checkResult.details &&
+        Object.values(checkResult.details).some(d => d.exists && !d.complete);
+      if (hasPartial && progressCallback) {
+        progressCallback({
+          stage: "resuming",
+          message: "检测到未完成的下载，继续下载...",
+          missing_models: checkResult.missing_models,
+        });
+      }
+
       const pythonCmd = await this.findPythonExecutable();
       const scriptPath = this.getDownloadScriptPath();
 

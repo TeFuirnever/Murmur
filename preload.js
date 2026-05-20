@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return () => ipcRenderer.removeListener("window-maximize-change", handler);
   },
   closeWindow: () => ipcRenderer.invoke("close-window"),
+  setAlwaysOnTop: (enabled) => ipcRenderer.invoke("set-always-on-top", enabled),
 
   // 录音相关
   onToggleDictation: (callback) => {

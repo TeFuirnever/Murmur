@@ -191,6 +191,11 @@ async function startApp() {
     logger.info("创建主窗口...");
     await windowManager.createMainWindow();
     logger.info("主窗口创建成功");
+
+    const alwaysOnTop = databaseManager.getSetting("window_always_on_top", true);
+    if (windowManager.mainWindow && alwaysOnTop === false) {
+      windowManager.mainWindow.setAlwaysOnTop(false);
+    }
   } catch (error) {
     logger.error("创建主窗口时出错:", error);
   }

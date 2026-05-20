@@ -13,6 +13,7 @@ class DatabaseManager {
 
   setSafeStorage(safeStorage) {
     this.safeStorage = safeStorage;
+    this._migrateSettings();
   }
 
   _encryptValue(value) {
@@ -123,8 +124,29 @@ class DatabaseManager {
     }
   }
 
+  _migrateSettings() {
+    const CURRENT_VERSION = 1;
+    const version = this.getSetting("settings_schema_version", 0);
+    if (version >= CURRENT_VERSION) return;
+
+    if (version < 1) {
+      // v1: encrypt api_api_key if stored as plaintext
+      const stmt = this.db.prepare("SELECT value FROM settings WHERE key = ?");
+      const row = stmt.get("ai_api_key");
+      if (row && this.safeStorage && this.safeStorage.isEncryptionAvailable()) {
+        try {
+          const parsed = JSON.parse(row.value);
+          if (typeof parsed === "string" && !parsed.startsWith('{"_enc":')) {
+            this.setSetting("ai_api_key", parsed);
+          }
+        } catch {}
+      }
+    }
+
+    this.setSetting("settings_schema_version", CURRENT_VERSION);
+  }
+
   saveTranscription(data) {
-    // 验证必需的数据
     if (!data || typeof data !== "object") {
       throw new Error("转录数据无效");
     }

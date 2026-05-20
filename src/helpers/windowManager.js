@@ -7,6 +7,8 @@ class WindowManager {
     this.controlPanelWindow = null;
     this.historyWindow = null;
     this.settingsWindow = null;
+    this._creatingMainWindow = false;
+    this._creatingControlPanel = false;
     this._setupCSP();
   }
 
@@ -28,6 +30,9 @@ class WindowManager {
       this.mainWindow.focus();
       return this.mainWindow;
     }
+    if (this._creatingMainWindow) return null;
+    this._creatingMainWindow = true;
+    try {
 
     this.mainWindow = new BrowserWindow({
       width: 520,
@@ -71,6 +76,9 @@ class WindowManager {
     });
 
     return this.mainWindow;
+    } finally {
+      this._creatingMainWindow = false;
+    }
   }
 
   async createControlPanelWindow() {
@@ -78,6 +86,9 @@ class WindowManager {
       this.controlPanelWindow.focus();
       return this.controlPanelWindow;
     }
+    if (this._creatingControlPanel) return null;
+    this._creatingControlPanel = true;
+    try {
 
     this.controlPanelWindow = new BrowserWindow({
       width: 800,
@@ -109,6 +120,9 @@ class WindowManager {
     });
 
     return this.controlPanelWindow;
+    } finally {
+      this._creatingControlPanel = false;
+    }
   }
 
   async createHistoryWindow() {

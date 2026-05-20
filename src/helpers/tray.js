@@ -1,4 +1,4 @@
-const { Tray, Menu, nativeImage } = require("electron");
+const { Tray, Menu, nativeImage, dialog, app } = require("electron");
 const path = require("path");
 
 class TrayManager {
@@ -107,7 +107,22 @@ class TrayManager {
       {
         label: "关于",
         click: () => {
-          // TODO: 显示关于对话框
+          dialog.showMessageBox({
+            type: "info",
+            title: "关于 Murmur",
+            message: `Murmur v${app.getVersion()}`,
+            detail: [
+              "开源免费的 AI 语音输入工具",
+              "",
+              `Electron: ${process.versions.electron}`,
+              `Node.js: ${process.versions.node}`,
+              `Chrome: ${process.versions.chrome}`,
+              "",
+              "https://github.com/TeFuirnever/Murmur",
+            ].join("\n"),
+            buttons: ["确定"],
+            noLink: true,
+          });
         },
       },
       { type: "separator" },

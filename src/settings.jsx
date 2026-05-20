@@ -324,6 +324,39 @@ const SettingsPage = () => {
                   </button>
                 </div>
 
+                {/* 窗口置顶 */}
+                <div className="flex items-center justify-between pt-2">
+                  <label className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
+                    窗口始终置顶
+                  </label>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={settings.window_always_on_top !== false}
+                    onClick={() => {
+                      const newVal = settings.window_always_on_top === false;
+                      handleInputChange("window_always_on_top", newVal);
+                      if (window.electronAPI?.setAlwaysOnTop) {
+                        window.electronAPI.setAlwaysOnTop(newVal);
+                      }
+                    }}
+                    className={`${
+                      settings.window_always_on_top !== false
+                        ? "bg-[#0071e3]"
+                        : "bg-[#d2d2d7] dark:bg-[#3a3a3c]"
+                    } relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-2`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`${
+                        settings.window_always_on_top !== false
+                          ? "translate-x-4"
+                          : "translate-x-0"
+                      } inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+                    />
+                  </button>
+                </div>
+
                 {/* API Key */}
                 <div>
                   <label className="block text-xs font-medium text-[#1d1d1f]/80 dark:text-[#f5f5f7]/80 mb-1">

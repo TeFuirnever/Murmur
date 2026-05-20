@@ -558,6 +558,15 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle("set-always-on-top", (event, enabled) => {
+      const win = this.windowManager.mainWindow;
+      if (win) {
+        win.setAlwaysOnTop(enabled);
+        return { success: true };
+      }
+      return { success: false };
+    });
+
     // F2热键管理
     ipcMain.handle("register-f2-hotkey", (event) => {
       try {

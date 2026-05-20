@@ -806,7 +806,9 @@ export default function App() {
                 {modelStatus.stage === "need_download"
                   ? "需要下载AI模型文件才能开始使用"
                   : modelStatus.stage === "downloading"
-                    ? `正在下载模型文件... ${modelStatus.downloadProgress || 0}%`
+                    ? modelStatus.downloadProgress > 0
+                      ? `正在下载模型文件... ${modelStatus.downloadProgress}%`
+                      : "正在准备下载模型文件..."
                     : modelStatus.stage === "loading"
                       ? "模型加载中，请稍候..."
                       : modelStatus.stage === "error"
@@ -821,6 +823,14 @@ export default function App() {
                                 ? "AI正在优化文本，请稍候..."
                                 : `点击麦克风或按 ${hotkey} 开始录音`}
               </p>
+              {modelStatus.stage === "need_download" && (
+                <div className="mt-3 text-xs text-[#86868b] dark:text-[#98989d] space-y-1">
+                  <p>使用步骤：</p>
+                  <p>① 下载语音识别模型（必需，约1GB）</p>
+                  <p>② 授权麦克风权限</p>
+                  <p>③ 在设置中配置 AI API Key（可选）</p>
+                </div>
+              )}
             </div>
 
             {/* 模型下载进度显示 */}
