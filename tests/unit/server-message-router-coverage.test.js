@@ -199,6 +199,22 @@ describe("ServerMessageRouter - extended coverage", () => {
     vi.useRealTimers();
   });
 
+  it("progress message without onProgress callback is handled", async () => {
+    router.attach(proc);
+    const promise = router.sendCommand("transcribe", {}, { timeout: 5000 });
+
+    const written = await new Promise((resolve) => {
+      proc.stdin.once("data", (d) => resolve(JSON.parse(d.toString())));
+    });
+
+    // Progress message arrives but no onProgress callback registered
+    proc.stdout.push(JSON.stringify({ type: "progress", request_id: written.request_id, percent: 50 }) + "\n");
+
+    proc.stdout.push(JSON.stringify({ success: true, request_id: written.request_id }) + "\n");
+    const result = await promise;
+    expect(result.success).toBe(true);
+  });
+
   it("_purgeExpired removes stale entries via cleanup interval", async () => {
     vi.useFakeTimers();
     router.attach(proc);

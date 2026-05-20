@@ -73,6 +73,11 @@ describe("exportFormatters - extended coverage", () => {
       const out = formatSRT({ text: "no segs" });
       expect(out).toContain("no segs");
     });
+
+    it("handles no duration fallback", () => {
+      const out = formatSRT({ text: "hello" });
+      expect(out).toContain("00:00:00,000 --> 00:00:00,000");
+    });
   });
 
   describe("formatVTT edge cases", () => {
@@ -86,6 +91,11 @@ describe("exportFormatters - extended coverage", () => {
       const out = formatVTT({ text: "hello" });
       expect(out).toContain("WEBVTT");
       expect(out).toContain("hello");
+    });
+
+    it("handles no duration fallback", () => {
+      const out = formatVTT({ text: "hello" });
+      expect(out).toContain("00:00:00.000 --> 00:00:00.000");
     });
   });
 

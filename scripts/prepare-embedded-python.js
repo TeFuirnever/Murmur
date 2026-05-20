@@ -7,7 +7,7 @@ const { pipeline } = require("stream");
 const { promisify } = require("util");
 const tar = require("tar");
 
-const pipelineAsync = promisify(pipeline);
+const _pipelineAsync = promisify(pipeline);
 
 class EmbeddedPythonBuilder {
   constructor() {
@@ -61,7 +61,7 @@ class EmbeddedPythonBuilder {
       await this.cleanupUnnecessaryFiles();
 
       console.log("✅ 嵌入式Python环境准备完成！");
-    } catch (error) {
+    } catch (_error) {
       console.error("❌ 准备Python环境失败:", error.message);
       process.exit(1);
     }
@@ -172,7 +172,7 @@ class EmbeddedPythonBuilder {
           PYTHONDONTWRITEBYTECODE: "1",
         },
       });
-    } catch (error) {
+    } catch (_error) {
       console.warn("⚠️ pip升级失败，继续安装依赖...");
     }
 
@@ -227,7 +227,7 @@ class EmbeddedPythonBuilder {
         );
 
         console.log(`✅ ${dep} 安装完成`);
-      } catch (error) {
+      } catch (_error) {
         console.error(`❌ ${dep} 安装失败:`, error.message);
         // 尝试不使用 --no-deps 重新安装
         try {
@@ -307,7 +307,7 @@ class EmbeddedPythonBuilder {
         );
 
         console.log(`✅ ${dep} 验证通过: ${result.toString().trim()}`);
-      } catch (error) {
+      } catch (_error) {
         console.error(`❌ ${dep} 验证失败:`, error.message);
         console.error("错误输出:", error.stderr?.toString() || "无");
         throw new Error(`关键依赖 ${dep} 安装失败: ${error.message}`);
@@ -359,7 +359,7 @@ class EmbeddedPythonBuilder {
             timeout: 10000, // 10秒超时
           });
           console.log(`✅ ${dep} 可用`);
-        } catch (error) {
+        } catch (_error) {
           console.log(`❌ ${dep} 不可用: ${error.message}`);
           return false;
         }
@@ -367,7 +367,7 @@ class EmbeddedPythonBuilder {
 
       console.log("✅ 现有环境验证完成，所有关键依赖都可用");
       return true;
-    } catch (error) {
+    } catch (_error) {
       console.log(`❌ 环境验证失败: ${error.message}`);
       return false;
     }
@@ -392,7 +392,7 @@ class EmbeddedPythonBuilder {
           console.log(
             `🗑️ 删除: ${path.relative(this.pythonDir, unnecessaryPath)}`,
           );
-        } catch (error) {
+        } catch (_error) {
           console.warn(`⚠️ 无法删除: ${unnecessaryPath}`);
         }
       }
@@ -448,7 +448,7 @@ class EmbeddedPythonBuilder {
         size: sizeInfo,
         ready: true,
       };
-    } catch (error) {
+    } catch (_error) {
       return {
         ready: false,
         error: error.message,

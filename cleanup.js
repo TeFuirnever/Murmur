@@ -4,7 +4,7 @@ const path = require("path");
 console.log("🧹 清理 Murmur 项目...");
 
 // 需要清理的目录和文件
-const cleanupTargets = [
+const _cleanupTargets = [
   "src/dist",
   "dist",
   "node_modules/.cache",

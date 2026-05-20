@@ -319,7 +319,14 @@ class DatabaseManager {
     if (!this.db) return false;
 
     try {
-      this.db.backup(backupPath);
+      const result = this.db.backup(backupPath);
+      if (result && typeof result.catch === "function") {
+        result.catch((error) => {
+          if (this.logger && this.logger.error) {
+            this.logger.error("数据库备份失败:", error);
+          }
+        });
+      }
       return true;
     } catch (error) {
       if (this.logger && this.logger.error) {

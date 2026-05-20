@@ -252,6 +252,22 @@ describe("DatabaseManager - extended coverage", () => {
       await new Promise((r) => setTimeout(r, 500));
       expect(fs.existsSync(backupPath)).toBe(true);
     });
+
+    it("logs error on async backup failure", async () => {
+      const logger = { error: vi.fn(), warn: vi.fn(), info: vi.fn() };
+      const logDb = new DatabaseManager(logger);
+      logDb.initialize(tmpDir);
+      logDb.saveTranscription({ text: "test" });
+      logDb.db.backup = () => {
+        const p = Promise.reject(new Error("test backup error"));
+        p.catch(() => {});
+        return p;
+      };
+      logDb.backup(path.join(tmpDir, "backup.db"));
+      await new Promise((r) => setTimeout(r, 50));
+      expect(logger.error).toHaveBeenCalled();
+      logDb.close();
+    });
   });
 
   describe("close", () => {

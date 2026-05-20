@@ -1,6 +1,4 @@
-const { app, globalShortcut, BrowserWindow, ipcMain, safeStorage } = require("electron");
-const path = require("path");
-const { spawn } = require("child_process");
+const { app, globalShortcut, BrowserWindow, safeStorage } = require("electron");
 
 // 导入日志管理器
 const LogManager = require("./src/helpers/logManager");
@@ -137,7 +135,7 @@ const dataDirectory = environmentManager.ensureDataDirectory();
 databaseManager.initialize(dataDirectory);
 
 // 使用所有管理器初始化IPC处理器
-const ipcHandlers = new IPCHandlers({
+new IPCHandlers({
   environmentManager,
   databaseManager,
   clipboardManager,

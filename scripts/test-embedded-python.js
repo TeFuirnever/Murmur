@@ -28,7 +28,7 @@ class EmbeddedPythonTester {
       await this.testEnvironmentIsolation();
 
       console.log("\n✅ 所有测试通过！嵌入式Python环境工作正常。");
-    } catch (error) {
+    } catch (_error) {
       console.error("\n❌ 测试失败:", error.message);
       process.exit(1);
     }
@@ -49,7 +49,7 @@ class EmbeddedPythonTester {
     // 检查执行权限
     try {
       fs.accessSync(this.pythonPath, fs.constants.X_OK);
-    } catch (error) {
+    } catch (_error) {
       throw new Error("Python文件没有执行权限");
     }
 
@@ -79,7 +79,7 @@ class EmbeddedPythonTester {
           `import ${dep}; print("${dep} OK")`,
         ]);
         console.log(`   ✅ ${dep} 导入成功`);
-      } catch (error) {
+      } catch (_error) {
         throw new Error(`依赖 ${dep} 导入失败: ${error.message}`);
       }
     }
@@ -94,7 +94,7 @@ class EmbeddedPythonTester {
         'import funasr; print("FunASR version:", getattr(funasr, "__version__", "unknown"))',
       ]);
       console.log(`   ✅ FunASR导入成功: ${result.trim()}`);
-    } catch (error) {
+    } catch (_error) {
       throw new Error(`FunASR导入失败: ${error.message}`);
     }
   }
@@ -208,7 +208,7 @@ class EmbeddedPythonTester {
         ]);
         const packageList = packages.split("\n").filter((p) => p.trim()).length;
         console.log(`已安装包数量: ${packageList}`);
-      } catch (error) {
+      } catch (_error) {
         console.log("无法获取包列表");
       }
 
@@ -223,7 +223,7 @@ class EmbeddedPythonTester {
           console.log(`  ${p.trim()}`);
         }
       });
-    } catch (error) {
+    } catch (_error) {
       console.error("获取环境信息失败:", error.message);
     }
   }
@@ -247,7 +247,7 @@ class EmbeddedPythonTester {
             fileCount++;
           }
         }
-      } catch (error) {
+      } catch (_error) {
         // 忽略权限错误等
       }
     };
