@@ -967,7 +967,7 @@ class IPCHandlers {
         ].join("\n"),
       );
       shell.openExternal(
-        `https://github.com/anthropics/murmur/issues/new?body=${body}`,
+        `https://github.com/TeFuirnever/Murmur/issues/new?body=${body}`,
       );
       return true;
     });

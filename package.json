@@ -1,7 +1,7 @@
 {
   "name": "murmur",
   "version": "1.0.0",
-  "description": " Murmur - 基于FunASR和可配置AI模型的中文优化语音转文字应用",
+  "description": "Murmur - 基于FunASR和可配置AI模型的中文优化语音转文字应用",
   "main": "main.js",
   "private": true,
   "scripts": {
@@ -33,14 +33,16 @@
     "clean": "node cleanup.js && rm -rf python"
   },
   "keywords": [
-    "dictation",
     "speech-to-text",
     "funasr",
-    "ai",
-    "llm",
+    "voice-input",
     "chinese",
     "electron",
-    "desktop-app"
+    "desktop-app",
+    "ai",
+    "llm",
+    "dictation",
+    "murmur"
   ],
   "author": {
     "name": "yan5xu",
@@ -162,5 +164,13 @@
       "icon": "assets/icon.png",
       "category": "Office"
     }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TeFuirnever/Murmur.git"
+  },
+  "homepage": "https://github.com/TeFuirnever/Murmur",
+  "bugs": {
+    "url": "https://github.com/TeFuirnever/Murmur/issues"
   }
 }
