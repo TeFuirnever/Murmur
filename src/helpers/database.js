@@ -7,6 +7,39 @@ class DatabaseManager {
     this.db = null;
     this.dbPath = null;
     this.logger = logger;
+    this.safeStorage = null;
+    this._encryptedKeys = new Set(["ai_api_key"]);
+  }
+
+  setSafeStorage(safeStorage) {
+    this.safeStorage = safeStorage;
+  }
+
+  _encryptValue(value) {
+    if (!this.safeStorage || !this.safeStorage.isEncryptionAvailable()) {
+      return JSON.stringify(value);
+    }
+    if (typeof value === "string") {
+      const encrypted = this.safeStorage.encryptString(value);
+      return JSON.stringify({ _enc: encrypted.toString("base64") });
+    }
+    return JSON.stringify(value);
+  }
+
+  _decryptValue(raw) {
+    if (raw == null) return raw;
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object" && parsed._enc) {
+        if (!this.safeStorage) return null;
+        return this.safeStorage.decryptString(
+          Buffer.from(parsed._enc, "base64"),
+        );
+      }
+      return parsed;
+    } catch {
+      return raw;
+    }
   }
 
   initialize(dataDirectory) {
@@ -204,10 +237,13 @@ class DatabaseManager {
 
   setSetting(key, value) {
     const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO settings (key, value, updated_at) 
+      INSERT OR REPLACE INTO settings (key, value, updated_at)
       VALUES (?, ?, CURRENT_TIMESTAMP)
     `);
-    return stmt.run(key, JSON.stringify(value));
+    const serialized = this._encryptedKeys.has(key)
+      ? this._encryptValue(value)
+      : JSON.stringify(value);
+    return stmt.run(key, serialized);
   }
 
   getSetting(key, defaultValue = null) {
@@ -215,6 +251,10 @@ class DatabaseManager {
     const result = stmt.get(key);
 
     if (result) {
+      if (this._encryptedKeys.has(key)) {
+        const decrypted = this._decryptValue(result.value);
+        return decrypted !== null ? decrypted : defaultValue;
+      }
       try {
         return JSON.parse(result.value);
       } catch (_error) {
@@ -231,10 +271,17 @@ class DatabaseManager {
 
     const settings = {};
     for (const row of rows) {
-      try {
-        settings[row.key] = JSON.parse(row.value);
-      } catch (_error) {
-        settings[row.key] = row.value;
+      if (this._encryptedKeys.has(row.key)) {
+        const decrypted = this._decryptValue(row.value);
+        if (decrypted !== null) {
+          settings[row.key] = decrypted;
+        }
+      } else {
+        try {
+          settings[row.key] = JSON.parse(row.value);
+        } catch (_error) {
+          settings[row.key] = row.value;
+        }
       }
     }
 

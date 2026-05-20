@@ -51,10 +51,12 @@ export const useTextProcessing = () => {
             });
           }
 
-          const result = await window.electronAPI.processText(
-            raw_text,
-            actualMode,
-          );
+          const result = await Promise.race([
+            window.electronAPI.processText(raw_text, actualMode),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error("AI优化超时，已使用原文")), 30000),
+            ),
+          ]);
 
           if (result && result.success) {
             processed_text = result.text;

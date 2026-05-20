@@ -131,6 +131,11 @@ class IPCHandlers {
       "transcribe-file",
       async (event, audioPath, options = {}) => {
         const path = require("path");
+        const allowedExts = [".wav", ".mp3", ".m4a", ".flac"];
+        const ext = path.extname(audioPath).toLowerCase();
+        if (!allowedExts.includes(ext)) {
+          return { success: false, error: "不支持的音频格式: " + ext };
+        }
         const result = await this.funasrManager.transcribeFile(audioPath, {
           ...options,
           onProgress: (progress) => {
@@ -768,6 +773,12 @@ class IPCHandlers {
 
     // 文件系统相关
     ipcMain.handle("show-item-in-folder", (event, fullPath) => {
+      if (!fullPath || typeof fullPath !== "string") return;
+      const userDataPath = require("electron").app.getPath("userData");
+      if (!fullPath.startsWith(userDataPath)) {
+        this.logger.warn("阻止访问用户数据目录外的路径:", fullPath);
+        return;
+      }
       require("electron").shell.showItemInFolder(fullPath);
     });
 
@@ -1321,12 +1332,13 @@ ${text}
         try {
           errorData = JSON.parse(errorText);
         } catch {
+          this.logger.warn("AI错误响应非JSON格式:", (errorText || "").substring(0, 200));
           errorData = { error: errorText || response.statusText };
         }
         throw new Error(
           errorData.error?.message ||
             errorData.error ||
-            `API error: ${response.status}`,
+            `AI服务请求失败 (${response.status})`,
         );
       }
 
@@ -1478,6 +1490,7 @@ ${text}
         try {
           errorData = JSON.parse(errorText);
         } catch {
+          this.logger.warn("AI错误响应非JSON格式:", (errorText || "").substring(0, 200));
           errorData = { error: errorText || response.statusText };
         }
 

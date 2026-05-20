@@ -964,7 +964,9 @@ class FunASRManager {
       const timeout = setTimeout(() => {
         try {
           proc.kill("SIGKILL");
-        } catch (_e) {}
+        } catch (_e) {
+          // Process already dead, safe to ignore
+        }
         resolve();
       }, 5000);
 
@@ -1486,6 +1488,7 @@ class FunASRManager {
     try {
       stats = fs.statSync(audioPath);
     } catch {
+      this.logger.warn("音频文件不存在或无法访问:", audioPath);
       return {
         success: false,
         error: "文件不存在或无法访问",

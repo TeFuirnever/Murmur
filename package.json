@@ -155,10 +155,7 @@
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "entitlements.mac.plist",
-      "entitlementsInherit": "entitlements.mac.plist",
-      "notarize": {
-        "teamId": "7MTHK6DGS4"
-      }
+      "entitlementsInherit": "entitlements.mac.plist"
     },
     "win": {
       "icon": "assets/icon.ico"

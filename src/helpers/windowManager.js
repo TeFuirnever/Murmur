@@ -16,7 +16,7 @@ class WindowManager {
         responseHeaders: {
           ...details.responseHeaders,
           "Content-Security-Policy": [
-            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.aliyuncs.com https://api.openai.com https://*.openai.com https://*.bigmodel.cn https://api.bigmodel.cn",
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.modelscope.cn https://api.openai.com https://*.openai.com https://*.bigmodel.cn https://api.bigmodel.cn",
           ],
         },
       });
@@ -43,6 +43,7 @@ class WindowManager {
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
+        sandbox: true,
         preload: path.join(__dirname, "..", "..", "preload.js"),
       },
     });
@@ -85,6 +86,7 @@ class WindowManager {
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
+        sandbox: true,
         preload: path.join(__dirname, "..", "..", "preload.js"),
       },
     });
@@ -124,6 +126,7 @@ class WindowManager {
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
+        sandbox: true,
         preload: path.join(__dirname, "..", "..", "preload.js"),
       },
     });
@@ -160,6 +163,7 @@ class WindowManager {
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
+        sandbox: true,
         preload: path.join(__dirname, "..", "..", "preload.js"),
       },
     });

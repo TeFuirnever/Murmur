@@ -1,4 +1,4 @@
-const { app, globalShortcut, BrowserWindow, ipcMain } = require("electron");
+const { app, globalShortcut, BrowserWindow, ipcMain, safeStorage } = require("electron");
 const path = require("path");
 const { spawn } = require("child_process");
 
@@ -221,6 +221,9 @@ async function startApp() {
 
 // 应用事件处理器
 app.whenReady().then(() => {
+  if (safeStorage && safeStorage.isEncryptionAvailable()) {
+    databaseManager.setSafeStorage(safeStorage);
+  }
   startApp();
 });
 
@@ -241,9 +244,19 @@ app.on("will-quit", async (e) => {
   globalShortcut.unregisterAll();
 
   try {
-    await funasrManager.gracefulShutdown();
+    const shutdownPromise = funasrManager.gracefulShutdown();
+    await Promise.race([
+      shutdownPromise,
+      new Promise((resolve) => setTimeout(resolve, 5000)),
+    ]);
   } catch (err) {
     logger.error("Error during FunASR shutdown:", err);
+  }
+
+  try {
+    databaseManager.close();
+  } catch (err) {
+    logger.error("Error closing database:", err);
   }
 
   app.exit();

@@ -7,7 +7,33 @@ on:
   workflow_dispatch:
 
 jobs:
+  test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Rebuild native modules for system Node
+        run: pnpm rebuild better-sqlite3
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
   build-mac:
+    needs: test
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -47,6 +73,7 @@ jobs:
             dist/*.zip
 
   build-win:
+    needs: test
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
