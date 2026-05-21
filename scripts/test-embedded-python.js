@@ -28,7 +28,7 @@ class EmbeddedPythonTester {
       await this.testEnvironmentIsolation();
 
       console.log("\n✅ 所有测试通过！嵌入式Python环境工作正常。");
-    } catch (_error) {
+    } catch (error) {
       console.error("\n❌ 测试失败:", error.message);
       process.exit(1);
     }
@@ -79,7 +79,7 @@ class EmbeddedPythonTester {
           `import ${dep}; print("${dep} OK")`,
         ]);
         console.log(`   ✅ ${dep} 导入成功`);
-      } catch (_error) {
+      } catch (error) {
         throw new Error(`依赖 ${dep} 导入失败: ${error.message}`);
       }
     }
@@ -94,7 +94,7 @@ class EmbeddedPythonTester {
         'import funasr; print("FunASR version:", getattr(funasr, "__version__", "unknown"))',
       ]);
       console.log(`   ✅ FunASR导入成功: ${result.trim()}`);
-    } catch (_error) {
+    } catch (error) {
       throw new Error(`FunASR导入失败: ${error.message}`);
     }
   }
@@ -223,7 +223,7 @@ class EmbeddedPythonTester {
           console.log(`  ${p.trim()}`);
         }
       });
-    } catch (_error) {
+    } catch (error) {
       console.error("获取环境信息失败:", error.message);
     }
   }

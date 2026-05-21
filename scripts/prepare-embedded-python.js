@@ -61,7 +61,7 @@ class EmbeddedPythonBuilder {
       await this.cleanupUnnecessaryFiles();
 
       console.log("✅ 嵌入式Python环境准备完成！");
-    } catch (_error) {
+    } catch (error) {
       console.error("❌ 准备Python环境失败:", error.message);
       process.exit(1);
     }
@@ -227,7 +227,7 @@ class EmbeddedPythonBuilder {
         );
 
         console.log(`✅ ${dep} 安装完成`);
-      } catch (_error) {
+      } catch (error) {
         console.error(`❌ ${dep} 安装失败:`, error.message);
         // 尝试不使用 --no-deps 重新安装
         try {
@@ -307,7 +307,7 @@ class EmbeddedPythonBuilder {
         );
 
         console.log(`✅ ${dep} 验证通过: ${result.toString().trim()}`);
-      } catch (_error) {
+      } catch (error) {
         console.error(`❌ ${dep} 验证失败:`, error.message);
         console.error("错误输出:", error.stderr?.toString() || "无");
         throw new Error(`关键依赖 ${dep} 安装失败: ${error.message}`);
@@ -359,7 +359,7 @@ class EmbeddedPythonBuilder {
             timeout: 10000, // 10秒超时
           });
           console.log(`✅ ${dep} 可用`);
-        } catch (_error) {
+        } catch (error) {
           console.log(`❌ ${dep} 不可用: ${error.message}`);
           return false;
         }
@@ -367,7 +367,7 @@ class EmbeddedPythonBuilder {
 
       console.log("✅ 现有环境验证完成，所有关键依赖都可用");
       return true;
-    } catch (_error) {
+    } catch (error) {
       console.log(`❌ 环境验证失败: ${error.message}`);
       return false;
     }
@@ -448,7 +448,7 @@ class EmbeddedPythonBuilder {
         size: sizeInfo,
         ready: true,
       };
-    } catch (_error) {
+    } catch (error) {
       return {
         ready: false,
         error: error.message,
