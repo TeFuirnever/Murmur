@@ -125,5 +125,7 @@ module.exports = {
     SETTINGS_UPDATE: "settings-update",
     MODEL_DOWNLOAD_PROGRESS: "model-download-progress",
     FILE_TRANSCRIPTION_PROGRESS: "file-transcription-progress",
+    PYTHON_INSTALL_PROGRESS: "python-install-progress",
+    FUNASR_INSTALL_PROGRESS: "funasr-install-progress",
   },
 };

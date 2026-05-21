@@ -17,7 +17,7 @@ function register(ipcMain, managers) {
 
   ipcMain.handle(C.PYTHON.INSTALL, async (event, _progressCallback) => {
     return await funasrManager.installPython((progress) => {
-      event.sender.send("python-install-progress", progress);
+      event.sender.send(C.EVENTS.PYTHON_INSTALL_PROGRESS, progress);
     });
   });
 
