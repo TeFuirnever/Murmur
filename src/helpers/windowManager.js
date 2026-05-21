@@ -9,7 +9,12 @@ class WindowManager {
     this.settingsWindow = null;
     this._creatingMainWindow = false;
     this._creatingControlPanel = false;
+    this._alwaysOnTop = true;
     this._setupCSP();
+  }
+
+  setDefaultAlwaysOnTop(enabled) {
+    this._alwaysOnTop = enabled;
   }
 
   _setupCSP() {
@@ -39,7 +44,7 @@ class WindowManager {
       height: 640,
       frame: false,
       transparent: true,
-      alwaysOnTop: true,
+      alwaysOnTop: this._alwaysOnTop,
       resizable: true,
       minWidth: 400,
       minHeight: 500,
