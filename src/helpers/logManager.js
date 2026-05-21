@@ -1,8 +1,19 @@
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
 
 class LogManager {
   constructor() {
+    this._initialized = false;
+    this.logDir = null;
+    this.logFile = null;
+    this.funasrLogFile = null;
+    this._pendingLogs = [];
+  }
+
+  _ensureInitialized() {
+    if (this._initialized) return;
+    this._initialized = true;
     this.logDir = this.getLogDirectory();
     this.logFile = path.join(this.logDir, "app.log");
     this.funasrLogFile = path.join(this.logDir, "funasr.log");
@@ -10,9 +21,12 @@ class LogManager {
   }
 
   getLogDirectory() {
-    // 在用户目录下创建日志文件夹
-    const userDataPath = require("electron").app.getPath("userData");
-    return path.join(userDataPath, "logs");
+    try {
+      const userDataPath = require("electron").app.getPath("userData");
+      return path.join(userDataPath, "logs");
+    } catch {
+      return path.join(os.tmpdir(), "murmur-logs");
+    }
   }
 
   ensureLogDirectory() {
@@ -26,6 +40,7 @@ class LogManager {
   }
 
   log(level, message, data = null) {
+    this._ensureInitialized();
     const timestamp = new Date().toISOString();
     const logEntry = {
       timestamp,
@@ -65,6 +80,7 @@ class LogManager {
 
   // 记录FunASR相关日志
   logFunASR(level, message, data = null) {
+    this._ensureInitialized();
     const timestamp = new Date().toISOString();
     const logEntry = {
       timestamp,
@@ -157,10 +173,12 @@ class LogManager {
 
   // 获取日志文件路径
   getLogFilePath() {
+    this._ensureInitialized();
     return this.logFile;
   }
 
   getFunASRLogFilePath() {
+    this._ensureInitialized();
     return this.funasrLogFile;
   }
 

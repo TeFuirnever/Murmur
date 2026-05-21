@@ -100,39 +100,19 @@ class FunASRManager {
         "site-packages",
       );
 
-      process.env.PYTHONHOME = pythonHome;
-      process.env.PYTHONPATH = sitePackages;
-      process.env.PYTHONDONTWRITEBYTECODE = "1";
-      process.env.PYTHONIOENCODING = "utf-8";
-      process.env.PYTHONUNBUFFERED = "1";
-
       this.logger.info &&
         this.logger.info("设置嵌入式Python环境", {
-          PYTHONHOME: process.env.PYTHONHOME,
-          PYTHONPATH: process.env.PYTHONPATH,
+          PYTHONHOME: pythonHome,
+          PYTHONPATH: sitePackages,
           pythonExecutable: embeddedPythonPath,
         });
     } else {
-      // 使用系统Python时，清除可能干扰的嵌入式Python环境变量
-      delete process.env.PYTHONHOME;
-      delete process.env.PYTHONPATH;
-
-      // 设置基础环境变量
-      process.env.PYTHONDONTWRITEBYTECODE = "1";
-      process.env.PYTHONIOENCODING = "utf-8";
-      process.env.PYTHONUNBUFFERED = "1";
-
       this.logger.info &&
-        this.logger.info("设置系统Python环境", {
-          note: "清除嵌入式Python环境变量，使用系统Python默认环境",
+        this.logger.info("使用系统Python环境", {
+          note: "buildPythonEnvironment() will construct per-spawn env",
           pythonExecutable: this.pythonCmd || "未确定",
         });
     }
-
-    // 清除可能干扰的系统Python环境变量
-    delete process.env.PYTHONUSERBASE;
-    delete process.env.PYTHONSTARTUP;
-    delete process.env.VIRTUAL_ENV;
   }
 
   buildPythonEnvironment() {
@@ -840,7 +820,7 @@ class FunASRManager {
           this.modelsInitialized = false;
 
           if (!initResponseReceived) {
-            resolve();
+            reject(new Error("FunASR服务器进程异常退出"));
           }
         });
 
@@ -851,7 +831,7 @@ class FunASRManager {
           this.serverReady = false;
 
           if (!initResponseReceived) {
-            resolve();
+            reject(new Error("FunASR服务器进程启动失败: " + error.message));
           }
         });
 
@@ -862,7 +842,7 @@ class FunASRManager {
             if (this.serverProcess) {
               this.serverProcess.kill();
             }
-            resolve();
+            reject(new Error("FunASR服务器启动超时(120秒)"));
           }
         }, 120000); // 2分钟超时
       });
@@ -1457,7 +1437,9 @@ class FunASRManager {
           if (fs.existsSync(outputPath)) {
             try {
               fs.unlinkSync(outputPath);
-            } catch {}
+            } catch (e) {
+              this.logger?.warn?.("Temp file cleanup failed", e.message);
+            }
           }
           reject(
             new Error(
@@ -1556,7 +1538,9 @@ class FunASRManager {
       if (converted && wavPath !== audioPath) {
         try {
           fs.unlinkSync(wavPath);
-        } catch {}
+        } catch (e) {
+          this.logger?.warn?.("WAV cleanup failed", e.message);
+        }
       }
     }
   }

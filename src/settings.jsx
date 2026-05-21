@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
-import { toast } from "sonner";
+import { Toaster, toast } from "sonner";
 import {
   Settings,
   Save,
@@ -92,7 +92,9 @@ const SettingsPage = () => {
       setSaving(true);
       if (window.electronAPI) {
         // 保存每个设置项
-        await window.electronAPI.setSetting("ai_api_key", settings.ai_api_key);
+        if (!settings.ai_api_key.startsWith("****")) {
+          await window.electronAPI.setSetting("ai_api_key", settings.ai_api_key);
+        }
         await window.electronAPI.setSetting(
           "ai_base_url",
           settings.ai_base_url,
@@ -645,5 +647,10 @@ export { SettingsPage };
 // 如果是直接访问settings.html，则渲染应用
 if (document.getElementById("settings-root")) {
   const root = ReactDOM.createRoot(document.getElementById("settings-root"));
-  root.render(<SettingsPage />);
+  root.render(
+    <React.Fragment>
+      <SettingsPage />
+      <Toaster position="top-right" />
+    </React.Fragment>,
+  );
 }

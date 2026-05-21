@@ -18,6 +18,8 @@ export const useRecording = ({
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const streamRef = useRef(null);
+  const cancelledRef = useRef(false);
+  const optimizationTimeoutRef = useRef(null);
 
   // 添加防重复处理机制
   const processingRef = useRef({
@@ -37,6 +39,11 @@ export const useRecording = ({
   const startRecording = useCallback(async () => {
     try {
       setError(null);
+      cancelledRef.current = false;
+      if (optimizationTimeoutRef.current) {
+        clearTimeout(optimizationTimeoutRef.current);
+        optimizationTimeoutRef.current = null;
+      }
 
       // 检查FunASR是否就绪
       if (!modelStatus.isReady) {
@@ -107,6 +114,10 @@ export const useRecording = ({
         setError(`录音错误: ${event.error?.message || "未知错误"}`);
         setIsRecording(false);
         setIsProcessing(false);
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((track) => track.stop());
+          streamRef.current = null;
+        }
       };
 
       // 开始录音
@@ -169,7 +180,8 @@ export const useRecording = ({
 
           // 异步处理AI优化和保存（只保存一次）
           setIsOptimizing(true);
-          setTimeout(async () => {
+          optimizationTimeoutRef.current = setTimeout(async () => {
+            if (cancelledRef.current) return;
             try {
               // 从设置中读取是否启用AI优化
               const useAI = await window.electronAPI.getSetting(
@@ -317,29 +329,25 @@ export const useRecording = ({
       const reader = new FileReader();
 
       reader.onload = async () => {
+        let audioContext = null;
         try {
           const arrayBuffer = reader.result;
 
-          // 创建AudioContext
-          const audioContext = new (
+          audioContext = new (
             window.AudioContext || window.webkitAudioContext
           )({
             sampleRate: 16000,
           });
 
-          // 解码音频数据
           const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-
-          // 转换为WAV格式
           const wavBuffer = audioBufferToWav(audioBuffer);
           const wavBlob = new Blob([wavBuffer], { type: "audio/wav" });
-
-          // 关闭AudioContext释放资源
-          audioContext.close();
 
           resolve(wavBlob);
         } catch (err) {
           reject(new Error(`音频格式转换失败: ${err.message}`));
+        } finally {
+          if (audioContext) audioContext.close();
         }
       };
 
@@ -404,6 +412,12 @@ export const useRecording = ({
 
   // 取消录音
   const cancelRecording = useCallback(() => {
+    cancelledRef.current = true;
+    if (optimizationTimeoutRef.current) {
+      clearTimeout(optimizationTimeoutRef.current);
+      optimizationTimeoutRef.current = null;
+    }
+
     if (mediaRecorderRef.current) {
       mediaRecorderRef.current.stop();
     }

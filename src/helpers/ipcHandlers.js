@@ -2,6 +2,24 @@ const { ipcMain } = require("electron");
 const exportFormatters = require("./exportFormatters");
 
 class IPCHandlers {
+  static ALLOWED_AI_DOMAINS = [
+    "api.openai.com",
+    "dashscope.aliyuncs.com",
+    "api.bigmodel.cn",
+    "open.bigmodel.cn",
+  ];
+
+  _validateAIBaseUrl(baseUrl) {
+    try {
+      const url = new URL(baseUrl);
+      return IPCHandlers.ALLOWED_AI_DOMAINS.some(
+        (d) => url.hostname === d || url.hostname.endsWith(`.${d}`),
+      );
+    } catch {
+      return false;
+    }
+  }
+
   constructor(managers) {
     this.environmentManager = managers.environmentManager;
     this.databaseManager = managers.databaseManager;
@@ -131,10 +149,17 @@ class IPCHandlers {
       "transcribe-file",
       async (event, audioPath, options = {}) => {
         const path = require("path");
+        const os = require("os");
         const allowedExts = [".wav", ".mp3", ".m4a", ".flac"];
         const ext = path.extname(audioPath).toLowerCase();
         if (!allowedExts.includes(ext)) {
           return { success: false, error: "不支持的音频格式: " + ext };
+        }
+        const resolved = path.resolve(audioPath);
+        const homedir = os.homedir();
+        const tmpdir = os.tmpdir();
+        if (!resolved.startsWith(homedir) && !resolved.startsWith(tmpdir)) {
+          return { success: false, error: "路径不在允许范围内" };
         }
         const result = await this.funasrManager.transcribeFile(audioPath, {
           ...options,
@@ -188,7 +213,9 @@ class IPCHandlers {
           if (row.segments) {
             try {
               segments = JSON.parse(row.segments);
-            } catch {}
+            } catch (e) {
+              this.logger.warn("Segments JSON parse failed for id", id, e.message);
+            }
           }
           const transcription = { ...row, parsedSegments: segments };
 
@@ -307,7 +334,13 @@ class IPCHandlers {
     });
 
     ipcMain.handle("get-settings", () => {
-      return this.databaseManager.getAllSettings();
+      const settings = this.databaseManager.getAllSettings();
+      if (settings.ai_api_key && typeof settings.ai_api_key === "string") {
+        const key = settings.ai_api_key;
+        settings.ai_api_key =
+          key.length > 4 ? `****${key.slice(-4)}` : "****";
+      }
+      return settings;
     });
 
     ipcMain.handle("save-setting", (event, key, value) => {
@@ -1086,6 +1119,11 @@ class IPCHandlers {
               ? this.logger.getFunASRLogFilePath()
               : this.logger.getLogFilePath();
 
+          const { app: electronApp } = require("electron");
+          const userDataPath = electronApp.getPath("userData");
+          if (!logPath.startsWith(userDataPath)) {
+            return { success: false, error: "路径不在允许范围内" };
+          }
           require("electron").shell.showItemInFolder(logPath);
           return { success: true };
         }
@@ -1305,6 +1343,10 @@ ${text}
       const model =
         (await this.databaseManager.getSetting("ai_model")) || "gpt-3.5-turbo";
 
+      if (!this._validateAIBaseUrl(baseUrl)) {
+        return { success: false, error: "不支持的API地址" };
+      }
+
       const requestData = {
         model: model,
         messages: [
@@ -1388,18 +1430,7 @@ ${text}
       this.logger.error("AI文本处理失败:", error);
 
       let errorMessage = "文本处理失败";
-      if (error.response) {
-        // API错误响应
-        if (error.response.status === 401) {
-          errorMessage = "API密钥无效，请检查配置";
-        } else if (error.response.status === 429) {
-          errorMessage = "API调用频率超限，请稍后重试";
-        } else if (error.response.status === 500) {
-          errorMessage = "AI服务器错误，请稍后重试";
-        } else {
-          errorMessage = `API错误: ${error.response.status}`;
-        }
-      } else if (error.code === "ECONNABORTED") {
+      if (error.code === "ECONNABORTED") {
         errorMessage = "请求超时，请检查网络连接";
       } else if (error.code === "ENOTFOUND") {
         errorMessage = "无法连接到AI服务器，请检查网络";
@@ -1432,7 +1463,6 @@ ${text}
         this.logger.info("使用临时测试配置:", {
           baseUrl,
           model,
-          apiKeyLength: apiKey?.length || 0,
         });
       } else {
         apiKey = await this.databaseManager.getSetting("ai_api_key");
@@ -1445,7 +1475,6 @@ ${text}
         this.logger.info("使用已保存配置:", {
           baseUrl,
           model,
-          apiKeyLength: apiKey?.length || 0,
         });
       }
 
@@ -1458,10 +1487,17 @@ ${text}
         };
       }
 
+      if (!this._validateAIBaseUrl(baseUrl)) {
+        return {
+          available: false,
+          error: "不支持的API地址",
+          details: "仅支持 OpenAI、阿里云百炼、智谱 BigModel",
+        };
+      }
+
       this.logger.info("AI配置信息:", {
         baseUrl: baseUrl,
         model: model,
-        apiKeyLength: apiKey.length,
       });
 
       // 发送一个更有意义的测试请求

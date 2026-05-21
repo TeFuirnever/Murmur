@@ -53,6 +53,8 @@ class DatabaseManager {
     }
 
     this.db = new Database(this.dbPath);
+    this.db.pragma("journal_mode = WAL");
+    this.db.pragma("busy_timeout = 5000");
     this.createTables();
     this._migrateSchema();
   }
@@ -139,7 +141,9 @@ class DatabaseManager {
           if (typeof parsed === "string" && !parsed.startsWith('{"_enc":')) {
             this.setSetting("ai_api_key", parsed);
           }
-        } catch {}
+        } catch (e) {
+          this.logger?.warn?.("API key encryption migration failed", e.message);
+        }
       }
     }
 

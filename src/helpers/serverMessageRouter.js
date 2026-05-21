@@ -74,7 +74,13 @@ class ServerMessageRouter {
         onProgress,
       });
 
-      this.serverProcess.stdin.write(JSON.stringify(command) + "\n");
+      try {
+        this.serverProcess.stdin.write(JSON.stringify(command) + "\n");
+      } catch (e) {
+        clearTimeout(timer);
+        this.pending.delete(requestId);
+        reject(new Error("FunASR服务器写入失败: " + e.message));
+      }
     });
   }
 
@@ -99,7 +105,13 @@ class ServerMessageRouter {
         createdAt: Date.now(),
       });
 
-      this.serverProcess.stdin.write(JSON.stringify(command) + "\n");
+      try {
+        this.serverProcess.stdin.write(JSON.stringify(command) + "\n");
+      } catch (e) {
+        clearTimeout(timer);
+        this.pending.delete(requestId);
+        reject(new Error("FunASR服务器写入失败: " + e.message));
+      }
     });
   }
 

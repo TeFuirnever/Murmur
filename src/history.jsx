@@ -1,5 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
+import { Toaster } from "sonner";
 import "./index.css";
 // 历史记录页面组件
 // eslint-disable-next-line react-refresh/only-export-components
@@ -334,5 +335,12 @@ const HistoryContent = ({ onCopy }) => {
 
 // 渲染应用
 const container = document.getElementById("history-root");
-const root = createRoot(container);
-root.render(<HistoryPage />);
+if (container) {
+  const root = createRoot(container);
+  root.render(
+    <React.Fragment>
+      <HistoryPage />
+      <Toaster position="top-right" />
+    </React.Fragment>,
+  );
+}
