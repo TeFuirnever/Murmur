@@ -1,4 +1,4 @@
-const { app, globalShortcut, BrowserWindow, safeStorage } = require("electron");
+const { app, globalShortcut, BrowserWindow, safeStorage, ipcMain } = require("electron");
 
 // 导入日志管理器
 const LogManager = require("./src/helpers/logManager");
@@ -27,7 +27,7 @@ const ClipboardManager = require("./src/helpers/clipboard");
 const FunASRManager = require("./src/helpers/funasrManager");
 const TrayManager = require("./src/helpers/tray");
 const HotkeyManager = require("./src/helpers/hotkeyManager");
-const IPCHandlers = require("./src/helpers/ipcHandlers");
+const { registerAll: registerIPCHandlers } = require("./src/helpers/ipc");
 
 // 设置生产环境PATH
 function setupProductionPath() {
@@ -135,14 +135,14 @@ const dataDirectory = environmentManager.ensureDataDirectory();
 databaseManager.initialize(dataDirectory);
 
 // 使用所有管理器初始化IPC处理器
-new IPCHandlers({
+registerIPCHandlers(ipcMain, {
   environmentManager,
   databaseManager,
   clipboardManager,
   funasrManager,
   windowManager,
   hotkeyManager,
-  logger, // 传递logger实例
+  logger,
 });
 
 // 主应用启动函数

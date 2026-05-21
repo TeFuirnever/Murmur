@@ -1,178 +1,201 @@
 const { contextBridge, ipcRenderer } = require("electron");
+const C = require("./src/helpers/ipc-contracts");
 
 // 暴露安全的API给渲染进程
 contextBridge.exposeInMainWorld("electronAPI", {
   // 窗口控制
-  hideWindow: () => ipcRenderer.invoke("hide-window"),
-  showWindow: () => ipcRenderer.invoke("show-window"),
-  minimizeWindow: () => ipcRenderer.invoke("minimize-window"),
-  maximizeWindow: () => ipcRenderer.invoke("maximize-window"),
-  isWindowMaximized: () => ipcRenderer.invoke("is-window-maximized"),
+  hideWindow: () => ipcRenderer.invoke(C.WINDOW.HIDE),
+  showWindow: () => ipcRenderer.invoke(C.WINDOW.SHOW),
+  minimizeWindow: () => ipcRenderer.invoke(C.WINDOW.MINIMIZE),
+  maximizeWindow: () => ipcRenderer.invoke(C.WINDOW.MAXIMIZE),
+  isWindowMaximized: () => ipcRenderer.invoke(C.WINDOW.IS_MAX),
   onWindowMaximizeChange: (callback) => {
     const handler = (event, data) => callback(data);
-    ipcRenderer.on("window-maximize-change", handler);
-    return () => ipcRenderer.removeListener("window-maximize-change", handler);
+    ipcRenderer.on(C.EVENTS.WINDOW_MAXIMIZE_CHANGE, handler);
+    return () =>
+      ipcRenderer.removeListener(C.EVENTS.WINDOW_MAXIMIZE_CHANGE, handler);
   },
-  closeWindow: () => ipcRenderer.invoke("close-window"),
-  setAlwaysOnTop: (enabled) => ipcRenderer.invoke("set-always-on-top", enabled),
+  closeWindow: () => ipcRenderer.invoke(C.WINDOW.CLOSE),
+  setAlwaysOnTop: (enabled) => ipcRenderer.invoke(C.WINDOW.SET_TOP, enabled),
 
   // 录音相关
   onToggleDictation: (callback) => {
-    ipcRenderer.on("toggle-dictation", callback);
-    return () => ipcRenderer.removeListener("toggle-dictation", callback);
+    ipcRenderer.on(C.EVENTS.TOGGLE_DICTATION, callback);
+    return () =>
+      ipcRenderer.removeListener(C.EVENTS.TOGGLE_DICTATION, callback);
   },
 
   // FunASR语音识别
   transcribeAudio: (audioData) =>
-    ipcRenderer.invoke("transcribe-audio", audioData),
-  checkFunASRStatus: () => ipcRenderer.invoke("check-funasr-status"),
-  installFunASR: () => ipcRenderer.invoke("install-funasr"),
-  restartFunasrServer: () => ipcRenderer.invoke("restart-funasr-server"),
+    ipcRenderer.invoke(C.TRANSCRIPTION.AUDIO, audioData),
+  checkFunASRStatus: () => ipcRenderer.invoke(C.FUNASR.STATUS),
+  installFunASR: () => ipcRenderer.invoke(C.FUNASR.INSTALL),
+  restartFunasrServer: () => ipcRenderer.invoke(C.FUNASR.RESTART),
 
   // 模型文件管理
-  checkModelFiles: () => ipcRenderer.invoke("check-model-files"),
-  getDownloadProgress: () => ipcRenderer.invoke("get-download-progress"),
-  downloadModels: () => ipcRenderer.invoke("download-models"),
+  checkModelFiles: () => ipcRenderer.invoke(C.MODELS.CHECK),
+  getDownloadProgress: () => ipcRenderer.invoke(C.MODELS.PROGRESS),
+  downloadModels: () => ipcRenderer.invoke(C.MODELS.DOWNLOAD),
 
   // AI文本处理
-  processText: (text, mode) => ipcRenderer.invoke("process-text", text, mode),
+  processText: (text, mode) =>
+    ipcRenderer.invoke(C.AI.PROCESS, text, mode),
   checkAIStatus: (testConfig) =>
-    ipcRenderer.invoke("check-ai-status", testConfig),
+    ipcRenderer.invoke(C.AI.CHECK_STATUS, testConfig),
 
   // 剪贴板操作
-  pasteText: (text) => ipcRenderer.invoke("paste-text", text),
-  copyText: (text) => ipcRenderer.invoke("copy-text", text),
-  readClipboard: () => ipcRenderer.invoke("read-clipboard"),
-  writeClipboard: (text) => ipcRenderer.invoke("write-clipboard", text),
+  pasteText: (text) => ipcRenderer.invoke(C.CLIPBOARD.PASTE, text),
+  copyText: (text) => ipcRenderer.invoke(C.CLIPBOARD.COPY, text),
+  readClipboard: () => ipcRenderer.invoke(C.CLIPBOARD.READ),
+  writeClipboard: (text) => ipcRenderer.invoke(C.CLIPBOARD.WRITE, text),
 
   // 数据库操作
   saveTranscription: (text, processedText) =>
-    ipcRenderer.invoke("save-transcription", text, processedText),
+    ipcRenderer.invoke(C.TRANSCRIPTION.SAVE, text, processedText),
   getTranscriptions: (limit, offset) =>
-    ipcRenderer.invoke("get-transcriptions", limit, offset),
-  deleteTranscription: (id) => ipcRenderer.invoke("delete-transcription", id),
-  clearAllTranscriptions: () => ipcRenderer.invoke("clear-all-transcriptions"),
+    ipcRenderer.invoke(C.TRANSCRIPTION.GET_ALL, limit, offset),
+  deleteTranscription: (id) =>
+    ipcRenderer.invoke(C.TRANSCRIPTION.DELETE, id),
+  clearAllTranscriptions: () =>
+    ipcRenderer.invoke(C.TRANSCRIPTION.CLEAR),
 
   // 设置管理
-  getSettings: () => ipcRenderer.invoke("get-settings"),
-  getAllSettings: () => ipcRenderer.invoke("get-all-settings"),
+  getSettings: () => ipcRenderer.invoke(C.SETTINGS.GET_LEGACY),
+  getAllSettings: () => ipcRenderer.invoke(C.SETTINGS.GET_ALL),
   getSetting: (key, defaultValue) =>
-    ipcRenderer.invoke("get-setting", key, defaultValue),
-  setSetting: (key, value) => ipcRenderer.invoke("set-setting", key, value),
-  saveSetting: (key, value) => ipcRenderer.invoke("save-setting", key, value),
-  resetSettings: () => ipcRenderer.invoke("reset-settings"),
+    ipcRenderer.invoke(C.SETTINGS.GET, key, defaultValue),
+  setSetting: (key, value) =>
+    ipcRenderer.invoke(C.SETTINGS.SET, key, value),
+  saveSetting: (key, value) =>
+    ipcRenderer.invoke(C.SETTINGS.SAVE, key, value),
+  resetSettings: () => ipcRenderer.invoke(C.SETTINGS.RESET),
 
   // 热键管理
-  registerHotkey: (hotkey) => ipcRenderer.invoke("register-hotkey", hotkey),
-  unregisterHotkey: (hotkey) => ipcRenderer.invoke("unregister-hotkey", hotkey),
-  getCurrentHotkey: () => ipcRenderer.invoke("get-current-hotkey"),
+  registerHotkey: (hotkey) =>
+    ipcRenderer.invoke(C.HOTKEY.REGISTER, hotkey),
+  unregisterHotkey: (hotkey) =>
+    ipcRenderer.invoke(C.HOTKEY.UNREGISTER, hotkey),
+  getCurrentHotkey: () => ipcRenderer.invoke(C.HOTKEY.GET_CURRENT),
 
   // F2热键管理
-  registerF2Hotkey: () => ipcRenderer.invoke("register-f2-hotkey"),
-  unregisterF2Hotkey: () => ipcRenderer.invoke("unregister-f2-hotkey"),
+  registerF2Hotkey: () => ipcRenderer.invoke(C.HOTKEY.REGISTER_F2),
+  unregisterF2Hotkey: () => ipcRenderer.invoke(C.HOTKEY.UNREGISTER_F2),
   setRecordingState: (isRecording) =>
-    ipcRenderer.invoke("set-recording-state", isRecording),
-  getRecordingState: () => ipcRenderer.invoke("get-recording-state"),
+    ipcRenderer.invoke(C.HOTKEY.SET_STATE, isRecording),
+  getRecordingState: () => ipcRenderer.invoke(C.HOTKEY.GET_STATE),
 
   // F2双击事件监听
   onF2DoubleClick: (callback) => {
-    ipcRenderer.on("f2-double-click", callback);
-    return () => ipcRenderer.removeListener("f2-double-click", callback);
+    ipcRenderer.on(C.EVENTS.F2_DOUBLE_CLICK, callback);
+    return () =>
+      ipcRenderer.removeListener(C.EVENTS.F2_DOUBLE_CLICK, callback);
   },
 
   // 热键触发事件监听
   onHotkeyTriggered: (callback) => {
-    ipcRenderer.on("hotkey-triggered", callback);
-    return () => ipcRenderer.removeListener("hotkey-triggered", callback);
+    ipcRenderer.on(C.EVENTS.HOTKEY_TRIGGERED, callback);
+    return () =>
+      ipcRenderer.removeListener(C.EVENTS.HOTKEY_TRIGGERED, callback);
   },
 
   // 文件操作
   exportTranscriptions: (format) =>
-    ipcRenderer.invoke("export-transcriptions", format),
-  importSettings: () => ipcRenderer.invoke("import-settings"),
-  exportSettings: () => ipcRenderer.invoke("export-settings"),
+    ipcRenderer.invoke(C.TRANSCRIPTION.EXPORT_ALL, format),
+  importSettings: () => ipcRenderer.invoke(C.SETTINGS.IMPORT),
+  exportSettings: () => ipcRenderer.invoke(C.SETTINGS.EXPORT),
 
   // 系统信息
-  getSystemInfo: () => ipcRenderer.invoke("get-system-info"),
-  checkPermissions: () => ipcRenderer.invoke("check-permissions"),
-  requestPermissions: () => ipcRenderer.invoke("request-permissions"),
+  getSystemInfo: () => ipcRenderer.invoke(C.SYSTEM.INFO),
+  checkPermissions: () => ipcRenderer.invoke(C.SYSTEM.PERMISSIONS),
+  requestPermissions: () =>
+    ipcRenderer.invoke(C.SYSTEM.REQUEST_PERMS),
   testAccessibilityPermission: () =>
-    ipcRenderer.invoke("test-accessibility-permission"),
-  openSystemPermissions: () => ipcRenderer.invoke("open-system-permissions"),
+    ipcRenderer.invoke(C.SYSTEM.TEST_A11Y),
+  openSystemPermissions: () =>
+    ipcRenderer.invoke(C.SYSTEM.OPEN_PERMS),
 
   // 应用信息
-  getAppVersion: () => ipcRenderer.invoke("get-app-version"),
-  checkForUpdates: () => ipcRenderer.invoke("check-for-updates"),
+  getAppVersion: () => ipcRenderer.invoke(C.SYSTEM.VERSION),
+  checkForUpdates: () => ipcRenderer.invoke(C.SYSTEM.UPDATES),
 
   // 调试和日志
-  log: (level, message) => ipcRenderer.invoke("log", level, message),
-  getDebugInfo: () => ipcRenderer.invoke("get-debug-info"),
+  log: (level, message) => ipcRenderer.invoke(C.SYSTEM.LOG, level, message),
+  getDebugInfo: () => ipcRenderer.invoke(C.SYSTEM.DEBUG),
 
   // 事件监听
   onTranscriptionUpdate: (callback) => {
-    ipcRenderer.on("transcription-update", callback);
-    return () => ipcRenderer.removeListener("transcription-update", callback);
+    ipcRenderer.on(C.EVENTS.TRANSCRIPTION_UPDATE, callback);
+    return () =>
+      ipcRenderer.removeListener(C.EVENTS.TRANSCRIPTION_UPDATE, callback);
   },
   onProcessingUpdate: (callback) => {
-    ipcRenderer.on("processing-update", callback);
-    return () => ipcRenderer.removeListener("processing-update", callback);
+    ipcRenderer.on(C.EVENTS.PROCESSING_UPDATE, callback);
+    return () =>
+      ipcRenderer.removeListener(C.EVENTS.PROCESSING_UPDATE, callback);
   },
   onError: (callback) => {
-    ipcRenderer.on("error", callback);
-    return () => ipcRenderer.removeListener("error", callback);
+    ipcRenderer.on(C.EVENTS.ERROR, callback);
+    return () => ipcRenderer.removeListener(C.EVENTS.ERROR, callback);
   },
   onSettingsUpdate: (callback) => {
-    ipcRenderer.on("settings-update", callback);
-    return () => ipcRenderer.removeListener("settings-update", callback);
+    ipcRenderer.on(C.EVENTS.SETTINGS_UPDATE, callback);
+    return () =>
+      ipcRenderer.removeListener(C.EVENTS.SETTINGS_UPDATE, callback);
   },
 
   // 控制面板相关
-  openControlPanel: () => ipcRenderer.invoke("open-control-panel"),
-  closeControlPanel: () => ipcRenderer.invoke("close-control-panel"),
+  openControlPanel: () => ipcRenderer.invoke(C.WINDOW.OPEN_CONTROL),
+  closeControlPanel: () => ipcRenderer.invoke(C.WINDOW.CLOSE_CONTROL),
 
   // 历史记录窗口相关
-  openHistoryWindow: () => ipcRenderer.invoke("open-history-window"),
-  closeHistoryWindow: () => ipcRenderer.invoke("close-history-window"),
-  hideHistoryWindow: () => ipcRenderer.invoke("hide-history-window"),
+  openHistoryWindow: () => ipcRenderer.invoke(C.WINDOW.OPEN_HISTORY),
+  closeHistoryWindow: () => ipcRenderer.invoke(C.WINDOW.CLOSE_HISTORY),
+  hideHistoryWindow: () => ipcRenderer.invoke(C.WINDOW.HIDE_HISTORY),
 
   // 设置窗口相关
-  openSettingsWindow: () => ipcRenderer.invoke("open-settings-window"),
-  closeSettingsWindow: () => ipcRenderer.invoke("close-settings-window"),
-  hideSettingsWindow: () => ipcRenderer.invoke("hide-settings-window"),
+  openSettingsWindow: () => ipcRenderer.invoke(C.WINDOW.OPEN_SETTINGS),
+  closeSettingsWindow: () => ipcRenderer.invoke(C.WINDOW.CLOSE_SETTINGS),
+  hideSettingsWindow: () => ipcRenderer.invoke(C.WINDOW.HIDE_SETTINGS),
 
   // 模型管理
-  downloadModel: (modelName) => ipcRenderer.invoke("download-model", modelName),
-  getAvailableModels: () => ipcRenderer.invoke("get-available-models"),
-  getCurrentModel: () => ipcRenderer.invoke("get-current-model"),
-  switchModel: (modelName) => ipcRenderer.invoke("switch-model", modelName),
+  downloadModel: (modelName) =>
+    ipcRenderer.invoke(C.MODELS.DOWNLOAD_MODEL, modelName),
+  getAvailableModels: () => ipcRenderer.invoke(C.MODELS.AVAILABLE),
+  getCurrentModel: () => ipcRenderer.invoke(C.MODELS.CURRENT),
+  switchModel: (modelName) => ipcRenderer.invoke(C.MODELS.SWITCH, modelName),
 
   // 模型下载进度监听
   onModelDownloadProgress: (callback) => {
-    ipcRenderer.on("model-download-progress", callback);
+    ipcRenderer.on(C.EVENTS.MODEL_DOWNLOAD_PROGRESS, callback);
     return () =>
-      ipcRenderer.removeListener("model-download-progress", callback);
+      ipcRenderer.removeListener(
+        C.EVENTS.MODEL_DOWNLOAD_PROGRESS,
+        callback,
+      );
   },
 
   // 文件转录相关
-  importAudioFile: () => ipcRenderer.invoke("import-audio-file"),
+  importAudioFile: () => ipcRenderer.invoke(C.TRANSCRIPTION.IMPORT_FILE),
   transcribeFile: (audioPath, options) =>
-    ipcRenderer.invoke("transcribe-file", audioPath, options),
+    ipcRenderer.invoke(C.TRANSCRIPTION.TRANSCRIBE_FILE, audioPath, options),
   cancelFileTranscription: () =>
-    ipcRenderer.invoke("cancel-file-transcription"),
+    ipcRenderer.invoke(C.TRANSCRIPTION.CANCEL),
   onFileTranscriptionProgress: (callback) => {
-    ipcRenderer.on("file-transcription-progress", (event, data) =>
+    ipcRenderer.on(C.EVENTS.FILE_TRANSCRIPTION_PROGRESS, (event, data) =>
       callback(data),
     );
     return () =>
-      ipcRenderer.removeListener("file-transcription-progress", callback);
+      ipcRenderer.removeListener(
+        C.EVENTS.FILE_TRANSCRIPTION_PROGRESS,
+        callback,
+      );
   },
 
   // 导出与AI创作
   exportTranscription: (id, format, options) =>
-    ipcRenderer.invoke("export-transcription", id, format, options),
+    ipcRenderer.invoke(C.TRANSCRIPTION.EXPORT, id, format, options),
   aiReviewTranscription: (id, template) =>
-    ipcRenderer.invoke("ai-review-transcription", id, template),
-
+    ipcRenderer.invoke(C.TRANSCRIPTION.AI_REVIEW, id, template),
 });
 
 // 添加一些实用的常量

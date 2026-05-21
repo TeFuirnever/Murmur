@@ -1,0 +1,90 @@
+const fs = require("fs");
+const { dialog } = require("electron");
+const C = require("../ipc-contracts");
+
+function maskApiKey(settings) {
+  if (settings.ai_api_key && typeof settings.ai_api_key === "string") {
+    const key = settings.ai_api_key;
+    settings.ai_api_key = key.length > 4 ? `****${key.slice(-4)}` : "****";
+  }
+  return settings;
+}
+
+function register(ipcMain, managers) {
+  const { databaseManager, logger } = managers;
+
+  ipcMain.handle(C.SETTINGS.GET, (event, key, defaultValue) => {
+    return databaseManager.getSetting(key, defaultValue);
+  });
+
+  ipcMain.handle(C.SETTINGS.SET, (event, key, value) => {
+    return databaseManager.setSetting(key, value);
+  });
+
+  ipcMain.handle(C.SETTINGS.GET_ALL, () => {
+    return maskApiKey(databaseManager.getAllSettings());
+  });
+
+  ipcMain.handle(C.SETTINGS.GET_LEGACY, () => {
+    return maskApiKey(databaseManager.getAllSettings());
+  });
+
+  ipcMain.handle(C.SETTINGS.SAVE, (event, key, value) => {
+    return databaseManager.setSetting(key, value);
+  });
+
+  ipcMain.handle(C.SETTINGS.RESET, () => {
+    return databaseManager.resetSettings();
+  });
+
+  ipcMain.handle(C.SETTINGS.IMPORT, async () => {
+    try {
+      const result = await dialog.showOpenDialog({
+        title: "导入设置",
+        filters: [{ name: "JSON", extensions: ["json"] }],
+        properties: ["openFile"],
+      });
+
+      if (result.canceled || result.filePaths.length === 0) {
+        return { success: false, canceled: true };
+      }
+
+      const content = fs.readFileSync(result.filePaths[0], "utf-8");
+      const settings = JSON.parse(content);
+
+      for (const [key, value] of Object.entries(settings)) {
+        databaseManager.setSetting(key, value);
+      }
+
+      return { success: true, count: Object.keys(settings).length };
+    } catch (error) {
+      logger.error("导入设置失败:", error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle(C.SETTINGS.EXPORT, async () => {
+    try {
+      const settings = databaseManager.getAllSettings();
+      const content = JSON.stringify(settings, null, 2);
+
+      const result = await dialog.showSaveDialog({
+        title: "导出设置",
+        defaultPath: "murmur-settings.json",
+        filters: [{ name: "JSON", extensions: ["json"] }],
+      });
+
+      if (result.canceled || !result.filePath) {
+        return { success: false, canceled: true };
+      }
+
+      fs.writeFileSync(result.filePath, content, "utf-8");
+      return { success: true, path: result.filePath };
+    } catch (error) {
+      logger.error("导出设置失败:", error);
+      return { success: false, error: error.message };
+    }
+  });
+}
+
+module.exports = { register };
