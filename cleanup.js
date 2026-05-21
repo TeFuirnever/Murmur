@@ -3,16 +3,6 @@ const path = require("path");
 
 console.log("🧹 清理 Murmur 项目...");
 
-// 需要清理的目录和文件
-const _cleanupTargets = [
-  "src/dist",
-  "dist",
-  "node_modules/.cache",
-  "cache",
-  "*.log",
-  "funasr_bridge.log",
-];
-
 // 递归删除目录
 function removeDir(dirPath) {
   if (fs.existsSync(dirPath)) {

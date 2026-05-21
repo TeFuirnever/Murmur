@@ -3,11 +3,7 @@ const path = require("path");
 const https = require("https");
 const { execSync } = require("child_process");
 const { createWriteStream } = require("fs");
-const { pipeline } = require("stream");
-const { promisify } = require("util");
 const tar = require("tar");
-
-const _pipelineAsync = promisify(pipeline);
 
 class EmbeddedPythonBuilder {
   constructor() {
