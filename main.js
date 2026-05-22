@@ -185,6 +185,7 @@ async function startApp() {
   });
 
   // 创建主窗口
+  windowManager._setupCSP();
   try {
     logger.info("创建主窗口...");
     const alwaysOnTop = databaseManager.getSetting("window_always_on_top", true);
@@ -195,24 +196,9 @@ async function startApp() {
     logger.error("创建主窗口时出错:", error);
   }
 
-  // 创建控制面板窗口
-  try {
-    logger.info("创建控制面板窗口...");
-    await windowManager.createControlPanelWindow();
-    logger.info("控制面板窗口创建成功");
-  } catch (error) {
-    logger.error("创建控制面板窗口时出错:", error);
-  }
-
   // 设置托盘
   logger.info("设置系统托盘...");
-  trayManager.setWindows(
-    windowManager.mainWindow,
-    windowManager.controlPanelWindow,
-  );
-  trayManager.setCreateControlPanelCallback(() =>
-    windowManager.createControlPanelWindow(),
-  );
+  trayManager.setWindows(windowManager.mainWindow);
   await trayManager.createTray();
   logger.info("系统托盘设置完成");
 

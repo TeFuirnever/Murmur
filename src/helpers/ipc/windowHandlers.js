@@ -60,26 +60,6 @@ function register(ipcMain, managers) {
     return { success: false };
   });
 
-  ipcMain.handle(C.WINDOW.OPEN_CONTROL, () => {
-    windowManager.showControlPanel();
-    return true;
-  });
-
-  ipcMain.handle(C.WINDOW.CLOSE_CONTROL, () => {
-    windowManager.hideControlPanel();
-    return true;
-  });
-
-  ipcMain.handle(C.WINDOW.SHOW_CONTROL, () => {
-    windowManager.showControlPanel();
-    return true;
-  });
-
-  ipcMain.handle(C.WINDOW.HIDE_CONTROL, () => {
-    windowManager.hideControlPanel();
-    return true;
-  });
-
   ipcMain.handle(C.WINDOW.OPEN_HISTORY, () => {
     windowManager.showHistoryWindow();
     return true;

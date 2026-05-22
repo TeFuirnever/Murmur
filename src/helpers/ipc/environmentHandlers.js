@@ -37,7 +37,7 @@ function register(ipcMain, managers) {
 
   ipcMain.handle(C.FUNASR.INSTALL, async (event) => {
     return await funasrManager.installFunASR((progress) => {
-      event.sender.send("funasr-install-progress", progress);
+      event.sender.send(C.EVENTS.FUNASR_INSTALL_PROGRESS, progress);
     });
   });
 

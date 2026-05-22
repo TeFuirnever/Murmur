@@ -48,6 +48,9 @@ class FunASRManager {
   async restartServer() {
     try {
       this.logger.info && this.logger.info("重启FunASR服务器...");
+      if (this.server.initializationPromise) {
+        try { await this.server.initializationPromise; } catch { /* ignore */ }
+      }
       if (this.server.serverProcess) {
         await this.server._stopFunASRServer();
         this.logger.info && this.logger.info("已停止现有FunASR服务器");
@@ -101,18 +104,20 @@ class FunASRManager {
   async preInitializeModels() {
     if (this.server.initializationPromise) return this.server.initializationPromise;
 
-    const installStatus = await this.checkFunASRInstallation();
-    if (!installStatus.installed) return this.server.initializationPromise;
+    this.server.initializationPromise = (async () => {
+      const installStatus = await this.checkFunASRInstallation();
+      if (!installStatus.installed) return;
 
-    const pythonCmd = await this.findPythonExecutable();
-    const serverPath = this.getFunASRServerPath();
-    this.setupIsolatedEnvironment();
-    const pythonEnv = this.buildPythonEnvironment();
-    const cachePath = this.getModelCachePath();
+      const pythonCmd = await this.findPythonExecutable();
+      const serverPath = this.getFunASRServerPath();
+      this.setupIsolatedEnvironment();
+      const pythonEnv = this.buildPythonEnvironment();
+      const cachePath = this.getModelCachePath();
 
-    this.server.initializationPromise = this.server._startFunASRServer(
-      pythonEnv, pythonCmd, serverPath, cachePath,
-    );
+      return this.server._startFunASRServer(
+        pythonEnv, pythonCmd, serverPath, cachePath,
+      );
+    })();
     return this.server.initializationPromise;
   }
 

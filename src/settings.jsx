@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
 import { Toaster, toast } from "sonner";
+import { assertElectronAPI } from "./bootstrap/assertElectronAPI.js";
 import {
   Settings,
   Save,
@@ -14,6 +15,8 @@ import {
   XCircle,
   Mic,
   Shield,
+  Download,
+  RefreshCw,
 } from "lucide-react";
 import { usePermissions } from "./hooks/usePermissions";
 import PermissionCard from "./components/ui/permission-card";
@@ -34,6 +37,11 @@ const SettingsPage = () => {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
 
+  // 更新检查
+  const [appVersion, setAppVersion] = useState("");
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState(null);
+
   // 权限管理
   const showAlert = (alert) => {
     toast(alert.title, {
@@ -52,6 +60,9 @@ const SettingsPage = () => {
   // 加载设置
   useEffect(() => {
     loadSettings();
+    if (window.electronAPI) {
+      window.electronAPI.getAppVersion().then(setAppVersion);
+    }
   }, []);
 
   const loadSettings = async () => {
@@ -64,6 +75,7 @@ const SettingsPage = () => {
           ai_base_url: allSettings.ai_base_url || "https://api.openai.com/v1",
           ai_model: allSettings.ai_model || "gpt-3.5-turbo",
           enable_ai_optimization: allSettings.enable_ai_optimization !== false, // 默认为true
+          window_always_on_top: allSettings.window_always_on_top !== false, // 默认为true
         };
         setSettings((prev) => ({ ...prev, ...loadedSettings }));
 
@@ -197,6 +209,22 @@ const SettingsPage = () => {
       });
     } finally {
       setTesting(false);
+    }
+  };
+
+  // 检查更新
+  const checkForUpdates = async () => {
+    try {
+      setCheckingUpdate(true);
+      setUpdateInfo(null);
+      if (window.electronAPI) {
+        const result = await window.electronAPI.checkForUpdates();
+        setUpdateInfo(result);
+      }
+    } catch (_error) {
+      setUpdateInfo({ hasUpdate: false, error: "检查更新失败" });
+    } finally {
+      setCheckingUpdate(false);
     }
   };
 
@@ -613,7 +641,7 @@ const SettingsPage = () => {
             </div>
           </div>
 
-          {/* 其他设置部分 */}
+          {/* 关于 Murmur */}
           <div className="mt-4 bg-white dark:bg-[#2c2c2e] rounded-xl shadow-lg border border-[#d2d2d7] dark:border-[#3a3a3c]">
             <div className="p-4">
               <h2 className="text-lg font-semibold text-[#1d1d1f] dark:text-[#f5f5f7] text-heading mb-3">
@@ -624,6 +652,11 @@ const SettingsPage = () => {
                   🎤 <strong>Murmur</strong> -
                   基于FunASR和AI的中文语音转文字应用
                 </p>
+                {appVersion && (
+                  <p className="text-xs text-[#86868b] mb-2">
+                    当前版本：v{appVersion}
+                  </p>
+                )}
                 <p className="text-xs text-[#86868b]">
                   • 高精度中文语音识别
                   <br />
@@ -632,6 +665,44 @@ const SettingsPage = () => {
                   • 实时语音处理
                   <br />• 隐私保护设计
                 </p>
+              </div>
+
+              {/* 更新检查 */}
+              <div className="mt-3 flex items-center justify-between">
+                <button
+                  onClick={checkForUpdates}
+                  disabled={checkingUpdate}
+                  className="flex items-center space-x-2 px-3 py-1.5 text-sm text-[#0071e3] hover:bg-[#e8f4fd] dark:hover:bg-blue-900/30 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {checkingUpdate ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-3 h-3" />
+                  )}
+                  <span>{checkingUpdate ? "检查中..." : "检查更新"}</span>
+                </button>
+
+                {updateInfo?.hasUpdate && (
+                  <button
+                    onClick={() =>
+                      window.electronAPI?.openExternal?.(updateInfo.releaseUrl)
+                    }
+                    className="flex items-center space-x-1.5 px-3 py-1.5 text-sm bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                  >
+                    <Download className="w-3 h-3" />
+                    <span>v{updateInfo.latestVersion} 可用</span>
+                  </button>
+                )}
+
+                {updateInfo && !updateInfo.hasUpdate && !updateInfo.error && (
+                  <span className="text-xs text-[#86868b]">已是最新版本</span>
+                )}
+
+                {updateInfo?.error && (
+                  <span className="text-xs text-red-500">
+                    {updateInfo.error}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -645,7 +716,7 @@ const SettingsPage = () => {
 export { SettingsPage };
 
 // 如果是直接访问settings.html，则渲染应用
-if (document.getElementById("settings-root")) {
+if (document.getElementById("settings-root") && assertElectronAPI()) {
   const root = ReactDOM.createRoot(document.getElementById("settings-root"));
   root.render(
     <React.Fragment>

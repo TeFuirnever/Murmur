@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App.jsx";
 import "./index.css";
 import { Toaster } from "./components/ui/sonner";
+import { assertElectronAPI } from "./bootstrap/assertElectronAPI.js";
 
 // 检查是否在Electron环境中
 const isElectron = () => {
@@ -168,6 +169,11 @@ function initializeApp() {
 // 初始化应用
 initializeApp();
 
+// 在挂载前断言 preload 已就绪；若失败则渲染纯 DOM 错误屏并停止
+if (!assertElectronAPI()) {
+  // 已渲染 fallback，直接退出，不再 createRoot
+} else {
+
 // 渲染应用
 const root = ReactDOM.createRoot(document.getElementById("root"));
 
@@ -221,3 +227,5 @@ if (process.env.NODE_ENV === "development") {
     }, 30000); // 每30秒检查一次
   }
 }
+
+} // end assertElectronAPI guard

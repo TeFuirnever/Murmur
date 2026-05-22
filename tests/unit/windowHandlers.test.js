@@ -34,8 +34,6 @@ describe("windowHandlers", () => {
     managers = {
       windowManager: {
         mainWindow,
-        showControlPanel: vi.fn(),
-        hideControlPanel: vi.fn(),
         showHistoryWindow: vi.fn(),
         closeHistoryWindow: vi.fn(),
         hideHistoryWindow: vi.fn(),
@@ -50,7 +48,7 @@ describe("windowHandlers", () => {
 
   it("registers all window handlers", () => {
     const channels = Object.keys(ipcMain._handlers);
-    expect(channels.length).toBeGreaterThanOrEqual(10);
+    expect(channels.length).toBeGreaterThanOrEqual(7);
     expect(ipcMain._handlers["hide-window"]).toBeDefined();
     expect(ipcMain._handlers["show-window"]).toBeDefined();
     expect(ipcMain._handlers["close-window"]).toBeDefined();
@@ -95,12 +93,6 @@ describe("windowHandlers", () => {
   it("close-window closes the main window", () => {
     const result = ipcMain._handlers["close-window"]();
     expect(managers.windowManager.mainWindow.close).toHaveBeenCalled();
-    expect(result).toBe(true);
-  });
-
-  it("open-control-panel delegates to showControlPanel", () => {
-    const result = ipcMain._handlers["open-control-panel"]();
-    expect(managers.windowManager.showControlPanel).toHaveBeenCalled();
     expect(result).toBe(true);
   });
 

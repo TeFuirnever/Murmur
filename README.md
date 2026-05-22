@@ -151,12 +151,34 @@ pnpm run build    # 构建生产版本
 │   ├── components/            # UI 组件
 │   ├── hooks/                 # React Hooks
 │   ├── helpers/               # 主进程模块
-│   │   ├── funasrManager.js   # FunASR 进程管理
-│   │   ├── ipcHandlers.js     # IPC 处理器
-│   │   ├── database.js        # 数据库管理
-│   │   └── windowManager.js   # 窗口管理
+│   │   ├── ipc-contracts.js   # IPC 通道名称常量
+│   │   ├── ipc/               # IPC 处理器（按领域拆分）
+│   │   │   ├── index.js       # 处理器注册入口
+│   │   │   ├── aiHandlers.js
+│   │   │   ├── clipboardHandlers.js
+│   │   │   ├── environmentHandlers.js
+│   │   │   ├── hotkeyHandlers.js
+│   │   │   ├── modelHandlers.js
+│   │   │   ├── settingsHandlers.js
+│   │   │   ├── systemHandlers.js
+│   │   │   ├── transcriptionHandlers.js
+│   │   │   └── windowHandlers.js
+│   │   ├── funasrManager.js   # FunASR 门面（委托到子模块）
+│   │   ├── funasrServer.js    # Python 进程管理、转录、健康监控
+│   │   ├── modelManager.js    # 模型下载、校验、进度
+│   │   ├── pythonEnvironment.js # Python 路径发现、环境构建
+│   │   ├── serverMessageRouter.js # 进程间 JSON 消息路由
+│   │   ├── audioFileHelpers.js # 临时文件、ffmpeg 转换
+│   │   ├── aiPrompts.js       # AI Prompt 模板
+│   │   ├── database.js        # SQLite 数据库（safeStorage 加密）
+│   │   ├── windowManager.js   # 窗口管理（sandbox + CSP）
+│   │   ├── clipboard.js       # 剪贴板操作
+│   │   ├── hotkeyManager.js   # 全局热键
+│   │   ├── tray.js            # 系统托盘
+│   │   ├── environment.js     # 环境检测
+│   │   └── logManager.js      # 日志管理
 │   └── utils/                 # 工具函数
-├── tests/                     # 测试文件
+├── tests/                     # Vitest 测试（145 tests）
 ├── scripts/                   # 构建脚本
 └── assets/                    # 图标和资源
 ```
@@ -180,7 +202,7 @@ pnpm run build    # 构建生产版本
 - [ ] 实时流式转录（200ms 延迟）
 - [ ] 自定义 AI Prompt 模板
 - [ ] 多语言支持（中/英/日）
-- [ ] 自动更新
+- [x] 自动更新检测（通知用户去 GitHub 下载）
 
 详见 [Projects](https://github.com/TeFuirnever/Murmur/projects) 查看完整规划。
 
@@ -323,12 +345,34 @@ pnpm run build    # Production build
 │   ├── components/            # UI components
 │   ├── hooks/                 # React Hooks
 │   ├── helpers/               # Main process modules
-│   │   ├── funasrManager.js   # FunASR process management
-│   │   ├── ipcHandlers.js     # IPC handlers
-│   │   ├── database.js        # Database management
-│   │   └── windowManager.js   # Window management
+│   │   ├── ipc-contracts.js   # IPC channel name constants
+│   │   ├── ipc/               # IPC handlers (domain-scoped)
+│   │   │   ├── index.js       # Handler registration entry
+│   │   │   ├── aiHandlers.js
+│   │   │   ├── clipboardHandlers.js
+│   │   │   ├── environmentHandlers.js
+│   │   │   ├── hotkeyHandlers.js
+│   │   │   ├── modelHandlers.js
+│   │   │   ├── settingsHandlers.js
+│   │   │   ├── systemHandlers.js
+│   │   │   ├── transcriptionHandlers.js
+│   │   │   └── windowHandlers.js
+│   │   ├── funasrManager.js   # FunASR facade (delegates to sub-modules)
+│   │   ├── funasrServer.js    # Python process, transcription, health
+│   │   ├── modelManager.js    # Model download, verify, progress
+│   │   ├── pythonEnvironment.js # Python discovery, env construction
+│   │   ├── serverMessageRouter.js # JSON message routing
+│   │   ├── audioFileHelpers.js # Temp files, ffmpeg conversion
+│   │   ├── aiPrompts.js       # AI prompt templates
+│   │   ├── database.js        # SQLite (safeStorage encryption)
+│   │   ├── windowManager.js   # Window management (sandbox + CSP)
+│   │   ├── clipboard.js       # Clipboard operations
+│   │   ├── hotkeyManager.js   # Global hotkeys
+│   │   ├── tray.js            # System tray
+│   │   ├── environment.js     # Environment detection
+│   │   └── logManager.js      # Logging
 │   └── utils/                 # Utilities
-├── tests/                     # Test files
+├── tests/                     # Vitest tests (145 tests)
 ├── scripts/                   # Build scripts
 └── assets/                    # Icons and resources
 ```
@@ -352,7 +396,7 @@ We welcome all contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for:
 - [ ] Real-time streaming transcription (200ms latency)
 - [ ] Custom AI Prompt templates
 - [ ] Multi-language support (Chinese/English/Japanese)
-- [ ] Auto-update
+- [x] Auto-update detection (notifies user to download from GitHub)
 
 ## Acknowledgments
 

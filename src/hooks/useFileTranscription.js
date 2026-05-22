@@ -69,6 +69,11 @@ export function useFileTranscription() {
     setResult(null);
 
     try {
+      if (!window.electronAPI?.transcribeFile) {
+        setError("Electron API 不可用，请重启应用");
+        setState("error");
+        return;
+      }
       if (
         window.electronAPI &&
         window.electronAPI.onFileTranscriptionProgress

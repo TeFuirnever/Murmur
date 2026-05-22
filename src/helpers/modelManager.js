@@ -50,22 +50,33 @@ class ModelManager {
   }
 
   getModelCachePath() {
+    const userDataModels = path.join(require("electron").app.getPath("userData"), "models");
+    const modelScopeCache = path.join(require("os").homedir(), ".cache", "modelscope", "hub", "models");
+
     const candidates = [];
     if (process.env.NODE_ENV === "development") {
       candidates.push(path.join(__dirname, "..", "..", "models"));
     }
-    candidates.push(path.join(require("electron").app.getPath("userData"), "models"));
+    candidates.push(userDataModels);
+    candidates.push(modelScopeCache);
 
     for (const candidate of candidates) {
-      if (fs.existsSync(candidate)) return candidate;
+      if (!fs.existsSync(candidate)) continue;
+      const damoSub = path.join(candidate, "damo");
+      if (fs.existsSync(damoSub) && fs.readdirSync(damoSub).length > 0) return damoSub;
+      if (fs.readdirSync(candidate).length > 0) {
+        const hasExpected = fs.readdirSync(candidate).some(
+          (n) => n.startsWith("speech_paraformer") || n.startsWith("speech_fsmn") || n.startsWith("punc_ct"),
+        );
+        if (hasExpected) return candidate;
+      }
     }
 
     const found = this.findDamoRoot(path.join(__dirname, "..", ".."));
     if (found) return found;
 
-    const defaultPath = candidates[candidates.length - 1];
-    fs.mkdirSync(defaultPath, { recursive: true });
-    return defaultPath;
+    fs.mkdirSync(userDataModels, { recursive: true });
+    return userDataModels;
   }
 
   async checkModelFiles() {

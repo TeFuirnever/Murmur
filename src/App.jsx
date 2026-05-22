@@ -440,17 +440,8 @@ export default function App() {
   // 使用热键Hook，不再使用F2双击功能
   const { hotkey, syncRecordingState, registerHotkey } = useHotkey();
 
-  // 注册传统热键监听 - 只在主窗口注册，避免重复
+  // 注册传统热键监听
   useEffect(() => {
-    // 检查是否为控制面板窗口
-    const urlParams = new URLSearchParams(window.location.search);
-    const isControlPanel = urlParams.get("panel") === "control";
-
-    // 只有主窗口才注册热键
-    if (isControlPanel) {
-      return;
-    }
-
     const initializeHotkey = async () => {
       try {
         // 注册默认热键 CommandOrControl+Shift+Space

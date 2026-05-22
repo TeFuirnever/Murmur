@@ -2,6 +2,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { Toaster } from "sonner";
 import "./index.css";
+import { assertElectronAPI } from "./bootstrap/assertElectronAPI.js";
 // 历史记录页面组件
 // eslint-disable-next-line react-refresh/only-export-components
 const HistoryPage = () => {
@@ -335,7 +336,7 @@ const HistoryContent = ({ onCopy }) => {
 
 // 渲染应用
 const container = document.getElementById("history-root");
-if (container) {
+if (container && assertElectronAPI()) {
   const root = createRoot(container);
   root.render(
     <React.Fragment>

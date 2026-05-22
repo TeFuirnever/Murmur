@@ -5,18 +5,11 @@ class TrayManager {
   constructor(logger = null) {
     this.tray = null;
     this.mainWindow = null;
-    this.controlPanelWindow = null;
-    this.createControlPanelCallback = null;
     this.logger = logger;
   }
 
-  setWindows(mainWindow, controlPanelWindow) {
+  setWindows(mainWindow) {
     this.mainWindow = mainWindow;
-    this.controlPanelWindow = controlPanelWindow;
-  }
-
-  setCreateControlPanelCallback(callback) {
-    this.createControlPanelCallback = callback;
   }
 
   async createTray() {
@@ -44,7 +37,7 @@ class TrayManager {
 
       // 设置点击事件
       this.tray.on("click", () => {
-        if (this.mainWindow) {
+        if (this.mainWindow && !this.mainWindow.isDestroyed()) {
           if (this.mainWindow.isVisible()) {
             this.mainWindow.hide();
           } else {
@@ -82,24 +75,9 @@ class TrayManager {
       {
         label: "显示主窗口",
         click: () => {
-          if (this.mainWindow) {
+          if (this.mainWindow && !this.mainWindow.isDestroyed()) {
             this.mainWindow.show();
             this.mainWindow.focus();
-          }
-        },
-      },
-      {
-        label: "控制面板",
-        click: () => {
-          if (this.controlPanelWindow) {
-            this.controlPanelWindow.show();
-            this.controlPanelWindow.focus();
-          } else if (this.createControlPanelCallback) {
-            this.createControlPanelCallback().then(() => {
-              if (this.controlPanelWindow) {
-                this.controlPanelWindow.show();
-              }
-            });
           }
         },
       },

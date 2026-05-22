@@ -11,6 +11,7 @@ yarn.lock*
 dist/
 build/
 out/
+dist-preload/
 
 # Environment variables
 .env

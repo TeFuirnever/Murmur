@@ -1,16 +1,15 @@
 const { BrowserWindow, session } = require("electron");
 const path = require("path");
+const C = require("./ipc-contracts");
 
 class WindowManager {
   constructor() {
     this.mainWindow = null;
-    this.controlPanelWindow = null;
     this.historyWindow = null;
     this.settingsWindow = null;
     this._creatingMainWindow = false;
-    this._creatingControlPanel = false;
     this._alwaysOnTop = true;
-    this._setupCSP();
+    this._cspSetup = false;
   }
 
   setDefaultAlwaysOnTop(enabled) {
@@ -18,13 +17,20 @@ class WindowManager {
   }
 
   _setupCSP() {
+    if (this._cspSetup) return;
+    this._cspSetup = true;
+
+    const isDev = process.env.NODE_ENV === "development";
+    const prodCsp =
+      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.modelscope.cn https://api.openai.com https://*.openai.com https://*.bigmodel.cn https://api.bigmodel.cn";
+    const devCsp =
+      "default-src 'self' 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://localhost:* http://localhost:* https://*.modelscope.cn https://api.openai.com https://*.openai.com https://*.bigmodel.cn https://api.bigmodel.cn";
+
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
       callback({
         responseHeaders: {
           ...details.responseHeaders,
-          "Content-Security-Policy": [
-            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.modelscope.cn https://api.openai.com https://*.openai.com https://*.bigmodel.cn https://api.bigmodel.cn",
-          ],
+          "Content-Security-Policy": [isDev ? devCsp : prodCsp],
         },
       });
     });
@@ -54,7 +60,7 @@ class WindowManager {
         nodeIntegration: false,
         contextIsolation: true,
         sandbox: true,
-        preload: path.join(__dirname, "..", "..", "preload.js"),
+        preload: path.join(__dirname, "..", "..", "dist-preload", "preload.js"),
       },
     });
 
@@ -73,60 +79,16 @@ class WindowManager {
     });
 
     this.mainWindow.on("maximize", () => {
-      this.mainWindow.webContents.send("window-maximize-change", true);
+      this.mainWindow.webContents.send(C.EVENTS.WINDOW_MAXIMIZE_CHANGE, true);
     });
 
     this.mainWindow.on("unmaximize", () => {
-      this.mainWindow.webContents.send("window-maximize-change", false);
+      this.mainWindow.webContents.send(C.EVENTS.WINDOW_MAXIMIZE_CHANGE, false);
     });
 
     return this.mainWindow;
     } finally {
       this._creatingMainWindow = false;
-    }
-  }
-
-  async createControlPanelWindow() {
-    if (this.controlPanelWindow) {
-      this.controlPanelWindow.focus();
-      return this.controlPanelWindow;
-    }
-    if (this._creatingControlPanel) return null;
-    this._creatingControlPanel = true;
-    try {
-
-    this.controlPanelWindow = new BrowserWindow({
-      width: 800,
-      height: 600,
-      show: false,
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true,
-        sandbox: true,
-        preload: path.join(__dirname, "..", "..", "preload.js"),
-      },
-    });
-
-    const isDev = process.env.NODE_ENV === "development";
-
-    if (isDev) {
-      await this.controlPanelWindow.loadURL(
-        "http://localhost:5173?panel=control",
-      );
-    } else {
-      await this.controlPanelWindow.loadFile(
-        path.join(__dirname, "..", "dist", "index.html"),
-        { query: { panel: "control" } },
-      );
-    }
-
-    this.controlPanelWindow.on("closed", () => {
-      this.controlPanelWindow = null;
-    });
-
-    return this.controlPanelWindow;
-    } finally {
-      this._creatingControlPanel = false;
     }
   }
 
@@ -146,7 +108,7 @@ class WindowManager {
         nodeIntegration: false,
         contextIsolation: true,
         sandbox: true,
-        preload: path.join(__dirname, "..", "..", "preload.js"),
+        preload: path.join(__dirname, "..", "..", "dist-preload", "preload.js"),
       },
     });
 
@@ -183,7 +145,7 @@ class WindowManager {
         nodeIntegration: false,
         contextIsolation: true,
         sandbox: true,
-        preload: path.join(__dirname, "..", "..", "preload.js"),
+        preload: path.join(__dirname, "..", "..", "dist-preload", "preload.js"),
       },
     });
 
@@ -202,23 +164,6 @@ class WindowManager {
     });
 
     return this.settingsWindow;
-  }
-
-  showControlPanel() {
-    if (this.controlPanelWindow) {
-      this.controlPanelWindow.show();
-      this.controlPanelWindow.focus();
-    } else {
-      this.createControlPanelWindow().then(() => {
-        this.controlPanelWindow.show();
-      });
-    }
-  }
-
-  hideControlPanel() {
-    if (this.controlPanelWindow) {
-      this.controlPanelWindow.hide();
-    }
   }
 
   showHistoryWindow() {
@@ -276,9 +221,6 @@ class WindowManager {
   closeAllWindows() {
     if (this.mainWindow) {
       this.mainWindow.close();
-    }
-    if (this.controlPanelWindow) {
-      this.controlPanelWindow.close();
     }
     if (this.historyWindow) {
       this.historyWindow.close();

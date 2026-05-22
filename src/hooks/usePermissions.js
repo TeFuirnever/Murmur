@@ -34,6 +34,18 @@ export const usePermissions = (showAlertDialog) => {
   }, [showAlertDialog]);
 
   const testAccessibilityPermission = useCallback(async () => {
+    if (!window.electronAPI?.pasteText) {
+      setAccessibilityPermissionGranted(false);
+      if (showAlertDialog) {
+        showAlertDialog({
+          title: "❌ Electron API 不可用",
+          description: "preload 脚本加载失败，请重启应用。",
+        });
+      } else {
+        alert("❌ Electron API 不可用，请重启应用。");
+      }
+      return;
+    }
     try {
       await window.electronAPI.pasteText("Murmur辅助功能测试");
       setAccessibilityPermissionGranted(true);

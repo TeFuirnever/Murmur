@@ -1,11 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 
-// 检查是否为控制面板或设置页面
-const isControlPanelOrSettings = () => {
+// 检查是否为设置页面
+const isSettingsPage = () => {
   const urlParams = new URLSearchParams(window.location.search);
-  return (
-    urlParams.get("panel") === "control" || urlParams.get("page") === "settings"
-  );
+  return urlParams.get("page") === "settings";
 };
 
 /**
@@ -230,8 +228,8 @@ export const useModelStatus = () => {
 
   // 初始化时检查状态
   useEffect(() => {
-    if (isControlPanelOrSettings()) {
-      console.log("控制面板或设置页面，跳过模型状态检查");
+    if (isSettingsPage()) {
+      console.log("设置页面，跳过模型状态检查");
       return;
     }
 
@@ -241,7 +239,7 @@ export const useModelStatus = () => {
   // 设置定期检查（仅在主窗口且模型未就绪时）
   useEffect(() => {
     if (
-      isControlPanelOrSettings() ||
+      isSettingsPage() ||
       modelStatus.isReady ||
       modelStatus.isDownloading
     ) {

@@ -43,6 +43,9 @@ export const useTextProcessing = () => {
 
       if (useAI) {
         try {
+          if (!window.electronAPI?.processText) {
+            throw new Error("Electron API 不可用，请重启应用");
+          }
           const actualMode = determineProcessingMode(raw_text, "auto");
           if (window.electronAPI && window.electronAPI.log) {
             window.electronAPI.log("info", "开始AI文本优化:", {

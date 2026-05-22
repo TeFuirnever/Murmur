@@ -117,10 +117,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // 应用信息
   getAppVersion: () => ipcRenderer.invoke(C.SYSTEM.VERSION),
   checkForUpdates: () => ipcRenderer.invoke(C.SYSTEM.UPDATES),
+  openExternal: (url) => ipcRenderer.invoke(C.SYSTEM.OPEN_EXTERNAL, url),
 
   // 调试和日志
   log: (level, message) => ipcRenderer.invoke(C.SYSTEM.LOG, level, message),
-  getDebugInfo: () => ipcRenderer.invoke(C.SYSTEM.DEBUG),
 
   // 事件监听
   onTranscriptionUpdate: (callback) => {
@@ -142,10 +142,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return () =>
       ipcRenderer.removeListener(C.EVENTS.SETTINGS_UPDATE, callback);
   },
-
-  // 控制面板相关
-  openControlPanel: () => ipcRenderer.invoke(C.WINDOW.OPEN_CONTROL),
-  closeControlPanel: () => ipcRenderer.invoke(C.WINDOW.CLOSE_CONTROL),
 
   // 历史记录窗口相关
   openHistoryWindow: () => ipcRenderer.invoke(C.WINDOW.OPEN_HISTORY),
@@ -181,13 +177,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   cancelFileTranscription: () =>
     ipcRenderer.invoke(C.TRANSCRIPTION.CANCEL),
   onFileTranscriptionProgress: (callback) => {
-    ipcRenderer.on(C.EVENTS.FILE_TRANSCRIPTION_PROGRESS, (event, data) =>
-      callback(data),
-    );
+    const handler = (event, data) => callback(data);
+    ipcRenderer.on(C.EVENTS.FILE_TRANSCRIPTION_PROGRESS, handler);
     return () =>
       ipcRenderer.removeListener(
         C.EVENTS.FILE_TRANSCRIPTION_PROGRESS,
-        callback,
+        handler,
       );
   },
 
