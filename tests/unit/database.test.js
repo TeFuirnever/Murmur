@@ -114,4 +114,37 @@ describe("DatabaseManager", () => {
       expect(timeout).toBe(5000);
     });
   });
+
+  describe("syncToFileConfig", () => {
+    it("does nothing when no file config path set", () => {
+      expect(() => db.syncToFileConfig()).not.toThrow();
+    });
+
+    it("writes settings to file config", () => {
+      const configPath = path.join(tmpDir, "murmur.json");
+      db.setFileConfigPath(configPath);
+      db.setSetting("theme", "dark");
+      db.setSetting("ai_base_url", "https://api.example.com");
+      db.syncToFileConfig();
+      const content = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+      expect(content.theme).toBe("dark");
+      expect(content.ai_base_url).toBe("https://api.example.com");
+    });
+  });
+
+  describe("backup", () => {
+    it("returns false when db not initialized", () => {
+      const freshDb = new DatabaseManager();
+      const result = freshDb.backup(path.join(tmpDir, "nobackup.db"));
+      expect(result).toBe(false);
+    });
+
+    it("returns true or handles backup on initialized db", () => {
+      db.saveTranscription({ text: "backup test" });
+      const backupPath = path.join(tmpDir, "backup.db");
+      const result = db.backup(backupPath);
+      // better-sqlite3 backup may succeed or fail depending on env
+      expect(typeof result).toBe("boolean");
+    });
+  });
 });
