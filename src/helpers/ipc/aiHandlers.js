@@ -47,7 +47,12 @@ async function processTextWithAI(text, mode, databaseManager, logger) {
     const baseUrl =
       (await databaseManager.getSetting("ai_base_url")) ||
       "https://api.openai.com/v1";
-    const isLocal = isLocalhost(new URL(baseUrl).hostname);
+    let isLocal = false;
+    try {
+      isLocal = isLocalhost(new URL(baseUrl).hostname);
+    } catch {
+      isLocal = false;
+    }
 
     if (!apiKey && !isLocal) {
       return {
@@ -182,7 +187,14 @@ async function checkAIStatus(testConfig, databaseManager, logger) {
       logger.info("使用已保存配置:", { baseUrl, model });
     }
 
-    if (!apiKey) {
+    let isLocal = false;
+    try {
+      isLocal = isLocalhost(new URL(baseUrl).hostname);
+    } catch {
+      isLocal = false;
+    }
+
+    if (!apiKey && !isLocal) {
       logger.warn("AI测试失败: 未配置API密钥");
       return {
         available: false,
@@ -191,7 +203,7 @@ async function checkAIStatus(testConfig, databaseManager, logger) {
       };
     }
 
-    if (!validateAIBaseUrl(baseUrl)) {
+    if (!validateAIBaseUrl(baseUrl, { allowLocalhost: isLocal })) {
       return {
         available: false,
         error: "请填写有效的 https API 地址（不支持 http 或内网地址）",
@@ -212,12 +224,14 @@ async function checkAIStatus(testConfig, databaseManager, logger) {
 
     logger.info("发送AI测试请求:", requestData);
 
+    const headers = { "Content-Type": "application/json" };
+    if (apiKey) {
+      headers.Authorization = `Bearer ${apiKey}`;
+    }
+
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
+      headers,
       body: JSON.stringify(requestData),
     });
 

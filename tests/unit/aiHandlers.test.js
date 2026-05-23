@@ -67,8 +67,6 @@ describe("aiHandlers", () => {
     it.each([
       ["http://api.openai.com/v1", "http rejected"],
       ["https://192.168.1.1/v1", "RFC1918 rejected"],
-      ["https://localhost/v1", "localhost rejected"],
-      ["https://127.0.0.1/v1", "loopback rejected"],
       ["not a url", "garbage rejected"],
     ])("rejects unsafe base URL %s (%s)", async (baseUrl) => {
       const db = {

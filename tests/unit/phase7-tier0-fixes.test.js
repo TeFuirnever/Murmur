@@ -173,4 +173,34 @@ describe("Tier 0 fixes", () => {
       expect(result.error).toContain("API密钥");
     });
   });
+
+  describe("T1-1: checkAIStatus supports local models without API key", () => {
+    let checkAIStatus;
+
+    beforeEach(() => {
+      const aiPath = requireCJS.resolve(
+        "../../src/helpers/ipc/aiHandlers.js",
+      );
+      delete requireCJS.cache[aiPath];
+      const aiHandlers = requireCJS("../../src/helpers/ipc/aiHandlers.js");
+      checkAIStatus = aiHandlers.checkAIStatus;
+    });
+
+    it("does not reject localhost URL in checkAIStatus", async () => {
+      const db = {
+        getSetting: vi.fn(async (key) => {
+          if (key === "ai_api_key") return null;
+          if (key === "ai_base_url") return "http://localhost:11434/v1";
+          if (key === "ai_model") return "qwen2.5";
+          return null;
+        }),
+      };
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+
+      const result = await checkAIStatus(null, db, logger);
+      // Should NOT fail with the "https" or "API密钥" error
+      expect(result.error).not.toContain("https");
+      expect(result.error).not.toContain("API密钥");
+    });
+  });
 });
