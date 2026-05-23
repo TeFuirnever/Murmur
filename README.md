@@ -123,6 +123,9 @@ pnpm electron-builder --win
 pnpm dev          # 启动开发模式
 pnpm test         # 运行测试
 pnpm lint         # 代码检查
+pnpm format:check # 检查代码格式
+pnpm ci:check     # 本地运行所有 CI 门禁
+pnpm ci:fix       # 自动修复 CI 问题
 pnpm run build    # 构建生产版本
 ```
 
@@ -178,8 +181,10 @@ pnpm run build    # 构建生产版本
 │   │   ├── tray.js            # 系统托盘
 │   │   ├── environment.js     # 环境检测
 │   │   └── logManager.js      # 日志管理
+│   ├── i18n/                  # 国际化（i18next，zh-CN/en）
+│   ├── bootstrap/             # Electron API 初始化
 │   └── utils/                 # 工具函数
-├── tests/                     # Vitest 测试（145 tests）
+├── tests/                     # Vitest 测试（320 tests）
 ├── scripts/                   # 构建脚本
 └── assets/                    # 图标和资源
 ```
@@ -202,7 +207,7 @@ pnpm run build    # 构建生产版本
 - [x] 健康监控和自动恢复
 - [ ] 实时流式转录（200ms 延迟）
 - [ ] 自定义 AI Prompt 模板
-- [ ] 多语言支持（中/英/日）
+- [x] 多语言支持（中/英，i18next）
 - [x] 自动更新检测（通知用户去 GitHub 下载）
 
 详见 [Projects](https://github.com/TeFuirnever/Murmur/projects) 查看完整规划。
@@ -320,6 +325,9 @@ pnpm electron-builder --win
 pnpm dev          # Start dev mode
 pnpm test         # Run tests
 pnpm lint         # Lint check
+pnpm format:check # Check code formatting
+pnpm ci:check     # Run all CI gates locally
+pnpm ci:fix       # Auto-fix CI issues
 pnpm run build    # Production build
 ```
 
@@ -373,8 +381,10 @@ pnpm run build    # Production build
 │   │   ├── tray.js            # System tray
 │   │   ├── environment.js     # Environment detection
 │   │   └── logManager.js      # Logging
+│   ├── i18n/                  # Internationalization (i18next, zh-CN/en)
+│   ├── bootstrap/             # Electron API bootstrap
 │   └── utils/                 # Utilities
-├── tests/                     # Vitest tests (145 tests)
+├── tests/                     # Vitest tests (320 tests)
 ├── scripts/                   # Build scripts
 └── assets/                    # Icons and resources
 ```
@@ -397,7 +407,7 @@ We welcome all contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for:
 - [x] Health monitor with auto-restart
 - [ ] Real-time streaming transcription (200ms latency)
 - [ ] Custom AI Prompt templates
-- [ ] Multi-language support (Chinese/English/Japanese)
+- [x] Multi-language support (Chinese/English, i18next)
 - [x] Auto-update detection (notifies user to download from GitHub)
 
 ## Acknowledgments

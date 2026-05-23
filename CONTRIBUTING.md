@@ -36,7 +36,14 @@ pnpm dev
 | `pnpm dev`                         | 启动开发模式（Electron + Vite HMR） |
 | `pnpm test`                        | 运行所有测试                        |
 | `pnpm test:watch`                  | 监听模式运行测试                    |
+| `pnpm test:coverage`               | 运行测试并生成覆盖率报告            |
+| `pnpm test:e2e`                    | 运行端到端测试（Playwright）        |
 | `pnpm lint`                        | ESLint 代码检查                     |
+| `pnpm format:check`                | 检查代码格式（Prettier）            |
+| `pnpm format`                      | 自动格式化代码                      |
+| `pnpm license:check`               | 检查依赖许可证（拦截 GPL/AGPL）     |
+| `pnpm ci:check`                    | 本地运行所有 CI 门禁                |
+| `pnpm ci:fix`                      | 自动修复 CI 问题                    |
 | `pnpm run build`                   | 构建生产版本                        |
 | `pnpm run prepare:python:embedded` | 准备嵌入式 Python 环境              |
 
@@ -70,7 +77,7 @@ fix: 修复录音中断后未保存的问题
 docs: 更新 API 文档
 test: 添加数据库 CRUD 测试
 refactor: 提取转录逻辑到独立 hook
-chore: 升级 Electron 到 v37
+chore: 升级 Electron 到 v36
 ```
 
 ### 代码风格
@@ -83,7 +90,9 @@ chore: 升级 Electron 到 v37
 
 - 测试框架：Vitest
 - 位置：`tests/unit/`
+- 覆盖率阈值：statements 97%、branches 90%、functions 100%、lines 98%
 - 修改代码后运行 `pnpm test` 确保不引入回归
+- 提交前运行 `pnpm ci:check` 确保所有门禁通过
 
 ## PR 流程
 
@@ -97,10 +106,23 @@ chore: 升级 Electron 到 v37
 
 ### PR 检查清单
 
-- [ ] `pnpm lint` 通过（0 errors）
-- [ ] `pnpm test` 通过
+- [ ] `pnpm ci:check` 通过（包含 lint、format、license、test+coverage、build）
 - [ ] 新功能有对应测试
 - [ ] 提交信息符合 conventional commits
+
+### CI Gates
+
+每次 PR 自动运行以下检查：
+
+1. **Format check** — `pnpm format:check`（Prettier）
+2. **Lint** — `pnpm lint`（ESLint，0 warnings）
+3. **Security audit** — `pnpm audit --audit-level moderate`（非阻塞）
+4. **License compliance** — `pnpm license:check`（拦截 GPL/AGPL）
+5. **Dependency review** — PR 中自动审查新增依赖
+6. **Test + coverage** — `pnpm test -- --coverage`（覆盖率阈值：97%/90%/100%/98%）
+7. **Build preload** — `pnpm run build:preload`
+8. **Build renderer** — `pnpm run build:renderer`
+9. **E2E tests** — `pnpm test:e2e`（非阻塞）
 
 ## 架构概览
 
@@ -176,6 +198,8 @@ FunASR 以 Python 子进程方式运行，生命周期由 `FunASRManager`（`src
 | HotkeyManager       | `src/helpers/hotkeyManager.js`       | 全局热键注册、F2 双击检测                                                                               |
 | PythonInstaller     | `src/helpers/pythonInstaller.js`     | 嵌入式 Python 环境准备                                                                                  |
 | ServerMessageRouter | `src/helpers/serverMessageRouter.js` | UUID 请求-响应匹配路由                                                                                  |
+| ExportFormatters    | `src/helpers/exportFormatters.js`    | TXT/SRT/VTT/MD/DOCX 导出格式化                                                                          |
+| UpdateManager       | `src/helpers/updateManager.js`       | 半自动更新（SHA256 校验、进度 UI、系统通知）                                                            |
 
 ## 报告问题
 

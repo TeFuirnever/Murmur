@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- i18n internationalization: i18next integration with zh-CN/en translations and language selector in settings
+- Accessibility: ARIA labels, keyboard navigation, focus-visible styles, decorative aria-hidden
+- Semi-auto update with SHA256 verification, progress UI, and system notification
+- TypeScript infrastructure: tsconfig.json, jsconfig.json, electronAPI.d.ts for editor intellisense
+- E2E testing with Playwright: launch, settings, and IPC integration tests
+- CI gate enforcement: format check, coverage thresholds, license compliance, build verification
+- Local CI gate script (`scripts/ci-check.js`) with `--fix`, `--json`, `--quiet`, `--e2e` modes
+- CI gate AI skill (`.claude/skills/ci-gate.md`) for assisted failure diagnosis
+- Dependabot configuration for npm and GitHub Actions
+- Node version pinning via `.nvmrc`
+
 ### Changed
 
 - AI prompt engineering overhaul: system/user role separation + XML `<transcript>` tags (ChatGPT/Manus/Claude best practices)
@@ -32,6 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 
 - SSRF validation on AI base URL (block internal networks: localhost, 127.x, 10.x, 172.16-31.x, 192.168.x, 169.254.x)
+- Settings import whitelist validation and SQL parameter escaping
+- License compliance check blocking GPL/AGPL dependencies
 
 ## [1.0.0] - 2026-05-21
 
@@ -87,7 +102,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Tests
 
-- Vitest test suite expanded from 27 to 145 tests
+- Vitest test suite expanded from 27 to 320 tests
 - IPC contract validation tests
 - Handler unit tests for window, model, settings, AI domains
 - ESLint with 0 warnings, 0 errors

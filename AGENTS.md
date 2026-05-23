@@ -142,7 +142,7 @@ Five canonical triage roles: `needs-triage`, `needs-info`, `ready-for-agent`, `r
 
 ### Domain docs
 
-Single-context: one `CONTEXT.md` at root + `docs/adr/`. See `docs/agents/domain.md`.
+Domain context: see `docs/agents/domain.md`.
 
 ## GBrain Configuration (configured by /setup-gbrain)
 
