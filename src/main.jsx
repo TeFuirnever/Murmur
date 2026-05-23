@@ -4,6 +4,7 @@ import App from "./App.jsx";
 import "./index.css";
 import { Toaster } from "./components/ui/sonner";
 import { assertElectronAPI } from "./bootstrap/assertElectronAPI.js";
+import { ModelStatusProvider } from "./hooks/useModelStatus";
 
 // 检查是否在Electron环境中
 const isElectron = () => {
@@ -180,8 +181,10 @@ const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
   <React.StrictMode>
     <ErrorBoundary>
-      <App />
-      <Toaster />
+      <ModelStatusProvider>
+        <App />
+        <Toaster />
+      </ModelStatusProvider>
     </ErrorBoundary>
   </React.StrictMode>,
 );
@@ -195,7 +198,9 @@ if (process.env.NODE_ENV === "development") {
         root.render(
           <React.StrictMode>
             <ErrorBoundary>
-              <NextApp />
+              <ModelStatusProvider>
+                <NextApp />
+              </ModelStatusProvider>
             </ErrorBoundary>
           </React.StrictMode>,
         );

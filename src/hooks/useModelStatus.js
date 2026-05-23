@@ -1,16 +1,13 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, createContext, useContext } from "react";
 
-// 检查是否为设置页面
+const ModelStatusContext = createContext(null);
+
 const isSettingsPage = () => {
   const urlParams = new URLSearchParams(window.location.search);
   return urlParams.get("page") === "settings";
 };
 
-/**
- * 模型状态监控Hook
- * 监控FunASR模型的下载、加载状态
- */
-export const useModelStatus = () => {
+export function ModelStatusProvider({ children }) {
   const [modelStatus, setModelStatus] = useState({
     isLoading: true,
     isReady: false,
@@ -20,10 +17,9 @@ export const useModelStatus = () => {
     progress: 0,
     downloadProgress: 0,
     missingModels: [],
-    stage: "checking", // checking, downloading, loading, ready, error
+    stage: "checking",
   });
 
-  // 检查模型文件状态
   const checkModelFiles = useCallback(async () => {
     try {
       if (window.electronAPI) {
@@ -37,7 +33,6 @@ export const useModelStatus = () => {
     }
   }, []);
 
-  // 检查FunASR服务器状态
   const checkServerStatus = useCallback(async () => {
     try {
       if (window.electronAPI) {
@@ -51,7 +46,6 @@ export const useModelStatus = () => {
     }
   }, []);
 
-  // 综合检查模型状态
   const checkModelStatus = useCallback(async () => {
     try {
       if (!window.electronAPI) {
@@ -64,7 +58,6 @@ export const useModelStatus = () => {
         return;
       }
 
-      // 检查模型文件
       const modelFiles = await checkModelFiles();
       const serverStatus = await checkServerStatus();
 
@@ -82,7 +75,6 @@ export const useModelStatus = () => {
       const missingModels = modelFiles.missing_models || [];
 
       if (!modelsDownloaded) {
-        // 模型未下载
         setModelStatus((prev) => ({
           ...prev,
           isLoading: false,
@@ -94,7 +86,6 @@ export const useModelStatus = () => {
           stage: "need_download",
         }));
       } else if (serverStatus.success && serverStatus.models_initialized) {
-        // 模型已下载且服务器就绪
         setModelStatus((prev) => ({
           ...prev,
           isLoading: false,
@@ -106,7 +97,6 @@ export const useModelStatus = () => {
           stage: "ready",
         }));
       } else if (serverStatus.initializing) {
-        // 模型已下载，正在加载
         setModelStatus((prev) => ({
           ...prev,
           isLoading: true,
@@ -118,7 +108,6 @@ export const useModelStatus = () => {
           stage: "loading",
         }));
       } else {
-        // 模型已下载但服务器未就绪
         setModelStatus((prev) => ({
           ...prev,
           isLoading: false,
@@ -145,27 +134,24 @@ export const useModelStatus = () => {
     }
   }, [checkModelFiles, checkServerStatus]);
 
-  // 下载模型
   const downloadModels = useCallback(async () => {
     try {
       if (!window.electronAPI) {
         throw new Error("Electron API 不可用");
       }
 
-      // 设置下载状态，并阻止定时器干扰
       setModelStatus((prev) => ({
         ...prev,
         isDownloading: true,
         downloadProgress: 0,
         error: null,
         stage: "downloading",
-        isLoading: false, // 确保不显示加载状态
+        isLoading: false,
       }));
 
       const result = await window.electronAPI.downloadModels();
 
       if (result.success) {
-        // 下载成功，设置为加载状态
         setModelStatus((prev) => ({
           ...prev,
           isDownloading: false,
@@ -175,16 +161,14 @@ export const useModelStatus = () => {
           isLoading: true,
         }));
 
-        // 下载完成后重启FunASR服务器以加载模型
         try {
           console.log("模型下载完成，重启FunASR服务器...");
           await window.electronAPI.restartFunasrServer();
           console.log("FunASR服务器重启完成");
 
-          // 重启后等待一段时间再检查状态
           setTimeout(() => {
             checkModelStatus();
-          }, 3000); // 增加等待时间到3秒
+          }, 3000);
         } catch (restartError) {
           console.error("重启FunASR服务器失败:", restartError);
           setModelStatus((prev) => ({
@@ -212,7 +196,6 @@ export const useModelStatus = () => {
     }
   }, [checkModelStatus]);
 
-  // 获取下载进度
   const getDownloadProgress = useCallback(async () => {
     try {
       if (window.electronAPI) {
@@ -226,17 +209,14 @@ export const useModelStatus = () => {
     }
   }, []);
 
-  // 初始化时检查状态
   useEffect(() => {
     if (isSettingsPage()) {
       console.log("设置页面，跳过模型状态检查");
       return;
     }
-
     checkModelStatus();
   }, [checkModelStatus]);
 
-  // 设置定期检查（仅在主窗口且模型未就绪时）
   useEffect(() => {
     if (
       isSettingsPage() ||
@@ -250,12 +230,11 @@ export const useModelStatus = () => {
       if (!modelStatus.isReady && !modelStatus.isDownloading) {
         checkModelStatus();
       }
-    }, 3000); // 减少间隔，确保及时检测到状态变化
+    }, 3000);
 
     return () => clearInterval(interval);
   }, [modelStatus.isReady, modelStatus.isDownloading, checkModelStatus]);
 
-  // 监听下载进度事件
   useEffect(() => {
     if (window.electronAPI && window.electronAPI.onModelDownloadProgress) {
       const unsubscribe = window.electronAPI.onModelDownloadProgress(
@@ -268,12 +247,10 @@ export const useModelStatus = () => {
           }));
         },
       );
-
       return unsubscribe;
     }
   }, []);
 
-  // 监听模型初始化事件
   useEffect(() => {
     if (window.electronAPI && window.electronAPI.onProcessingUpdate) {
       const unsubscribe = window.electronAPI.onProcessingUpdate(
@@ -289,12 +266,10 @@ export const useModelStatus = () => {
           }
         },
       );
-
       return unsubscribe;
     }
   }, []);
 
-  // 监听设置变更事件：保存配置后立即重新检查模型状态
   useEffect(() => {
     if (isSettingsPage()) return;
     if (!window.electronAPI?.onSettingsUpdate) return;
@@ -304,11 +279,25 @@ export const useModelStatus = () => {
     return unsubscribe;
   }, [checkModelStatus]);
 
-  return {
+  const value = {
     ...modelStatus,
     checkModelStatus,
     downloadModels,
     getDownloadProgress,
     checkModelFiles,
   };
+
+  return (
+    <ModelStatusContext.Provider value={value}>
+      {children}
+    </ModelStatusContext.Provider>
+  );
+}
+
+export const useModelStatus = () => {
+  const context = useContext(ModelStatusContext);
+  if (!context) {
+    throw new Error("useModelStatus must be used within a ModelStatusProvider");
+  }
+  return context;
 };
