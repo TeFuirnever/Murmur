@@ -80,6 +80,18 @@ function register(ipcMain, managers) {
       return errorResult;
     }
   });
+
+  ipcMain.handle(C.FUNASR.GET_LOGS, (event, lines = 100) => {
+    try {
+      if (logger && logger.getFunASRLogs) {
+        return { success: true, logs: logger.getFunASRLogs(lines) };
+      }
+      return { success: false, error: "日志管理器不可用" };
+    } catch (error) {
+      logger.error("获取FunASR日志失败:", error);
+      return { success: false, error: error.message };
+    }
+  });
 }
 
 module.exports = { register };
