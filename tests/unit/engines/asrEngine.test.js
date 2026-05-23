@@ -111,6 +111,31 @@ describe("ASREngine interface", () => {
       registry.setActive("whisper");
       expect(registry.getActive()).toBe(engine2);
     });
+
+    it("setDefault returns false for non-existent engine", () => {
+      expect(registry.setDefault("nonexistent")).toBe(false);
+    });
+
+    it("setActive returns false for non-existent engine", () => {
+      expect(registry.setActive("nonexistent")).toBe(false);
+    });
+
+    it("getActive returns undefined when no engines registered", () => {
+      expect(registry.getActive()).toBeUndefined();
+    });
+
+    it("first registered engine becomes default and active", () => {
+      registry.register("first", mockEngine);
+      expect(registry.getDefault()).toBe("first");
+      expect(registry.getActive()).toBe(mockEngine);
+    });
+
+    it("second registered engine does not override default", () => {
+      const engine2 = { ...mockEngine };
+      registry.register("first", mockEngine);
+      registry.register("second", engine2);
+      expect(registry.getDefault()).toBe("first");
+    });
   });
 
   describe("FunASRManager satisfies ASREngine", () => {
