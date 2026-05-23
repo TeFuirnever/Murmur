@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from "react";
 import { useModelStatus } from "./useModelStatus";
 
-function determineProcessingMode(text) {
+export function determineProcessingMode(text) {
   const textLength = text.trim().length;
   const wordCount = text.trim().split(/\s+/).length;
   if (textLength > 150 || wordCount > 30) {
