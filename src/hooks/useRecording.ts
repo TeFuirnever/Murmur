@@ -202,7 +202,7 @@ export const useRecording = ({
                 true,
               )) as boolean;
 
-              let finalData: Record<string, unknown> = { ...transcriptionData };
+              const finalData: Record<string, unknown> = { ...transcriptionData };
 
               if (useAI) {
                 try {
