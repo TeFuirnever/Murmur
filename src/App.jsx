@@ -702,29 +702,32 @@ export default function App() {
             <Tooltip content="最小化" position="bottom">
               <button
                 onClick={handleMinimize}
+                aria-label="最小化"
                 className="p-2 hover:bg-[#e8e8ed] dark:hover:bg-[#3a3a3c] rounded-lg transition-colors"
               >
-                <Minus className="w-4 h-4 text-[#1d1d1f]/60 dark:text-[#f5f5f7]/60" />
+                <Minus className="w-4 h-4 text-[#1d1d1f]/60 dark:text-[#f5f5f7]/60" aria-hidden="true" />
               </button>
             </Tooltip>
             <Tooltip content={isMaximized ? "还原" : "最大化"} position="bottom">
               <button
                 onClick={handleMaximize}
+                aria-label={isMaximized ? "还原" : "最大化"}
                 className="p-2 hover:bg-[#e8e8ed] dark:hover:bg-[#3a3a3c] rounded-lg transition-colors"
               >
                 {isMaximized ? (
-                  <Square className="w-3.5 h-3.5 text-[#1d1d1f]/60 dark:text-[#f5f5f7]/60" strokeWidth={2.5} />
+                  <Square className="w-3.5 h-3.5 text-[#1d1d1f]/60 dark:text-[#f5f5f7]/60" strokeWidth={2.5} aria-hidden="true" />
                 ) : (
-                  <Maximize2 className="w-4 h-4 text-[#1d1d1f]/60 dark:text-[#f5f5f7]/60" />
+                  <Maximize2 className="w-4 h-4 text-[#1d1d1f]/60 dark:text-[#f5f5f7]/60" aria-hidden="true" />
                 )}
               </button>
             </Tooltip>
             <Tooltip content="关闭" position="bottom">
               <button
                 onClick={handleClose}
+                aria-label="关闭"
                 className="p-2 hover:bg-[#ff5f57] rounded-lg transition-colors group"
               >
-                <X className="w-4 h-4 text-[#1d1d1f]/60 dark:text-[#f5f5f7]/60 group-hover:text-white" />
+                <X className="w-4 h-4 text-[#1d1d1f]/60 dark:text-[#f5f5f7]/60 group-hover:text-white" aria-hidden="true" />
               </button>
             </Tooltip>
             <div className="w-px h-5 bg-[#d2d2d7] dark:bg-[#48484a] mx-1" />
@@ -756,6 +759,8 @@ export default function App() {
                   setAppMode("recording");
                 }
               }}
+              aria-label="实时录音模式"
+              role="button"
               className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
                 appMode === "recording"
                   ? "bg-white dark:bg-[#3a3a3c] text-gray-900 dark:text-gray-100 shadow-sm"
@@ -792,12 +797,20 @@ export default function App() {
                       toggleRecording();
                     }
                   }}
+                  onKeyDown={(e) => {
+                    if ((e.key === "Enter" || e.key === " ") && !micProps.disabled) {
+                      e.preventDefault();
+                      toggleRecording();
+                    }
+                  }}
                   onMouseEnter={() => {
                     if (!micProps.disabled) {
                       setIsHovered(true);
                     }
                   }}
                   onMouseLeave={() => setIsHovered(false)}
+                  aria-label={isRecording ? "停止录音" : "开始录音"}
+                  tabIndex={0}
                   className={`${micProps.className} non-draggable shadow-lg`}
                   disabled={micProps.disabled}
                 >

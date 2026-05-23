@@ -352,9 +352,10 @@ const SettingsPage = () => {
           </div>
           <button
             onClick={handleClose}
+            aria-label="关闭设置"
             className="p-2 hover:bg-[#f5f5f7] dark:hover:bg-[#2c2c2e] rounded-lg transition-colors"
           >
-            <X className="w-5 h-5 text-[#86868b]" />
+            <X className="w-5 h-5 text-[#86868b]" aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -810,6 +811,7 @@ const SettingsPage = () => {
 
                 <button
                   onClick={saveSettings}
+                  aria-label="保存设置"
                   disabled={saving || (settings.enable_ai_optimization && !settings.ai_api_key)}
                   className="flex items-center space-x-2 px-4 py-1.5 text-sm bg-[#0071e3] hover:bg-[#0077ed] text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >

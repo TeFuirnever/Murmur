@@ -31,6 +31,7 @@ const PermissionCard = ({
         ) : (
           <button
             onClick={onRequest}
+            aria-label={buttonText}
             className="px-2 py-1 bg-[#0071e3] hover:bg-[#0077ed] text-white text-xs font-medium rounded transition-colors flex-shrink-0"
           >
             {buttonText}
