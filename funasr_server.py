@@ -85,6 +85,9 @@ class FunASRServer:
         # 外部传入的 damo 根目录（例如 /Volumes/APFS/AI/models/damo）
         self.damo_root = damo_root or os.environ.get("DAMO_ROOT")
 
+        self.device = os.environ.get("MURMUR_DEVICE") or self._detect_device()
+        logger.info(f"推理设备: {self.device}")
+
         signal.signal(signal.SIGTERM, self._signal_handler)
         signal.signal(signal.SIGINT, self._signal_handler)
         self._setup_runtime_environment()
@@ -99,6 +102,19 @@ class FunASRServer:
             logger.info("运行时环境变量设置完成")
         except Exception as e:
             logger.warning(f"环境设置失败: {str(e)}")
+
+    @staticmethod
+    def _detect_device():
+        """Auto-detect best available compute device: CUDA > MPS > CPU"""
+        try:
+            import torch
+            if torch.cuda.is_available():
+                return "cuda"
+            if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                return "mps"
+        except ImportError:
+            pass
+        return "cpu"
 
     ALLOWED_EXTENSIONS = {'.wav', '.mp3', '.m4a', '.flac', '.ogg', '.wma', '.aac'}
 
@@ -167,7 +183,7 @@ class FunASRServer:
                     model="damo/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
                     model_revision="v2.0.4",
                     disable_update=True,
-                    device="cpu",
+                    device=self.device,
                 )
             logger.info("ASR模型加载完成")
             return True
@@ -186,7 +202,7 @@ class FunASRServer:
                     model="damo/speech_fsmn_vad_zh-cn-16k-common-pytorch",
                     model_revision="v2.0.4",
                     disable_update=True,
-                    device="cpu",
+                    device=self.device,
                 )
             logger.info("VAD模型加载完成")
             return True
@@ -216,7 +232,7 @@ class FunASRServer:
                     model="damo/punc_ct-transformer_zh-cn-common-vocab272727-pytorch",
                     model_revision="v2.0.4",
                     disable_update=True,
-                    device="cpu",
+                    device=self.device,
                 )
             model_time = time.time() - model_start
             total_time = time.time() - start_time
