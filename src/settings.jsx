@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
 import { Toaster, toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { assertElectronAPI } from "./bootstrap/assertElectronAPI.js";
 import {
   Settings,
@@ -22,6 +23,7 @@ import { usePermissions } from "./hooks/usePermissions";
 import PermissionCard from "./components/ui/permission-card";
 
 const SettingsPage = () => {
+  const { t, i18n } = useTranslation();
   const [settings, setSettings] = useState({
     ai_api_key: "",
     ai_base_url: "https://api.openai.com/v1",
@@ -449,9 +451,8 @@ const SettingsPage = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <label className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
-                      外观
+                      {t("settings.appearance.theme")}
                     </label>
-                    <p className="text-xs text-[#86868b]">应用的颜色主题</p>
                   </div>
                   <select
                     value={settings.theme}
@@ -461,9 +462,30 @@ const SettingsPage = () => {
                     }}
                     className="text-sm px-3 py-1.5 border border-[#d2d2d7] dark:border-[#3a3a3c] rounded-lg bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7] focus:ring-2 focus:ring-[#0071e3] focus:border-transparent"
                   >
-                    <option value="system">跟随系统</option>
-                    <option value="light">浅色</option>
-                    <option value="dark">深色</option>
+                    <option value="system">{t("settings.appearance.system")}</option>
+                    <option value="light">{t("settings.appearance.light")}</option>
+                    <option value="dark">{t("settings.appearance.dark")}</option>
+                  </select>
+                </div>
+
+                {/* 语言设置 */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
+                      {t("settings.language.label")}
+                    </label>
+                  </div>
+                  <select
+                    value={i18n.language}
+                    onChange={(e) => {
+                      i18n.changeLanguage(e.target.value);
+                      localStorage.setItem("language", e.target.value);
+                      document.documentElement.lang = e.target.value;
+                    }}
+                    className="text-sm px-3 py-1.5 border border-[#d2d2d7] dark:border-[#3a3a3c] rounded-lg bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7] focus:ring-2 focus:ring-[#0071e3] focus:border-transparent"
+                  >
+                    <option value="zh-CN">{t("settings.language.zhCN")}</option>
+                    <option value="en">{t("settings.language.en")}</option>
                   </select>
                 </div>
               </div>
@@ -841,11 +863,11 @@ const SettingsPage = () => {
                     ) : (
                       <RefreshCw className="w-3 h-3" />
                     )}
-                    <span>{checkingUpdate ? "检查中..." : "检查更新"}</span>
+                    <span>{checkingUpdate ? t("settings.update.checking") : t("settings.update.check")}</span>
                   </button>
 
                   {updateInfo && !updateInfo.hasUpdate && !updateInfo.error && (
-                    <span className="text-xs text-[#86868b]">已是最新版本</span>
+                    <span className="text-xs text-[#86868b]">{t("settings.update.upToDate")}</span>
                   )}
 
                   {updateInfo?.error && (
@@ -859,7 +881,7 @@ const SettingsPage = () => {
                   <div className="mt-2 p-2 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs font-medium text-green-700 dark:text-green-400">
-                        v{updateInfo.latestVersion} 可用
+                        {t("settings.update.available", { version: `v${updateInfo.latestVersion}` })}
                       </span>
                       <span className="text-xs text-[#86868b]">
                         {updateInfo.downloadSize ? `${(updateInfo.downloadSize / 1048576).toFixed(1)} MB` : ""}
@@ -875,7 +897,7 @@ const SettingsPage = () => {
                       className="flex items-center space-x-1.5 px-3 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
                     >
                       <Download className="w-3 h-3" />
-                      <span>下载更新</span>
+                      <span>{t("settings.update.download")}</span>
                     </button>
                   </div>
                 )}
@@ -884,13 +906,13 @@ const SettingsPage = () => {
                   <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs text-blue-700 dark:text-blue-400">
-                        下载中... {downloadProgress.progress}%
+                        {t("settings.update.downloading", { progress: downloadProgress.progress })}
                       </span>
                       <button
                         onClick={() => window.electronAPI?.cancelUpdateDownload?.()}
                         className="text-xs text-[#86868b] hover:text-red-500"
                       >
-                        取消
+                        {t("settings.update.cancel")}
                       </button>
                     </div>
                     <div className="w-full bg-blue-200 dark:bg-blue-900 rounded-full h-1.5">
@@ -905,13 +927,13 @@ const SettingsPage = () => {
                 {downloadedUpdate && (
                   <div className="mt-2 p-2 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
                     <p className="text-xs text-green-700 dark:text-green-400 mb-2">
-                      v{downloadedUpdate.version} 下载完成 (SHA256 已验证)
+                      {t("settings.update.downloaded", { version: `v${downloadedUpdate.version}` })}
                     </p>
                     <button
                       onClick={() => window.electronAPI?.installUpdate?.(downloadedUpdate.filePath)}
                       className="flex items-center space-x-1.5 px-3 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
                     >
-                      <span>安装并重启</span>
+                      <span>{t("settings.update.install")}</span>
                     </button>
                   </div>
                 )}

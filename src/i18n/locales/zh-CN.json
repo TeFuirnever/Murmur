@@ -1,0 +1,134 @@
+{
+  "app": {
+    "title": "Murmur",
+    "subtitle": "基于FunASR和AI的中文语音转文字应用",
+    "features": {
+      "recognition": "高精度中文语音识别",
+      "ai": "AI智能文本优化",
+      "realtime": "实时语音处理",
+      "privacy": "隐私保护设计"
+    },
+    "currentVersion": "当前版本：v{{version}}",
+    "optimizing": "AI正在优化文本...",
+    "steps": {
+      "title": "使用步骤：",
+      "step1": "① 下载语音识别模型（必需，约1GB）",
+      "step2": "② 授权麦克风权限",
+      "step3": "③ 在设置中配置 AI API Key（可选）"
+    },
+    "startRecording": "开始录音",
+    "stopRecording": "停止录音"
+  },
+  "settings": {
+    "title": "设置",
+    "loading": "加载设置中...",
+    "loadFailed": "加载设置失败",
+    "saveSuccess": "设置保存成功",
+    "saveFailed": "保存设置失败",
+    "save": "保存设置",
+    "saving": "保存中...",
+    "reset": "重置",
+    "close": "关闭",
+    "about": "关于 Murmur",
+    "sections": {
+      "ai": "AI 配置",
+      "recognition": "语音识别",
+      "appearance": "外观",
+      "permissions": "权限管理",
+      "language": "语言"
+    },
+    "ai": {
+      "apiKey": "API 密钥",
+      "apiKeyPlaceholder": "请输入您的AI API Key",
+      "baseUrl": "API 地址",
+      "model": "AI 模型",
+      "modelPlaceholder": "输入自定义模型名称，如：qwen3-30b-a3b-instruct-2507",
+      "customModel": "自定义模型",
+      "enableOptimization": "启用AI文本优化",
+      "testConfig": "测试配置",
+      "testing": "测试中...",
+      "testSuccess": "AI配置测试成功",
+      "testSuccessToast": "AI配置测试成功！",
+      "testFailed": "AI配置测试失败",
+      "testFailedToast": "测试失败",
+      "unknownError": "未知错误",
+      "missingKey": "请先输入API密钥",
+      "emptyKey": "API密钥不能为空",
+      "incomplete": "配置不完整",
+      "providers": {
+        "tongyi": "阿里云通义",
+        "zhipu": "智谱 GLM"
+      }
+    },
+    "recognition": {
+      "autoPaste": "语音识别完成后的操作方式",
+      "pasteOption": "自动粘贴到当前应用",
+      "clipboardOption": "仅复制到剪贴板",
+      "closeBehavior": "点击关闭按钮后的行为",
+      "hideBehavior": "隐藏到菜单栏",
+      "quitBehavior": "退出应用",
+      "alwaysOnTop": "将应用窗口保持在最前面"
+    },
+    "appearance": {
+      "theme": "应用的颜色主题",
+      "system": "跟随系统",
+      "light": "浅色",
+      "dark": "深色"
+    },
+    "permissions": {
+      "microphone": "麦克风权限",
+      "microphoneDesc": "录制语音所需的权限",
+      "testMicrophone": "测试麦克风",
+      "accessibility": "辅助功能权限",
+      "accessibilityDesc": "自动粘贴文本所需的权限",
+      "testAccessibility": "测试权限",
+      "granted": "已授权",
+      "denied": "未授权",
+      "testSuccess": "权限测试成功",
+      "testFailed": "权限测试失败"
+    },
+    "language": {
+      "label": "语言设置",
+      "zhCN": "中文",
+      "en": "English"
+    },
+    "update": {
+      "check": "检查更新",
+      "checking": "检查中...",
+      "upToDate": "已是最新版本",
+      "available": "{{version}} 可用",
+      "download": "下载更新",
+      "downloading": "下载中... {{progress}}%",
+      "cancel": "取消",
+      "downloaded": "{{version}} 下载完成 (SHA256 已验证)",
+      "install": "安装并重启",
+      "checkFailed": "检查更新失败",
+      "downloadSize": "{{size}} MB"
+    }
+  },
+  "history": {
+    "title": "历史记录",
+    "empty": "暂无转录记录",
+    "search": "搜索转录记录...",
+    "delete": "删除",
+    "copy": "复制",
+    "export": "导出",
+    "clear": "清空所有",
+    "clearConfirm": "确定清空所有转录记录吗？",
+    "exportSuccess": "导出成功",
+    "exportFailed": "导出失败"
+  },
+  "recording": {
+    "recording": "录音中",
+    "paused": "已暂停",
+    "ready": "准备就绪"
+  },
+  "common": {
+    "confirm": "确认",
+    "cancel": "取消",
+    "ok": "确定",
+    "error": "错误",
+    "success": "成功",
+    "unknown": "未知"
+  }
+}

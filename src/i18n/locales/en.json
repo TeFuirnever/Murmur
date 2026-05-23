@@ -1,0 +1,134 @@
+{
+  "app": {
+    "title": "Murmur",
+    "subtitle": "Chinese voice-to-text app powered by FunASR and AI",
+    "features": {
+      "recognition": "High-accuracy Chinese speech recognition",
+      "ai": "AI-powered text optimization",
+      "realtime": "Real-time voice processing",
+      "privacy": "Privacy-first design"
+    },
+    "currentVersion": "Current version: v{{version}}",
+    "optimizing": "AI is optimizing text...",
+    "steps": {
+      "title": "Getting started:",
+      "step1": "① Download the speech recognition model (required, ~1GB)",
+      "step2": "② Grant microphone permission",
+      "step3": "③ Configure AI API Key in settings (optional)"
+    },
+    "startRecording": "Start Recording",
+    "stopRecording": "Stop Recording"
+  },
+  "settings": {
+    "title": "Settings",
+    "loading": "Loading settings...",
+    "loadFailed": "Failed to load settings",
+    "saveSuccess": "Settings saved successfully",
+    "saveFailed": "Failed to save settings",
+    "save": "Save Settings",
+    "saving": "Saving...",
+    "reset": "Reset",
+    "close": "Close",
+    "about": "About Murmur",
+    "sections": {
+      "ai": "AI Configuration",
+      "recognition": "Speech Recognition",
+      "appearance": "Appearance",
+      "permissions": "Permissions",
+      "language": "Language"
+    },
+    "ai": {
+      "apiKey": "API Key",
+      "apiKeyPlaceholder": "Enter your AI API Key",
+      "baseUrl": "API Endpoint",
+      "model": "AI Model",
+      "modelPlaceholder": "Enter custom model name, e.g.: qwen3-30b-a3b-instruct-2507",
+      "customModel": "Custom Model",
+      "enableOptimization": "Enable AI text optimization",
+      "testConfig": "Test Configuration",
+      "testing": "Testing...",
+      "testSuccess": "AI configuration test passed",
+      "testSuccessToast": "AI configuration test passed!",
+      "testFailed": "AI configuration test failed",
+      "testFailedToast": "Test failed",
+      "unknownError": "Unknown error",
+      "missingKey": "Please enter your API key first",
+      "emptyKey": "API key cannot be empty",
+      "incomplete": "Configuration incomplete",
+      "providers": {
+        "tongyi": "Alibaba Tongyi",
+        "zhipu": "Zhipu GLM"
+      }
+    },
+    "recognition": {
+      "autoPaste": "Action after speech recognition",
+      "pasteOption": "Auto-paste to active app",
+      "clipboardOption": "Copy to clipboard only",
+      "closeBehavior": "Close button behavior",
+      "hideBehavior": "Hide to menu bar",
+      "quitBehavior": "Quit application",
+      "alwaysOnTop": "Keep window always on top"
+    },
+    "appearance": {
+      "theme": "Color theme",
+      "system": "Follow system",
+      "light": "Light",
+      "dark": "Dark"
+    },
+    "permissions": {
+      "microphone": "Microphone Permission",
+      "microphoneDesc": "Required for voice recording",
+      "testMicrophone": "Test Microphone",
+      "accessibility": "Accessibility Permission",
+      "accessibilityDesc": "Required for auto-paste",
+      "testAccessibility": "Test Permission",
+      "granted": "Granted",
+      "denied": "Not Granted",
+      "testSuccess": "Permission test passed",
+      "testFailed": "Permission test failed"
+    },
+    "language": {
+      "label": "Language",
+      "zhCN": "中文",
+      "en": "English"
+    },
+    "update": {
+      "check": "Check for Updates",
+      "checking": "Checking...",
+      "upToDate": "You're up to date",
+      "available": "{{version}} available",
+      "download": "Download Update",
+      "downloading": "Downloading... {{progress}}%",
+      "cancel": "Cancel",
+      "downloaded": "{{version}} download complete (SHA256 verified)",
+      "install": "Install & Restart",
+      "checkFailed": "Failed to check for updates",
+      "downloadSize": "{{size}} MB"
+    }
+  },
+  "history": {
+    "title": "History",
+    "empty": "No transcriptions yet",
+    "search": "Search transcriptions...",
+    "delete": "Delete",
+    "copy": "Copy",
+    "export": "Export",
+    "clear": "Clear All",
+    "clearConfirm": "Are you sure you want to clear all transcriptions?",
+    "exportSuccess": "Export successful",
+    "exportFailed": "Export failed"
+  },
+  "recording": {
+    "recording": "Recording",
+    "paused": "Paused",
+    "ready": "Ready"
+  },
+  "common": {
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "ok": "OK",
+    "error": "Error",
+    "success": "Success",
+    "unknown": "Unknown"
+  }
+}
