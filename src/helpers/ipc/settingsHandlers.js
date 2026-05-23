@@ -2,12 +2,33 @@ const fs = require("fs");
 const { dialog } = require("electron");
 const C = require("../ipc-contracts");
 
+const ALLOWED_SETTING_KEYS = new Set([
+  "ai_api_key",
+  "ai_base_url",
+  "ai_model",
+  "enable_ai_optimization",
+  "window_always_on_top",
+  "auto_paste",
+  "close_behavior",
+  "theme",
+  "model_download_path",
+]);
+
+const MAX_VALUE_LENGTH = 10000;
+
 function maskApiKey(settings) {
   if (settings.ai_api_key && typeof settings.ai_api_key === "string") {
     const key = settings.ai_api_key;
     settings.ai_api_key = key.length > 4 ? `****${key.slice(-4)}` : "****";
   }
   return settings;
+}
+
+function validateSetting(key, value) {
+  if (typeof key !== "string" || key.length > 100) return false;
+  if (!ALLOWED_SETTING_KEYS.has(key)) return false;
+  if (typeof value === "string" && value.length > MAX_VALUE_LENGTH) return false;
+  return true;
 }
 
 function register(ipcMain, managers) {
@@ -25,6 +46,9 @@ function register(ipcMain, managers) {
   });
 
   ipcMain.handle(C.SETTINGS.SET, (event, key, value) => {
+    if (!validateSetting(key, value)) {
+      return { success: false, error: "Invalid setting key or value" };
+    }
     const result = databaseManager.setSetting(key, value);
     broadcastSettingsUpdate(key);
     return result;
@@ -39,6 +63,9 @@ function register(ipcMain, managers) {
   });
 
   ipcMain.handle(C.SETTINGS.SAVE, (event, key, value) => {
+    if (!validateSetting(key, value)) {
+      return { success: false, error: "Invalid setting key or value" };
+    }
     const result = databaseManager.setSetting(key, value);
     broadcastSettingsUpdate(key);
     return result;
@@ -65,12 +92,15 @@ function register(ipcMain, managers) {
       const content = fs.readFileSync(result.filePaths[0], "utf-8");
       const settings = JSON.parse(content);
 
+      let imported = 0;
       for (const [key, value] of Object.entries(settings)) {
+        if (!validateSetting(key, value)) continue;
         databaseManager.setSetting(key, value);
+        imported++;
       }
       broadcastSettingsUpdate(null);
 
-      return { success: true, count: Object.keys(settings).length };
+      return { success: true, count: imported };
     } catch (error) {
       logger.error("导入设置失败:", error);
       return { success: false, error: error.message };
@@ -101,4 +131,4 @@ function register(ipcMain, managers) {
   });
 }
 
-module.exports = { register };
+module.exports = { register, validateSetting };

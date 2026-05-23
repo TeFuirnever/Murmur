@@ -232,12 +232,13 @@ class DatabaseManager {
 
   searchTranscriptions(query, limit = 50) {
     const stmt = this.db.prepare(`
-      SELECT * FROM transcriptions 
-      WHERE text LIKE ? OR raw_text LIKE ? OR processed_text LIKE ?
-      ORDER BY created_at DESC 
+      SELECT * FROM transcriptions
+      WHERE text LIKE ? ESCAPE '\\' OR raw_text LIKE ? ESCAPE '\\' OR processed_text LIKE ? ESCAPE '\\'
+      ORDER BY created_at DESC
       LIMIT ?
     `);
-    const searchTerm = `%${query}%`;
+    const escaped = query.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+    const searchTerm = `%${escaped}%`;
     return stmt.all(searchTerm, searchTerm, searchTerm, limit);
   }
 

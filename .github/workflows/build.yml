@@ -44,7 +44,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 22
 
       - uses: actions/setup-python@v5
         with:
@@ -84,7 +84,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 22
 
       - uses: actions/setup-python@v5
         with:
@@ -103,7 +103,7 @@ jobs:
         run: pnpm run build:renderer
 
       - name: Build Windows EXE
-        run: pnpm electron-builder --win
+        run: CSC_IDENTITY_AUTO_DISCOVERY=false pnpm electron-builder --win
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

@@ -181,11 +181,11 @@ describe("SETTINGS_UPDATE broadcast regression", () => {
     const { managers, sendSpy } = createManagers();
 
     register(ipcMain, managers);
-    await ipcMain._handlers[C.SETTINGS.SAVE]({}, "test-key", "test-value");
+    await ipcMain._handlers[C.SETTINGS.SAVE]({}, "theme", "dark");
 
     expect(sendSpy).toHaveBeenCalledWith(
       C.EVENTS.SETTINGS_UPDATE,
-      expect.objectContaining({ key: "test-key" })
+      expect.objectContaining({ key: "theme" })
     );
   });
 
@@ -195,11 +195,11 @@ describe("SETTINGS_UPDATE broadcast regression", () => {
     const { managers, sendSpy } = createManagers();
 
     register(ipcMain, managers);
-    await ipcMain._handlers[C.SETTINGS.SET]({}, "test-key", "test-value");
+    await ipcMain._handlers[C.SETTINGS.SET]({}, "theme", "dark");
 
     expect(sendSpy).toHaveBeenCalledWith(
       C.EVENTS.SETTINGS_UPDATE,
-      expect.objectContaining({ key: "test-key" })
+      expect.objectContaining({ key: "theme" })
     );
   });
 

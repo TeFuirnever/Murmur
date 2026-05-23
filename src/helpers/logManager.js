@@ -56,7 +56,9 @@ class LogManager {
     // 写入日志文件
     try {
       const logLine = JSON.stringify(logEntry) + "\n";
-      fs.appendFileSync(this.logFile, logLine);
+      fs.appendFile(this.logFile, logLine, (err) => {
+        if (err) console.error("写入日志文件失败:", err);
+      });
     } catch (error) {
       console.error("写入日志文件失败:", error);
     }
@@ -94,7 +96,9 @@ class LogManager {
 
     try {
       const logLine = JSON.stringify(logEntry) + "\n";
-      fs.appendFileSync(this.funasrLogFile, logLine);
+      fs.appendFile(this.funasrLogFile, logLine, (err) => {
+        if (err) console.error("写入FunASR日志文件失败:", err);
+      });
     } catch (error) {
       console.error("写入FunASR日志文件失败:", error);
     }

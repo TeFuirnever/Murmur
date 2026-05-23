@@ -54,8 +54,8 @@ describe("settingsHandlers", () => {
   });
 
   it("set-setting delegates to databaseManager", () => {
-    ipcMain._handlers["set-setting"]({}, "test-key", "test-value");
-    expect(managers.databaseManager.setSetting).toHaveBeenCalledWith("test-key", "test-value");
+    ipcMain._handlers["set-setting"]({}, "theme", "dark");
+    expect(managers.databaseManager.setSetting).toHaveBeenCalledWith("theme", "dark");
   });
 
   it("get-all-settings masks API key", () => {
@@ -70,8 +70,8 @@ describe("settingsHandlers", () => {
   });
 
   it("save-setting delegates to databaseManager.setSetting", () => {
-    ipcMain._handlers["save-setting"]({}, "key", "value");
-    expect(managers.databaseManager.setSetting).toHaveBeenCalledWith("key", "value");
+    ipcMain._handlers["save-setting"]({}, "auto_paste", "clipboard_only");
+    expect(managers.databaseManager.setSetting).toHaveBeenCalledWith("auto_paste", "clipboard_only");
   });
 
   it("reset-settings delegates to databaseManager", () => {
