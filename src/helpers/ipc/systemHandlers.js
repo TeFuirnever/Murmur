@@ -1,4 +1,5 @@
 const { app, shell, BrowserWindow, net } = require("electron");
+const path = require("path");
 const C = require("../ipc-contracts");
 
 function semverGt(a, b) {
@@ -17,11 +18,12 @@ function register(ipcMain, managers) {
   ipcMain.handle(C.SYSTEM.SHOW_ITEM, (event, fullPath) => {
     if (!fullPath || typeof fullPath !== "string") return;
     const userDataPath = app.getPath("userData");
-    if (!fullPath.startsWith(userDataPath)) {
+    const resolved = path.resolve(fullPath);
+    if (!resolved.startsWith(userDataPath)) {
       logger.warn("阻止访问用户数据目录外的路径:", fullPath);
       return;
     }
-    shell.showItemInFolder(fullPath);
+    shell.showItemInFolder(resolved);
   });
 
   ipcMain.handle(C.SYSTEM.OPEN_EXTERNAL, (event, url) => {
@@ -193,7 +195,7 @@ function register(ipcMain, managers) {
             : logger.getLogFilePath();
 
         const userDataPath = app.getPath("userData");
-        if (!logPath.startsWith(userDataPath)) {
+        if (!path.resolve(logPath).startsWith(userDataPath)) {
           return { success: false, error: "路径不在允许范围内" };
         }
         shell.showItemInFolder(logPath);

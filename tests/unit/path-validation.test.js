@@ -82,6 +82,12 @@ describe("path validation regression — systemHandlers SHOW_ITEM and OPEN_LOG",
       expect(showItemSpy).not.toHaveBeenCalled();
     });
 
+    it("rejects path traversal through embedded ..", async () => {
+      const { ipcMain } = registerHandlers();
+      await ipcMain._handlers[C.SYSTEM.SHOW_ITEM]({}, "/mock/userData/../../etc/passwd");
+      expect(showItemSpy).not.toHaveBeenCalled();
+    });
+
     it("rejects null and non-string paths", async () => {
       const { ipcMain } = registerHandlers();
       await ipcMain._handlers[C.SYSTEM.SHOW_ITEM]({}, null);
