@@ -80,40 +80,34 @@ describe("Phase 0: SQL LIKE wildcard escaping logic", () => {
   });
 });
 
-describe("Phase 0: LogManager uses async I/O", () => {
-  it("should use fs.appendFile (async) not fs.appendFileSync", () => {
+describe("Phase 0: LogManager uses sync I/O for crash safety", () => {
+  it("should use fs.appendFileSync for app logs", () => {
     const fs = require("fs");
     const logManager = new LogManager();
 
-    const appendFileSpy = vi
-      .spyOn(fs, "appendFile")
+    const appendFileSyncSpy = vi
+      .spyOn(fs, "appendFileSync")
       .mockImplementation(() => {});
-    const appendFileSyncSpy = vi.spyOn(fs, "appendFileSync");
 
     logManager.info("test message");
 
-    expect(appendFileSpy).toHaveBeenCalled();
-    expect(appendFileSyncSpy).not.toHaveBeenCalled();
+    expect(appendFileSyncSpy).toHaveBeenCalled();
 
-    appendFileSpy.mockRestore();
     appendFileSyncSpy.mockRestore();
   });
 
-  it("should use fs.appendFile for FunASR logs", () => {
+  it("should use fs.appendFileSync for FunASR logs", () => {
     const fs = require("fs");
     const logManager = new LogManager();
 
-    const appendFileSpy = vi
-      .spyOn(fs, "appendFile")
+    const appendFileSyncSpy = vi
+      .spyOn(fs, "appendFileSync")
       .mockImplementation(() => {});
-    const appendFileSyncSpy = vi.spyOn(fs, "appendFileSync");
 
     logManager.logFunASR("info", "FunASR test message");
 
-    expect(appendFileSpy).toHaveBeenCalled();
-    expect(appendFileSyncSpy).not.toHaveBeenCalled();
+    expect(appendFileSyncSpy).toHaveBeenCalled();
 
-    appendFileSpy.mockRestore();
     appendFileSyncSpy.mockRestore();
   });
 });

@@ -56,9 +56,7 @@ class LogManager {
     // 写入日志文件
     try {
       const logLine = JSON.stringify(logEntry) + "\n";
-      fs.appendFile(this.logFile, logLine, (err) => {
-        if (err) console.error("写入日志文件失败:", err);
-      });
+      fs.appendFileSync(this.logFile, logLine);
     } catch (error) {
       console.error("写入日志文件失败:", error);
     }
@@ -96,9 +94,7 @@ class LogManager {
 
     try {
       const logLine = JSON.stringify(logEntry) + "\n";
-      fs.appendFile(this.funasrLogFile, logLine, (err) => {
-        if (err) console.error("写入FunASR日志文件失败:", err);
-      });
+      fs.appendFileSync(this.funasrLogFile, logLine);
     } catch (error) {
       console.error("写入FunASR日志文件失败:", error);
     }
@@ -166,7 +162,7 @@ class LogManager {
           const stats = fs.statSync(logFile);
           if (stats.mtime.getTime() < cutoffTime) {
             fs.unlinkSync(logFile);
-            this.info(`清理旧日志文件: ${logFile}`);
+            console.log(`清理旧日志文件: ${logFile}`);
           }
         }
       });
