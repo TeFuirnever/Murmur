@@ -1,3 +1,4 @@
+import * as React from "react";
 import {
   CheckCircle,
   AlertCircle,
@@ -6,11 +7,22 @@ import {
   Clock,
 } from "lucide-react";
 
-/**
- * 模型状态指示器组件
- * 显示FunASR模型的下载、加载状态
- */
-export const ModelStatusIndicator = ({
+interface ModelStatus {
+  stage: string;
+  isDownloading?: boolean;
+  isLoading?: boolean;
+  downloadProgress?: number;
+  progress?: number;
+  error?: string;
+}
+
+interface ModelStatusIndicatorProps {
+  modelStatus: ModelStatus;
+  className?: string;
+  onDownload?: (() => void) | null;
+}
+
+export const ModelStatusIndicator: React.FC<ModelStatusIndicatorProps> = ({
   modelStatus,
   className = "",
   onDownload = null,
@@ -109,7 +121,13 @@ export const ModelStatusIndicator = ({
  * 简化的模型状态图标组件
  * 仅显示图标，用于空间受限的地方
  */
-export const ModelStatusIcon = ({
+interface ModelStatusIconProps {
+  modelStatus: ModelStatus;
+  size?: string;
+  showTooltip?: boolean;
+}
+
+export const ModelStatusIcon: React.FC<ModelStatusIconProps> = ({
   modelStatus,
   size = "w-5 h-5",
   showTooltip = true,
@@ -181,7 +199,13 @@ export const ModelStatusIcon = ({
  * 模型下载进度组件
  * 显示详细的下载进度信息
  */
-export const ModelDownloadProgress = ({
+interface ModelDownloadProgressProps {
+  modelStatus: ModelStatus;
+  onDownload?: () => void;
+  onCancel?: () => void;
+}
+
+export const ModelDownloadProgress: React.FC<ModelDownloadProgressProps> = ({
   modelStatus,
   onDownload,
   onCancel,

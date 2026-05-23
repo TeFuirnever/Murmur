@@ -1,6 +1,16 @@
-import { Check } from "lucide-react";
+import * as React from "react";
+import { Check, type LucideIcon } from "lucide-react";
 
-const PermissionCard = ({
+interface PermissionCardProps {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  granted: boolean;
+  onRequest: () => void;
+  buttonText?: string;
+}
+
+const PermissionCard: React.FC<PermissionCardProps> = ({
   icon: Icon,
   title,
   description,

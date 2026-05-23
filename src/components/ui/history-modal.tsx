@@ -1,12 +1,27 @@
-import { useState, useEffect } from "react";
+import * as React from "react";
 import { X, Copy, Trash2, Search, Calendar, FileText } from "lucide-react";
 import { toast } from "sonner";
 
-const HistoryModal = ({ isOpen, onClose, onCopy }) => {
-  const [transcriptions, setTranscriptions] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [filteredTranscriptions, setFilteredTranscriptions] = useState([]);
+interface TranscriptionItem {
+  id: number;
+  text?: string;
+  raw_text?: string;
+  processed_text?: string;
+  confidence?: number;
+  created_at: string;
+}
+
+interface HistoryModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onCopy?: (text: string) => Promise<void>;
+}
+
+const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, onCopy }) => {
+  const [transcriptions, setTranscriptions] = React.useState<TranscriptionItem[]>([]);
+  const [loading, setLoading] = React.useState(false);
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [filteredTranscriptions, setFilteredTranscriptions] = React.useState<TranscriptionItem[]>([]);
 
   // 加载转录历史
   const loadTranscriptions = async () => {
@@ -26,7 +41,7 @@ const HistoryModal = ({ isOpen, onClose, onCopy }) => {
   };
 
   // 搜索功能
-  useEffect(() => {
+  React.useEffect(() => {
     if (!searchQuery.trim()) {
       setFilteredTranscriptions(transcriptions);
     } else {
@@ -42,7 +57,7 @@ const HistoryModal = ({ isOpen, onClose, onCopy }) => {
   }, [searchQuery, transcriptions]);
 
   // 当模态框打开时加载数据
-  useEffect(() => {
+  React.useEffect(() => {
     if (isOpen) {
       loadTranscriptions();
     }
@@ -80,7 +95,7 @@ const HistoryModal = ({ isOpen, onClose, onCopy }) => {
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     const now = new Date();
-    const diffTime = Math.abs(now - date);
+    const diffTime = Math.abs(now.getTime() - date.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
     if (diffDays === 1) {

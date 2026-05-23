@@ -106,7 +106,7 @@ describe("Phase 5: Accessibility a11y", () => {
     let content;
 
     beforeAll(() => {
-      content = readFile("src/components/ui/permission-card.jsx");
+      content = readFile("src/components/ui/permission-card.tsx");
     });
 
     it("should exist", () => {
