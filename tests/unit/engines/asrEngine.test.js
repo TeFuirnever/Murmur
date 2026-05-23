@@ -118,13 +118,15 @@ describe("ASREngine interface", () => {
       const FunASRManager = require("../../../src/helpers/funasrManager");
       const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
       const manager = new FunASRManager(logger);
-      expect(validateASREngine({
-        transcribeAudio: manager.transcribeAudio.bind(manager),
-        transcribeFile: manager.transcribeFile.bind(manager),
-        cancelTranscription: manager.cancelTranscription.bind(manager),
-        checkStatus: manager.checkStatus.bind(manager),
-        shutdown: manager.gracefulShutdown.bind(manager),
-      })).toBe(true);
+      expect(
+        validateASREngine({
+          transcribeAudio: manager.transcribeAudio.bind(manager),
+          transcribeFile: manager.transcribeFile.bind(manager),
+          cancelTranscription: manager.cancelTranscription.bind(manager),
+          checkStatus: manager.checkStatus.bind(manager),
+          shutdown: manager.gracefulShutdown.bind(manager),
+        }),
+      ).toBe(true);
     });
   });
 });

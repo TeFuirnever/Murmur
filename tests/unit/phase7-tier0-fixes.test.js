@@ -36,9 +36,7 @@ describe("Tier 0 fixes", () => {
 
     it("accepts Python 3.11", () => {
       const env = new PythonEnvironment();
-      expect(
-        env.isPythonVersionSupported({ major: 3, minor: 11 }),
-      ).toBe(true);
+      expect(env.isPythonVersionSupported({ major: 3, minor: 11 })).toBe(true);
     });
 
     it("rejects null/undefined version", () => {
@@ -57,9 +55,7 @@ describe("Tier 0 fixes", () => {
     let validateAIBaseUrl;
 
     beforeEach(() => {
-      const aiPath = requireCJS.resolve(
-        "../../src/helpers/ipc/aiHandlers.js",
-      );
+      const aiPath = requireCJS.resolve("../../src/helpers/ipc/aiHandlers.js");
       delete requireCJS.cache[aiPath];
       const aiHandlers = requireCJS("../../src/helpers/ipc/aiHandlers.js");
       validateAIBaseUrl = aiHandlers.validateAIBaseUrl;
@@ -124,9 +120,7 @@ describe("Tier 0 fixes", () => {
     let processTextWithAI;
 
     beforeEach(() => {
-      const aiPath = requireCJS.resolve(
-        "../../src/helpers/ipc/aiHandlers.js",
-      );
+      const aiPath = requireCJS.resolve("../../src/helpers/ipc/aiHandlers.js");
       delete requireCJS.cache[aiPath];
       const aiHandlers = requireCJS("../../src/helpers/ipc/aiHandlers.js");
       processTextWithAI = aiHandlers.processTextWithAI;
@@ -178,9 +172,7 @@ describe("Tier 0 fixes", () => {
     let checkAIStatus;
 
     beforeEach(() => {
-      const aiPath = requireCJS.resolve(
-        "../../src/helpers/ipc/aiHandlers.js",
-      );
+      const aiPath = requireCJS.resolve("../../src/helpers/ipc/aiHandlers.js");
       delete requireCJS.cache[aiPath];
       const aiHandlers = requireCJS("../../src/helpers/ipc/aiHandlers.js");
       checkAIStatus = aiHandlers.checkAIStatus;

@@ -248,7 +248,9 @@ const SettingsPage = () => {
       setTestResult(null);
 
       // 验证当前输入的配置
-      const isLocalModel = settings.ai_base_url.includes("localhost") || settings.ai_base_url.includes("127.0.0.1");
+      const isLocalModel =
+        settings.ai_base_url.includes("localhost") ||
+        settings.ai_base_url.includes("127.0.0.1");
       if (!settings.ai_api_key.trim() && !isLocalModel) {
         setTestResult({
           available: false,

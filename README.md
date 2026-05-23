@@ -4,15 +4,20 @@
 
 # Murmur
 
-**开源免费的 AI 语音输入工具 | 为中文而生**
+**开源 · 本地 · AI 语音输入**
+
+说话就能打字，音频秒转文字。基于 FunASR，数据不出你的电脑。
 
 [English](#english) · [中文](#中文)
 
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)](#安装)
-[![GitHub Release](https://img.shields.io/github/v/release/TeFuirnever/Murmur?include_prereleases)](https://github.com/TeFuirnever/Murmur/releases)
+[![Tests](https://img.shields.io/badge/tests-399%20passing-brightgreen)](tests/)
+[![Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen)](tests/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
-[![Build](https://img.shields.io/github/actions/workflow/status/TeFuirnever/Murmur/build.yml?branch=main)](https://github.com/TeFuirnever/Murmur/actions)
+
+<!-- TODO: 添加产品演示 GIF -->
+<!-- <img src="assets/demo.gif" width="800" /> -->
 
 </div>
 
@@ -20,22 +25,28 @@
 
 <a id="中文"></a>
 
-## Murmur 是什么？
+## 为什么选择 Murmur？
 
-Murmur 是一款桌面端语音输入工具，让你**说话就能打字**。基于 [蛐蛐(QuQu)](https://github.com/yan5xu/ququ) 二次开发，内置阿里巴巴 FunASR 语音识别引擎，所有音频在**本地处理**，不上传任何数据。支持连接 AI 模型（通义千问、Kimi、智谱、OpenAI 等）自动润色文本。
+|               |   Murmur   | macOS 原生听写 |  讯飞语记  | Whisper Desktop |
+| ------------- | :--------: | :------------: | :--------: | :-------------: |
+| 中文精度      | ⭐⭐⭐⭐⭐ |     ⭐⭐⭐     | ⭐⭐⭐⭐⭐ |     ⭐⭐⭐      |
+| 完全本地      |     ✅     |       ✅       |     ❌     |       ✅        |
+| AI 后处理     |     ✅     |       ❌       |     ❌     |       ❌        |
+| 开源免费      |     ✅     |       ✅       |     ❌     |       ✅        |
+| 10+ AI 模型   |     ✅     |       ❌       |     ❌     |       ❌        |
+| 自定义 Prompt |     ✅     |       ❌       |     ❌     |       ❌        |
 
-### 核心特性
+## 特性
 
-- 🎤 **高精度中文识别** — FunASR Paraformer-large 模型，本地运行，隐私安全
-- 🤖 **AI 智能润色** — 自动过滤口头禅、修正错话、整理格式
-- ⌨️ **全局热键** — `Cmd+Shift+Space` 一键开始/停止，自动粘贴到当前光标
-- 📁 **音频文件转录** — 支持 wav/mp3/m4a/flac 格式导入
-- 💾 **转录历史** — SQLite 本地存储，支持搜索和导出（TXT/SRT/VTT/MD/DOCX）
-- 🎯 **国产模型优先** — 适配通义千问、Kimi、智谱 AI 等，延迟更低
+| 🎤 高精度中文识别       | 🤖 AI 智能润色       | ⌨️ 全局热键       | 🔒 完全本地 |
+| ----------------------- | -------------------- | ----------------- | ----------- |
+| FunASR Paraformer-large | 去除口头禅、修正错话 | `Cmd+Shift+Space` | 零数据上传  |
+
+| 🌐 10+ AI 模型                        | 📁 音频文件转录  | 💾 转录历史          | 🌍 双语支持  |
+| ------------------------------------- | ---------------- | -------------------- | ------------ |
+| OpenAI/DeepSeek/通义/智谱/本地 Ollama | wav/mp3/m4a/flac | SQLite + 搜索 + 导出 | 中文/English |
 
 ## 安装
-
-### 包管理器安装（推荐）
 
 ```bash
 # macOS (Homebrew)
@@ -45,28 +56,35 @@ brew install --cask murmur
 winget install TeFuirnever.Murmur
 ```
 
-### 下载安装包
+或从 [Releases](https://github.com/TeFuirnever/Murmur/releases) 下载安装包。
 
-从 [Releases](https://github.com/TeFuirnever/Murmur/releases) 下载最新版本：
-
-| 平台                  | 文件                 | 说明           |
-| --------------------- | -------------------- | -------------- |
-| macOS (Apple Silicon) | `Murmur-*.dmg`       | 双击安装       |
-| Windows               | `Murmur-Setup-*.exe` | 双击安装       |
-| Linux                 | 自行构建             | 见下方开发指南 |
-
-> **首次安装提示**：
+> **首次安装**：macOS 如遇"无法验证开发者"，右键点击应用 → 选择"打开"
 >
-> - **macOS**: 如遇"无法验证开发者"，右键点击应用 → 选择"打开"
-> - **Windows**: 如遇 SmartScreen 拦截，点击"更多信息" → "仍要运行"
+> Windows 如遇 SmartScreen 拦截，点击"更多信息" → "仍要运行"
 
-遇到问题？查看 [FAQ](docs/faq.md) 和 [故障排除](docs/troubleshooting.md)。
-
-### 首次运行
+## 30 秒上手
 
 1. 启动 Murmur，等待模型下载完成（首次约 1GB）
-2. 打开设置页面，填入 AI 模型的 API Key（可选，不配置也能使用语音识别）
-3. 按下 `Cmd+Shift+Space` 开始说话
+2. 按下 `Cmd+Shift+Space` 开始说话
+3. 文字自动出现在光标处
+
+**使用 AI 润色**（可选）：打开设置 → 选择 AI 模型提供商（DeepSeek、通义千问、Ollama 等） → 填入 API Key 或使用本地模型
+
+## 支持的 AI 模型
+
+| 提供商               | Base URL               | 需要 API Key |
+| -------------------- | ---------------------- | :----------: |
+| OpenAI               | api.openai.com/v1      |      ✅      |
+| DeepSeek             | api.deepseek.com/v1    |      ✅      |
+| 通义千问             | dashscope.aliyuncs.com |      ✅      |
+| 智谱 GLM             | open.bigmodel.cn       |      ✅      |
+| 硅基流动             | api.siliconflow.cn     |      ✅      |
+| Groq                 | api.groq.com           |      ✅      |
+| Moonshot             | api.moonshot.cn        |      ✅      |
+| **Ollama (本地)**    | localhost:11434        |      ❌      |
+| **LM Studio (本地)** | localhost:1234         |      ❌      |
+
+只需选择提供商，Murmur 自动填入地址和模型。
 
 ---
 
@@ -76,57 +94,35 @@ winget install TeFuirnever.Murmur
 
 - **Node.js** 18+ 和 [pnpm](https://pnpm.io)
 - **Python** 3.8+（用于 FunASR）
-- **Git**
-- **ffmpeg**（用于音频格式转换，macOS: `brew install ffmpeg`）
+- **ffmpeg**（macOS: `brew install ffmpeg`）
 
 ### 快速开始
 
 ```bash
-# 克隆仓库
 git clone https://github.com/TeFuirnever/Murmur.git
 cd Murmur
-
-# 安装依赖
 pnpm install
 
-# 准备 Python 环境（二选一）
-
-# 方案 A: 使用 uv（推荐，自动管理 Python 版本）
+# Python 环境（二选一）
+# 方案 A: uv（推荐）
 curl -LsSf https://astral.sh/uv/install.sh | sh
-uv sync
-uv run python download_models.py
+uv sync && uv run python download_models.py
 
-# 方案 B: 使用系统 Python
+# 方案 B: 系统 Python
 pip install funasr modelscope torch torchaudio librosa numpy
 python download_models.py
 
-# 启动开发模式
 pnpm dev
-```
-
-### 构建安装包
-
-```bash
-# 准备嵌入式 Python
-pnpm run prepare:python:embedded
-
-# 构建 macOS DMG（未签名）
-CSC_IDENTITY_AUTO_DISCOVERY=false pnpm electron-builder --mac
-
-# 构建 Windows EXE（需在 Windows 上）
-pnpm electron-builder --win
 ```
 
 ### 开发命令
 
 ```bash
 pnpm dev          # 启动开发模式
-pnpm test         # 运行测试
+pnpm test         # 运行测试（399 tests）
 pnpm lint         # 代码检查
-pnpm format:check # 检查代码格式
+pnpm typecheck    # TypeScript 类型检查
 pnpm ci:check     # 本地运行所有 CI 门禁
-pnpm ci:fix       # 自动修复 CI 问题
-pnpm run build    # 构建生产版本
 ```
 
 ---
@@ -138,85 +134,35 @@ pnpm run build    # 构建生产版本
 | 桌面框架 | Electron 36                                           |
 | 前端     | React 19, Tailwind CSS 4, Vite                        |
 | 语音识别 | FunASR (Paraformer-large + FSMN-VAD + CT-Transformer) |
-| AI 优化  | 兼容 OpenAI API 的任意模型                            |
-| 数据存储 | SQLite (better-sqlite3)                               |
-| IPC 通信 | Electron contextBridge + ipcMain/ipcRenderer          |
-
-## 项目结构
-
-```
-├── main.js                    # Electron 主进程
-├── preload.js                 # 预加载脚本（IPC 桥接）
-├── funasr_server.py           # FunASR Python 服务
-├── src/
-│   ├── App.jsx                # 主界面
-│   ├── settings.jsx           # 设置页面
-│   ├── history.jsx            # 历史记录
-│   ├── components/            # UI 组件
-│   ├── hooks/                 # React Hooks
-│   ├── helpers/               # 主进程模块
-│   │   ├── ipc-contracts.js   # IPC 通道名称常量
-│   │   ├── ipc/               # IPC 处理器（按领域拆分）
-│   │   │   ├── index.js       # 处理器注册入口
-│   │   │   ├── aiHandlers.js
-│   │   │   ├── clipboardHandlers.js
-│   │   │   ├── environmentHandlers.js
-│   │   │   ├── hotkeyHandlers.js
-│   │   │   ├── modelHandlers.js
-│   │   │   ├── settingsHandlers.js
-│   │   │   ├── systemHandlers.js
-│   │   │   ├── transcriptionHandlers.js
-│   │   │   └── windowHandlers.js
-│   │   ├── funasrManager.js   # FunASR 门面（委托到子模块）
-│   │   ├── funasrServer.js    # Python 进程管理、转录、健康监控
-│   │   ├── modelManager.js    # 模型下载、校验、进度
-│   │   ├── pythonEnvironment.js # Python 路径发现、环境构建
-│   │   ├── serverMessageRouter.js # 进程间 JSON 消息路由
-│   │   ├── audioFileHelpers.js # 临时文件、ffmpeg 转换
-│   │   ├── aiPrompts.js       # AI Prompt 模板
-│   │   ├── database.js        # SQLite 数据库（safeStorage 加密）
-│   │   ├── windowManager.js   # 窗口管理（sandbox + CSP）
-│   │   ├── clipboard.js       # 剪贴板操作
-│   │   ├── hotkeyManager.js   # 全局热键
-│   │   ├── tray.js            # 系统托盘
-│   │   ├── environment.js     # 环境检测
-│   │   └── logManager.js      # 日志管理
-│   ├── i18n/                  # 国际化（i18next，zh-CN/en）
-│   ├── bootstrap/             # Electron API 初始化
-│   └── utils/                 # 工具函数
-├── tests/                     # Vitest 测试（320 tests）
-├── scripts/                   # 构建脚本
-└── assets/                    # 图标和资源
-```
-
-## 参与贡献
-
-我们欢迎所有形式的贡献！请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 了解：
-
-- 开发环境搭建
-- 代码规范和提交格式
-- PR 提交流程
+| AI 优化  | 10+ OpenAI 兼容模型 + 自定义 Prompt 模板              |
+| 数据存储 | SQLite (better-sqlite3, safeStorage 加密)             |
 
 ## 路线图
 
 - [x] 本地 FunASR 语音识别
-- [x] AI 文本智能优化
+- [x] AI 文本智能优化（10+ 模型）
+- [x] 自定义 AI Prompt 模板
+- [x] 本地模型支持（Ollama / LM Studio）
 - [x] 音频文件导入转录
 - [x] 转录历史搜索和导出
 - [x] 全局热键
-- [x] 健康监控和自动恢复
+- [x] 多语言支持（中文/English）
+- [x] 自动更新检测
+- [x] 无障碍（ARIA + 键盘导航）
 - [ ] 实时流式转录（200ms 延迟）
-- [ ] 自定义 AI Prompt 模板
-- [x] 多语言支持（中/英，i18next）
-- [x] 自动更新检测（通知用户去 GitHub 下载）
+- [ ] CLI 模式
+- [ ] ASR 多引擎支持（whisper.cpp）
 
 详见 [Projects](https://github.com/TeFuirnever/Murmur/projects) 查看完整规划。
 
+## 参与贡献
+
+PRs welcome! 见 [CONTRIBUTING.md](CONTRIBUTING.md) 了解开发环境搭建、代码规范和提交流程。
+
 ## 致谢
 
-- [蛐蛐(QuQu)](https://github.com/yan5xu/ququ) — 本项目的上游项目，由 yan5xu 发起
+- [蛐蛐(QuQu)](https://github.com/yan5xu/ququ) — 本项目的上游项目
 - [FunASR](https://github.com/modelscope/FunASR) — 阿里巴巴开源语音识别工具包
-- [OpenWhispr](https://github.com/HeroTools/open-whispr) — 架构参考
 - [shadcn/ui](https://ui.shadcn.com/) — UI 组件
 
 ## 许可证
@@ -227,22 +173,28 @@ pnpm run build    # 构建生产版本
 
 <a id="english"></a>
 
-## What is Murmur?
+## Why Murmur?
 
-Murmur is a desktop voice input tool that lets you **type by speaking**. It is a derivative of [QuQu](https://github.com/yan5xu/ququ), using Alibaba's FunASR speech recognition engine with all audio processed **locally** — no data ever leaves your machine. Optionally connect an AI model (Qwen, Kimi, Zhipu, OpenAI, etc.) to auto-polish your text.
+|                    |   Murmur   | macOS Dictation |  iFlytek   | Whisper Desktop |
+| ------------------ | :--------: | :-------------: | :--------: | :-------------: |
+| Chinese Accuracy   | ⭐⭐⭐⭐⭐ |     ⭐⭐⭐      | ⭐⭐⭐⭐⭐ |     ⭐⭐⭐      |
+| Fully Local        |     ✅     |       ✅        |     ❌     |       ✅        |
+| AI Post-processing |     ✅     |       ❌        |     ❌     |       ❌        |
+| Open Source        |     ✅     |       ✅        |     ❌     |       ✅        |
+| 10+ AI Models      |     ✅     |       ❌        |     ❌     |       ❌        |
+| Custom Prompts     |     ✅     |       ❌        |     ❌     |       ❌        |
 
-### Key Features
+## Features
 
-- 🎤 **Accurate Chinese recognition** — FunASR Paraformer-large, runs locally
-- 🤖 **AI text refinement** — Auto-remove filler words, fix mistakes, format output
-- ⌨️ **Global hotkey** — `Cmd+Shift+Space` to start/stop, auto-paste at cursor
-- 📁 **File transcription** — Import wav/mp3/m4a/flac files
-- 💾 **History & export** — SQLite storage, search, export to TXT/SRT/VTT/MD/DOCX
-- 🎯 **China-friendly** — Optimized for Qwen, Kimi, Zhipu AI models
+| 🎤 Accurate Chinese     | 🤖 AI Refinement                  | ⌨️ Global Hotkey  | 🔒 Fully Local   |
+| ----------------------- | --------------------------------- | ----------------- | ---------------- |
+| FunASR Paraformer-large | Remove filler words, fix mistakes | `Cmd+Shift+Space` | Zero data upload |
+
+| 🌐 10+ AI Models                | 📁 File Transcription | 💾 History               | 🌍 i18n         |
+| ------------------------------- | --------------------- | ------------------------ | --------------- |
+| OpenAI/DeepSeek/Qwen/GLM/Ollama | wav/mp3/m4a/flac      | SQLite + search + export | zh-CN / English |
 
 ## Install
-
-### Package Manager (Recommended)
 
 ```bash
 # macOS (Homebrew)
@@ -252,169 +204,66 @@ brew install --cask murmur
 winget install TeFuirnever.Murmur
 ```
 
-### Download
+Or download from [Releases](https://github.com/TeFuirnever/Murmur/releases).
 
-Get the latest version from [Releases](https://github.com/TeFuirnever/Murmur/releases):
+## Quick Start
 
-| Platform              | File                 | Notes                   |
-| --------------------- | -------------------- | ----------------------- |
-| macOS (Apple Silicon) | `Murmur-*.dmg`       | Double-click to install |
-| Windows               | `Murmur-Setup-*.exe` | Double-click to install |
-| Linux                 | Build from source    | See below               |
+1. Launch Murmur, wait for model download (~1GB first time)
+2. Press `Cmd+Shift+Space` and start speaking
+3. Text appears at your cursor
 
-> **First install tips**:
->
-> - **macOS**: If you see "cannot verify developer", right-click the app → "Open"
-> - **Windows**: If SmartScreen blocks it, click "More info" → "Run anyway"
-
-Having issues? Check the [FAQ](docs/faq.md) and [Troubleshooting](docs/troubleshooting.md) guides.
-
-### First Run
-
-1. Launch Murmur and wait for model download (~1GB on first run)
-2. Open Settings and enter your AI model's API Key (optional — voice recognition works without it)
-3. Press `Cmd+Shift+Space` and start speaking
+**AI Polish** (optional): Settings → choose provider (DeepSeek, Qwen, Ollama, etc.) → enter API key or use local model
 
 ## Build from Source
 
-### Prerequisites
-
-- **Node.js** 18+ and [pnpm](https://pnpm.io)
-- **Python** 3.8+ (for FunASR)
-- **Git**
-- **ffmpeg** (for audio format conversion, macOS: `brew install ffmpeg`)
-
-### Quick Start
-
 ```bash
 git clone https://github.com/TeFuirnever/Murmur.git
-cd Murmur
-pnpm install
+cd Murmur && pnpm install
 
 # Python setup (choose one)
+curl -LsSf https://astral.sh/uv/install.sh | sh  # Option A: uv (recommended)
+uv sync && uv run python download_models.py
 
-# Option A: uv (recommended)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-uv sync
-uv run python download_models.py
-
-# Option B: System Python
-pip install funasr modelscope torch torchaudio librosa numpy
+pip install funasr modelscope torch torchaudio librosa numpy  # Option B: system Python
 python download_models.py
 
-# Start dev mode
 pnpm dev
-```
-
-### Build Installers
-
-```bash
-# Prepare embedded Python
-pnpm run prepare:python:embedded
-
-# Build macOS DMG (unsigned)
-CSC_IDENTITY_AUTO_DISCOVERY=false pnpm electron-builder --mac
-
-# Build Windows EXE (requires Windows machine)
-pnpm electron-builder --win
-```
-
-### Dev Commands
-
-```bash
-pnpm dev          # Start dev mode
-pnpm test         # Run tests
-pnpm lint         # Lint check
-pnpm format:check # Check code formatting
-pnpm ci:check     # Run all CI gates locally
-pnpm ci:fix       # Auto-fix CI issues
-pnpm run build    # Production build
 ```
 
 ## Tech Stack
 
-| Layer              | Technology                                            |
-| ------------------ | ----------------------------------------------------- |
-| Desktop            | Electron 36                                           |
-| Frontend           | React 19, Tailwind CSS 4, Vite                        |
-| Speech Recognition | FunASR (Paraformer-large + FSMN-VAD + CT-Transformer) |
-| AI Optimization    | Any OpenAI API-compatible model                       |
-| Storage            | SQLite (better-sqlite3)                               |
-| IPC                | Electron contextBridge + ipcMain/ipcRenderer          |
-
-## Project Structure
-
-```
-├── main.js                    # Electron main process
-├── preload.js                 # Preload script (IPC bridge)
-├── funasr_server.py           # FunASR Python service
-├── src/
-│   ├── App.jsx                # Main UI
-│   ├── settings.jsx           # Settings page
-│   ├── history.jsx            # History page
-│   ├── components/            # UI components
-│   ├── hooks/                 # React Hooks
-│   ├── helpers/               # Main process modules
-│   │   ├── ipc-contracts.js   # IPC channel name constants
-│   │   ├── ipc/               # IPC handlers (domain-scoped)
-│   │   │   ├── index.js       # Handler registration entry
-│   │   │   ├── aiHandlers.js
-│   │   │   ├── clipboardHandlers.js
-│   │   │   ├── environmentHandlers.js
-│   │   │   ├── hotkeyHandlers.js
-│   │   │   ├── modelHandlers.js
-│   │   │   ├── settingsHandlers.js
-│   │   │   ├── systemHandlers.js
-│   │   │   ├── transcriptionHandlers.js
-│   │   │   └── windowHandlers.js
-│   │   ├── funasrManager.js   # FunASR facade (delegates to sub-modules)
-│   │   ├── funasrServer.js    # Python process, transcription, health
-│   │   ├── modelManager.js    # Model download, verify, progress
-│   │   ├── pythonEnvironment.js # Python discovery, env construction
-│   │   ├── serverMessageRouter.js # JSON message routing
-│   │   ├── audioFileHelpers.js # Temp files, ffmpeg conversion
-│   │   ├── aiPrompts.js       # AI prompt templates
-│   │   ├── database.js        # SQLite (safeStorage encryption)
-│   │   ├── windowManager.js   # Window management (sandbox + CSP)
-│   │   ├── clipboard.js       # Clipboard operations
-│   │   ├── hotkeyManager.js   # Global hotkeys
-│   │   ├── tray.js            # System tray
-│   │   ├── environment.js     # Environment detection
-│   │   └── logManager.js      # Logging
-│   ├── i18n/                  # Internationalization (i18next, zh-CN/en)
-│   ├── bootstrap/             # Electron API bootstrap
-│   └── utils/                 # Utilities
-├── tests/                     # Vitest tests (320 tests)
-├── scripts/                   # Build scripts
-└── assets/                    # Icons and resources
-```
-
-## Contributing
-
-We welcome all contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for:
-
-- Development environment setup
-- Code standards and commit format
-- PR submission process
+| Layer    | Technology                                             |
+| -------- | ------------------------------------------------------ |
+| Desktop  | Electron 36                                            |
+| Frontend | React 19, Tailwind CSS 4, Vite                         |
+| Speech   | FunASR (Paraformer-large + FSMN-VAD + CT-Transformer)  |
+| AI       | 10+ OpenAI-compatible models + custom prompt templates |
+| Storage  | SQLite (better-sqlite3, safeStorage encryption)        |
 
 ## Roadmap
 
 - [x] Local FunASR speech recognition
-- [x] AI text optimization
+- [x] AI text optimization (10+ models)
+- [x] Custom AI prompt templates
+- [x] Local model support (Ollama / LM Studio)
 - [x] Audio file transcription
 - [x] History search and export
 - [x] Global hotkey
-- [x] Health monitor with auto-restart
-- [ ] Real-time streaming transcription (200ms latency)
-- [ ] Custom AI Prompt templates
-- [x] Multi-language support (Chinese/English, i18next)
-- [x] Auto-update detection (notifies user to download from GitHub)
+- [x] Multi-language (Chinese/English)
+- [x] Auto-update detection
+- [x] Accessibility (ARIA + keyboard nav)
+- [ ] Real-time streaming transcription
+- [ ] CLI mode
+- [ ] Multi-engine ASR (whisper.cpp)
+
+## Contributing
+
+PRs welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, code standards, and PR process.
 
 ## Acknowledgments
 
-- [QuQu](https://github.com/yan5xu/ququ) — The upstream project, created by yan5xu
-- [FunASR](https://github.com/modelscope/FunASR) — Alibaba open-source speech recognition toolkit
-- [OpenWhispr](https://github.com/HeroTools/open-whispr) — Architecture reference
+- [QuQu](https://github.com/yan5xu/ququ) — Upstream project
+- [FunASR](https://github.com/modelscope/FunASR) — Alibaba open-source speech recognition
 - [shadcn/ui](https://ui.shadcn.com/) — UI components
 
 ## License

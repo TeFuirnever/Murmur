@@ -178,14 +178,18 @@ user_template: "请处理: {text}"
   });
 
   describe("buildPrompt backward compatibility", () => {
-    it.each(["optimize", "optimize_long", "format", "correct", "summarize", "enhance"])(
-      "returns valid prompt for built-in mode '%s'",
-      (mode) => {
-        const result = buildPrompt(mode, "sample text");
-        expect(result.system).toBeTruthy();
-        expect(result.user).toContain("sample text");
-      },
-    );
+    it.each([
+      "optimize",
+      "optimize_long",
+      "format",
+      "correct",
+      "summarize",
+      "enhance",
+    ])("returns valid prompt for built-in mode '%s'", (mode) => {
+      const result = buildPrompt(mode, "sample text");
+      expect(result.system).toBeTruthy();
+      expect(result.user).toContain("sample text");
+    });
 
     it("defaults to optimize for unknown mode", () => {
       const result = buildPrompt("nonexistent", "text");

@@ -32,7 +32,9 @@ describe("detectLocalModels", () => {
         if (url.includes("11434")) {
           return {
             ok: true,
-            json: async () => ({ models: [{ name: "qwen2.5:7b" }, { name: "llama3.1:8b" }] }),
+            json: async () => ({
+              models: [{ name: "qwen2.5:7b" }, { name: "llama3.1:8b" }],
+            }),
           };
         }
         throw new Error("ECONNREFUSED");

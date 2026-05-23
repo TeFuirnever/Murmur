@@ -17,10 +17,7 @@ function getAIModes(templatesDir) {
   const custom = loadCustomTemplates(templatesDir);
   const customNames = new Set(custom.map((t) => t.name));
   const builtIn = BUILT_IN_MODES.filter((m) => !customNames.has(m.name));
-  return [
-    ...builtIn,
-    ...custom.map((t) => ({ name: t.name, label: t.label })),
-  ];
+  return [...builtIn, ...custom.map((t) => ({ name: t.name, label: t.label }))];
 }
 
 function isLocalhost(host) {
@@ -63,7 +60,13 @@ function validateAIBaseUrl(baseUrl, { allowLocalhost = false } = {}) {
   }
 }
 
-async function processTextWithAI(text, mode, databaseManager, logger, options = {}) {
+async function processTextWithAI(
+  text,
+  mode,
+  databaseManager,
+  logger,
+  options = {},
+) {
   try {
     const apiKey = await databaseManager.getSetting("ai_api_key");
     const baseUrl =
@@ -328,13 +331,17 @@ async function checkAIStatus(testConfig, databaseManager, logger) {
 
 function register(ipcMain, managers) {
   const { databaseManager, logger } = managers;
-  const templatesDir = managers.templatesDir || (() => {
-    const { app } = require("electron");
-    return path.join(app.getPath("userData"), "templates");
-  })();
+  const templatesDir =
+    managers.templatesDir ||
+    (() => {
+      const { app } = require("electron");
+      return path.join(app.getPath("userData"), "templates");
+    })();
 
   ipcMain.handle(C.AI.PROCESS, async (event, text, mode = "optimize") => {
-    return await processTextWithAI(text, mode, databaseManager, logger, { templatesDir });
+    return await processTextWithAI(text, mode, databaseManager, logger, {
+      templatesDir,
+    });
   });
 
   ipcMain.handle(C.AI.CHECK_STATUS, async (event, testConfig = null) => {
@@ -354,4 +361,10 @@ function register(ipcMain, managers) {
   });
 }
 
-module.exports = { register, processTextWithAI, checkAIStatus, validateAIBaseUrl, getAIModes };
+module.exports = {
+  register,
+  processTextWithAI,
+  checkAIStatus,
+  validateAIBaseUrl,
+  getAIModes,
+};

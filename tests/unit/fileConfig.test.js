@@ -25,7 +25,10 @@ describe("fileConfig", () => {
     it("loads valid JSON config file", () => {
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), "murmur-test-"));
       const configPath = path.join(dir, "murmur.json");
-      const config = { ai_base_url: "http://localhost:11434/v1", ai_model: "qwen2.5" };
+      const config = {
+        ai_base_url: "http://localhost:11434/v1",
+        ai_model: "qwen2.5",
+      };
       fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
 
       try {
@@ -52,12 +55,15 @@ describe("fileConfig", () => {
     it("filters out non-configurable keys", () => {
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), "murmur-test-"));
       const configPath = path.join(dir, "murmur.json");
-      fs.writeFileSync(configPath, JSON.stringify({
-        ai_base_url: "http://localhost:11434/v1",
-        ai_api_key: "super-secret-key",
-        ai_model: "qwen2.5",
-        some_random_key: "value",
-      }));
+      fs.writeFileSync(
+        configPath,
+        JSON.stringify({
+          ai_base_url: "http://localhost:11434/v1",
+          ai_api_key: "super-secret-key",
+          ai_model: "qwen2.5",
+          some_random_key: "value",
+        }),
+      );
 
       try {
         const result = loadFileConfig(configPath);
@@ -75,7 +81,10 @@ describe("fileConfig", () => {
     it("writes config to file", () => {
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), "murmur-test-"));
       const configPath = path.join(dir, "murmur.json");
-      const config = { ai_base_url: "http://localhost:11434/v1", ai_model: "qwen2.5" };
+      const config = {
+        ai_base_url: "http://localhost:11434/v1",
+        ai_model: "qwen2.5",
+      };
 
       try {
         saveFileConfig(configPath, config);
@@ -136,7 +145,11 @@ describe("fileConfig", () => {
 
     beforeEach(() => {
       DatabaseManager = require("../../src/helpers/database");
-      db = new DatabaseManager({ info: vi.fn(), error: vi.fn(), warn: vi.fn() });
+      db = new DatabaseManager({
+        info: vi.fn(),
+        error: vi.fn(),
+        warn: vi.fn(),
+      });
       configDir = fs.mkdtempSync(path.join(os.tmpdir(), "murmur-db-test-"));
       db.initialize(configDir);
     });
