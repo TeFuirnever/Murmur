@@ -108,5 +108,39 @@ describe("detectLocalModels", () => {
         globalThis.fetch = originalFetch;
       }
     });
+
+    it("skips endpoints returning non-ok response", async () => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn(async (url) => {
+        if (url.includes("11434")) {
+          return { ok: false, status: 500 };
+        }
+        throw new Error("ECONNREFUSED");
+      });
+      try {
+        const result = await detectLocalModels();
+        expect(result).toEqual([]);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
+    it("handles Ollama with empty models list", async () => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn(async (url) => {
+        if (url.includes("11434")) {
+          return { ok: true, json: async () => ({}) };
+        }
+        throw new Error("ECONNREFUSED");
+      });
+      try {
+        const result = await detectLocalModels();
+        const ollama = result.find((r) => r.name === "ollama");
+        expect(ollama).toBeDefined();
+        expect(ollama.models).toEqual([]);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
   });
 });
