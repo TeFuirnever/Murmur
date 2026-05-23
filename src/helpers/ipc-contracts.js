@@ -54,6 +54,7 @@ module.exports = {
     CHECK_STATUS: "check-ai-status",
     GET_MODES: "get-ai-modes",
     GET_PROVIDER_PRESETS: "get-ai-provider-presets",
+    DETECT_LOCAL_MODELS: "detect-local-models",
   },
   SETTINGS: {
     GET: "get-setting",

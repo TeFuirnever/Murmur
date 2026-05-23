@@ -2,6 +2,7 @@ const path = require("path");
 const C = require("../ipc-contracts");
 const { buildPrompt, loadCustomTemplates } = require("../aiPrompts");
 const { getProviderPresets } = require("../providerPresets");
+const { detectLocalModels } = require("../detectLocalModels");
 
 const BUILT_IN_MODES = [
   { name: "optimize", label: "智能润色" },
@@ -346,6 +347,10 @@ function register(ipcMain, managers) {
 
   ipcMain.handle(C.AI.GET_PROVIDER_PRESETS, async () => {
     return getProviderPresets();
+  });
+
+  ipcMain.handle(C.AI.DETECT_LOCAL_MODELS, async () => {
+    return await detectLocalModels();
   });
 }
 

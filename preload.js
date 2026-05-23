@@ -44,6 +44,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke(C.AI.CHECK_STATUS, testConfig),
   getAIModes: () => ipcRenderer.invoke(C.AI.GET_MODES),
   getAIProviderPresets: () => ipcRenderer.invoke(C.AI.GET_PROVIDER_PRESETS),
+  detectLocalModels: () => ipcRenderer.invoke(C.AI.DETECT_LOCAL_MODELS),
 
   // 剪贴板操作
   pasteText: (text) => ipcRenderer.invoke(C.CLIPBOARD.PASTE, text),

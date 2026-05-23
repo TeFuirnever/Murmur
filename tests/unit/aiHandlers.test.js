@@ -54,6 +54,10 @@ describe("aiHandlers", () => {
         "get-ai-provider-presets",
         expect.any(Function),
       );
+      expect(ipcMain.handle).toHaveBeenCalledWith(
+        "detect-local-models",
+        expect.any(Function),
+      );
     });
   });
 
