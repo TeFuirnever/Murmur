@@ -1,19 +1,25 @@
 const C = require("../ipc-contracts");
 const { buildPrompt } = require("../aiPrompts");
 
-const ALLOWED_AI_DOMAINS = [
-  "api.openai.com",
-  "dashscope.aliyuncs.com",
-  "api.bigmodel.cn",
-  "open.bigmodel.cn",
-];
-
+// Validate that the configured AI base URL is a public https endpoint.
+// We deliberately do NOT maintain a provider allowlist: users bring their
+// own API key, so restricting providers offers no security benefit and
+// breaks any non-listed compatible service. We only block obviously
+// dangerous targets (non-https, internal/loopback hosts) to prevent SSRF.
 function validateAIBaseUrl(baseUrl) {
   try {
     const url = new URL(baseUrl);
-    return ALLOWED_AI_DOMAINS.some(
-      (d) => url.hostname === d || url.hostname.endsWith(`.${d}`),
-    );
+    if (url.protocol !== "https:") return false;
+    const host = url.hostname.toLowerCase();
+    if (!host) return false;
+    if (host === "localhost" || host.endsWith(".localhost")) return false;
+    if (host === "0.0.0.0" || host === "::1" || host === "[::1]") return false;
+    if (/^127\./.test(host)) return false;
+    if (/^10\./.test(host)) return false;
+    if (/^192\.168\./.test(host)) return false;
+    if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return false;
+    if (/^169\.254\./.test(host)) return false;
+    return true;
   } catch {
     return false;
   }
@@ -36,14 +42,17 @@ async function processTextWithAI(text, mode, databaseManager, logger) {
       (await databaseManager.getSetting("ai_model")) || "gpt-3.5-turbo";
 
     if (!validateAIBaseUrl(baseUrl)) {
-      return { success: false, error: "不支持的API地址" };
+      return { success: false, error: "请填写有效的 https API 地址（不支持 http 或内网地址）" };
     }
 
-    const prompt = buildPrompt(mode, text);
+    const { system, user } = buildPrompt(mode, text);
 
     const requestData = {
       model: model,
-      messages: [{ role: "user", content: prompt }],
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
       temperature: 0.3,
       max_tokens: 2000,
       stream: false,
@@ -53,8 +62,7 @@ async function processTextWithAI(text, mode, databaseManager, logger) {
       baseUrl,
       model,
       mode,
-      inputText: text.substring(0, 100) + (text.length > 100 ? "..." : ""),
-      requestData,
+      inputLength: text.length,
     });
 
     const response = await fetch(`${baseUrl}/chat/completions`, {
@@ -89,7 +97,7 @@ async function processTextWithAI(text, mode, databaseManager, logger) {
 
     logger.info("AI文本处理响应:", {
       status: response.status,
-      data: data,
+      outputLength: data.choices?.[0]?.message?.content?.length || 0,
       usage: data.usage,
     });
 
@@ -102,11 +110,8 @@ async function processTextWithAI(text, mode, databaseManager, logger) {
       };
 
       logger.info("AI文本处理结果:", {
-        originalText:
-          text.substring(0, 100) + (text.length > 100 ? "..." : ""),
-        optimizedText:
-          result.text.substring(0, 100) +
-          (result.text.length > 100 ? "..." : ""),
+        inputLength: text.length,
+        outputLength: result.text.length,
         usage: result.usage,
       });
 
@@ -167,7 +172,7 @@ async function checkAIStatus(testConfig, databaseManager, logger) {
     if (!validateAIBaseUrl(baseUrl)) {
       return {
         available: false,
-        error: "不支持的API地址",
+        error: "请填写有效的 https API 地址（不支持 http 或内网地址）",
         details: "仅支持 OpenAI、阿里云百炼、智谱 BigModel",
       };
     }

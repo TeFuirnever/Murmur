@@ -21,10 +21,14 @@ class WindowManager {
     this._cspSetup = true;
 
     const isDev = process.env.NODE_ENV === "development";
+    // connect-src is intentionally permissive (any https endpoint). AI
+    // calls are user-configurable; the actual SSRF guard lives in
+    // aiHandlers.validateAIBaseUrl. CSP still restricts scripts, styles,
+    // and other vectors strictly.
     const prodCsp =
-      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.modelscope.cn https://api.openai.com https://*.openai.com https://*.bigmodel.cn https://api.bigmodel.cn";
+      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https:";
     const devCsp =
-      "default-src 'self' 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://localhost:* http://localhost:* https://*.modelscope.cn https://api.openai.com https://*.openai.com https://*.bigmodel.cn https://api.bigmodel.cn";
+      "default-src 'self' 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://localhost:* http://localhost:* https:";
 
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
       callback({

@@ -53,10 +53,16 @@ describe("aiHandlers", () => {
       expect(result.error).toContain("API密钥");
     });
 
-    it("returns error for unsupported base URL", async () => {
+    it.each([
+      ["http://api.openai.com/v1", "http rejected"],
+      ["https://192.168.1.1/v1", "RFC1918 rejected"],
+      ["https://localhost/v1", "localhost rejected"],
+      ["https://127.0.0.1/v1", "loopback rejected"],
+      ["not a url", "garbage rejected"],
+    ])("rejects unsafe base URL %s (%s)", async (baseUrl) => {
       const db = { getSetting: vi.fn(async (key) => {
         if (key === "ai_api_key") return "test-key";
-        if (key === "ai_base_url") return "https://evil.example.com/v1";
+        if (key === "ai_base_url") return baseUrl;
         if (key === "ai_model") return "gpt-3.5-turbo";
         return null;
       })};
@@ -64,7 +70,7 @@ describe("aiHandlers", () => {
 
       const result = await checkAIStatus(null, db, logger);
       expect(result.available).toBe(false);
-      expect(result.error).toContain("不支持");
+      expect(result.error).toContain("https");
     });
   });
 });
