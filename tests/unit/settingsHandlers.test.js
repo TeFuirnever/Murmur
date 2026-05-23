@@ -32,6 +32,7 @@ describe("settingsHandlers", () => {
           ai_model: "gpt-3.5-turbo",
         })),
         resetSettings: vi.fn(() => true),
+        syncToFileConfig: vi.fn(),
       },
       logger: { error: vi.fn() },
     };

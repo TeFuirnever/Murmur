@@ -186,6 +186,7 @@ describe("SETTINGS_UPDATE broadcast regression", () => {
           setSetting: vi.fn(() => true),
           getAllSettings: vi.fn(() => ({})),
           resetSettings: vi.fn(() => true),
+          syncToFileConfig: vi.fn(),
         },
         logger: { error: vi.fn() },
         windowManager: {

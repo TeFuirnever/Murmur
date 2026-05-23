@@ -335,6 +335,17 @@ class DatabaseManager {
     return stmt.run();
   }
 
+  syncToFileConfig() {
+    if (!this._fileConfigPath) return;
+    const { saveFileConfig, FILE_CONFIGURABLE_KEYS } = require("./fileConfig");
+    const allSettings = this.getAllSettings();
+    const filtered = {};
+    for (const key of FILE_CONFIGURABLE_KEYS) {
+      if (key in allSettings) filtered[key] = allSettings[key];
+    }
+    saveFileConfig(this._fileConfigPath, filtered);
+  }
+
   backup(backupPath) {
     if (!this.db) return false;
 

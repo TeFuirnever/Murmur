@@ -51,6 +51,7 @@ function register(ipcMain, managers) {
       return { success: false, error: "Invalid setting key or value" };
     }
     const result = databaseManager.setSetting(key, value);
+    databaseManager.syncToFileConfig();
     broadcastSettingsUpdate(key);
     return result;
   });
