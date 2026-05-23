@@ -198,6 +198,16 @@ const SettingsPage = () => {
       model: "deepseek-chat",
     },
     {
+      label: "硅基流动",
+      baseUrl: "https://api.siliconflow.cn/v1",
+      model: "Qwen/Qwen2.5-7B-Instruct",
+    },
+    {
+      label: "Groq",
+      baseUrl: "https://api.groq.com/openai/v1",
+      model: "llama-3.3-70b-versatile",
+    },
+    {
       label: "Moonshot",
       baseUrl: "https://api.moonshot.cn/v1",
       model: "moonshot-v1-8k",
@@ -206,6 +216,18 @@ const SettingsPage = () => {
       label: "MiniMax",
       baseUrl: "https://api.minimaxi.com/v1",
       model: "MiniMax-Text-01",
+    },
+    {
+      label: "Ollama (本地)",
+      baseUrl: "http://localhost:11434/v1",
+      model: "qwen2.5:7b",
+      noApiKey: true,
+    },
+    {
+      label: "LM Studio (本地)",
+      baseUrl: "http://localhost:1234/v1",
+      model: "loaded-model",
+      noApiKey: true,
     },
   ];
 
@@ -226,7 +248,8 @@ const SettingsPage = () => {
       setTestResult(null);
 
       // 验证当前输入的配置
-      if (!settings.ai_api_key.trim()) {
+      const isLocalModel = settings.ai_base_url.includes("localhost") || settings.ai_base_url.includes("127.0.0.1");
+      if (!settings.ai_api_key.trim() && !isLocalModel) {
         setTestResult({
           available: false,
           error: "请先输入API密钥",

@@ -15,7 +15,7 @@ describe("detectLocalModels", () => {
 
     it("returns empty array when no local models running", async () => {
       const originalFetch = globalThis.fetch;
-      globalThis.fetch = vi.fn(async (url) => {
+      globalThis.fetch = vi.fn(async (_url) => {
         throw new Error("ECONNREFUSED");
       });
       try {
@@ -96,7 +96,7 @@ describe("detectLocalModels", () => {
 
     it("handles timeout gracefully", async () => {
       const originalFetch = globalThis.fetch;
-      globalThis.fetch = vi.fn(async (url) => {
+      globalThis.fetch = vi.fn(async (_url) => {
         throw new Error("fetch timeout");
       });
       try {
