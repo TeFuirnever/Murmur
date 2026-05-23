@@ -1,4 +1,3 @@
-
 import { Check } from "lucide-react";
 
 const PermissionCard = ({
@@ -18,9 +17,7 @@ const PermissionCard = ({
             <h3 className="text-xs font-medium text-[#1d1d1f] dark:text-[#f5f5f7] text-heading truncate">
               {title}
             </h3>
-            <p className="text-xs text-[#86868b] truncate">
-              {description}
-            </p>
+            <p className="text-xs text-[#86868b] truncate">{description}</p>
           </div>
         </div>
         {granted ? (

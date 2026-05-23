@@ -23,9 +23,7 @@ function getPlatformAsset(release, platform) {
 }
 
 function getChecksumsAsset(release) {
-  return (release.assets || []).find(
-    (a) => a.name === "checksums-sha256.txt"
-  );
+  return (release.assets || []).find((a) => a.name === "checksums-sha256.txt");
 }
 
 function parseChecksums(content) {
@@ -143,7 +141,10 @@ function register(ipcMain, managers) {
         throw new Error(`下载失败: ${response.status}`);
       }
 
-      const contentLength = parseInt(response.headers.get("content-length") || "0", 10);
+      const contentLength = parseInt(
+        response.headers.get("content-length") || "0",
+        10,
+      );
       const fileStream = fs.createWriteStream(filePath);
       let downloaded = 0;
 
@@ -251,4 +252,11 @@ function register(ipcMain, managers) {
   });
 }
 
-module.exports = { register, semverGt, getPlatformAsset, getChecksumsAsset, parseChecksums, verifySHA256 };
+module.exports = {
+  register,
+  semverGt,
+  getPlatformAsset,
+  getChecksumsAsset,
+  parseChecksums,
+  verifySHA256,
+};

@@ -1,4 +1,10 @@
-const { app, globalShortcut, BrowserWindow, safeStorage, ipcMain } = require("electron");
+const {
+  app,
+  globalShortcut,
+  BrowserWindow,
+  safeStorage,
+  ipcMain,
+} = require("electron");
 
 // 导入日志管理器
 const LogManager = require("./src/helpers/logManager");
@@ -188,7 +194,10 @@ async function startApp() {
   windowManager._setupCSP();
   try {
     logger.info("创建主窗口...");
-    const alwaysOnTop = databaseManager.getSetting("window_always_on_top", true);
+    const alwaysOnTop = databaseManager.getSetting(
+      "window_always_on_top",
+      true,
+    );
     windowManager.setDefaultAlwaysOnTop(alwaysOnTop);
     await windowManager.createMainWindow();
     logger.info("主窗口创建成功");

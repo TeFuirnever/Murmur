@@ -72,7 +72,9 @@ const SettingsPage = () => {
     } else if (theme === "light") {
       root.classList.remove("dark");
     } else {
-      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      const prefersDark = window.matchMedia(
+        "(prefers-color-scheme: dark)",
+      ).matches;
       root.classList.toggle("dark", prefersDark);
     }
   };
@@ -129,7 +131,10 @@ const SettingsPage = () => {
       if (window.electronAPI) {
         // 保存每个设置项
         if (!settings.ai_api_key.startsWith("****")) {
-          await window.electronAPI.setSetting("ai_api_key", settings.ai_api_key);
+          await window.electronAPI.setSetting(
+            "ai_api_key",
+            settings.ai_api_key,
+          );
         }
         await window.electronAPI.setSetting(
           "ai_base_url",
@@ -287,7 +292,11 @@ const SettingsPage = () => {
 
   const startDownload = async () => {
     if (!updateInfo?.hasUpdate || !updateInfo?.downloadUrl) return;
-    setDownloadProgress({ progress: 0, downloaded: 0, total: updateInfo.downloadSize || 0 });
+    setDownloadProgress({
+      progress: 0,
+      downloaded: 0,
+      total: updateInfo.downloadSize || 0,
+    });
     try {
       await window.electronAPI.downloadUpdate({
         downloadUrl: updateInfo.downloadUrl,
@@ -310,7 +319,7 @@ const SettingsPage = () => {
     });
     const unsub3 = window.electronAPI.onUpdateDownloadError?.((data) => {
       setDownloadProgress(null);
-      setUpdateInfo((prev) => prev ? { ...prev, error: data.error } : prev);
+      setUpdateInfo((prev) => (prev ? { ...prev, error: data.error } : prev));
     });
     return () => {
       unsub1?.();
@@ -382,7 +391,9 @@ const SettingsPage = () => {
                     <label className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
                       窗口始终置顶
                     </label>
-                    <p className="text-xs text-[#86868b]">将应用窗口保持在最前面</p>
+                    <p className="text-xs text-[#86868b]">
+                      将应用窗口保持在最前面
+                    </p>
                   </div>
                   <button
                     type="button"
@@ -418,11 +429,15 @@ const SettingsPage = () => {
                     <label className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
                       转录完成后
                     </label>
-                    <p className="text-xs text-[#86868b]">语音识别完成后的操作方式</p>
+                    <p className="text-xs text-[#86868b]">
+                      语音识别完成后的操作方式
+                    </p>
                   </div>
                   <select
                     value={settings.auto_paste}
-                    onChange={(e) => handleInputChange("auto_paste", e.target.value)}
+                    onChange={(e) =>
+                      handleInputChange("auto_paste", e.target.value)
+                    }
                     className="text-sm px-3 py-1.5 border border-[#d2d2d7] dark:border-[#3a3a3c] rounded-lg bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7] focus:ring-2 focus:ring-[#0071e3] focus:border-transparent"
                   >
                     <option value="paste">自动粘贴到当前应用</option>
@@ -436,11 +451,15 @@ const SettingsPage = () => {
                     <label className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
                       关闭窗口时
                     </label>
-                    <p className="text-xs text-[#86868b]">点击关闭按钮后的行为</p>
+                    <p className="text-xs text-[#86868b]">
+                      点击关闭按钮后的行为
+                    </p>
                   </div>
                   <select
                     value={settings.close_behavior}
-                    onChange={(e) => handleInputChange("close_behavior", e.target.value)}
+                    onChange={(e) =>
+                      handleInputChange("close_behavior", e.target.value)
+                    }
                     className="text-sm px-3 py-1.5 border border-[#d2d2d7] dark:border-[#3a3a3c] rounded-lg bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7] focus:ring-2 focus:ring-[#0071e3] focus:border-transparent"
                   >
                     <option value="hide">隐藏到菜单栏</option>
@@ -463,9 +482,15 @@ const SettingsPage = () => {
                     }}
                     className="text-sm px-3 py-1.5 border border-[#d2d2d7] dark:border-[#3a3a3c] rounded-lg bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7] focus:ring-2 focus:ring-[#0071e3] focus:border-transparent"
                   >
-                    <option value="system">{t("settings.appearance.system")}</option>
-                    <option value="light">{t("settings.appearance.light")}</option>
-                    <option value="dark">{t("settings.appearance.dark")}</option>
+                    <option value="system">
+                      {t("settings.appearance.system")}
+                    </option>
+                    <option value="light">
+                      {t("settings.appearance.light")}
+                    </option>
+                    <option value="dark">
+                      {t("settings.appearance.dark")}
+                    </option>
                   </select>
                 </div>
 
@@ -535,7 +560,10 @@ const SettingsPage = () => {
                   AI 文本优化（可选）
                 </h2>
                 <p className="text-xs text-[#86868b] mt-1">
-                  AI 用于对识别出的文字做润色和优化，是可选功能。语音识别本身使用本地 FunASR 模型，无需在此配置。API Key 无效或留空时，将直接使用原始转录文本。
+                  AI
+                  用于对识别出的文字做润色和优化，是可选功能。语音识别本身使用本地
+                  FunASR 模型，无需在此配置。API Key
+                  无效或留空时，将直接使用原始转录文本。
                 </p>
               </div>
 
@@ -812,7 +840,10 @@ const SettingsPage = () => {
                 <button
                   onClick={saveSettings}
                   aria-label="保存设置"
-                  disabled={saving || (settings.enable_ai_optimization && !settings.ai_api_key)}
+                  disabled={
+                    saving ||
+                    (settings.enable_ai_optimization && !settings.ai_api_key)
+                  }
                   className="flex items-center space-x-2 px-4 py-1.5 text-sm bg-[#0071e3] hover:bg-[#0077ed] text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {saving ? (
@@ -865,11 +896,17 @@ const SettingsPage = () => {
                     ) : (
                       <RefreshCw className="w-3 h-3" />
                     )}
-                    <span>{checkingUpdate ? t("settings.update.checking") : t("settings.update.check")}</span>
+                    <span>
+                      {checkingUpdate
+                        ? t("settings.update.checking")
+                        : t("settings.update.check")}
+                    </span>
                   </button>
 
                   {updateInfo && !updateInfo.hasUpdate && !updateInfo.error && (
-                    <span className="text-xs text-[#86868b]">{t("settings.update.upToDate")}</span>
+                    <span className="text-xs text-[#86868b]">
+                      {t("settings.update.upToDate")}
+                    </span>
                   )}
 
                   {updateInfo?.error && (
@@ -879,39 +916,51 @@ const SettingsPage = () => {
                   )}
                 </div>
 
-                {updateInfo?.hasUpdate && !downloadProgress && !downloadedUpdate && (
-                  <div className="mt-2 p-2 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-medium text-green-700 dark:text-green-400">
-                        {t("settings.update.available", { version: `v${updateInfo.latestVersion}` })}
-                      </span>
-                      <span className="text-xs text-[#86868b]">
-                        {updateInfo.downloadSize ? `${(updateInfo.downloadSize / 1048576).toFixed(1)} MB` : ""}
-                      </span>
+                {updateInfo?.hasUpdate &&
+                  !downloadProgress &&
+                  !downloadedUpdate && (
+                    <div className="mt-2 p-2 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-medium text-green-700 dark:text-green-400">
+                          {t("settings.update.available", {
+                            version: `v${updateInfo.latestVersion}`,
+                          })}
+                        </span>
+                        <span className="text-xs text-[#86868b]">
+                          {updateInfo.downloadSize
+                            ? `${(updateInfo.downloadSize / 1048576).toFixed(1)} MB`
+                            : ""}
+                        </span>
+                      </div>
+                      {updateInfo.releaseNotes && (
+                        <p className="text-xs text-[#1d1d1f]/60 dark:text-[#f5f5f7]/60 mb-2 line-clamp-3 whitespace-pre-line">
+                          {updateInfo.releaseNotes
+                            .replace(/## What's Changed.*$/s, "")
+                            .slice(0, 300)}
+                        </p>
+                      )}
+                      <button
+                        onClick={startDownload}
+                        className="flex items-center space-x-1.5 px-3 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                      >
+                        <Download className="w-3 h-3" />
+                        <span>{t("settings.update.download")}</span>
+                      </button>
                     </div>
-                    {updateInfo.releaseNotes && (
-                      <p className="text-xs text-[#1d1d1f]/60 dark:text-[#f5f5f7]/60 mb-2 line-clamp-3 whitespace-pre-line">
-                        {updateInfo.releaseNotes.replace(/## What's Changed.*$/s, "").slice(0, 300)}
-                      </p>
-                    )}
-                    <button
-                      onClick={startDownload}
-                      className="flex items-center space-x-1.5 px-3 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
-                    >
-                      <Download className="w-3 h-3" />
-                      <span>{t("settings.update.download")}</span>
-                    </button>
-                  </div>
-                )}
+                  )}
 
                 {downloadProgress && (
                   <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs text-blue-700 dark:text-blue-400">
-                        {t("settings.update.downloading", { progress: downloadProgress.progress })}
+                        {t("settings.update.downloading", {
+                          progress: downloadProgress.progress,
+                        })}
                       </span>
                       <button
-                        onClick={() => window.electronAPI?.cancelUpdateDownload?.()}
+                        onClick={() =>
+                          window.electronAPI?.cancelUpdateDownload?.()
+                        }
                         className="text-xs text-[#86868b] hover:text-red-500"
                       >
                         {t("settings.update.cancel")}
@@ -929,10 +978,16 @@ const SettingsPage = () => {
                 {downloadedUpdate && (
                   <div className="mt-2 p-2 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
                     <p className="text-xs text-green-700 dark:text-green-400 mb-2">
-                      {t("settings.update.downloaded", { version: `v${downloadedUpdate.version}` })}
+                      {t("settings.update.downloaded", {
+                        version: `v${downloadedUpdate.version}`,
+                      })}
                     </p>
                     <button
-                      onClick={() => window.electronAPI?.installUpdate?.(downloadedUpdate.filePath)}
+                      onClick={() =>
+                        window.electronAPI?.installUpdate?.(
+                          downloadedUpdate.filePath,
+                        )
+                      }
                       className="flex items-center space-x-1.5 px-3 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
                     >
                       <span>{t("settings.update.install")}</span>

@@ -10,7 +10,7 @@ describe("Phase 4: Internationalization i18n", () => {
 
     beforeAll(() => {
       pkg = JSON.parse(
-        fs.readFileSync(path.join(rootDir, "package.json"), "utf8")
+        fs.readFileSync(path.join(rootDir, "package.json"), "utf8"),
       );
     });
 
@@ -68,7 +68,7 @@ describe("Phase 4: Internationalization i18n", () => {
     it("zh-CN.json should be valid JSON", () => {
       const content = fs.readFileSync(
         path.join(rootDir, "src/i18n/locales/zh-CN.json"),
-        "utf8"
+        "utf8",
       );
       expect(() => JSON.parse(content)).not.toThrow();
     });
@@ -76,17 +76,20 @@ describe("Phase 4: Internationalization i18n", () => {
     it("en.json should be valid JSON", () => {
       const content = fs.readFileSync(
         path.join(rootDir, "src/i18n/locales/en.json"),
-        "utf8"
+        "utf8",
       );
       expect(() => JSON.parse(content)).not.toThrow();
     });
 
     it("translation files should share the same key structure", () => {
       const zhContent = JSON.parse(
-        fs.readFileSync(path.join(rootDir, "src/i18n/locales/zh-CN.json"), "utf8")
+        fs.readFileSync(
+          path.join(rootDir, "src/i18n/locales/zh-CN.json"),
+          "utf8",
+        ),
       );
       const enContent = JSON.parse(
-        fs.readFileSync(path.join(rootDir, "src/i18n/locales/en.json"), "utf8")
+        fs.readFileSync(path.join(rootDir, "src/i18n/locales/en.json"), "utf8"),
       );
       const zhKeys = Object.keys(zhContent).sort();
       const enKeys = Object.keys(enContent).sort();
@@ -95,7 +98,10 @@ describe("Phase 4: Internationalization i18n", () => {
 
     it("zh-CN.json should have common UI keys", () => {
       const content = JSON.parse(
-        fs.readFileSync(path.join(rootDir, "src/i18n/locales/zh-CN.json"), "utf8")
+        fs.readFileSync(
+          path.join(rootDir, "src/i18n/locales/zh-CN.json"),
+          "utf8",
+        ),
       );
       // Spot-check key UI strings that must be translated
       const jsonStr = JSON.stringify(content);
@@ -107,10 +113,7 @@ describe("Phase 4: Internationalization i18n", () => {
     let mainContent;
 
     beforeAll(() => {
-      mainContent = fs.readFileSync(
-        path.join(rootDir, "src/main.jsx"),
-        "utf8"
-      );
+      mainContent = fs.readFileSync(path.join(rootDir, "src/main.jsx"), "utf8");
     });
 
     it("should import i18n configuration", () => {
@@ -124,7 +127,7 @@ describe("Phase 4: Internationalization i18n", () => {
     beforeAll(() => {
       settingsContent = fs.readFileSync(
         path.join(rootDir, "src/settings.jsx"),
-        "utf8"
+        "utf8",
       );
     });
 
@@ -135,7 +138,9 @@ describe("Phase 4: Internationalization i18n", () => {
     });
 
     it("should have language change handler", () => {
-      expect(settingsContent).toMatch(/changeLanguage|i18n\.changeLanguage|setLanguage/);
+      expect(settingsContent).toMatch(
+        /changeLanguage|i18n\.changeLanguage|setLanguage/,
+      );
     });
   });
 
@@ -145,7 +150,7 @@ describe("Phase 4: Internationalization i18n", () => {
     beforeAll(() => {
       settingsContent = fs.readFileSync(
         path.join(rootDir, "src/settings.jsx"),
-        "utf8"
+        "utf8",
       );
     });
 
@@ -160,7 +165,7 @@ describe("Phase 4: Internationalization i18n", () => {
     beforeAll(() => {
       typeFile = fs.readFileSync(
         path.join(rootDir, "src/electronAPI.d.ts"),
-        "utf8"
+        "utf8",
       );
     });
 

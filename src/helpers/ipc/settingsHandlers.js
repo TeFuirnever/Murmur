@@ -27,7 +27,8 @@ function maskApiKey(settings) {
 function validateSetting(key, value) {
   if (typeof key !== "string" || key.length > 100) return false;
   if (!ALLOWED_SETTING_KEYS.has(key)) return false;
-  if (typeof value === "string" && value.length > MAX_VALUE_LENGTH) return false;
+  if (typeof value === "string" && value.length > MAX_VALUE_LENGTH)
+    return false;
   return true;
 }
 

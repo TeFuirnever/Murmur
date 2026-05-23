@@ -21,7 +21,10 @@ describe("ipc-contracts", () => {
     for (const [domain, channels] of Object.entries(C)) {
       for (const [key, value] of Object.entries(channels)) {
         expect(typeof value, `${domain}.${key}`).toBe("string");
-        expect(value.length, `${domain}.${key} should not be empty`).toBeGreaterThan(0);
+        expect(
+          value.length,
+          `${domain}.${key} should not be empty`,
+        ).toBeGreaterThan(0);
       }
     }
   });
@@ -57,7 +60,9 @@ describe("ipc-contracts", () => {
     expect(C.EVENTS.HOTKEY_TRIGGERED).toBe("hotkey-triggered");
     expect(C.EVENTS.F2_DOUBLE_CLICK).toBe("f2-double-click");
     expect(C.EVENTS.MODEL_DOWNLOAD_PROGRESS).toBe("model-download-progress");
-    expect(C.EVENTS.FILE_TRANSCRIPTION_PROGRESS).toBe("file-transcription-progress");
+    expect(C.EVENTS.FILE_TRANSCRIPTION_PROGRESS).toBe(
+      "file-transcription-progress",
+    );
   });
 
   it("SETTINGS domain has all expected channels", () => {

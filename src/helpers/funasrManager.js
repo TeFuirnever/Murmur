@@ -13,43 +13,95 @@ class FunASRManager {
   }
 
   // Property accessors that maintain the old interface
-  get pythonCmd() { return this.pythonEnv.pythonCmd; }
-  set pythonCmd(v) { this.pythonEnv.pythonCmd = v; }
-  get funasrInstalled() { return this.pythonEnv.funasrInstalled; }
-  get modelsInitialized() { return this.server.modelsInitialized; }
-  get serverReady() { return this.server.serverReady; }
-  get modelsDownloaded() { return this.modelManager.modelsDownloaded; }
-  get initializationPromise() { return this.server.initializationPromise; }
+  get pythonCmd() {
+    return this.pythonEnv.pythonCmd;
+  }
+  set pythonCmd(v) {
+    this.pythonEnv.pythonCmd = v;
+  }
+  get funasrInstalled() {
+    return this.pythonEnv.funasrInstalled;
+  }
+  get modelsInitialized() {
+    return this.server.modelsInitialized;
+  }
+  get serverReady() {
+    return this.server.serverReady;
+  }
+  get modelsDownloaded() {
+    return this.modelManager.modelsDownloaded;
+  }
+  get initializationPromise() {
+    return this.server.initializationPromise;
+  }
 
   // Python & environment delegation
-  getFunASRServerPath() { return this.pythonEnv.getFunASRServerPath(); }
-  getEmbeddedPythonPath() { return this.pythonEnv.getEmbeddedPythonPath(); }
-  setupIsolatedEnvironment() { return this.pythonEnv.setupIsolatedEnvironment(); }
-  buildPythonEnvironment() { return this.pythonEnv.buildPythonEnvironment(); }
-  findPythonExecutable() { return this.pythonEnv.findPythonExecutable(); }
-  checkPythonInstallation() { return this.pythonEnv.checkPythonInstallation(); }
-  installPython(cb) { return this.pythonEnv.installPython(cb); }
-  checkFunASRInstallation() { return this.pythonEnv.checkFunASRInstallation(); }
-  installFunASR(cb) { return this.pythonEnv.installFunASR(cb); }
+  getFunASRServerPath() {
+    return this.pythonEnv.getFunASRServerPath();
+  }
+  getEmbeddedPythonPath() {
+    return this.pythonEnv.getEmbeddedPythonPath();
+  }
+  setupIsolatedEnvironment() {
+    return this.pythonEnv.setupIsolatedEnvironment();
+  }
+  buildPythonEnvironment() {
+    return this.pythonEnv.buildPythonEnvironment();
+  }
+  findPythonExecutable() {
+    return this.pythonEnv.findPythonExecutable();
+  }
+  checkPythonInstallation() {
+    return this.pythonEnv.checkPythonInstallation();
+  }
+  installPython(cb) {
+    return this.pythonEnv.installPython(cb);
+  }
+  checkFunASRInstallation() {
+    return this.pythonEnv.checkFunASRInstallation();
+  }
+  installFunASR(cb) {
+    return this.pythonEnv.installFunASR(cb);
+  }
 
   // Model delegation
-  getModelCachePath() { return this.modelManager.getModelCachePath(); }
-  checkModelFiles() { return this.modelManager.checkModelFiles(); }
-  getDownloadProgress() { return this.modelManager.getDownloadProgress(); }
-  downloadModels(cb) { return this.modelManager.downloadModels(cb); }
+  getModelCachePath() {
+    return this.modelManager.getModelCachePath();
+  }
+  checkModelFiles() {
+    return this.modelManager.checkModelFiles();
+  }
+  getDownloadProgress() {
+    return this.modelManager.getDownloadProgress();
+  }
+  downloadModels(cb) {
+    return this.modelManager.downloadModels(cb);
+  }
 
   // Transcription delegation
-  transcribeAudio(audioBlob, options) { return this.server.transcribeAudio(audioBlob, options); }
-  transcribeFile(audioPath, options) { return this.server.transcribeFile(audioPath, options); }
-  cancelTranscription() { return this.server.cancelTranscription(); }
-  gracefulShutdown() { return this.server.gracefulShutdown(); }
+  transcribeAudio(audioBlob, options) {
+    return this.server.transcribeAudio(audioBlob, options);
+  }
+  transcribeFile(audioPath, options) {
+    return this.server.transcribeFile(audioPath, options);
+  }
+  cancelTranscription() {
+    return this.server.cancelTranscription();
+  }
+  gracefulShutdown() {
+    return this.server.gracefulShutdown();
+  }
 
   // Orchestration methods
   async restartServer() {
     try {
       this.logger.info && this.logger.info("重启FunASR服务器...");
       if (this.server.initializationPromise) {
-        try { await this.server.initializationPromise; } catch { /* ignore */ }
+        try {
+          await this.server.initializationPromise;
+        } catch {
+          /* ignore */
+        }
       }
       if (this.server.serverProcess) {
         await this.server._stopFunASRServer();
@@ -72,7 +124,10 @@ class FunASRManager {
       const cachePath = this.getModelCachePath();
 
       this.server.initializationPromise = this.server._startFunASRServer(
-        pythonEnv, pythonCmd, serverPath, cachePath,
+        pythonEnv,
+        pythonCmd,
+        serverPath,
+        cachePath,
       );
       await this.server.initializationPromise;
 
@@ -89,20 +144,24 @@ class FunASRManager {
     try {
       this.logger.info && this.logger.info("FunASR管理器启动初始化开始");
       const pythonCmd = await this.findPythonExecutable();
-      this.logger.info && this.logger.info("Python可执行文件找到", { pythonCmd });
+      this.logger.info &&
+        this.logger.info("Python可执行文件找到", { pythonCmd });
       const funasrStatus = await this.checkFunASRInstallation();
-      this.logger.info && this.logger.info("FunASR安装状态检查完成", funasrStatus);
+      this.logger.info &&
+        this.logger.info("FunASR安装状态检查完成", funasrStatus);
       this.isInitialized = true;
       this.preInitializeModels();
       this.logger.info && this.logger.info("FunASR管理器启动初始化完成");
     } catch (error) {
-      this.logger.warn && this.logger.warn("FunASR启动初始化失败，但不影响应用启动", error);
+      this.logger.warn &&
+        this.logger.warn("FunASR启动初始化失败，但不影响应用启动", error);
       this.isInitialized = true;
     }
   }
 
   async preInitializeModels() {
-    if (this.server.initializationPromise) return this.server.initializationPromise;
+    if (this.server.initializationPromise)
+      return this.server.initializationPromise;
 
     this.server.initializationPromise = (async () => {
       const installStatus = await this.checkFunASRInstallation();
@@ -115,7 +174,10 @@ class FunASRManager {
       const cachePath = this.getModelCachePath();
 
       return this.server._startFunASRServer(
-        pythonEnv, pythonCmd, serverPath, cachePath,
+        pythonEnv,
+        pythonCmd,
+        serverPath,
+        cachePath,
       );
     })();
     return this.server.initializationPromise;
@@ -147,7 +209,12 @@ class FunASRManager {
         initializing: this.server.initializationPromise !== null,
       };
     } catch (error) {
-      return { success: false, error: error.message, installed: false, models_downloaded: false };
+      return {
+        success: false,
+        error: error.message,
+        installed: false,
+        models_downloaded: false,
+      };
     }
   }
 }

@@ -1,4 +1,3 @@
-
 import { useFileTranscription } from "../hooks/useFileTranscription";
 import FileDropZone from "./FileDropZone";
 import TranscriptionProgress from "./TranscriptionProgress";
@@ -92,9 +91,7 @@ export default function FileImport() {
               />
             </svg>
             <div>
-              <p className="text-sm font-medium text-[#ff3b30]">
-                转录失败
-              </p>
+              <p className="text-sm font-medium text-[#ff3b30]">转录失败</p>
               <p className="text-sm text-[#ff3b30]/80 mt-1">
                 {error || "未知错误"}
               </p>
@@ -130,9 +127,7 @@ export default function FileImport() {
                 d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
               />
             </svg>
-            <p className="text-sm font-medium text-[#ff9500]">
-              转录已取消
-            </p>
+            <p className="text-sm font-medium text-[#ff9500]">转录已取消</p>
           </div>
         </div>
         <button

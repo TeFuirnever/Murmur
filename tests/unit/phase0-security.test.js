@@ -7,7 +7,6 @@ import LogManager from "../../src/helpers/logManager";
 // ---------------------------------------------------------------------------
 
 describe("Phase 0: Settings import whitelist", () => {
-
   it("should reject unknown setting keys", () => {
     expect(validateSetting("evil_injected_key", "value")).toBe(false);
     expect(validateSetting("__proto__", "value")).toBe(false);
@@ -16,7 +15,9 @@ describe("Phase 0: Settings import whitelist", () => {
 
   it("should accept known setting keys", () => {
     expect(validateSetting("ai_api_key", "sk-123")).toBe(true);
-    expect(validateSetting("ai_base_url", "https://api.openai.com/v1")).toBe(true);
+    expect(validateSetting("ai_base_url", "https://api.openai.com/v1")).toBe(
+      true,
+    );
     expect(validateSetting("ai_model", "gpt-4")).toBe(true);
     expect(validateSetting("theme", "dark")).toBe(true);
     expect(validateSetting("auto_paste", "paste")).toBe(true);
@@ -52,7 +53,10 @@ describe("Phase 0: Settings import whitelist", () => {
 describe("Phase 0: SQL LIKE wildcard escaping logic", () => {
   // Test the escaping logic directly without a real database
   function escapeLike(query) {
-    return query.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+    return query
+      .replace(/\\/g, "\\\\")
+      .replace(/%/g, "\\%")
+      .replace(/_/g, "\\_");
   }
 
   it("should escape % wildcard", () => {
@@ -81,7 +85,9 @@ describe("Phase 0: LogManager uses async I/O", () => {
     const fs = require("fs");
     const logManager = new LogManager();
 
-    const appendFileSpy = vi.spyOn(fs, "appendFile").mockImplementation(() => {});
+    const appendFileSpy = vi
+      .spyOn(fs, "appendFile")
+      .mockImplementation(() => {});
     const appendFileSyncSpy = vi.spyOn(fs, "appendFileSync");
 
     logManager.info("test message");
@@ -97,7 +103,9 @@ describe("Phase 0: LogManager uses async I/O", () => {
     const fs = require("fs");
     const logManager = new LogManager();
 
-    const appendFileSpy = vi.spyOn(fs, "appendFile").mockImplementation(() => {});
+    const appendFileSpy = vi
+      .spyOn(fs, "appendFile")
+      .mockImplementation(() => {});
     const appendFileSyncSpy = vi.spyOn(fs, "appendFileSync");
 
     logManager.logFunASR("info", "FunASR test message");

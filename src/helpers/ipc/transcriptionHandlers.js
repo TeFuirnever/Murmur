@@ -71,9 +71,7 @@ function register(ipcMain, managers) {
             processed_text: result.raw_text || result.text,
             source_type: "file",
             source_file_path: path.basename(audioPath),
-            segments: result.segments
-              ? JSON.stringify(result.segments)
-              : null,
+            segments: result.segments ? JSON.stringify(result.segments) : null,
             duration: result.duration || null,
           });
           if (dbResult && dbResult.id) {
@@ -149,42 +147,43 @@ function register(ipcMain, managers) {
     },
   );
 
-  ipcMain.handle(
-    C.TRANSCRIPTION.AI_REVIEW,
-    async (event, id, template) => {
-      try {
-        const row = databaseManager.getTranscriptionById(id);
-        if (!row) {
-          return { success: false, error: "转录记录不存在" };
-        }
-
-        const prompts = exportFormatters.getAIReviewPrompt(
-          template,
-          row.text || "",
-        );
-        const result = await processTextWithAI(
-          prompts.userPrompt,
-          "optimize",
-          databaseManager,
-          logger,
-        );
-
-        if (!result.success) {
-          return result;
-        }
-
-        return { success: true, reviewText: result.text };
-      } catch (error) {
-        logger.error("AI创作稿生成失败:", error);
-        return { success: false, error: error.message };
+  ipcMain.handle(C.TRANSCRIPTION.AI_REVIEW, async (event, id, template) => {
+    try {
+      const row = databaseManager.getTranscriptionById(id);
+      if (!row) {
+        return { success: false, error: "转录记录不存在" };
       }
-    },
-  );
+
+      const prompts = exportFormatters.getAIReviewPrompt(
+        template,
+        row.text || "",
+      );
+      const result = await processTextWithAI(
+        prompts.userPrompt,
+        "optimize",
+        databaseManager,
+        logger,
+      );
+
+      if (!result.success) {
+        return result;
+      }
+
+      return { success: true, reviewText: result.text };
+    } catch (error) {
+      logger.error("AI创作稿生成失败:", error);
+      return { success: false, error: error.message };
+    }
+  });
 
   ipcMain.handle(C.TRANSCRIPTION.SAVE, (event, data) => {
     try {
       const result = databaseManager.saveTranscription(data);
-      return { success: true, lastInsertRowid: result.lastInsertRowid ?? result.id, changes: result.changes };
+      return {
+        success: true,
+        lastInsertRowid: result.lastInsertRowid ?? result.id,
+        changes: result.changes,
+      };
     } catch (error) {
       logger.error("保存转录失败:", error);
       return { success: false, error: error.message };

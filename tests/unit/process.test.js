@@ -21,19 +21,20 @@ describe("process utils", () => {
   });
 
   it("rejects on timeout", async () => {
-    await expect(
-      runCommand("sleep", ["10"], { timeout: 100 }),
-    ).rejects.toThrow("timed out");
+    await expect(runCommand("sleep", ["10"], { timeout: 100 })).rejects.toThrow(
+      "timed out",
+    );
   });
 
   it("rejects on process error", async () => {
-    await expect(
-      runCommand("nonexistent_command_xyz"),
-    ).rejects.toThrow();
+    await expect(runCommand("nonexistent_command_xyz")).rejects.toThrow();
   });
 
   it("captures stderr output", async () => {
-    const result = await runCommand("node", ["-e", "process.stderr.write('err-msg')"]);
+    const result = await runCommand("node", [
+      "-e",
+      "process.stderr.write('err-msg')",
+    ]);
     expect(result.code).toBe(0);
   });
 });

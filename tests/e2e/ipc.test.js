@@ -20,8 +20,8 @@ test.describe("IPC bridge communication", () => {
   });
 
   test("should get system info via IPC", async () => {
-    const info = await window.evaluate(
-      () => window.electronAPI.getSystemInfo()
+    const info = await window.evaluate(() =>
+      window.electronAPI.getSystemInfo(),
     );
     expect(info).toBeDefined();
     expect(info).toHaveProperty("platform");
@@ -29,8 +29,8 @@ test.describe("IPC bridge communication", () => {
   });
 
   test("should check permissions via IPC", async () => {
-    const perms = await window.evaluate(
-      () => window.electronAPI.checkPermissions()
+    const perms = await window.evaluate(() =>
+      window.electronAPI.checkPermissions(),
     );
     expect(perms).toBeDefined();
     expect(perms).toHaveProperty("microphone");
@@ -41,10 +41,10 @@ test.describe("IPC bridge communication", () => {
     const testText = "E2E clipboard test " + Date.now();
     await window.evaluate(
       (t) => window.electronAPI.writeClipboard(t),
-      testText
+      testText,
     );
-    const result = await window.evaluate(
-      () => window.electronAPI.readClipboard()
+    const result = await window.evaluate(() =>
+      window.electronAPI.readClipboard(),
     );
     expect(result).toBe(testText);
   });

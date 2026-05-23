@@ -12,7 +12,7 @@ describe("Phase 3: Semi-auto update", () => {
     beforeAll(() => {
       contracts = fs.readFileSync(
         path.join(rootDir, "src/helpers/ipc-contracts.js"),
-        "utf8"
+        "utf8",
       );
     });
 
@@ -59,7 +59,7 @@ describe("Phase 3: Semi-auto update", () => {
 
     it("should export register function", () => {
       expect(updateManagerContent).toMatch(
-        /module\.exports\s*=\s*\{[^}]*register/
+        /module\.exports\s*=\s*\{[^}]*register/,
       );
     });
 
@@ -116,7 +116,7 @@ describe("Phase 3: Semi-auto update", () => {
     beforeAll(() => {
       preloadContent = fs.readFileSync(
         path.join(rootDir, "preload.js"),
-        "utf8"
+        "utf8",
       );
     });
 
@@ -139,12 +139,14 @@ describe("Phase 3: Semi-auto update", () => {
     beforeAll(() => {
       settingsContent = fs.readFileSync(
         path.join(rootDir, "src/settings.jsx"),
-        "utf8"
+        "utf8",
       );
     });
 
     it("should have download progress state", () => {
-      expect(settingsContent).toMatch(/downloadProgress|updateDownloadProgress/);
+      expect(settingsContent).toMatch(
+        /downloadProgress|updateDownloadProgress/,
+      );
     });
 
     it("should have changelog/release notes display", () => {
@@ -158,7 +160,7 @@ describe("Phase 3: Semi-auto update", () => {
     beforeAll(() => {
       typeFile = fs.readFileSync(
         path.join(rootDir, "src/electronAPI.d.ts"),
-        "utf8"
+        "utf8",
       );
     });
 

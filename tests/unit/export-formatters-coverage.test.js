@@ -147,9 +147,7 @@ describe("exportFormatters - extended coverage", () => {
   describe("smartMergeSrt", () => {
     it("splits long text at punctuation boundaries", () => {
       const longText = "这是一段非常长的文本".repeat(10);
-      const segs = [
-        { start_ms: 0, end_ms: 4000, text: longText },
-      ];
+      const segs = [{ start_ms: 0, end_ms: 4000, text: longText }];
       const merged = smartMergeSrt(segs);
       expect(merged.length).toBe(1);
       expect(merged[0].text).toContain("\n");
@@ -172,7 +170,11 @@ describe("exportFormatters - extended coverage", () => {
 
     it("splits at punctuation when text over 42 chars", () => {
       const segs = [
-        { start_ms: 0, end_ms: 4000, text: "a，b，c，d，e，f，g，h，i，j，k，l，m，n，o，p，q，r，s，t，u，v" },
+        {
+          start_ms: 0,
+          end_ms: 4000,
+          text: "a，b，c，d，e，f，g，h，i，j，k，l，m，n，o，p，q，r，s，t，u，v",
+        },
       ];
       const merged = smartMergeSrt(segs);
       expect(merged[0].text).toContain("\n");

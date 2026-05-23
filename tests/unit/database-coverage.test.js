@@ -35,7 +35,11 @@ describe("DatabaseManager - extended coverage", () => {
 
   describe("setSafeStorage", () => {
     it("stores safeStorage reference", () => {
-      const ss = { isEncryptionAvailable: () => true, encryptString: vi.fn(), decryptString: vi.fn() };
+      const ss = {
+        isEncryptionAvailable: () => true,
+        encryptString: vi.fn(),
+        decryptString: vi.fn(),
+      };
       db.setSafeStorage(ss);
       expect(db.safeStorage).toBe(ss);
     });
@@ -72,7 +76,11 @@ describe("DatabaseManager - extended coverage", () => {
     it("returns default when encrypted value cannot be decrypted without safeStorage", () => {
       const encrypted = Buffer.from("enc").toString("base64");
       const raw = JSON.stringify({ _enc: encrypted });
-      db.db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)").run("ai_api_key", raw);
+      db.db
+        .prepare(
+          "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)",
+        )
+        .run("ai_api_key", raw);
 
       expect(db.getSetting("ai_api_key", "default")).toBe("default");
     });
@@ -113,7 +121,10 @@ describe("DatabaseManager - extended coverage", () => {
       db.setSafeStorage(ss1);
 
       db.setSetting("settings_schema_version", 0);
-      db.db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)")
+      db.db
+        .prepare(
+          "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)",
+        )
         .run("ai_api_key", JSON.stringify("plaintext-key"));
 
       const ss2 = {
@@ -183,7 +194,9 @@ describe("DatabaseManager - extended coverage", () => {
       const logDb = new DatabaseManager({ warn: vi.fn(), error: vi.fn() });
       logDb.initialize(tmpDir);
       const r = logDb.saveTranscription({ text: "bad segs" });
-      logDb.db.prepare("UPDATE transcriptions SET segments = ? WHERE id = ?").run("not-json", r.lastInsertRowid);
+      logDb.db
+        .prepare("UPDATE transcriptions SET segments = ? WHERE id = ?")
+        .run("not-json", r.lastInsertRowid);
       const row = logDb.getTranscriptionWithSegments(r.lastInsertRowid);
       expect(row.parsedSegments).toEqual([]);
       logDb.close();
@@ -310,7 +323,10 @@ describe("DatabaseManager - extended coverage", () => {
 
   describe("getSetting", () => {
     it("handles non-JSON stored value", () => {
-      db.db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)")
+      db.db
+        .prepare(
+          "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)",
+        )
         .run("raw", "not-json");
       expect(db.getSetting("raw")).toBe("not-json");
     });
@@ -318,11 +334,13 @@ describe("DatabaseManager - extended coverage", () => {
 
   describe("getAllSettings", () => {
     it("handles non-JSON stored value", () => {
-      db.db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)")
+      db.db
+        .prepare(
+          "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)",
+        )
         .run("bad", "not-json");
       const all = db.getAllSettings();
       expect(all.bad).toBe("not-json");
     });
   });
-
 });

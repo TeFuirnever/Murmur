@@ -30,6 +30,9 @@ describe("static import audit — every C.* consumer imports ipc-contracts", () 
       }
     }
 
-    expect(offenders, `files use C.X.Y but don't require ipc-contracts:\n${offenders.join("\n")}`).toEqual([]);
+    expect(
+      offenders,
+      `files use C.X.Y but don't require ipc-contracts:\n${offenders.join("\n")}`,
+    ).toEqual([]);
   });
 });

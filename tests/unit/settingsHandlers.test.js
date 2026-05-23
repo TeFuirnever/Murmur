@@ -22,7 +22,9 @@ describe("settingsHandlers", () => {
 
     managers = {
       databaseManager: {
-        getSetting: vi.fn((key, defaultValue) => defaultValue || "value-" + key),
+        getSetting: vi.fn(
+          (key, defaultValue) => defaultValue || "value-" + key,
+        ),
         setSetting: vi.fn(() => true),
         getAllSettings: vi.fn(() => ({
           ai_api_key: "sk-test-12345678",
@@ -50,12 +52,18 @@ describe("settingsHandlers", () => {
 
   it("get-setting delegates to databaseManager", () => {
     ipcMain._handlers["get-setting"]({}, "test-key", "default");
-    expect(managers.databaseManager.getSetting).toHaveBeenCalledWith("test-key", "default");
+    expect(managers.databaseManager.getSetting).toHaveBeenCalledWith(
+      "test-key",
+      "default",
+    );
   });
 
   it("set-setting delegates to databaseManager", () => {
     ipcMain._handlers["set-setting"]({}, "theme", "dark");
-    expect(managers.databaseManager.setSetting).toHaveBeenCalledWith("theme", "dark");
+    expect(managers.databaseManager.setSetting).toHaveBeenCalledWith(
+      "theme",
+      "dark",
+    );
   });
 
   it("get-all-settings masks API key", () => {
@@ -71,7 +79,10 @@ describe("settingsHandlers", () => {
 
   it("save-setting delegates to databaseManager.setSetting", () => {
     ipcMain._handlers["save-setting"]({}, "auto_paste", "clipboard_only");
-    expect(managers.databaseManager.setSetting).toHaveBeenCalledWith("auto_paste", "clipboard_only");
+    expect(managers.databaseManager.setSetting).toHaveBeenCalledWith(
+      "auto_paste",
+      "clipboard_only",
+    );
   });
 
   it("reset-settings delegates to databaseManager", () => {

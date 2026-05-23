@@ -31,9 +31,7 @@ describe("assertElectronAPI", () => {
   it("returns false and renders fallback DOM when electronAPI is missing", () => {
     delete globalThis.window.electronAPI;
     expect(assertElectronAPI()).toBe(false);
-    expect(globalThis.document.body.innerHTML).toContain(
-      "Electron API 不可用",
-    );
+    expect(globalThis.document.body.innerHTML).toContain("Electron API 不可用");
     expect(globalThis.document.body.innerHTML).toContain("location.reload()");
   });
 });

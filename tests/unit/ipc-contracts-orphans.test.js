@@ -63,9 +63,7 @@ describe("ipc-contracts orphans", () => {
     const preloadFile = path.join(process.cwd(), "preload.js");
     const mainFile = path.join(process.cwd(), "main.js");
     const allFiles = [...helperFiles, preloadFile, mainFile];
-    const haystack = allFiles
-      .map((f) => fs.readFileSync(f, "utf8"))
-      .join("\n");
+    const haystack = allFiles.map((f) => fs.readFileSync(f, "utf8")).join("\n");
 
     const flat = flatten(C);
     const orphans = [];

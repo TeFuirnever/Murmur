@@ -42,7 +42,10 @@ async function processTextWithAI(text, mode, databaseManager, logger) {
       (await databaseManager.getSetting("ai_model")) || "gpt-3.5-turbo";
 
     if (!validateAIBaseUrl(baseUrl)) {
-      return { success: false, error: "请填写有效的 https API 地址（不支持 http 或内网地址）" };
+      return {
+        success: false,
+        error: "请填写有效的 https API 地址（不支持 http 或内网地址）",
+      };
     }
 
     const { system, user } = buildPrompt(mode, text);
@@ -155,8 +158,7 @@ async function checkAIStatus(testConfig, databaseManager, logger) {
       baseUrl =
         (await databaseManager.getSetting("ai_base_url")) ||
         "https://api.openai.com/v1";
-      model =
-        (await databaseManager.getSetting("ai_model")) || "gpt-3.5-turbo";
+      model = (await databaseManager.getSetting("ai_model")) || "gpt-3.5-turbo";
       logger.info("使用已保存配置:", { baseUrl, model });
     }
 

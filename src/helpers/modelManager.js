@@ -13,7 +13,8 @@ class ModelManager {
     this.modelConfigs = {
       asr: {
         name: "damo/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
-        cache_path: "speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+        cache_path:
+          "speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
         expected_size: 840 * 1024 * 1024,
       },
       vad: {
@@ -42,7 +43,11 @@ class ModelManager {
           );
           if (hasExpectedModel) return damoPath;
         }
-        const found = this.findDamoRoot(path.join(startDir, entry.name), depth + 1, maxDepth);
+        const found = this.findDamoRoot(
+          path.join(startDir, entry.name),
+          depth + 1,
+          maxDepth,
+        );
         if (found) return found;
       }
     }
@@ -50,8 +55,17 @@ class ModelManager {
   }
 
   getModelCachePath() {
-    const userDataModels = path.join(require("electron").app.getPath("userData"), "models");
-    const modelScopeCache = path.join(require("os").homedir(), ".cache", "modelscope", "hub", "models");
+    const userDataModels = path.join(
+      require("electron").app.getPath("userData"),
+      "models",
+    );
+    const modelScopeCache = path.join(
+      require("os").homedir(),
+      ".cache",
+      "modelscope",
+      "hub",
+      "models",
+    );
 
     const candidates = [];
     if (process.env.NODE_ENV === "development") {
@@ -63,11 +77,17 @@ class ModelManager {
     for (const candidate of candidates) {
       if (!fs.existsSync(candidate)) continue;
       const damoSub = path.join(candidate, "damo");
-      if (fs.existsSync(damoSub) && fs.readdirSync(damoSub).length > 0) return damoSub;
+      if (fs.existsSync(damoSub) && fs.readdirSync(damoSub).length > 0)
+        return damoSub;
       if (fs.readdirSync(candidate).length > 0) {
-        const hasExpected = fs.readdirSync(candidate).some(
-          (n) => n.startsWith("speech_paraformer") || n.startsWith("speech_fsmn") || n.startsWith("punc_ct"),
-        );
+        const hasExpected = fs
+          .readdirSync(candidate)
+          .some(
+            (n) =>
+              n.startsWith("speech_paraformer") ||
+              n.startsWith("speech_fsmn") ||
+              n.startsWith("punc_ct"),
+          );
         if (hasExpected) return candidate;
       }
     }
@@ -81,13 +101,21 @@ class ModelManager {
 
   async checkModelFiles() {
     const now = Date.now();
-    if (globalModelCheckCache && now - globalModelCheckTime < GLOBAL_CACHE_TIME) {
+    if (
+      globalModelCheckCache &&
+      now - globalModelCheckTime < GLOBAL_CACHE_TIME
+    ) {
       return globalModelCheckCache;
     }
 
     const cachePath = this.getModelCachePath();
     if (!fs.existsSync(cachePath)) {
-      const result = { success: true, models_downloaded: false, missing_models: ["all"], cache_path: cachePath };
+      const result = {
+        success: true,
+        models_downloaded: false,
+        missing_models: ["all"],
+        cache_path: cachePath,
+      };
       this.modelsDownloaded = false;
       return result;
     }
@@ -131,9 +159,12 @@ class ModelManager {
       const stats = fs.statSync(modelFile);
       if (stats.isDirectory()) {
         const entries = fs.readdirSync(modelFile);
-        return entries.some(e =>
-          e === "model.pt" || e === "pytorch_model.bin" ||
-          e === "configuration.json" || e === "config.yaml"
+        return entries.some(
+          (e) =>
+            e === "model.pt" ||
+            e === "pytorch_model.bin" ||
+            e === "configuration.json" ||
+            e === "config.yaml",
         );
       }
       return stats.size >= config.expected_size * 0.9;
@@ -149,7 +180,8 @@ class ModelManager {
     }
 
     const totalExpected = Object.values(this.modelConfigs).reduce(
-      (sum, config) => sum + config.expected_size, 0,
+      (sum, config) => sum + config.expected_size,
+      0,
     );
 
     let totalDownloaded = 0;
@@ -166,7 +198,11 @@ class ModelManager {
           percentage: Math.min(100, (stats.size / config.expected_size) * 100),
         };
       } else {
-        modelProgress[modelType] = { downloaded: 0, total: config.expected_size, percentage: 0 };
+        modelProgress[modelType] = {
+          downloaded: 0,
+          total: config.expected_size,
+          percentage: 0,
+        };
       }
     }
 
@@ -183,7 +219,11 @@ class ModelManager {
     if (process.env.NODE_ENV === "development") {
       return path.join(__dirname, "..", "..", "download_models.py");
     }
-    return path.join(process.resourcesPath, "app.asar.unpacked", "download_models.py");
+    return path.join(
+      process.resourcesPath,
+      "app.asar.unpacked",
+      "download_models.py",
+    );
   }
 
   async downloadModels(progressCallback = null) {
@@ -192,7 +232,8 @@ class ModelManager {
       return { success: true, message: "模型文件已下载" };
     }
 
-    const hasPartial = checkResult.missing_models.length < Object.keys(this.modelConfigs).length;
+    const hasPartial =
+      checkResult.missing_models.length < Object.keys(this.modelConfigs).length;
     if (hasPartial && progressCallback) {
       progressCallback({ stage: "resuming", percentage: 0 });
     }
@@ -205,14 +246,21 @@ class ModelManager {
     const cachePath = this.getModelCachePath();
 
     return new Promise((resolve, reject) => {
-      const downloadProcess = spawn("python3", [scriptPath, "--output", cachePath], {
-        stdio: ["pipe", "pipe", "pipe"],
-      });
+      const downloadProcess = spawn(
+        "python3",
+        [scriptPath, "--output", cachePath],
+        {
+          stdio: ["pipe", "pipe", "pipe"],
+        },
+      );
 
       let hasError = false;
 
       downloadProcess.stdout.on("data", (data) => {
-        const lines = data.toString().split("\n").filter((l) => l.trim());
+        const lines = data
+          .toString()
+          .split("\n")
+          .filter((l) => l.trim());
         for (const line of lines) {
           try {
             const result = JSON.parse(line);
@@ -246,7 +294,8 @@ class ModelManager {
       });
 
       downloadProcess.stderr.on("data", (data) => {
-        this.logger.warn && this.logger.warn("Download stderr:", data.toString());
+        this.logger.warn &&
+          this.logger.warn("Download stderr:", data.toString());
       });
 
       downloadProcess.on("close", (code) => {

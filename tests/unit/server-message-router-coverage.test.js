@@ -37,7 +37,9 @@ describe("ServerMessageRouter - extended coverage", () => {
     });
 
     proc.stdout.push("not json\n");
-    proc.stdout.push(JSON.stringify({ success: true, request_id: written.request_id }) + "\n");
+    proc.stdout.push(
+      JSON.stringify({ success: true, request_id: written.request_id }) + "\n",
+    );
 
     const result = await promise;
     expect(result.success).toBe(true);
@@ -46,16 +48,28 @@ describe("ServerMessageRouter - extended coverage", () => {
   it("handles progress messages", async () => {
     router.attach(proc);
     const onProgress = vi.fn();
-    const promise = router.sendCommand("transcribe", {}, { onProgress, timeout: 5000 });
+    const promise = router.sendCommand(
+      "transcribe",
+      {},
+      { onProgress, timeout: 5000 },
+    );
 
     const written = await new Promise((resolve) => {
       proc.stdin.once("data", (d) => resolve(JSON.parse(d.toString())));
     });
 
-    proc.stdout.push(JSON.stringify({ type: "progress", request_id: written.request_id, percent: 50 }) + "\n");
+    proc.stdout.push(
+      JSON.stringify({
+        type: "progress",
+        request_id: written.request_id,
+        percent: 50,
+      }) + "\n",
+    );
     expect(onProgress).toHaveBeenCalled();
 
-    proc.stdout.push(JSON.stringify({ success: true, request_id: written.request_id }) + "\n");
+    proc.stdout.push(
+      JSON.stringify({ success: true, request_id: written.request_id }) + "\n",
+    );
     const result = await promise;
     expect(result.success).toBe(true);
   });
@@ -98,7 +112,11 @@ describe("ServerMessageRouter - extended coverage", () => {
     vi.useFakeTimers();
     router.attach(proc);
 
-    const promise = router.sendCommand("slow", {}, { timeout: 100, timeoutError: "custom timeout" });
+    const promise = router.sendCommand(
+      "slow",
+      {},
+      { timeout: 100, timeoutError: "custom timeout" },
+    );
     vi.advanceTimersByTime(150);
 
     await expect(promise).rejects.toThrow("custom timeout");
@@ -121,7 +139,9 @@ describe("ServerMessageRouter - extended coverage", () => {
       proc.stdin.once("data", (d) => resolve(JSON.parse(d.toString())));
     });
 
-    proc.stdout.push(JSON.stringify({ success: true, request_id: written.request_id }) + "\n");
+    proc.stdout.push(
+      JSON.stringify({ success: true, request_id: written.request_id }) + "\n",
+    );
     const result = await promise;
     expect(result.success).toBe(true);
   });
@@ -138,17 +158,29 @@ describe("ServerMessageRouter - extended coverage", () => {
     router.attach(proc);
 
     const onProgress = vi.fn();
-    const promise = router.sendCommand("transcribe", {}, { onProgress, timeout: 5000 });
+    const promise = router.sendCommand(
+      "transcribe",
+      {},
+      { onProgress, timeout: 5000 },
+    );
 
     const written = await new Promise((resolve) => {
       proc.stdin.once("data", (d) => resolve(JSON.parse(d.toString())));
     });
 
-    proc.stdout.push(JSON.stringify({ type: "progress", request_id: written.request_id, percent: 50 }) + "\n");
+    proc.stdout.push(
+      JSON.stringify({
+        type: "progress",
+        request_id: written.request_id,
+        percent: 50,
+      }) + "\n",
+    );
 
     vi.advanceTimersByTime(10000);
 
-    proc.stdout.push(JSON.stringify({ success: true, request_id: written.request_id }) + "\n");
+    proc.stdout.push(
+      JSON.stringify({ success: true, request_id: written.request_id }) + "\n",
+    );
     const result = await promise;
     expect(result.success).toBe(true);
 
@@ -160,13 +192,23 @@ describe("ServerMessageRouter - extended coverage", () => {
     router.attach(proc);
 
     const onProgress = vi.fn();
-    const promise = router.sendCommand("transcribe", {}, { onProgress, timeout: 5000 });
+    const promise = router.sendCommand(
+      "transcribe",
+      {},
+      { onProgress, timeout: 5000 },
+    );
 
     const written = await new Promise((resolve) => {
       proc.stdin.once("data", (d) => resolve(JSON.parse(d.toString())));
     });
 
-    proc.stdout.push(JSON.stringify({ type: "progress", request_id: written.request_id, percent: 50 }) + "\n");
+    proc.stdout.push(
+      JSON.stringify({
+        type: "progress",
+        request_id: written.request_id,
+        percent: 50,
+      }) + "\n",
+    );
 
     vi.advanceTimersByTime(MAX_ENTRY_AGE + 1000);
 
@@ -208,9 +250,17 @@ describe("ServerMessageRouter - extended coverage", () => {
     });
 
     // Progress message arrives but no onProgress callback registered
-    proc.stdout.push(JSON.stringify({ type: "progress", request_id: written.request_id, percent: 50 }) + "\n");
+    proc.stdout.push(
+      JSON.stringify({
+        type: "progress",
+        request_id: written.request_id,
+        percent: 50,
+      }) + "\n",
+    );
 
-    proc.stdout.push(JSON.stringify({ success: true, request_id: written.request_id }) + "\n");
+    proc.stdout.push(
+      JSON.stringify({ success: true, request_id: written.request_id }) + "\n",
+    );
     const result = await promise;
     expect(result.success).toBe(true);
   });
@@ -220,7 +270,9 @@ describe("ServerMessageRouter - extended coverage", () => {
     router.attach(proc);
 
     let rejectFn;
-    const promise = new Promise((_, rej) => { rejectFn = rej; });
+    const promise = new Promise((_, rej) => {
+      rejectFn = rej;
+    });
 
     // Manually inject a stale entry into pending
     router.pending.set("stale-id", {

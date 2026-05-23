@@ -6,7 +6,16 @@ import { useHotkey } from "./hooks/useHotkey";
 import { useWindowDrag } from "./hooks/useWindowDrag";
 import { useRecording } from "./hooks/useRecording";
 import { useModelStatus } from "./hooks/useModelStatus";
-import { Settings, History, Copy, Download, Minus, Square, X, Maximize2 } from "lucide-react";
+import {
+  Settings,
+  History,
+  Copy,
+  Download,
+  Minus,
+  Square,
+  X,
+  Maximize2,
+} from "lucide-react";
 import SettingsPanel from "./components/SettingsPanel";
 import { ModelDownloadProgress } from "./components/ui/model-status-indicator";
 import FileImport from "./components/FileImport";
@@ -227,12 +236,8 @@ export default function App() {
   const [appMode, setAppMode] = useState("recording"); // recording | file-import
   const [isMaximized, setIsMaximized] = useState(false);
 
-  const {
-    handleMouseDown,
-    handleMouseMove,
-    handleMouseUp,
-    handleClick,
-  } = useWindowDrag();
+  const { handleMouseDown, handleMouseMove, handleMouseUp, handleClick } =
+    useWindowDrag();
   const modelStatus = useModelStatus();
 
   const handleRecordingCompleteRef = useRef(null);
@@ -251,8 +256,6 @@ export default function App() {
     onAIOptimizationComplete: (...args) =>
       handleAIOptimizationCompleteRef.current?.(...args),
   });
-
-
 
   // 防重复粘贴的引用
   const lastPasteRef = useRef({ text: "", timestamp: 0 });
@@ -584,7 +587,6 @@ export default function App() {
     }
   }, [recordingError]);
 
-
   // 确定当前麦克风状态
   const getMicState = () => {
     if (isRecording) return "recording";
@@ -705,19 +707,32 @@ export default function App() {
                 aria-label="最小化"
                 className="p-2 hover:bg-[#e8e8ed] dark:hover:bg-[#3a3a3c] rounded-lg transition-colors"
               >
-                <Minus className="w-4 h-4 text-[#1d1d1f]/60 dark:text-[#f5f5f7]/60" aria-hidden="true" />
+                <Minus
+                  className="w-4 h-4 text-[#1d1d1f]/60 dark:text-[#f5f5f7]/60"
+                  aria-hidden="true"
+                />
               </button>
             </Tooltip>
-            <Tooltip content={isMaximized ? "还原" : "最大化"} position="bottom">
+            <Tooltip
+              content={isMaximized ? "还原" : "最大化"}
+              position="bottom"
+            >
               <button
                 onClick={handleMaximize}
                 aria-label={isMaximized ? "还原" : "最大化"}
                 className="p-2 hover:bg-[#e8e8ed] dark:hover:bg-[#3a3a3c] rounded-lg transition-colors"
               >
                 {isMaximized ? (
-                  <Square className="w-3.5 h-3.5 text-[#1d1d1f]/60 dark:text-[#f5f5f7]/60" strokeWidth={2.5} aria-hidden="true" />
+                  <Square
+                    className="w-3.5 h-3.5 text-[#1d1d1f]/60 dark:text-[#f5f5f7]/60"
+                    strokeWidth={2.5}
+                    aria-hidden="true"
+                  />
                 ) : (
-                  <Maximize2 className="w-4 h-4 text-[#1d1d1f]/60 dark:text-[#f5f5f7]/60" aria-hidden="true" />
+                  <Maximize2
+                    className="w-4 h-4 text-[#1d1d1f]/60 dark:text-[#f5f5f7]/60"
+                    aria-hidden="true"
+                  />
                 )}
               </button>
             </Tooltip>
@@ -727,7 +742,10 @@ export default function App() {
                 aria-label="关闭"
                 className="p-2 hover:bg-[#ff5f57] rounded-lg transition-colors group"
               >
-                <X className="w-4 h-4 text-[#1d1d1f]/60 dark:text-[#f5f5f7]/60 group-hover:text-white" aria-hidden="true" />
+                <X
+                  className="w-4 h-4 text-[#1d1d1f]/60 dark:text-[#f5f5f7]/60 group-hover:text-white"
+                  aria-hidden="true"
+                />
               </button>
             </Tooltip>
             <div className="w-px h-5 bg-[#d2d2d7] dark:bg-[#48484a] mx-1" />
@@ -798,7 +816,10 @@ export default function App() {
                     }
                   }}
                   onKeyDown={(e) => {
-                    if ((e.key === "Enter" || e.key === " ") && !micProps.disabled) {
+                    if (
+                      (e.key === "Enter" || e.key === " ") &&
+                      !micProps.disabled
+                    ) {
                       e.preventDefault();
                       toggleRecording();
                     }

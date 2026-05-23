@@ -5,7 +5,7 @@
 Instructions for AI agents working. All content in English.
 
 > **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
-> 
+>
 > Architecture reference: `docs/`
 
 ---
@@ -126,7 +126,7 @@ Instructions for AI agents working. All content in English.
 - AI prompt templates → `src/helpers/aiPrompts.js`
 - Security measures → `SECURITY.md`
 
-# 
+#
 
 ## Agent skills
 
@@ -143,6 +143,7 @@ Five canonical triage roles: `needs-triage`, `needs-info`, `ready-for-agent`, `r
 Single-context: one `CONTEXT.md` at root + `docs/adr/`. See `docs/agents/domain.md`.
 
 ## GBrain Configuration (configured by /setup-gbrain)
+
 - Mode: local-stdio
 - Engine: pglite
 - Config file: ~/.gbrain/config.json (mode 0600)
@@ -152,24 +153,27 @@ Single-context: one `CONTEXT.md` at root + `docs/adr/`. See `docs/agents/domain.
 - Current repo policy: read-write
 
 ## GBrain Search Guidance (configured by /sync-gbrain)
+
 <!-- gstack-gbrain-search-guidance:start -->
 
 GBrain is set up and synced on this machine. The agent should prefer gbrain
 over Grep when the question is semantic or when you don't know the exact
 identifier yet. Two indexed corpora available via the `gbrain` CLI:
+
 - This repo's code (registered as `gstack-code-<repo>` source).
 - `~/.gstack/` curated memory (registered as `gstack-brain-<user>` source via
   the existing federation pipeline).
 
 Prefer gbrain when:
+
 - "Where is X handled?" / semantic intent, no exact string yet:
-    `gbrain search "<terms>"` or `gbrain query "<question>"`
+  `gbrain search "<terms>"` or `gbrain query "<question>"`
 - "Where is symbol Y defined?" / symbol-based code questions:
-    `gbrain code-def <symbol>` or `gbrain code-refs <symbol>`
+  `gbrain code-def <symbol>` or `gbrain code-refs <symbol>`
 - "What calls Y?" / "What does Y depend on?":
-    `gbrain code-callers <symbol>` / `gbrain code-callees <symbol>`
+  `gbrain code-callers <symbol>` / `gbrain code-callees <symbol>`
 - "What did we decide last time?" / past plans, retros, learnings:
-    `gbrain search "<terms>" --source gstack-brain-<user>`
+  `gbrain search "<terms>" --source gstack-brain-<user>`
 
 Grep is still right for known exact strings, regex, multiline patterns, and
 file globs. The brain auto-syncs incrementally on every gstack skill start.

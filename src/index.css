@@ -32,8 +32,9 @@
     --input: 240 1% 83.1%;
     --ring: 211 100% 44.5%;
     --radius: 0.5rem;
-    --font-sans: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei",
-      "PingFang SC", "Hiragino Sans GB", sans-serif;
+    --font-sans:
+      system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC",
+      "Hiragino Sans GB", sans-serif;
   }
 
   .dark {

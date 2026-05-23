@@ -18,7 +18,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
 
       - name: Install dependencies
@@ -27,6 +27,9 @@ jobs:
       - name: Build preload bundle
         run: pnpm run build:preload
 
+      - name: Check formatting
+        run: pnpm format:check
+
       - name: Lint
         run: pnpm lint
 
@@ -34,8 +37,18 @@ jobs:
         run: pnpm audit --audit-level moderate
         continue-on-error: true
 
-      - name: Test
-        run: pnpm test
+      - name: License compliance
+        run: pnpm license:check
+
+      - name: Dependency review
+        if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@v4
+
+      - name: Test with coverage
+        run: pnpm test -- --coverage
+
+      - name: Build renderer
+        run: pnpm run build:renderer
 
       - name: E2E tests
         run: pnpm test:e2e

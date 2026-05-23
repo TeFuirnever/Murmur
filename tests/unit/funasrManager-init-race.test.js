@@ -13,16 +13,20 @@ describe("funasrManager preInitializeModels race", () => {
   });
 
   it("concurrent calls only start the server once", async () => {
-    const m = new FunASRManager({ info: vi.fn(), warn: vi.fn(), error: vi.fn() });
+    const m = new FunASRManager({
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    });
 
     // Replace each async dependency with a microtask-yielding stub so
     // the race window is real. If any of these returns synchronously,
     // the bug would be hidden by event-loop collapse.
-    m.checkFunASRInstallation = vi.fn(() =>
-      new Promise((r) => setImmediate(() => r({ installed: true }))),
+    m.checkFunASRInstallation = vi.fn(
+      () => new Promise((r) => setImmediate(() => r({ installed: true }))),
     );
-    m.findPythonExecutable = vi.fn(() =>
-      new Promise((r) => setImmediate(() => r("python3"))),
+    m.findPythonExecutable = vi.fn(
+      () => new Promise((r) => setImmediate(() => r("python3"))),
     );
     m.getFunASRServerPath = vi.fn(() => "/srv");
     m.setupIsolatedEnvironment = vi.fn();
@@ -42,8 +46,14 @@ describe("funasrManager preInitializeModels race", () => {
   });
 
   it("does not start the server when funasr is not installed", async () => {
-    const m = new FunASRManager({ info: vi.fn(), warn: vi.fn(), error: vi.fn() });
-    m.checkFunASRInstallation = vi.fn(() => Promise.resolve({ installed: false }));
+    const m = new FunASRManager({
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    });
+    m.checkFunASRInstallation = vi.fn(() =>
+      Promise.resolve({ installed: false }),
+    );
     const startSpy = vi.fn();
     m.server._startFunASRServer = startSpy;
 

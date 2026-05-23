@@ -31,14 +31,14 @@ pnpm dev
 
 ### 常用命令
 
-| 命令 | 说明 |
-|------|------|
-| `pnpm dev` | 启动开发模式（Electron + Vite HMR） |
-| `pnpm test` | 运行所有测试 |
-| `pnpm test:watch` | 监听模式运行测试 |
-| `pnpm lint` | ESLint 代码检查 |
-| `pnpm run build` | 构建生产版本 |
-| `pnpm run prepare:python:embedded` | 准备嵌入式 Python 环境 |
+| 命令                               | 说明                                |
+| ---------------------------------- | ----------------------------------- |
+| `pnpm dev`                         | 启动开发模式（Electron + Vite HMR） |
+| `pnpm test`                        | 运行所有测试                        |
+| `pnpm test:watch`                  | 监听模式运行测试                    |
+| `pnpm lint`                        | ESLint 代码检查                     |
+| `pnpm run build`                   | 构建生产版本                        |
+| `pnpm run prepare:python:embedded` | 准备嵌入式 Python 环境              |
 
 ## 项目结构
 
@@ -166,16 +166,16 @@ FunASR 以 Python 子进程方式运行，生命周期由 `FunASRManager`（`src
 
 ### 关键模块
 
-| 模块 | 文件 | 职责 |
-|------|------|------|
-| FunASRManager | `src/helpers/funasrManager.js` | FunASR 门面，委托到 `funasrServer.js`、`modelManager.js`、`pythonEnvironment.js`、`audioFileHelpers.js` |
-| IPC Handlers | `src/helpers/ipc/` | 按 9 个领域拆分的 Electron IPC 处理器，常量定义在 `ipc-contracts.js` |
-| DatabaseManager | `src/helpers/database.js` | SQLite CRUD、schema 迁移、数据查询分页 |
-| WindowManager | `src/helpers/windowManager.js` | 窗口创建、大小管理、浮动控件 |
-| ClipboardManager | `src/helpers/clipboard.js` | 自动粘贴到光标位置（macOS osascript / Electron clipboard） |
-| HotkeyManager | `src/helpers/hotkeyManager.js` | 全局热键注册、F2 双击检测 |
-| PythonInstaller | `src/helpers/pythonInstaller.js` | 嵌入式 Python 环境准备 |
-| ServerMessageRouter | `src/helpers/serverMessageRouter.js` | UUID 请求-响应匹配路由 |
+| 模块                | 文件                                 | 职责                                                                                                    |
+| ------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| FunASRManager       | `src/helpers/funasrManager.js`       | FunASR 门面，委托到 `funasrServer.js`、`modelManager.js`、`pythonEnvironment.js`、`audioFileHelpers.js` |
+| IPC Handlers        | `src/helpers/ipc/`                   | 按 9 个领域拆分的 Electron IPC 处理器，常量定义在 `ipc-contracts.js`                                    |
+| DatabaseManager     | `src/helpers/database.js`            | SQLite CRUD、schema 迁移、数据查询分页                                                                  |
+| WindowManager       | `src/helpers/windowManager.js`       | 窗口创建、大小管理、浮动控件                                                                            |
+| ClipboardManager    | `src/helpers/clipboard.js`           | 自动粘贴到光标位置（macOS osascript / Electron clipboard）                                              |
+| HotkeyManager       | `src/helpers/hotkeyManager.js`       | 全局热键注册、F2 双击检测                                                                               |
+| PythonInstaller     | `src/helpers/pythonInstaller.js`     | 嵌入式 Python 环境准备                                                                                  |
+| ServerMessageRouter | `src/helpers/serverMessageRouter.js` | UUID 请求-响应匹配路由                                                                                  |
 
 ## 报告问题
 

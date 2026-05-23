@@ -6,9 +6,7 @@ const rootDir = path.resolve(__dirname, "../../");
 
 function readFile(relPath) {
   const fullPath = path.join(rootDir, relPath);
-  return fs.existsSync(fullPath)
-    ? fs.readFileSync(fullPath, "utf8")
-    : null;
+  return fs.existsSync(fullPath) ? fs.readFileSync(fullPath, "utf8") : null;
 }
 
 describe("Phase 5: Accessibility a11y", () => {
@@ -95,13 +93,11 @@ describe("Phase 5: Accessibility a11y", () => {
 
     it("should not have setAccessibilitySupportEnabled in active code", () => {
       const hasActive = !mainContent.match(
-        /^[^/]*setAccessibilitySupportEnabled/m
+        /^[^/]*setAccessibilitySupportEnabled/m,
       );
-      const isCommented = mainContent.includes(
-        "// setAccessibilitySupportEnabled"
-      ) || mainContent.includes(
-        "// try {"
-      );
+      const isCommented =
+        mainContent.includes("// setAccessibilitySupportEnabled") ||
+        mainContent.includes("// try {");
       expect(hasActive || isCommented).toBe(true);
     });
   });

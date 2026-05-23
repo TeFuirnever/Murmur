@@ -39,8 +39,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   downloadModels: () => ipcRenderer.invoke(C.MODELS.DOWNLOAD),
 
   // AI文本处理
-  processText: (text, mode) =>
-    ipcRenderer.invoke(C.AI.PROCESS, text, mode),
+  processText: (text, mode) => ipcRenderer.invoke(C.AI.PROCESS, text, mode),
   checkAIStatus: (testConfig) =>
     ipcRenderer.invoke(C.AI.CHECK_STATUS, testConfig),
 
@@ -51,31 +50,24 @@ contextBridge.exposeInMainWorld("electronAPI", {
   writeClipboard: (text) => ipcRenderer.invoke(C.CLIPBOARD.WRITE, text),
 
   // 数据库操作
-  saveTranscription: (data) =>
-    ipcRenderer.invoke(C.TRANSCRIPTION.SAVE, data),
+  saveTranscription: (data) => ipcRenderer.invoke(C.TRANSCRIPTION.SAVE, data),
   getTranscriptions: (limit, offset) =>
     ipcRenderer.invoke(C.TRANSCRIPTION.GET_ALL, limit, offset),
-  deleteTranscription: (id) =>
-    ipcRenderer.invoke(C.TRANSCRIPTION.DELETE, id),
-  clearAllTranscriptions: () =>
-    ipcRenderer.invoke(C.TRANSCRIPTION.CLEAR),
+  deleteTranscription: (id) => ipcRenderer.invoke(C.TRANSCRIPTION.DELETE, id),
+  clearAllTranscriptions: () => ipcRenderer.invoke(C.TRANSCRIPTION.CLEAR),
 
   // 设置管理
   getSettings: () => ipcRenderer.invoke(C.SETTINGS.GET_LEGACY),
   getAllSettings: () => ipcRenderer.invoke(C.SETTINGS.GET_ALL),
   getSetting: (key, defaultValue) =>
     ipcRenderer.invoke(C.SETTINGS.GET, key, defaultValue),
-  setSetting: (key, value) =>
-    ipcRenderer.invoke(C.SETTINGS.SET, key, value),
-  saveSetting: (key, value) =>
-    ipcRenderer.invoke(C.SETTINGS.SAVE, key, value),
+  setSetting: (key, value) => ipcRenderer.invoke(C.SETTINGS.SET, key, value),
+  saveSetting: (key, value) => ipcRenderer.invoke(C.SETTINGS.SAVE, key, value),
   resetSettings: () => ipcRenderer.invoke(C.SETTINGS.RESET),
 
   // 热键管理
-  registerHotkey: (hotkey) =>
-    ipcRenderer.invoke(C.HOTKEY.REGISTER, hotkey),
-  unregisterHotkey: (hotkey) =>
-    ipcRenderer.invoke(C.HOTKEY.UNREGISTER, hotkey),
+  registerHotkey: (hotkey) => ipcRenderer.invoke(C.HOTKEY.REGISTER, hotkey),
+  unregisterHotkey: (hotkey) => ipcRenderer.invoke(C.HOTKEY.UNREGISTER, hotkey),
   getCurrentHotkey: () => ipcRenderer.invoke(C.HOTKEY.GET_CURRENT),
 
   // F2热键管理
@@ -88,8 +80,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // F2双击事件监听
   onF2DoubleClick: (callback) => {
     ipcRenderer.on(C.EVENTS.F2_DOUBLE_CLICK, callback);
-    return () =>
-      ipcRenderer.removeListener(C.EVENTS.F2_DOUBLE_CLICK, callback);
+    return () => ipcRenderer.removeListener(C.EVENTS.F2_DOUBLE_CLICK, callback);
   },
 
   // 热键触发事件监听
@@ -108,12 +99,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // 系统信息
   getSystemInfo: () => ipcRenderer.invoke(C.SYSTEM.INFO),
   checkPermissions: () => ipcRenderer.invoke(C.SYSTEM.PERMISSIONS),
-  requestPermissions: () =>
-    ipcRenderer.invoke(C.SYSTEM.REQUEST_PERMS),
-  testAccessibilityPermission: () =>
-    ipcRenderer.invoke(C.SYSTEM.TEST_A11Y),
-  openSystemPermissions: () =>
-    ipcRenderer.invoke(C.SYSTEM.OPEN_PERMS),
+  requestPermissions: () => ipcRenderer.invoke(C.SYSTEM.REQUEST_PERMS),
+  testAccessibilityPermission: () => ipcRenderer.invoke(C.SYSTEM.TEST_A11Y),
+  openSystemPermissions: () => ipcRenderer.invoke(C.SYSTEM.OPEN_PERMS),
 
   // 应用信息
   getAppVersion: () => ipcRenderer.invoke(C.SYSTEM.VERSION),
@@ -162,8 +150,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
   onSettingsUpdate: (callback) => {
     ipcRenderer.on(C.EVENTS.SETTINGS_UPDATE, callback);
-    return () =>
-      ipcRenderer.removeListener(C.EVENTS.SETTINGS_UPDATE, callback);
+    return () => ipcRenderer.removeListener(C.EVENTS.SETTINGS_UPDATE, callback);
   },
 
   // 历史记录窗口相关
@@ -187,26 +174,19 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onModelDownloadProgress: (callback) => {
     ipcRenderer.on(C.EVENTS.MODEL_DOWNLOAD_PROGRESS, callback);
     return () =>
-      ipcRenderer.removeListener(
-        C.EVENTS.MODEL_DOWNLOAD_PROGRESS,
-        callback,
-      );
+      ipcRenderer.removeListener(C.EVENTS.MODEL_DOWNLOAD_PROGRESS, callback);
   },
 
   // 文件转录相关
   importAudioFile: () => ipcRenderer.invoke(C.TRANSCRIPTION.IMPORT_FILE),
   transcribeFile: (audioPath, options) =>
     ipcRenderer.invoke(C.TRANSCRIPTION.TRANSCRIBE_FILE, audioPath, options),
-  cancelFileTranscription: () =>
-    ipcRenderer.invoke(C.TRANSCRIPTION.CANCEL),
+  cancelFileTranscription: () => ipcRenderer.invoke(C.TRANSCRIPTION.CANCEL),
   onFileTranscriptionProgress: (callback) => {
     const handler = (event, data) => callback(data);
     ipcRenderer.on(C.EVENTS.FILE_TRANSCRIPTION_PROGRESS, handler);
     return () =>
-      ipcRenderer.removeListener(
-        C.EVENTS.FILE_TRANSCRIPTION_PROGRESS,
-        handler,
-      );
+      ipcRenderer.removeListener(C.EVENTS.FILE_TRANSCRIPTION_PROGRESS, handler);
   },
 
   // 导出与AI创作

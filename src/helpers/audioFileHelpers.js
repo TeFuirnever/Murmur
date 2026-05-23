@@ -27,16 +27,23 @@ async function createTempAudioFile(logger, audioBlob) {
   await fs.promises.writeFile(tempAudioPath, buffer);
 
   const stats = await fs.promises.stat(tempAudioPath);
-  logger.info && logger.info("临时音频文件创建:", {
-    path: tempAudioPath, size: stats.size, isFile: stats.isFile(),
-  });
+  logger.info &&
+    logger.info("临时音频文件创建:", {
+      path: tempAudioPath,
+      size: stats.size,
+      isFile: stats.isFile(),
+    });
 
   if (stats.size === 0) throw new Error("音频文件为空");
   return tempAudioPath;
 }
 
 async function cleanupTempFile(tempAudioPath) {
-  try { await fs.promises.unlink(tempAudioPath); } catch (_e) { /* not critical */ }
+  try {
+    await fs.promises.unlink(tempAudioPath);
+  } catch (_e) {
+    /* not critical */
+  }
 }
 
 function getFFmpegPath() {
@@ -52,29 +59,60 @@ async function convertAudioFile(logger, inputPath) {
   const outputPath = path.join(os.tmpdir(), outputName);
 
   return new Promise((resolve, reject) => {
-    const args = ["-i", inputPath, "-ar", "16000", "-ac", "1", "-f", "wav", outputPath];
+    const args = [
+      "-i",
+      inputPath,
+      "-ar",
+      "16000",
+      "-ac",
+      "1",
+      "-f",
+      "wav",
+      outputPath,
+    ];
     const proc = spawn(ffmpegPath, args, { windowsHide: true });
     let stderrOutput = "";
-    proc.stderr.on("data", (d) => { stderrOutput += d.toString(); });
+    proc.stderr.on("data", (d) => {
+      stderrOutput += d.toString();
+    });
 
     const timeout = setTimeout(
-      () => { proc.kill("SIGKILL"); reject(new Error("ffmpeg 转换超时（5分钟）")); },
+      () => {
+        proc.kill("SIGKILL");
+        reject(new Error("ffmpeg 转换超时（5分钟）"));
+      },
       5 * 60 * 1000,
     );
 
-    proc.on("error", (err) => { clearTimeout(timeout); reject(new Error(`ffmpeg 启动失败: ${err.message}`)); });
+    proc.on("error", (err) => {
+      clearTimeout(timeout);
+      reject(new Error(`ffmpeg 启动失败: ${err.message}`));
+    });
     proc.on("close", (code) => {
       clearTimeout(timeout);
       if (code === 0 && fs.existsSync(outputPath)) {
         resolve(outputPath);
       } else {
         if (fs.existsSync(outputPath)) {
-          try { fs.unlinkSync(outputPath); } catch (e) { logger?.warn?.("Temp file cleanup failed", e.message); }
+          try {
+            fs.unlinkSync(outputPath);
+          } catch (e) {
+            logger?.warn?.("Temp file cleanup failed", e.message);
+          }
         }
-        reject(new Error(`ffmpeg 转换失败 (code=${code}): ${stderrOutput.slice(-200)}`));
+        reject(
+          new Error(
+            `ffmpeg 转换失败 (code=${code}): ${stderrOutput.slice(-200)}`,
+          ),
+        );
       }
     });
   });
 }
 
-module.exports = { createTempAudioFile, cleanupTempFile, getFFmpegPath, convertAudioFile };
+module.exports = {
+  createTempAudioFile,
+  cleanupTempFile,
+  getFFmpegPath,
+  convertAudioFile,
+};

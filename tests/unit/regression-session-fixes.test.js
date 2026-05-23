@@ -24,7 +24,10 @@ describe("FUNASR.STATUS spread order regression", () => {
     const ipcMain = createIpcMain();
 
     const managers = {
-      environmentManager: { exportConfig: vi.fn(), validateEnvironment: vi.fn() },
+      environmentManager: {
+        exportConfig: vi.fn(),
+        validateEnvironment: vi.fn(),
+      },
       funasrManager: {
         checkPythonInstallation: vi.fn(),
         installPython: vi.fn(),
@@ -53,12 +56,18 @@ describe("FUNASR.STATUS spread order regression", () => {
     const ipcMain = createIpcMain();
 
     const managers = {
-      environmentManager: { exportConfig: vi.fn(), validateEnvironment: vi.fn() },
+      environmentManager: {
+        exportConfig: vi.fn(),
+        validateEnvironment: vi.fn(),
+      },
       funasrManager: {
         checkPythonInstallation: vi.fn(),
         installPython: vi.fn(),
         checkFunASRInstallation: vi.fn(),
-        checkStatus: vi.fn(async () => ({ success: false, error: "something broke" })),
+        checkStatus: vi.fn(async () => ({
+          success: false,
+          error: "something broke",
+        })),
         modelsInitialized: false,
         serverReady: false,
         initializationPromise: null,
@@ -80,12 +89,18 @@ describe("FUNASR.STATUS spread order regression", () => {
     const ipcMain = createIpcMain();
 
     const managers = {
-      environmentManager: { exportConfig: vi.fn(), validateEnvironment: vi.fn() },
+      environmentManager: {
+        exportConfig: vi.fn(),
+        validateEnvironment: vi.fn(),
+      },
       funasrManager: {
         checkPythonInstallation: vi.fn(),
         installPython: vi.fn(),
         checkFunASRInstallation: vi.fn(),
-        checkStatus: vi.fn(async () => ({ success: true, server_running: true })),
+        checkStatus: vi.fn(async () => ({
+          success: true,
+          server_running: true,
+        })),
         modelsInitialized: true,
         serverReady: true,
         initializationPromise: null,
@@ -107,7 +122,9 @@ describe("FUNASR.STATUS spread order regression", () => {
 
 // 2. TRANSCRIPTION.SAVE canonical return shape
 describe("TRANSCRIPTION.SAVE return shape regression", () => {
-  beforeEach(() => { vi.resetModules(); });
+  beforeEach(() => {
+    vi.resetModules();
+  });
 
   it("returns {success:true} on successful save", async () => {
     const { register } = require("../../src/helpers/ipc/transcriptionHandlers");
@@ -123,7 +140,7 @@ describe("TRANSCRIPTION.SAVE return shape regression", () => {
     register(ipcMain, managers);
     const result = await ipcMain._handlers[C.TRANSCRIPTION.SAVE](
       {},
-      { text: "hello", raw_text: "hello" }
+      { text: "hello", raw_text: "hello" },
     );
 
     expect(result.success).toBe(true);
@@ -136,7 +153,9 @@ describe("TRANSCRIPTION.SAVE return shape regression", () => {
 
     const managers = {
       databaseManager: {
-        saveTranscription: vi.fn(() => { throw new Error("DB locked"); }),
+        saveTranscription: vi.fn(() => {
+          throw new Error("DB locked");
+        }),
       },
       logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
     };
@@ -144,7 +163,7 @@ describe("TRANSCRIPTION.SAVE return shape regression", () => {
     register(ipcMain, managers);
     const result = await ipcMain._handlers[C.TRANSCRIPTION.SAVE](
       {},
-      { text: "hello", raw_text: "hello" }
+      { text: "hello", raw_text: "hello" },
     );
 
     expect(result.success).toBe(false);
@@ -154,7 +173,9 @@ describe("TRANSCRIPTION.SAVE return shape regression", () => {
 
 // 3. SETTINGS_UPDATE broadcast on save
 describe("SETTINGS_UPDATE broadcast regression", () => {
-  beforeEach(() => { vi.resetModules(); });
+  beforeEach(() => {
+    vi.resetModules();
+  });
 
   function createManagers() {
     const sendSpy = vi.fn();
@@ -168,7 +189,10 @@ describe("SETTINGS_UPDATE broadcast regression", () => {
         },
         logger: { error: vi.fn() },
         windowManager: {
-          mainWindow: { isDestroyed: vi.fn(() => false), webContents: { send: sendSpy } },
+          mainWindow: {
+            isDestroyed: vi.fn(() => false),
+            webContents: { send: sendSpy },
+          },
         },
       },
       sendSpy,
@@ -185,7 +209,7 @@ describe("SETTINGS_UPDATE broadcast regression", () => {
 
     expect(sendSpy).toHaveBeenCalledWith(
       C.EVENTS.SETTINGS_UPDATE,
-      expect.objectContaining({ key: "theme" })
+      expect.objectContaining({ key: "theme" }),
     );
   });
 
@@ -199,7 +223,7 @@ describe("SETTINGS_UPDATE broadcast regression", () => {
 
     expect(sendSpy).toHaveBeenCalledWith(
       C.EVENTS.SETTINGS_UPDATE,
-      expect.objectContaining({ key: "theme" })
+      expect.objectContaining({ key: "theme" }),
     );
   });
 
@@ -213,7 +237,7 @@ describe("SETTINGS_UPDATE broadcast regression", () => {
 
     expect(sendSpy).toHaveBeenCalledWith(
       C.EVENTS.SETTINGS_UPDATE,
-      expect.objectContaining({ key: null })
+      expect.objectContaining({ key: null }),
     );
   });
 });
@@ -260,7 +284,9 @@ describe("aiPrompts system/user structure regression", () => {
 
 // 5. SSRF validation in processTextWithAI (not just checkAIStatus)
 describe("processTextWithAI SSRF regression", () => {
-  beforeEach(() => { vi.resetModules(); });
+  beforeEach(() => {
+    vi.resetModules();
+  });
 
   it("rejects internal base URL in process flow", async () => {
     const { processTextWithAI } = require("../../src/helpers/ipc/aiHandlers");

@@ -20,31 +20,29 @@ test.describe("Settings flow", () => {
   });
 
   test("should get app version", async () => {
-    const version = await window.evaluate(
-      () => window.electronAPI.getAppVersion()
+    const version = await window.evaluate(() =>
+      window.electronAPI.getAppVersion(),
     );
     expect(version).toMatch(/^\d+\.\d+\.\d+$/);
   });
 
   test("should get all settings", async () => {
-    const settings = await window.evaluate(
-      () => window.electronAPI.getAllSettings()
+    const settings = await window.evaluate(() =>
+      window.electronAPI.getAllSettings(),
     );
     expect(settings).toBeDefined();
     expect(typeof settings).toBe("object");
   });
 
   test("should set and get a setting", async () => {
-    await window.evaluate(() =>
-      window.electronAPI.setSetting("theme", "dark")
-    );
-    const value = await window.evaluate(
-      () => window.electronAPI.getSetting("theme")
+    await window.evaluate(() => window.electronAPI.setSetting("theme", "dark"));
+    const value = await window.evaluate(() =>
+      window.electronAPI.getSetting("theme"),
     );
     expect(value).toBe("dark");
     // Reset
     await window.evaluate(() =>
-      window.electronAPI.setSetting("theme", "system")
+      window.electronAPI.setSetting("theme", "system"),
     );
   });
 });

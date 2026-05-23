@@ -108,10 +108,18 @@ describe("windowHandlers", () => {
 
   it("set-always-on-top sets the flag on all windows", () => {
     const result = ipcMain._handlers["set-always-on-top"]({}, true);
-    expect(managers.windowManager.setDefaultAlwaysOnTop).toHaveBeenCalledWith(true);
-    expect(managers.windowManager.mainWindow.setAlwaysOnTop).toHaveBeenCalledWith(true);
-    expect(managers.windowManager.historyWindow.setAlwaysOnTop).toHaveBeenCalledWith(true);
-    expect(managers.windowManager.settingsWindow.setAlwaysOnTop).toHaveBeenCalledWith(true);
+    expect(managers.windowManager.setDefaultAlwaysOnTop).toHaveBeenCalledWith(
+      true,
+    );
+    expect(
+      managers.windowManager.mainWindow.setAlwaysOnTop,
+    ).toHaveBeenCalledWith(true);
+    expect(
+      managers.windowManager.historyWindow.setAlwaysOnTop,
+    ).toHaveBeenCalledWith(true);
+    expect(
+      managers.windowManager.settingsWindow.setAlwaysOnTop,
+    ).toHaveBeenCalledWith(true);
     expect(result).toEqual({ success: true });
   });
 });

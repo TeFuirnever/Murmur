@@ -237,7 +237,10 @@ class DatabaseManager {
       ORDER BY created_at DESC
       LIMIT ?
     `);
-    const escaped = query.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+    const escaped = query
+      .replace(/\\/g, "\\\\")
+      .replace(/%/g, "\\%")
+      .replace(/_/g, "\\_");
     const searchTerm = `%${escaped}%`;
     return stmt.all(searchTerm, searchTerm, searchTerm, limit);
   }

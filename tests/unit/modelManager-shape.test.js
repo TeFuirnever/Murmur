@@ -22,7 +22,11 @@ describe("modelManager.checkModelFiles contract", () => {
   });
 
   it("returns success:true when cache directory is missing", async () => {
-    const m = new ModelManager({ info: () => {}, warn: () => {}, error: () => {} });
+    const m = new ModelManager({
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+    });
     m.getModelCachePath = () => path.join(tmpDir, "does-not-exist");
     const r = await m.checkModelFiles();
     expect(r.success).toBe(true);
@@ -30,7 +34,11 @@ describe("modelManager.checkModelFiles contract", () => {
   });
 
   it("returns success:true when cache exists but files are missing", async () => {
-    const m = new ModelManager({ info: () => {}, warn: () => {}, error: () => {} });
+    const m = new ModelManager({
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+    });
     m.getModelCachePath = () => tmpDir;
     const r = await m.checkModelFiles();
     expect(r.success).toBe(true);
@@ -39,7 +47,11 @@ describe("modelManager.checkModelFiles contract", () => {
   });
 
   it("detects downloaded models in directory with model.pt", async () => {
-    const m = new ModelManager({ info: () => {}, warn: () => {}, error: () => {} });
+    const m = new ModelManager({
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+    });
     for (const config of Object.values(m.modelConfigs)) {
       const modelDir = path.join(tmpDir, config.cache_path);
       fs.mkdirSync(modelDir, { recursive: true });

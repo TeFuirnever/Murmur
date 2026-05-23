@@ -10,7 +10,9 @@ const MOCK_USER_DATA = "/mock/userData";
 function createIpcMain() {
   const handlers = {};
   return {
-    handle: vi.fn((channel, fn) => { handlers[channel] = fn; }),
+    handle: vi.fn((channel, fn) => {
+      handlers[channel] = fn;
+    }),
     _handlers: handlers,
   };
 }
@@ -54,14 +56,27 @@ describe("path validation regression — systemHandlers SHOW_ITEM and OPEN_LOG",
     const ipcMain = createIpcMain();
     const managers = {
       logger: {
-        info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(),
-        getRecentLogs: vi.fn(), getFunASRLogs: vi.fn(),
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+        debug: vi.fn(),
+        getRecentLogs: vi.fn(),
+        getFunASRLogs: vi.fn(),
         getLogFilePath: vi.fn(() => "/mock/userData/logs/app.log"),
         getFunASRLogFilePath: vi.fn(() => "/mock/userData/logs/funasr.log"),
         getSystemInfo: vi.fn(),
       },
-      funasrManager: { isInitialized: false, modelsInitialized: false, serverReady: false, pythonCmd: "python3" },
-      clipboardManager: { checkAccessibilityPermissions: vi.fn(() => Promise.resolve(true)), openSystemSettings: vi.fn(), pasteText: vi.fn() },
+      funasrManager: {
+        isInitialized: false,
+        modelsInitialized: false,
+        serverReady: false,
+        pythonCmd: "python3",
+      },
+      clipboardManager: {
+        checkAccessibilityPermissions: vi.fn(() => Promise.resolve(true)),
+        openSystemSettings: vi.fn(),
+        pasteText: vi.fn(),
+      },
     };
 
     const sysHandlers = requireCJS("../../src/helpers/ipc/systemHandlers");
@@ -72,8 +87,13 @@ describe("path validation regression — systemHandlers SHOW_ITEM and OPEN_LOG",
   describe("SHOW_ITEM path validation", () => {
     it("allows paths inside userData", async () => {
       const { ipcMain } = registerHandlers();
-      await ipcMain._handlers[C.SYSTEM.SHOW_ITEM]({}, "/mock/userData/transcriptions.db");
-      expect(showItemSpy).toHaveBeenCalledWith("/mock/userData/transcriptions.db");
+      await ipcMain._handlers[C.SYSTEM.SHOW_ITEM](
+        {},
+        "/mock/userData/transcriptions.db",
+      );
+      expect(showItemSpy).toHaveBeenCalledWith(
+        "/mock/userData/transcriptions.db",
+      );
     });
 
     it("rejects absolute path outside userData", async () => {
@@ -84,7 +104,10 @@ describe("path validation regression — systemHandlers SHOW_ITEM and OPEN_LOG",
 
     it("rejects path traversal through embedded ..", async () => {
       const { ipcMain } = registerHandlers();
-      await ipcMain._handlers[C.SYSTEM.SHOW_ITEM]({}, "/mock/userData/../../etc/passwd");
+      await ipcMain._handlers[C.SYSTEM.SHOW_ITEM](
+        {},
+        "/mock/userData/../../etc/passwd",
+      );
       expect(showItemSpy).not.toHaveBeenCalled();
     });
 

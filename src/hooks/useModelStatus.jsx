@@ -1,4 +1,10 @@
-import { useState, useEffect, useCallback, createContext, useContext } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  createContext,
+  useContext,
+} from "react";
 
 const ModelStatusContext = createContext(null);
 
@@ -218,11 +224,7 @@ export function ModelStatusProvider({ children }) {
   }, [checkModelStatus]);
 
   useEffect(() => {
-    if (
-      isSettingsPage() ||
-      modelStatus.isReady ||
-      modelStatus.isDownloading
-    ) {
+    if (isSettingsPage() || modelStatus.isReady || modelStatus.isDownloading) {
       return;
     }
 

@@ -41,7 +41,9 @@ class PythonEnvironment {
   setupIsolatedEnvironment() {
     const isUsingEmbedded = fs.existsSync(this.getEmbeddedPythonPath());
     if (isUsingEmbedded) {
-      const pythonDir = path.dirname(path.dirname(this.getEmbeddedPythonPath()));
+      const pythonDir = path.dirname(
+        path.dirname(this.getEmbeddedPythonPath()),
+      );
       process.env.PYTHONHOME = pythonDir;
       const pathSep = process.platform === "win32" ? ";" : ":";
       const pythonPath = [
@@ -66,7 +68,9 @@ class PythonEnvironment {
     const env = { ...process.env };
 
     if (isUsingEmbedded) {
-      const pythonDir = path.dirname(path.dirname(this.getEmbeddedPythonPath()));
+      const pythonDir = path.dirname(
+        path.dirname(this.getEmbeddedPythonPath()),
+      );
       env.PYTHONHOME = pythonDir;
       const pathSep = process.platform === "win32" ? ";" : ":";
       env.PYTHONPATH = [
@@ -90,10 +94,11 @@ class PythonEnvironment {
     if (this.pythonCmd) return this.pythonCmd;
 
     const embeddedPython = this.getEmbeddedPythonPath();
-    this.logger.info && this.logger.info("检查嵌入式Python", {
-      path: embeddedPython,
-      exists: fs.existsSync(embeddedPython),
-    });
+    this.logger.info &&
+      this.logger.info("检查嵌入式Python", {
+        path: embeddedPython,
+        exists: fs.existsSync(embeddedPython),
+      });
 
     if (fs.existsSync(embeddedPython)) {
       try {
@@ -101,10 +106,11 @@ class PythonEnvironment {
         const version = await this.getPythonVersion(embeddedPython);
         if (this.isPythonVersionSupported(version)) {
           this.pythonCmd = embeddedPython;
-          this.logger.info && this.logger.info("使用嵌入式Python", {
-            path: embeddedPython,
-            version: `${version.major}.${version.minor}`,
-          });
+          this.logger.info &&
+            this.logger.info("使用嵌入式Python", {
+              path: embeddedPython,
+              version: `${version.major}.${version.minor}`,
+            });
           return embeddedPython;
         }
       } catch (error) {
@@ -131,11 +137,17 @@ class PythonEnvironment {
       path.join(projectRoot, ".venv", "Scripts", "python.exe"),
       path.join(projectRoot, ".venv", "Scripts", "python3.11.exe"),
       path.join(projectRoot, ".venv", "Scripts", "python3.exe"),
-      "python3.11", "python3", "python",
-      "/usr/bin/python3.11", "/usr/bin/python3",
-      "/usr/local/bin/python3.11", "/usr/local/bin/python3",
-      "/opt/homebrew/bin/python3.11", "/opt/homebrew/bin/python3",
-      "/usr/bin/python", "/usr/local/bin/python",
+      "python3.11",
+      "python3",
+      "python",
+      "/usr/bin/python3.11",
+      "/usr/bin/python3",
+      "/usr/local/bin/python3.11",
+      "/usr/local/bin/python3",
+      "/opt/homebrew/bin/python3.11",
+      "/opt/homebrew/bin/python3",
+      "/usr/bin/python",
+      "/usr/local/bin/python",
     ];
 
     for (const pythonPath of possiblePaths) {
@@ -212,13 +224,25 @@ class PythonEnvironment {
         let output = "";
         let errorOutput = "";
         checkProcess.stdout.on("data", (data) => (output += data.toString()));
-        checkProcess.stderr.on("data", (data) => (errorOutput += data.toString()));
+        checkProcess.stderr.on(
+          "data",
+          (data) => (errorOutput += data.toString()),
+        );
         checkProcess.on("close", (code) => {
           if (code === 0 && output.includes("OK")) {
             resolve({ installed: true, working: true });
           } else {
-            this.logger.error && this.logger.error("FunASR检查失败", { code, output, errorOutput });
-            resolve({ installed: false, working: false, error: errorOutput || output });
+            this.logger.error &&
+              this.logger.error("FunASR检查失败", {
+                code,
+                output,
+                errorOutput,
+              });
+            resolve({
+              installed: false,
+              working: false,
+              error: errorOutput || output,
+            });
           }
         });
         checkProcess.on("error", (error) => {
@@ -228,7 +252,11 @@ class PythonEnvironment {
       this.funasrInstalled = result;
       return result;
     } catch (error) {
-      const errorResult = { installed: false, working: false, error: error.message };
+      const errorResult = {
+        installed: false,
+        working: false,
+        error: error.message,
+      };
       this.funasrInstalled = errorResult;
       return errorResult;
     }
@@ -243,15 +271,18 @@ class PythonEnvironment {
   async installFunASR(progressCallback = null) {
     const pythonCmd = await this.findPythonExecutable();
 
-    if (progressCallback) progressCallback({ stage: "升级 pip...", percentage: 10 });
+    if (progressCallback)
+      progressCallback({ stage: "升级 pip...", percentage: 10 });
 
     try {
       await this.upgradePip(pythonCmd);
     } catch (error) {
-      this.logger.warn && this.logger.warn("第一次 pip 升级尝试失败:", error.message);
+      this.logger.warn &&
+        this.logger.warn("第一次 pip 升级尝试失败:", error.message);
       try {
         await runCommand(
-          pythonCmd, ["-m", "pip", "install", "--user", "--upgrade", "pip"],
+          pythonCmd,
+          ["-m", "pip", "install", "--user", "--upgrade", "pip"],
           { timeout: TIMEOUTS.PIP_UPGRADE },
         );
       } catch (_userError) {
@@ -259,25 +290,40 @@ class PythonEnvironment {
       }
     }
 
-    if (progressCallback) progressCallback({ stage: "安装 FunASR...", percentage: 30 });
+    if (progressCallback)
+      progressCallback({ stage: "安装 FunASR...", percentage: 30 });
 
     try {
       await runCommand(pythonCmd, ["-m", "pip", "install", "-U", "funasr"], {
         timeout: TIMEOUTS.DOWNLOAD,
       });
-      if (progressCallback) progressCallback({ stage: "安装 librosa...", percentage: 60 });
+      if (progressCallback)
+        progressCallback({ stage: "安装 librosa...", percentage: 60 });
       await runCommand(pythonCmd, ["-m", "pip", "install", "-U", "librosa"], {
         timeout: TIMEOUTS.DOWNLOAD,
       });
-      if (progressCallback) progressCallback({ stage: "安装完成！", percentage: 100 });
+      if (progressCallback)
+        progressCallback({ stage: "安装完成！", percentage: 100 });
       this.funasrInstalled = null;
       return { success: true, message: "FunASR 安装成功" };
     } catch (error) {
-      if (error.message.includes("Permission denied") || error.message.includes("access is denied")) {
+      if (
+        error.message.includes("Permission denied") ||
+        error.message.includes("access is denied")
+      ) {
         try {
-          await runCommand(pythonCmd, ["-m", "pip", "install", "--user", "-U", "funasr"], { timeout: TIMEOUTS.DOWNLOAD });
-          await runCommand(pythonCmd, ["-m", "pip", "install", "--user", "-U", "librosa"], { timeout: TIMEOUTS.DOWNLOAD });
-          if (progressCallback) progressCallback({ stage: "安装完成！", percentage: 100 });
+          await runCommand(
+            pythonCmd,
+            ["-m", "pip", "install", "--user", "-U", "funasr"],
+            { timeout: TIMEOUTS.DOWNLOAD },
+          );
+          await runCommand(
+            pythonCmd,
+            ["-m", "pip", "install", "--user", "-U", "librosa"],
+            { timeout: TIMEOUTS.DOWNLOAD },
+          );
+          if (progressCallback)
+            progressCallback({ stage: "安装完成！", percentage: 100 });
           this.funasrInstalled = null;
           return { success: true, message: "FunASR 安装成功（用户模式）" };
         } catch (userError) {
@@ -287,7 +333,8 @@ class PythonEnvironment {
 
       let message = error.message;
       if (message.includes("Microsoft Visual C++")) {
-        message = "需要 Microsoft Visual C++ 构建工具。请安装 Visual Studio Build Tools。";
+        message =
+          "需要 Microsoft Visual C++ 构建工具。请安装 Visual Studio Build Tools。";
       } else if (message.includes("No matching distribution")) {
         message = "Python 版本不兼容。FunASR 需要 Python 3.8-3.11。";
       }

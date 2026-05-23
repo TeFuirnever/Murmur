@@ -10,7 +10,7 @@ describe("Phase 6: E2E testing infrastructure", () => {
 
     beforeAll(() => {
       pkg = JSON.parse(
-        fs.readFileSync(path.join(rootDir, "package.json"), "utf8")
+        fs.readFileSync(path.join(rootDir, "package.json"), "utf8"),
       );
     });
 
@@ -95,7 +95,7 @@ describe("Phase 6: E2E testing infrastructure", () => {
 
     beforeAll(() => {
       pkg = JSON.parse(
-        fs.readFileSync(path.join(rootDir, "package.json"), "utf8")
+        fs.readFileSync(path.join(rootDir, "package.json"), "utf8"),
       );
     });
 

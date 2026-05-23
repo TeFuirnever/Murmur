@@ -49,13 +49,14 @@ winget install TeFuirnever.Murmur
 
 从 [Releases](https://github.com/TeFuirnever/Murmur/releases) 下载最新版本：
 
-| 平台 | 文件 | 说明 |
-|------|------|------|
-| macOS (Apple Silicon) | `Murmur-*.dmg` | 双击安装 |
-| Windows | `Murmur-Setup-*.exe` | 双击安装 |
-| Linux | 自行构建 | 见下方开发指南 |
+| 平台                  | 文件                 | 说明           |
+| --------------------- | -------------------- | -------------- |
+| macOS (Apple Silicon) | `Murmur-*.dmg`       | 双击安装       |
+| Windows               | `Murmur-Setup-*.exe` | 双击安装       |
+| Linux                 | 自行构建             | 见下方开发指南 |
 
 > **首次安装提示**：
+>
 > - **macOS**: 如遇"无法验证开发者"，右键点击应用 → 选择"打开"
 > - **Windows**: 如遇 SmartScreen 拦截，点击"更多信息" → "仍要运行"
 
@@ -129,14 +130,14 @@ pnpm run build    # 构建生产版本
 
 ## 技术栈
 
-| 层级 | 技术 |
-|------|------|
-| 桌面框架 | Electron 36 |
-| 前端 | React 19, Tailwind CSS 4, Vite |
+| 层级     | 技术                                                  |
+| -------- | ----------------------------------------------------- |
+| 桌面框架 | Electron 36                                           |
+| 前端     | React 19, Tailwind CSS 4, Vite                        |
 | 语音识别 | FunASR (Paraformer-large + FSMN-VAD + CT-Transformer) |
-| AI 优化 | 兼容 OpenAI API 的任意模型 |
-| 数据存储 | SQLite (better-sqlite3) |
-| IPC 通信 | Electron contextBridge + ipcMain/ipcRenderer |
+| AI 优化  | 兼容 OpenAI API 的任意模型                            |
+| 数据存储 | SQLite (better-sqlite3)                               |
+| IPC 通信 | Electron contextBridge + ipcMain/ipcRenderer          |
 
 ## 项目结构
 
@@ -250,13 +251,14 @@ winget install TeFuirnever.Murmur
 
 Get the latest version from [Releases](https://github.com/TeFuirnever/Murmur/releases):
 
-| Platform | File | Notes |
-|----------|------|-------|
-| macOS (Apple Silicon) | `Murmur-*.dmg` | Double-click to install |
-| Windows | `Murmur-Setup-*.exe` | Double-click to install |
-| Linux | Build from source | See below |
+| Platform              | File                 | Notes                   |
+| --------------------- | -------------------- | ----------------------- |
+| macOS (Apple Silicon) | `Murmur-*.dmg`       | Double-click to install |
+| Windows               | `Murmur-Setup-*.exe` | Double-click to install |
+| Linux                 | Build from source    | See below               |
 
 > **First install tips**:
+>
 > - **macOS**: If you see "cannot verify developer", right-click the app → "Open"
 > - **Windows**: If SmartScreen blocks it, click "More info" → "Run anyway"
 
@@ -323,14 +325,14 @@ pnpm run build    # Production build
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|------------|
-| Desktop | Electron 36 |
-| Frontend | React 19, Tailwind CSS 4, Vite |
+| Layer              | Technology                                            |
+| ------------------ | ----------------------------------------------------- |
+| Desktop            | Electron 36                                           |
+| Frontend           | React 19, Tailwind CSS 4, Vite                        |
 | Speech Recognition | FunASR (Paraformer-large + FSMN-VAD + CT-Transformer) |
-| AI Optimization | Any OpenAI API-compatible model |
-| Storage | SQLite (better-sqlite3) |
-| IPC | Electron contextBridge + ipcMain/ipcRenderer |
+| AI Optimization    | Any OpenAI API-compatible model                       |
+| Storage            | SQLite (better-sqlite3)                               |
+| IPC                | Electron contextBridge + ipcMain/ipcRenderer          |
 
 ## Project Structure
 

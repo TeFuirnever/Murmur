@@ -50,9 +50,7 @@ describe("windowManager — real module execution with mocked electron", () => {
     };
 
     // Force re-require of windowManager so our stub is picked up
-    const wmPath = requireCJS.resolve(
-      "../../src/helpers/windowManager.js",
-    );
+    const wmPath = requireCJS.resolve("../../src/helpers/windowManager.js");
     delete requireCJS.cache[wmPath];
   });
 
@@ -63,9 +61,7 @@ describe("windowManager — real module execution with mocked electron", () => {
 
   it("maximize/unmaximize listeners fire webContents.send with C.EVENTS.WINDOW_MAXIMIZE_CHANGE — no ReferenceError", async () => {
     const C = requireCJS("../../src/helpers/ipc-contracts");
-    const WindowManager = requireCJS(
-      "../../src/helpers/windowManager.js",
-    );
+    const WindowManager = requireCJS("../../src/helpers/windowManager.js");
     const wm = new WindowManager();
     process.env.NODE_ENV = "development";
     await wm.createMainWindow();

@@ -156,7 +156,9 @@ function initializeApp() {
     } else if (theme === "light") {
       root.classList.remove("dark");
     } else {
-      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      const prefersDark = window.matchMedia(
+        "(prefers-color-scheme: dark)",
+      ).matches;
       root.classList.toggle("dark", prefersDark);
     }
   };
@@ -190,63 +192,63 @@ initializeApp();
 if (!assertElectronAPI()) {
   // 已渲染 fallback，直接退出，不再 createRoot
 } else {
+  // 渲染应用
+  const root = ReactDOM.createRoot(document.getElementById("root"));
 
-// 渲染应用
-const root = ReactDOM.createRoot(document.getElementById("root"));
+  root.render(
+    <React.StrictMode>
+      <ErrorBoundary>
+        <ModelStatusProvider>
+          <App />
+          <Toaster />
+        </ModelStatusProvider>
+      </ErrorBoundary>
+    </React.StrictMode>,
+  );
 
-root.render(
-  <React.StrictMode>
-    <ErrorBoundary>
-      <ModelStatusProvider>
-        <App />
-        <Toaster />
-      </ModelStatusProvider>
-    </ErrorBoundary>
-  </React.StrictMode>,
-);
+  // 开发环境下的热重载支持
+  if (process.env.NODE_ENV === "development") {
+    if (import.meta.hot) {
+      import.meta.hot.accept("./App.jsx", (newModule) => {
+        if (newModule) {
+          const NextApp = newModule.default;
+          root.render(
+            <React.StrictMode>
+              <ErrorBoundary>
+                <ModelStatusProvider>
+                  <NextApp />
+                </ModelStatusProvider>
+              </ErrorBoundary>
+            </React.StrictMode>,
+          );
+        }
+      });
+    }
+  }
 
-// 开发环境下的热重载支持
-if (process.env.NODE_ENV === "development") {
-  if (import.meta.hot) {
-    import.meta.hot.accept("./App.jsx", (newModule) => {
-      if (newModule) {
-        const NextApp = newModule.default;
-        root.render(
-          <React.StrictMode>
-            <ErrorBoundary>
-              <ModelStatusProvider>
-                <NextApp />
-              </ModelStatusProvider>
-            </ErrorBoundary>
-          </React.StrictMode>,
-        );
+  // 性能监控（开发环境）
+  if (process.env.NODE_ENV === "development") {
+    // 监控渲染性能
+    const observer = new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        if (entry.entryType === "measure") {
+          console.log(
+            `性能测量: ${entry.name} - ${entry.duration.toFixed(2)}ms`,
+          );
+        }
       }
     });
-  }
-}
 
-// 性能监控（开发环境）
-if (process.env.NODE_ENV === "development") {
-  // 监控渲染性能
-  const observer = new PerformanceObserver((list) => {
-    for (const entry of list.getEntries()) {
-      if (entry.entryType === "measure") {
-        console.log(`性能测量: ${entry.name} - ${entry.duration.toFixed(2)}ms`);
-      }
+    observer.observe({ entryTypes: ["measure"] });
+
+    // 监控内存使用
+    if (performance.memory) {
+      setInterval(() => {
+        const memory = performance.memory;
+        console.log(
+          `内存使用: ${(memory.usedJSHeapSize / 1024 / 1024).toFixed(2)}MB / ${(memory.totalJSHeapSize / 1024 / 1024).toFixed(2)}MB`,
+        );
+      }, 30000); // 每30秒检查一次
     }
-  });
-
-  observer.observe({ entryTypes: ["measure"] });
-
-  // 监控内存使用
-  if (performance.memory) {
-    setInterval(() => {
-      const memory = performance.memory;
-      console.log(
-        `内存使用: ${(memory.usedJSHeapSize / 1024 / 1024).toFixed(2)}MB / ${(memory.totalJSHeapSize / 1024 / 1024).toFixed(2)}MB`,
-      );
-    }, 30000); // 每30秒检查一次
   }
-}
-
 } // end assertElectronAPI guard

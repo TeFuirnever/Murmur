@@ -48,49 +48,57 @@ class WindowManager {
     if (this._creatingMainWindow) return null;
     this._creatingMainWindow = true;
     try {
+      this.mainWindow = new BrowserWindow({
+        width: 520,
+        height: 640,
+        frame: false,
+        transparent: true,
+        alwaysOnTop: this._alwaysOnTop,
+        resizable: true,
+        minWidth: 400,
+        minHeight: 500,
+        skipTaskbar: true,
+        movable: true,
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true,
+          sandbox: true,
+          preload: path.join(
+            __dirname,
+            "..",
+            "..",
+            "dist-preload",
+            "preload.js",
+          ),
+        },
+      });
 
-    this.mainWindow = new BrowserWindow({
-      width: 520,
-      height: 640,
-      frame: false,
-      transparent: true,
-      alwaysOnTop: this._alwaysOnTop,
-      resizable: true,
-      minWidth: 400,
-      minHeight: 500,
-      skipTaskbar: true,
-      movable: true,
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true,
-        sandbox: true,
-        preload: path.join(__dirname, "..", "..", "dist-preload", "preload.js"),
-      },
-    });
+      const isDev = process.env.NODE_ENV === "development";
 
-    const isDev = process.env.NODE_ENV === "development";
+      if (isDev) {
+        await this.mainWindow.loadURL("http://localhost:5173");
+      } else {
+        await this.mainWindow.loadFile(
+          path.join(__dirname, "..", "dist", "index.html"),
+        );
+      }
 
-    if (isDev) {
-      await this.mainWindow.loadURL("http://localhost:5173");
-    } else {
-      await this.mainWindow.loadFile(
-        path.join(__dirname, "..", "dist", "index.html"),
-      );
-    }
+      this.mainWindow.on("closed", () => {
+        this.mainWindow = null;
+      });
 
-    this.mainWindow.on("closed", () => {
-      this.mainWindow = null;
-    });
+      this.mainWindow.on("maximize", () => {
+        this.mainWindow.webContents.send(C.EVENTS.WINDOW_MAXIMIZE_CHANGE, true);
+      });
 
-    this.mainWindow.on("maximize", () => {
-      this.mainWindow.webContents.send(C.EVENTS.WINDOW_MAXIMIZE_CHANGE, true);
-    });
+      this.mainWindow.on("unmaximize", () => {
+        this.mainWindow.webContents.send(
+          C.EVENTS.WINDOW_MAXIMIZE_CHANGE,
+          false,
+        );
+      });
 
-    this.mainWindow.on("unmaximize", () => {
-      this.mainWindow.webContents.send(C.EVENTS.WINDOW_MAXIMIZE_CHANGE, false);
-    });
-
-    return this.mainWindow;
+      return this.mainWindow;
     } finally {
       this._creatingMainWindow = false;
     }

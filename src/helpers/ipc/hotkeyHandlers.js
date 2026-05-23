@@ -71,8 +71,7 @@ function register(ipcMain, managers) {
       if (hotkeyManager) {
         const hotkeys = hotkeyManager.getRegisteredHotkeys();
         const mainHotkey =
-          hotkeys.find((key) => key !== "F2") ||
-          "CommandOrControl+Shift+Space";
+          hotkeys.find((key) => key !== "F2") || "CommandOrControl+Shift+Space";
         return mainHotkey;
       }
       return "CommandOrControl+Shift+Space";

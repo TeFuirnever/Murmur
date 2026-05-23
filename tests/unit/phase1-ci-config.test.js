@@ -7,40 +7,63 @@ const rootDir = path.resolve(__dirname, "../../");
 describe("Phase 1: CI/CD configuration", () => {
   describe("dependabot.yml", () => {
     it("should exist", () => {
-      expect(fs.existsSync(path.join(rootDir, ".github/dependabot.yml"))).toBe(true);
+      expect(fs.existsSync(path.join(rootDir, ".github/dependabot.yml"))).toBe(
+        true,
+      );
     });
 
     it("should configure npm ecosystem", () => {
-      const content = fs.readFileSync(path.join(rootDir, ".github/dependabot.yml"), "utf8");
+      const content = fs.readFileSync(
+        path.join(rootDir, ".github/dependabot.yml"),
+        "utf8",
+      );
       expect(content).toContain("package-ecosystem: npm");
     });
 
     it("should configure github-actions ecosystem", () => {
-      const content = fs.readFileSync(path.join(rootDir, ".github/dependabot.yml"), "utf8");
+      const content = fs.readFileSync(
+        path.join(rootDir, ".github/dependabot.yml"),
+        "utf8",
+      );
       expect(content).toContain("package-ecosystem: github-actions");
     });
 
     it("should use weekly schedule", () => {
-      const content = fs.readFileSync(path.join(rootDir, ".github/dependabot.yml"), "utf8");
+      const content = fs.readFileSync(
+        path.join(rootDir, ".github/dependabot.yml"),
+        "utf8",
+      );
       expect(content).toContain("interval: weekly");
     });
   });
 
   describe("ci.yml", () => {
-    it("should use Node 22 consistently", () => {
-      const content = fs.readFileSync(path.join(rootDir, ".github/workflows/ci.yml"), "utf8");
-      expect(content).toContain("node-version: 22");
-      // Should NOT contain node-version: 24
-      expect(content).not.toContain("node-version: 24");
+    it("should reference .nvmrc for Node version", () => {
+      const content = fs.readFileSync(
+        path.join(rootDir, ".github/workflows/ci.yml"),
+        "utf8",
+      );
+      expect(content).toContain("node-version-file: .nvmrc");
+    });
+
+    it("should have .nvmrc pinning Node 22", () => {
+      const nvmrc = fs.readFileSync(path.join(rootDir, ".nvmrc"), "utf8").trim();
+      expect(nvmrc).toBe("22");
     });
 
     it("should have pnpm cache enabled", () => {
-      const content = fs.readFileSync(path.join(rootDir, ".github/workflows/ci.yml"), "utf8");
+      const content = fs.readFileSync(
+        path.join(rootDir, ".github/workflows/ci.yml"),
+        "utf8",
+      );
       expect(content).toContain("cache: pnpm");
     });
 
     it("should have security audit step", () => {
-      const content = fs.readFileSync(path.join(rootDir, ".github/workflows/ci.yml"), "utf8");
+      const content = fs.readFileSync(
+        path.join(rootDir, ".github/workflows/ci.yml"),
+        "utf8",
+      );
       expect(content).toContain("pnpm audit");
     });
   });
@@ -49,15 +72,15 @@ describe("Phase 1: CI/CD configuration", () => {
     let content;
 
     beforeAll(() => {
-      content = fs.readFileSync(path.join(rootDir, ".github/workflows/build.yml"), "utf8");
+      content = fs.readFileSync(
+        path.join(rootDir, ".github/workflows/build.yml"),
+        "utf8",
+      );
     });
 
-    it("should use Node 22 for all jobs", () => {
-      const nodeVersions = [...content.matchAll(/node-version:\s*(\d+)/g)].map(m => m[1]);
-      expect(nodeVersions.length).toBeGreaterThanOrEqual(3);
-      for (const v of nodeVersions) {
-        expect(v).toBe("22");
-      }
+    it("should reference .nvmrc for all jobs", () => {
+      const refs = [...content.matchAll(/node-version-file:\s*.nvmrc/g)];
+      expect(refs.length).toBeGreaterThanOrEqual(3);
     });
 
     it("should generate SHA256 checksums for macOS", () => {
@@ -78,11 +101,15 @@ describe("Phase 1: CI/CD configuration", () => {
     });
 
     it("should have CSC_IDENTITY_AUTO_DISCOVERY=false for macOS", () => {
-      expect(content).toContain("CSC_IDENTITY_AUTO_DISCOVERY=false pnpm electron-builder --mac");
+      expect(content).toContain(
+        "CSC_IDENTITY_AUTO_DISCOVERY=false pnpm electron-builder --mac",
+      );
     });
 
     it("should have CSC_IDENTITY_AUTO_DISCOVERY=false for Windows", () => {
-      expect(content).toContain("CSC_IDENTITY_AUTO_DISCOVERY=false pnpm electron-builder --win");
+      expect(content).toContain(
+        "CSC_IDENTITY_AUTO_DISCOVERY=false pnpm electron-builder --win",
+      );
     });
 
     it("should have pnpm cache in all jobs", () => {

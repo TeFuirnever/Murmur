@@ -43,9 +43,7 @@ export default function ExportPanel({ transcriptionId }) {
 
   return (
     <div className="space-y-2">
-      <h4 className="text-xs font-medium text-[#86868b]">
-        导出格式
-      </h4>
+      <h4 className="text-xs font-medium text-[#86868b]">导出格式</h4>
       <div className="flex gap-2">
         {EXPORT_FORMATS.map((fmt) => {
           const isExporting = exportingFormat === fmt.key;

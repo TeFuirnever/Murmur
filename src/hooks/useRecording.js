@@ -136,7 +136,7 @@ export const useRecording = ({
       setError(`无法开始录音: ${err.message}`);
       setIsRecording(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelStatus.isReady, modelStatus.isLoading, modelStatus.error]);
 
   // 停止录音
@@ -214,7 +214,10 @@ export const useRecording = ({
                   const result = await Promise.race([
                     window.electronAPI.processText(raw_text, mode),
                     new Promise((_, reject) =>
-                      setTimeout(() => reject(new Error("AI优化超时，已使用原文")), 30000),
+                      setTimeout(
+                        () => reject(new Error("AI优化超时，已使用原文")),
+                        30000,
+                      ),
                     ),
                   ]);
 
@@ -346,11 +349,11 @@ export const useRecording = ({
         try {
           const arrayBuffer = reader.result;
 
-          audioContext = new (
-            window.AudioContext || window.webkitAudioContext
-          )({
-            sampleRate: 16000,
-          });
+          audioContext = new (window.AudioContext || window.webkitAudioContext)(
+            {
+              sampleRate: 16000,
+            },
+          );
 
           const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
           const wavBuffer = audioBufferToWav(audioBuffer);

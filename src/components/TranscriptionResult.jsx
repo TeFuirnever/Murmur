@@ -56,9 +56,7 @@ export default function TranscriptionResult({ text, segments, duration }) {
       {/* 完整文本 */}
       {text && (
         <div className="bg-[#f5f5f7] dark:bg-[#2c2c2e] rounded-lg p-4 max-h-48 overflow-y-auto custom-scrollbar">
-          <h4 className="text-xs font-medium text-[#86868b] mb-2">
-            转录文本
-          </h4>
+          <h4 className="text-xs font-medium text-[#86868b] mb-2">转录文本</h4>
           <p className="text-content text-[#1d1d1f] dark:text-[#f5f5f7]/80 text-sm whitespace-pre-wrap">
             {text}
           </p>
