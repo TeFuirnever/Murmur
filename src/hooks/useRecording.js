@@ -1,6 +1,15 @@
 import { useState, useRef, useCallback } from "react";
 import { useModelStatus } from "./useModelStatus";
 
+function determineProcessingMode(text) {
+  const textLength = text.trim().length;
+  const wordCount = text.trim().split(/\s+/).length;
+  if (textLength > 150 || wordCount > 30) {
+    return "optimize_long";
+  }
+  return "optimize";
+}
+
 /**
  * 录音功能Hook
  * 提供录音、停止录音、音频处理等功能
@@ -201,10 +210,13 @@ export const useRecording = ({
                     );
                   }
 
-                  const result = await window.electronAPI.processText(
-                    raw_text,
-                    "optimize",
-                  );
+                  const mode = determineProcessingMode(raw_text);
+                  const result = await Promise.race([
+                    window.electronAPI.processText(raw_text, mode),
+                    new Promise((_, reject) =>
+                      setTimeout(() => reject(new Error("AI优化超时，已使用原文")), 30000),
+                    ),
+                  ]);
 
                   if (result && result.success) {
                     const processed_text = result.text;
@@ -294,6 +306,7 @@ export const useRecording = ({
               if (window.electronAPI && window.electronAPI.log) {
                 window.electronAPI.log("error", "处理和保存转录时出错:", err);
               }
+              setError("转录处理失败: " + (err.message || "未知错误"));
             } finally {
               setIsOptimizing(false);
             }

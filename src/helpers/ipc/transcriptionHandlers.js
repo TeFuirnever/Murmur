@@ -182,7 +182,13 @@ function register(ipcMain, managers) {
   );
 
   ipcMain.handle(C.TRANSCRIPTION.SAVE, (event, data) => {
-    return databaseManager.saveTranscription(data);
+    try {
+      const result = databaseManager.saveTranscription(data);
+      return { success: true, lastInsertRowid: result.lastInsertRowid ?? result.id, changes: result.changes };
+    } catch (error) {
+      logger.error("保存转录失败:", error);
+      return { success: false, error: error.message };
+    }
   });
 
   ipcMain.handle(C.TRANSCRIPTION.GET_ALL, (event, limit, offset) => {

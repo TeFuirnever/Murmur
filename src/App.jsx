@@ -5,7 +5,6 @@ import { LoadingDots } from "./components/ui/loading-dots";
 import { useHotkey } from "./hooks/useHotkey";
 import { useWindowDrag } from "./hooks/useWindowDrag";
 import { useRecording } from "./hooks/useRecording";
-import { useTextProcessing } from "./hooks/useTextProcessing";
 import { useModelStatus } from "./hooks/useModelStatus";
 import { Settings, History, Copy, Download, Minus, Square, X, Maximize2 } from "lucide-react";
 import SettingsPanel from "./components/SettingsPanel";
@@ -253,10 +252,7 @@ export default function App() {
       handleAIOptimizationCompleteRef.current?.(...args),
   });
 
-  const {
-    isProcessing: isTextProcessing,
-    error: textProcessingError,
-  } = useTextProcessing();
+
 
   // 防重复粘贴的引用
   const lastPasteRef = useRef({ text: "", timestamp: 0 });
@@ -549,11 +545,6 @@ export default function App() {
     }
   }, [recordingError]);
 
-  useEffect(() => {
-    if (textProcessingError) {
-      toast.error(textProcessingError);
-    }
-  }, [textProcessingError]);
 
   // 确定当前麦克风状态
   const getMicState = () => {
@@ -840,7 +831,7 @@ export default function App() {
               <TextDisplay
                 originalText={originalText}
                 processedText={processedText}
-                isProcessing={isTextProcessing || isOptimizing}
+                isProcessing={isOptimizing}
                 onCopy={handleCopyText}
                 onExport={handleExportText}
                 onPaste={safePaste}

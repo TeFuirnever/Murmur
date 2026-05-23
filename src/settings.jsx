@@ -135,26 +135,49 @@ const SettingsPage = () => {
     }));
   };
 
-  // 应用推荐配置
-  const applyRecommendedConfig = () => {
+  // AI provider presets — convenience only, users can also enter any
+  // https endpoint manually. To add a provider, append to this array.
+  const AI_PROVIDER_PRESETS = [
+    {
+      label: "OpenAI",
+      baseUrl: "https://api.openai.com/v1",
+      model: "gpt-4o-mini",
+    },
+    {
+      label: "阿里云通义",
+      baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      model: "qwen3-30b-a3b-instruct-2507",
+    },
+    {
+      label: "智谱 GLM",
+      baseUrl: "https://open.bigmodel.cn/api/paas/v4",
+      model: "glm-4-flash",
+    },
+    {
+      label: "DeepSeek",
+      baseUrl: "https://api.deepseek.com/v1",
+      model: "deepseek-chat",
+    },
+    {
+      label: "Moonshot",
+      baseUrl: "https://api.moonshot.cn/v1",
+      model: "moonshot-v1-8k",
+    },
+    {
+      label: "MiniMax",
+      baseUrl: "https://api.minimaxi.com/v1",
+      model: "MiniMax-Text-01",
+    },
+  ];
+
+  const applyProviderPreset = (preset) => {
     setSettings((prev) => ({
       ...prev,
-      ai_base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-      ai_model: "qwen3-30b-a3b-instruct-2507",
+      ai_base_url: preset.baseUrl,
+      ai_model: preset.model,
     }));
     setCustomModel(true);
-    toast.info("已应用阿里云推荐配置");
-  };
-
-  // 重置为OpenAI配置
-  const resetToOpenAI = () => {
-    setSettings((prev) => ({
-      ...prev,
-      ai_base_url: "https://api.openai.com/v1",
-      ai_model: "gpt-3.5-turbo",
-    }));
-    setCustomModel(false);
-    toast.info("已重置为OpenAI配置");
+    toast.info(`已应用 ${preset.label} 预设`);
   };
 
   // 测试AI配置
@@ -310,11 +333,10 @@ const SettingsPage = () => {
             <div className="p-6">
               <div className="mb-4">
                 <h2 className="text-lg font-semibold text-[#1d1d1f] dark:text-[#f5f5f7] text-heading">
-                  AI配置
+                  AI 文本优化（可选）
                 </h2>
                 <p className="text-xs text-[#86868b] mt-1">
-                  配置AI模型以优化和增强语音识别结果。如果API
-                  Key无效或未填写，优化功能将自动禁用。
+                  AI 用于对识别出的文字做润色和优化，是可选功能。语音识别本身使用本地 FunASR 模型，无需在此配置。API Key 无效或留空时，将直接使用原始转录文本。
                 </p>
               </div>
 
@@ -444,21 +466,17 @@ const SettingsPage = () => {
                     <label className="block text-xs font-medium text-[#1d1d1f]/80 dark:text-[#f5f5f7]/80">
                       AI模型
                     </label>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        type="button"
-                        onClick={applyRecommendedConfig}
-                        className="text-xs px-2 py-0.5 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors"
-                      >
-                        阿里云推荐
-                      </button>
-                      <button
-                        type="button"
-                        onClick={resetToOpenAI}
-                        className="text-xs px-2 py-0.5 bg-[#e8f4fd] text-[#0071e3] dark:bg-blue-900/30 dark:text-blue-400 rounded hover:bg-[#d0eafb] dark:hover:bg-blue-900/50 transition-colors"
-                      >
-                        OpenAI
-                      </button>
+                    <div className="flex flex-wrap items-center gap-1">
+                      {AI_PROVIDER_PRESETS.map((preset) => (
+                        <button
+                          key={preset.label}
+                          type="button"
+                          onClick={() => applyProviderPreset(preset)}
+                          className="text-xs px-2 py-0.5 bg-[#e8f4fd] text-[#0071e3] dark:bg-blue-900/30 dark:text-blue-400 rounded hover:bg-[#d0eafb] dark:hover:bg-blue-900/50 transition-colors"
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
                     </div>
                   </div>
 
@@ -627,7 +645,7 @@ const SettingsPage = () => {
 
                 <button
                   onClick={saveSettings}
-                  disabled={saving || !settings.ai_api_key}
+                  disabled={saving || (settings.enable_ai_optimization && !settings.ai_api_key)}
                   className="flex items-center space-x-2 px-4 py-1.5 text-sm bg-[#0071e3] hover:bg-[#0077ed] text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {saving ? (

@@ -42,19 +42,19 @@ export const ModelStatusIndicator = ({
   const getStatusText = () => {
     switch (modelStatus.stage) {
       case "checking":
-        return "检查模型状态...";
+        return "检查语音模型...";
       case "need_download":
-        return "需要下载模型";
+        return "需要下载语音模型";
       case "downloading":
-        return "正在下载模型...";
+        return "正在下载语音模型...";
       case "loading":
-        return "模型加载中...";
+        return "语音模型加载中...";
       case "ready":
-        return "模型已就绪";
+        return "语音识别就绪";
       case "error":
-        return "模型错误";
+        return "语音识别错误";
       default:
-        return "模型状态未知";
+        return "语音模型状态未知";
     }
   };
 
@@ -145,19 +145,19 @@ export const ModelStatusIcon = ({
   const getTooltipText = () => {
     switch (modelStatus.stage) {
       case "checking":
-        return "🔍 正在检查模型状态...";
+        return "🔍 正在检查语音模型状态...";
       case "need_download":
-        return "📥 需要下载AI模型文件（约1.1GB）";
+        return "📥 需要下载语音识别模型（约1.1GB）";
       case "downloading":
-        return `⬇️ 正在下载模型文件... ${modelStatus.downloadProgress || 0}%`;
+        return `⬇️ 正在下载语音模型... ${modelStatus.downloadProgress || 0}%`;
       case "loading":
-        return "🤖 AI模型加载中，请稍候...";
+        return "🎙️ 语音模型加载中，请稍候...";
       case "ready":
-        return "✅ AI模型已就绪，可以开始语音识别";
+        return "✅ 语音识别就绪，可以开始录音";
       case "error":
-        return `❌ 模型错误: ${modelStatus.error || "未知错误"}`;
+        return `❌ 语音识别错误: ${modelStatus.error || "未知错误"}`;
       default:
-        return "⏳ 模型状态未知";
+        return "⏳ 语音模型状态未知";
     }
   };
 
@@ -195,10 +195,10 @@ export const ModelDownloadProgress = ({
             <Download className="w-5 h-5 text-orange-500" />
             <div>
               <h3 className="text-sm font-medium text-orange-800 dark:text-orange-200">
-                需要下载AI模型
+                需要下载语音识别模型
               </h3>
               <p className="text-xs text-orange-600 dark:text-orange-300">
-                首次使用需要下载约1.1GB的模型文件
+                首次使用需下载约1.1GB的本地语音模型（FunASR）
               </p>
             </div>
           </div>

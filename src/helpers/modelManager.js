@@ -87,7 +87,7 @@ class ModelManager {
 
     const cachePath = this.getModelCachePath();
     if (!fs.existsSync(cachePath)) {
-      const result = { models_downloaded: false, missing_models: ["all"] };
+      const result = { success: true, models_downloaded: false, missing_models: ["all"], cache_path: cachePath };
       this.modelsDownloaded = false;
       return result;
     }
@@ -113,6 +113,7 @@ class ModelManager {
     }
 
     const result = {
+      success: true,
       models_downloaded: allDownloaded,
       missing_models: missingModels,
       model_details: modelDetails,
@@ -128,6 +129,13 @@ class ModelManager {
   _verifyModel(modelFile, config) {
     try {
       const stats = fs.statSync(modelFile);
+      if (stats.isDirectory()) {
+        const entries = fs.readdirSync(modelFile);
+        return entries.some(e =>
+          e === "model.pt" || e === "pytorch_model.bin" ||
+          e === "configuration.json" || e === "config.yaml"
+        );
+      }
       return stats.size >= config.expected_size * 0.9;
     } catch {
       return false;
@@ -217,6 +225,8 @@ class ModelManager {
               progressCallback({
                 stage: result.stage,
                 percentage: result.percentage || 0,
+                overall_progress: result.percentage || 0,
+                progress: result.percentage || 0,
               });
             }
             if (result.success !== undefined) {

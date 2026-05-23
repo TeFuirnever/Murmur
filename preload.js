@@ -50,8 +50,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   writeClipboard: (text) => ipcRenderer.invoke(C.CLIPBOARD.WRITE, text),
 
   // 数据库操作
-  saveTranscription: (text, processedText) =>
-    ipcRenderer.invoke(C.TRANSCRIPTION.SAVE, text, processedText),
+  saveTranscription: (data) =>
+    ipcRenderer.invoke(C.TRANSCRIPTION.SAVE, data),
   getTranscriptions: (limit, offset) =>
     ipcRenderer.invoke(C.TRANSCRIPTION.GET_ALL, limit, offset),
   deleteTranscription: (id) =>

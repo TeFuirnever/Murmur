@@ -29,6 +29,7 @@ function register(ipcMain, managers) {
     const status = await funasrManager.checkStatus();
     return {
       ...status,
+      success: status?.success !== false,
       models_initialized: funasrManager.modelsInitialized,
       server_ready: funasrManager.serverReady,
       is_initializing: funasrManager.initializationPromise !== null,

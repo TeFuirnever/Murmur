@@ -294,6 +294,16 @@ export const useModelStatus = () => {
     }
   }, []);
 
+  // 监听设置变更事件：保存配置后立即重新检查模型状态
+  useEffect(() => {
+    if (isSettingsPage()) return;
+    if (!window.electronAPI?.onSettingsUpdate) return;
+    const unsubscribe = window.electronAPI.onSettingsUpdate(() => {
+      checkModelStatus();
+    });
+    return unsubscribe;
+  }, [checkModelStatus]);
+
   return {
     ...modelStatus,
     checkModelStatus,

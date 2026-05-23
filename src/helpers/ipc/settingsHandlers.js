@@ -11,14 +11,23 @@ function maskApiKey(settings) {
 }
 
 function register(ipcMain, managers) {
-  const { databaseManager, logger } = managers;
+  const { databaseManager, logger, windowManager } = managers;
+
+  const broadcastSettingsUpdate = (key) => {
+    const mw = windowManager?.mainWindow;
+    if (mw && !mw.isDestroyed()) {
+      mw.webContents.send(C.EVENTS.SETTINGS_UPDATE, { key });
+    }
+  };
 
   ipcMain.handle(C.SETTINGS.GET, (event, key, defaultValue) => {
     return databaseManager.getSetting(key, defaultValue);
   });
 
   ipcMain.handle(C.SETTINGS.SET, (event, key, value) => {
-    return databaseManager.setSetting(key, value);
+    const result = databaseManager.setSetting(key, value);
+    broadcastSettingsUpdate(key);
+    return result;
   });
 
   ipcMain.handle(C.SETTINGS.GET_ALL, () => {
@@ -30,11 +39,15 @@ function register(ipcMain, managers) {
   });
 
   ipcMain.handle(C.SETTINGS.SAVE, (event, key, value) => {
-    return databaseManager.setSetting(key, value);
+    const result = databaseManager.setSetting(key, value);
+    broadcastSettingsUpdate(key);
+    return result;
   });
 
   ipcMain.handle(C.SETTINGS.RESET, () => {
-    return databaseManager.resetSettings();
+    const result = databaseManager.resetSettings();
+    broadcastSettingsUpdate(null);
+    return result;
   });
 
   ipcMain.handle(C.SETTINGS.IMPORT, async () => {
@@ -55,6 +68,7 @@ function register(ipcMain, managers) {
       for (const [key, value] of Object.entries(settings)) {
         databaseManager.setSetting(key, value);
       }
+      broadcastSettingsUpdate(null);
 
       return { success: true, count: Object.keys(settings).length };
     } catch (error) {
