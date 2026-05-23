@@ -15,18 +15,26 @@ interface ModelStatus {
 interface ModelStatusContextValue extends ModelStatus {
   checkModelStatus: () => Promise<void>;
   downloadModels: () => Promise<{ success: boolean; error?: string }>;
-  getDownloadProgress: () => Promise<import("../types/ipc").DownloadProgress | { success: boolean }>;
+  getDownloadProgress: () => Promise<
+    import("../types/ipc").DownloadProgress | { success: boolean }
+  >;
   checkModelFiles: () => Promise<import("../types/ipc").ModelCheckResult>;
 }
 
-const ModelStatusContext = React.createContext<ModelStatusContextValue | null>(null);
+const ModelStatusContext = React.createContext<ModelStatusContextValue | null>(
+  null,
+);
 
 const isSettingsPage = () => {
   const urlParams = new URLSearchParams(window.location.search);
   return urlParams.get("page") === "settings";
 };
 
-export function ModelStatusProvider({ children }: { children: React.ReactNode }) {
+export function ModelStatusProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const [modelStatus, setModelStatus] = React.useState<ModelStatus>({
     isLoading: true,
     isReady: false,
@@ -39,7 +47,9 @@ export function ModelStatusProvider({ children }: { children: React.ReactNode })
     stage: "checking",
   });
 
-  const checkModelFiles = React.useCallback(async (): Promise<import("../types/ipc").ModelCheckResult> => {
+  const checkModelFiles = React.useCallback(async (): Promise<
+    import("../types/ipc").ModelCheckResult
+  > => {
     try {
       if (window.electronAPI) {
         const result = await window.electronAPI.checkModelFiles();
@@ -52,16 +62,28 @@ export function ModelStatusProvider({ children }: { children: React.ReactNode })
     }
   }, []);
 
-  const checkServerStatus = React.useCallback(async (): Promise<import("../types/ipc").FunASRStatusResult> => {
+  const checkServerStatus = React.useCallback(async (): Promise<
+    import("../types/ipc").FunASRStatusResult
+  > => {
     try {
       if (window.electronAPI) {
         const status = await window.electronAPI.checkFunASRStatus();
         return status;
       }
-      return { success: false, installed: false, models_downloaded: false, initializing: false };
+      return {
+        success: false,
+        installed: false,
+        models_downloaded: false,
+        initializing: false,
+      };
     } catch (error) {
       console.error("检查服务器状态失败:", error);
-      return { success: false, installed: false, models_downloaded: false, initializing: false };
+      return {
+        success: false,
+        installed: false,
+        models_downloaded: false,
+        initializing: false,
+      };
     }
   }, []);
 

@@ -98,7 +98,8 @@ const SettingsPage = () => {
         const allSettings = await window.electronAPI.getAllSettings();
         const loadedSettings = {
           ai_api_key: (allSettings.ai_api_key || "") as string,
-          ai_base_url: (allSettings.ai_base_url || "https://api.openai.com/v1") as string,
+          ai_base_url: (allSettings.ai_base_url ||
+            "https://api.openai.com/v1") as string,
           ai_model: (allSettings.ai_model || "gpt-3.5-turbo") as string,
           enable_ai_optimization: allSettings.enable_ai_optimization !== false,
           window_always_on_top: allSettings.window_always_on_top !== false,
@@ -138,8 +139,14 @@ const SettingsPage = () => {
 
   useEffect(() => {
     if (!window.electronAPI) return;
-    window.electronAPI.getAIProviderPresets().then(setProviderPresets).catch(() => {});
-    window.electronAPI.detectLocalModels().then(setDetectedLocalModels).catch(() => {});
+    window.electronAPI
+      .getAIProviderPresets()
+      .then(setProviderPresets)
+      .catch(() => {});
+    window.electronAPI
+      .detectLocalModels()
+      .then(setDetectedLocalModels)
+      .catch(() => {});
   }, []);
 
   // 保存设置
@@ -199,16 +206,17 @@ const SettingsPage = () => {
   const getDetectedModels = (name: string) =>
     detectedLocalModels.find((d) => d.name === name)?.models || [];
 
-  const AI_PROVIDER_PRESETS = providerPresets.length > 0
-    ? providerPresets.map((p) => ({
-        label: isLocalDetected(p.name) ? `${p.label} ✓` : p.label,
-        baseUrl: p.base_url,
-        model: isLocalDetected(p.name)
-          ? getDetectedModels(p.name)[0] || p.models[0]
-          : p.models[0],
-        noApiKey: !p.requires_api_key,
-      }))
-    : [];
+  const AI_PROVIDER_PRESETS =
+    providerPresets.length > 0
+      ? providerPresets.map((p) => ({
+          label: isLocalDetected(p.name) ? `${p.label} ✓` : p.label,
+          baseUrl: p.base_url,
+          model: isLocalDetected(p.name)
+            ? getDetectedModels(p.name)[0] || p.models[0]
+            : p.models[0],
+          noApiKey: !p.requires_api_key,
+        }))
+      : [];
 
   const applyProviderPreset = (preset: Record<string, unknown>) => {
     setSettings((prev) => ({
@@ -323,7 +331,9 @@ const SettingsPage = () => {
     });
     const unsub3 = window.electronAPI.onUpdateDownloadError?.((data) => {
       setDownloadProgress(null);
-      setUpdateInfo((prev: typeof settings) => (prev ? { ...prev, error: data.error } : prev));
+      setUpdateInfo((prev: typeof settings) =>
+        prev ? { ...prev, error: data.error } : prev,
+      );
     });
     return () => {
       unsub1?.();

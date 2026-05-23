@@ -5,7 +5,9 @@ interface AlertDialog {
   description: string;
 }
 
-export const usePermissions = (showAlertDialog?: (alert: AlertDialog) => void) => {
+export const usePermissions = (
+  showAlertDialog?: (alert: AlertDialog) => void,
+) => {
   const [micPermissionGranted, setMicPermissionGranted] = React.useState(false);
   const [accessibilityPermissionGranted, setAccessibilityPermissionGranted] =
     React.useState(false);

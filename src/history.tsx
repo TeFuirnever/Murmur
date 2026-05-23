@@ -63,7 +63,11 @@ const HistoryPage = () => {
 
 // 历史记录内容组件
 // eslint-disable-next-line react-refresh/only-export-components
-const HistoryContent = ({ onCopy }: { onCopy: (text: string) => Promise<void> }) => {
+const HistoryContent = ({
+  onCopy,
+}: {
+  onCopy: (text: string) => Promise<void>;
+}) => {
   const [transcriptions, setTranscriptions] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState("");

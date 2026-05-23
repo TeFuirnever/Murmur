@@ -19,7 +19,10 @@ interface ErrorBoundaryState {
 }
 
 // 错误边界组件
-class ErrorBoundary extends React.Component<{ children: React.ReactNode }, ErrorBoundaryState> {
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  ErrorBoundaryState
+> {
   constructor(props: { children: React.ReactNode }) {
     super(props);
     this.state = { hasError: false, error: null, errorInfo: null };

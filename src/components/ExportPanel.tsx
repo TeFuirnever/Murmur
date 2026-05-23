@@ -18,7 +18,9 @@ interface ExportPanelProps {
  * 提供多种格式的导出按钮
  */
 export default function ExportPanel({ transcriptionId }: ExportPanelProps) {
-  const [exportingFormat, setExportingFormat] = React.useState<string | null>(null);
+  const [exportingFormat, setExportingFormat] = React.useState<string | null>(
+    null,
+  );
 
   const handleExport = async (format: string) => {
     if (!window.electronAPI || !window.electronAPI.exportTranscription) {

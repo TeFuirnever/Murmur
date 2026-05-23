@@ -31,7 +31,9 @@ export interface ElectronAPI {
   minimizeWindow: () => Promise<void>;
   maximizeWindow: () => Promise<void>;
   isWindowMaximized: () => Promise<boolean>;
-  onWindowMaximizeChange: (callback: (isMaximized: boolean) => void) => () => void;
+  onWindowMaximizeChange: (
+    callback: (isMaximized: boolean) => void,
+  ) => () => void;
   closeWindow: () => Promise<void>;
   closeApp: () => Promise<void>;
   setAlwaysOnTop: (enabled: boolean) => Promise<void>;
@@ -40,24 +42,43 @@ export interface ElectronAPI {
   onToggleDictation: (callback: (isRecording: boolean) => void) => () => void;
 
   // FunASR
-  transcribeAudio: (audioData: ArrayBuffer | Blob, options?: Record<string, unknown>) => Promise<FileTranscriptionResult>;
+  transcribeAudio: (
+    audioData: ArrayBuffer | Blob,
+    options?: Record<string, unknown>,
+  ) => Promise<FileTranscriptionResult>;
   checkFunASRStatus: () => Promise<FunASRStatusResult>;
   installFunASR: () => Promise<{ installed: boolean; error?: string }>;
-  restartFunasrServer: () => Promise<{ success: boolean; message?: string; error?: string }>;
+  restartFunasrServer: () => Promise<{
+    success: boolean;
+    message?: string;
+    error?: string;
+  }>;
 
   // Model management
   checkModelFiles: () => Promise<ModelCheckResult>;
   getDownloadProgress: () => Promise<DownloadProgress>;
-  downloadModels: (callback?: (progress: DownloadProgress) => void) => Promise<ModelCheckResult>;
-  downloadModel: (modelName: string) => Promise<{ success: boolean; error?: string }>;
+  downloadModels: (
+    callback?: (progress: DownloadProgress) => void,
+  ) => Promise<ModelCheckResult>;
+  downloadModel: (
+    modelName: string,
+  ) => Promise<{ success: boolean; error?: string }>;
   getAvailableModels: () => Promise<ModelInfo[]>;
   getCurrentModel: () => Promise<string>;
-  switchModel: (modelName: string) => Promise<{ success: boolean; error?: string }>;
-  onModelDownloadProgress: (callback: (eventOrProgress: any, progress?: DownloadProgress) => void) => () => void;
+  switchModel: (
+    modelName: string,
+  ) => Promise<{ success: boolean; error?: string }>;
+  onModelDownloadProgress: (
+    callback: (eventOrProgress: any, progress?: DownloadProgress) => void,
+  ) => () => void;
 
   // AI text processing
   processText: (text: string, mode: string) => Promise<AIProcessResult>;
-  checkAIStatus: (testConfig?: { ai_api_key?: string; ai_base_url?: string; ai_model?: string }) => Promise<AICheckStatusResult>;
+  checkAIStatus: (testConfig?: {
+    ai_api_key?: string;
+    ai_base_url?: string;
+    ai_model?: string;
+  }) => Promise<AICheckStatusResult>;
   getAIModes: () => Promise<AIMode[]>;
   getAIProviderPresets: () => Promise<AIProviderPreset[]>;
   detectLocalModels: () => Promise<LocalModelDetection[]>;
@@ -69,12 +90,27 @@ export interface ElectronAPI {
   writeClipboard: (text: string) => Promise<void>;
 
   // Transcription
-  saveTranscription: (data: { text: string; raw_text?: string; processed_text?: string; confidence?: number; duration?: number; audio_format?: string }) => Promise<TranscriptionSaveResult>;
+  saveTranscription: (data: {
+    text: string;
+    raw_text?: string;
+    processed_text?: string;
+    confidence?: number;
+    duration?: number;
+    audio_format?: string;
+  }) => Promise<TranscriptionSaveResult>;
   getTranscription: (id: number) => Promise<TranscriptionRecord | null>;
-  getTranscriptions: (limit: number, offset: number) => Promise<TranscriptionRecord[]>;
-  deleteTranscription: (id: number) => Promise<{ success: boolean; error?: string }>;
+  getTranscriptions: (
+    limit: number,
+    offset: number,
+  ) => Promise<TranscriptionRecord[]>;
+  deleteTranscription: (
+    id: number,
+  ) => Promise<{ success: boolean; error?: string }>;
   clearAllTranscriptions: () => Promise<{ success: boolean; error?: string }>;
-  searchTranscriptions: (query: string, limit?: number) => Promise<TranscriptionRecord[]>;
+  searchTranscriptions: (
+    query: string,
+    limit?: number,
+  ) => Promise<TranscriptionRecord[]>;
   getTranscriptionStats: () => Promise<TranscriptionStats>;
 
   // Settings
@@ -99,17 +135,36 @@ export interface ElectronAPI {
   onHotkeyTriggered: (callback: (hotkey: string) => void) => () => void;
 
   // File operations
-  exportTranscription: (id: number, format: string, options?: Record<string, unknown>) => Promise<ExportResult>;
+  exportTranscription: (
+    id: number,
+    format: string,
+    options?: Record<string, unknown>,
+  ) => Promise<ExportResult>;
   exportTranscriptions: (format: string) => Promise<ExportAllResult>;
 
   // File transcription
   importAudioFile: () => Promise<FileTranscriptionResult>;
-  transcribeFile: (audioPath: string, options?: Record<string, unknown>) => Promise<FileTranscriptionResult>;
+  transcribeFile: (
+    audioPath: string,
+    options?: Record<string, unknown>,
+  ) => Promise<FileTranscriptionResult>;
   cancelFileTranscription: () => Promise<{ success: boolean }>;
-  onFileTranscriptionProgress: (callback: (data: { progress?: number; status?: string; phase?: string; message?: string; processed_ms?: number; total_ms?: number }) => void) => () => void;
+  onFileTranscriptionProgress: (
+    callback: (data: {
+      progress?: number;
+      status?: string;
+      phase?: string;
+      message?: string;
+      processed_ms?: number;
+      total_ms?: number;
+    }) => void,
+  ) => () => void;
 
   // AI review
-  aiReviewTranscription: (id: number, template?: string) => Promise<AIReviewResult>;
+  aiReviewTranscription: (
+    id: number,
+    template?: string,
+  ) => Promise<AIReviewResult>;
 
   // System
   getSystemInfo: () => Promise<Record<string, unknown>>;
@@ -121,12 +176,22 @@ export interface ElectronAPI {
 
   // Update management
   checkForUpdates: () => Promise<UpdateCheckResult>;
-  downloadUpdate: (updateInfo: { downloadUrl: string; checksumsUrl: string; latestVersion: string }) => Promise<UpdateDownloadResult>;
+  downloadUpdate: (updateInfo: {
+    downloadUrl: string;
+    checksumsUrl: string;
+    latestVersion: string;
+  }) => Promise<UpdateDownloadResult>;
   cancelUpdateDownload: () => Promise<{ success: boolean; error?: string }>;
   installUpdate: (filePath: string) => Promise<boolean>;
-  onUpdateDownloadProgress: (callback: (data: UpdateProgressData) => void) => () => void;
-  onUpdateDownloadComplete: (callback: (data: UpdateCompleteData) => void) => () => void;
-  onUpdateDownloadError: (callback: (data: UpdateErrorData) => void) => () => void;
+  onUpdateDownloadProgress: (
+    callback: (data: UpdateProgressData) => void,
+  ) => () => void;
+  onUpdateDownloadComplete: (
+    callback: (data: UpdateCompleteData) => void,
+  ) => () => void;
+  onUpdateDownloadError: (
+    callback: (data: UpdateErrorData) => void,
+  ) => () => void;
 
   // Misc
   openExternal: (url: string) => Promise<void>;
@@ -137,10 +202,25 @@ export interface ElectronAPI {
   openDevTools: () => Promise<void>;
 
   // Event listeners
-  onTranscriptionUpdate: (callback: (data: TranscriptionRecord) => void) => () => void;
-  onProcessingUpdate: (callback: (eventOrData: any, data?: { status?: string; progress?: number; type?: string; isLoading?: boolean; isReady?: boolean }) => void) => () => void;
+  onTranscriptionUpdate: (
+    callback: (data: TranscriptionRecord) => void,
+  ) => () => void;
+  onProcessingUpdate: (
+    callback: (
+      eventOrData: any,
+      data?: {
+        status?: string;
+        progress?: number;
+        type?: string;
+        isLoading?: boolean;
+        isReady?: boolean;
+      },
+    ) => void,
+  ) => () => void;
   onError: (callback: (data: { error: string }) => void) => () => void;
-  onSettingsUpdate: (callback: (data: Record<string, unknown>) => void) => () => void;
+  onSettingsUpdate: (
+    callback: (data: Record<string, unknown>) => void,
+  ) => () => void;
 
   // History window
   openHistoryWindow: () => Promise<void>;
@@ -155,14 +235,21 @@ export interface ElectronAPI {
   // Python environment
   checkPython: () => Promise<import("./types/ipc").PythonCheckResult>;
   installPython: () => Promise<import("./types/ipc").PythonInstallResult>;
-  testPythonEnvironment: () => Promise<import("./types/ipc").PythonInstallResult>;
+  testPythonEnvironment: () => Promise<
+    import("./types/ipc").PythonInstallResult
+  >;
   checkFunASR: () => Promise<import("./types/ipc").FunASRInstallResult>;
   installFunASR: () => Promise<import("./types/ipc").FunASRInstallResult>;
   getFunASRLogs: () => Promise<string[]>;
 
   // Environment
   getConfig: () => Promise<import("./types/ipc").EnvironmentConfig>;
-  validateEnvironment: () => Promise<{ python: boolean; funasr: boolean; ffmpeg: boolean; models: boolean }>;
+  validateEnvironment: () => Promise<{
+    python: boolean;
+    funasr: boolean;
+    ffmpeg: boolean;
+    models: boolean;
+  }>;
 }
 
 export interface AppConstants {

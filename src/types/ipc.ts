@@ -18,7 +18,11 @@ export type Result = SuccessResult | ErrorResult;
 export interface AIProcessResult {
   success: boolean;
   text?: string;
-  usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
   model?: string;
   error?: string;
 }
@@ -28,7 +32,11 @@ export interface AICheckStatusResult {
   model?: string;
   status?: string;
   response?: string;
-  usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
   details?: string;
   error?: string;
 }

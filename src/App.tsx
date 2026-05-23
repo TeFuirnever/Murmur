@@ -86,7 +86,15 @@ const VoiceWaveIndicator = ({ isListening }: { isListening: boolean }) => {
 };
 
 // 增强的工具提示组件
-const Tooltip = ({ children, content, position = "top" }: { children: React.ReactNode; content: React.ReactNode; position?: string }) => {
+const Tooltip = ({
+  children,
+  content,
+  position = "top",
+}: {
+  children: React.ReactNode;
+  content: React.ReactNode;
+  position?: string;
+}) => {
   const [isVisible, setIsVisible] = useState(false);
 
   const getPositionClasses = () => {
@@ -310,20 +318,23 @@ export default function App() {
   }, []);
 
   // 处理录音完成（FunASR识别完成）
-  const handleRecordingComplete = useCallback(async (transcriptionResult: Record<string, unknown>) => {
-    if (transcriptionResult.success && transcriptionResult.text) {
-      // 立即显示FunASR识别的原始文本
-      setOriginalText(transcriptionResult.text as string);
-      setShowTextArea(true);
+  const handleRecordingComplete = useCallback(
+    async (transcriptionResult: Record<string, unknown>) => {
+      if (transcriptionResult.success && transcriptionResult.text) {
+        // 立即显示FunASR识别的原始文本
+        setOriginalText(transcriptionResult.text as string);
+        setShowTextArea(true);
 
-      // 清空之前的处理结果，等待AI优化
-      setProcessedText("");
+        // 清空之前的处理结果，等待AI优化
+        setProcessedText("");
 
-      // 注意：不在这里保存到数据库，由 useRecording.js 统一处理保存逻辑
+        // 注意：不在这里保存到数据库，由 useRecording.js 统一处理保存逻辑
 
-      toast.success("🎤 语音识别完成，AI正在优化文本...");
-    }
-  }, []);
+        toast.success("🎤 语音识别完成，AI正在优化文本...");
+      }
+    },
+    [],
+  );
 
   // 处理AI优化完成
   const handleAIOptimizationComplete = useCallback(
@@ -546,11 +557,9 @@ export default function App() {
   useEffect(() => {
     if (window.electronAPI) {
       // 监听传统热键触发
-      const unsubscribeHotkey = window.electronAPI.onHotkeyTriggered(
-        () => {
-          toggleRecording();
-        },
-      );
+      const unsubscribeHotkey = window.electronAPI.onHotkeyTriggered(() => {
+        toggleRecording();
+      });
 
       // 监听旧的toggle事件（保持兼容性）
       const unsubscribeToggle = window.electronAPI.onToggleDictation(() => {

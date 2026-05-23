@@ -17,11 +17,19 @@ interface HistoryModalProps {
   onCopy?: (text: string) => Promise<void>;
 }
 
-const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, onCopy }) => {
-  const [transcriptions, setTranscriptions] = React.useState<TranscriptionItem[]>([]);
+const HistoryModal: React.FC<HistoryModalProps> = ({
+  isOpen,
+  onClose,
+  onCopy,
+}) => {
+  const [transcriptions, setTranscriptions] = React.useState<
+    TranscriptionItem[]
+  >([]);
   const [loading, setLoading] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState("");
-  const [filteredTranscriptions, setFilteredTranscriptions] = React.useState<TranscriptionItem[]>([]);
+  const [filteredTranscriptions, setFilteredTranscriptions] = React.useState<
+    TranscriptionItem[]
+  >([]);
 
   // 加载转录历史
   const loadTranscriptions = async () => {

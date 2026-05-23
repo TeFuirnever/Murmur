@@ -1,6 +1,12 @@
 import * as React from "react";
 
-type TranscriptionState = "idle" | "selected" | "transcribing" | "done" | "error" | "cancelled";
+type TranscriptionState =
+  | "idle"
+  | "selected"
+  | "transcribing"
+  | "done"
+  | "error"
+  | "cancelled";
 
 interface FileInfo {
   filePath: string;
@@ -32,7 +38,9 @@ interface TranscriptionResult {
 export function useFileTranscription() {
   const [state, setState] = React.useState<TranscriptionState>("idle");
   const [fileInfo, setFileInfo] = React.useState<FileInfo | null>(null);
-  const [progress, setProgress] = React.useState<TranscriptionProgress | null>(null);
+  const [progress, setProgress] = React.useState<TranscriptionProgress | null>(
+    null,
+  );
   const [result, setResult] = React.useState<TranscriptionResult | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const progressCleanup = React.useRef<(() => void) | null>(null);

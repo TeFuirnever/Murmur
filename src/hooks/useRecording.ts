@@ -1,7 +1,9 @@
 import * as React from "react";
 import { useModelStatus } from "./useModelStatus";
 
-export function determineProcessingMode(text: string): "optimize_long" | "optimize" {
+export function determineProcessingMode(
+  text: string,
+): "optimize_long" | "optimize" {
   const textLength = text.trim().length;
   const wordCount = text.trim().split(/\s+/).length;
   if (textLength > 150 || wordCount > 30) {
@@ -33,15 +35,21 @@ export const useRecording = ({
   const audioChunksRef = React.useRef<Blob[]>([]);
   const streamRef = React.useRef<MediaStream | null>(null);
   const cancelledRef = React.useRef(false);
-  const optimizationTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const optimizationTimeoutRef = React.useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
 
   const processingRef = React.useRef({
     isProcessingAudio: false,
     lastProcessTime: 0,
   });
 
-  const onTranscriptionCompleteRef = React.useRef<((text: string | Record<string, unknown>) => void) | undefined>(undefined);
-  const onAIOptimizationCompleteRef = React.useRef<((text: string | Record<string, unknown>) => void) | undefined>(undefined);
+  const onTranscriptionCompleteRef = React.useRef<
+    ((text: string | Record<string, unknown>) => void) | undefined
+  >(undefined);
+  const onAIOptimizationCompleteRef = React.useRef<
+    ((text: string | Record<string, unknown>) => void) | undefined
+  >(undefined);
   onTranscriptionCompleteRef.current = onTranscriptionComplete;
   onAIOptimizationCompleteRef.current = onAIOptimizationComplete;
 
@@ -202,7 +210,9 @@ export const useRecording = ({
                 true,
               )) as boolean;
 
-              const finalData: Record<string, unknown> = { ...transcriptionData };
+              const finalData: Record<string, unknown> = {
+                ...transcriptionData,
+              };
 
               if (useAI) {
                 try {
@@ -215,7 +225,7 @@ export const useRecording = ({
                   }
 
                   const mode = determineProcessingMode(raw_text);
-                  const result = await Promise.race([
+                  const result = (await Promise.race([
                     window.electronAPI.processText(raw_text, mode),
                     new Promise((_, reject) =>
                       setTimeout(
@@ -223,7 +233,7 @@ export const useRecording = ({
                         30000,
                       ),
                     ),
-                  ]) as import("../types/ipc").AIProcessResult;
+                  ])) as import("../types/ipc").AIProcessResult;
 
                   if (result && result.success) {
                     const processed_text = result.text;
@@ -271,8 +281,9 @@ export const useRecording = ({
                     finalData,
                   );
                 }
-                const savedResult =
-                  await window.electronAPI.saveTranscription(finalData as any);
+                const savedResult = await window.electronAPI.saveTranscription(
+                  finalData as any,
+                );
                 if (window.electronAPI && window.electronAPI.log) {
                   window.electronAPI.log(
                     "info",
@@ -344,40 +355,43 @@ export const useRecording = ({
   }, []);
 
   // 转换音频格式为WAV
-  const convertToWav = React.useCallback(async (audioBlob: Blob): Promise<Blob | null> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
+  const convertToWav = React.useCallback(
+    async (audioBlob: Blob): Promise<Blob | null> => {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
 
-      reader.onload = async () => {
-        let audioContext = null;
-        try {
-          const arrayBuffer = reader.result;
+        reader.onload = async () => {
+          let audioContext = null;
+          try {
+            const arrayBuffer = reader.result;
 
-          audioContext = new (window.AudioContext || (window as any).webkitAudioContext)(
-            {
+            audioContext = new (
+              window.AudioContext || (window as any).webkitAudioContext
+            )({
               sampleRate: 16000,
-            },
-          );
+            });
 
-          const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-          const wavBuffer = audioBufferToWav(audioBuffer);
-          const wavBlob = new Blob([wavBuffer], { type: "audio/wav" });
+            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+            const wavBuffer = audioBufferToWav(audioBuffer);
+            const wavBlob = new Blob([wavBuffer], { type: "audio/wav" });
 
-          resolve(wavBlob);
-        } catch (err) {
-          reject(new Error(`音频格式转换失败: ${err.message}`));
-        } finally {
-          if (audioContext) audioContext.close();
-        }
-      };
+            resolve(wavBlob);
+          } catch (err) {
+            reject(new Error(`音频格式转换失败: ${err.message}`));
+          } finally {
+            if (audioContext) audioContext.close();
+          }
+        };
 
-      reader.onerror = () => {
-        reject(new Error("读取音频文件失败"));
-      };
+        reader.onerror = () => {
+          reject(new Error("读取音频文件失败"));
+        };
 
-      reader.readAsArrayBuffer(audioBlob);
-    });
-  }, []);
+        reader.readAsArrayBuffer(audioBlob);
+      });
+    },
+    [],
+  );
 
   // AudioBuffer转WAV格式
   const audioBufferToWav = (audioBuffer: AudioBuffer) => {

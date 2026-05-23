@@ -38,8 +38,14 @@ function formatDuration(seconds?: number): string {
  * 转录结果展示组件
  * 显示完整文本和按时间段的分段详情
  */
-export default function TranscriptionResult({ text, segments, duration }: TranscriptionResultProps) {
-  const [expandedSegment, setExpandedSegment] = React.useState<string | number | null>(null);
+export default function TranscriptionResult({
+  text,
+  segments,
+  duration,
+}: TranscriptionResultProps) {
+  const [expandedSegment, setExpandedSegment] = React.useState<
+    string | number | null
+  >(null);
 
   const hasSegments = segments && segments.length > 0;
 

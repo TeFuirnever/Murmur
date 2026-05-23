@@ -22,7 +22,10 @@ function formatFileSize(bytes: number): string {
  * 文件拖放/选择区域组件
  * 点击选择音频文件，未来支持拖拽
  */
-export default function FileDropZone({ fileInfo, onSelectFile }: FileDropZoneProps) {
+export default function FileDropZone({
+  fileInfo,
+  onSelectFile,
+}: FileDropZoneProps) {
   if (fileInfo) {
     return (
       <div className="bg-[#f5f5f7] dark:bg-[#2c2c2e] rounded-xl p-4 border border-[#d2d2d7] dark:border-[#383838]">
