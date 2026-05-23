@@ -18,7 +18,8 @@
  * @returns {PromptTemplate | null}
  */
 function parseTemplateFile(content, fileName) {
-  const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)/);
+  const normalized = content.replace(/\r\n/g, "\n");
+  const match = normalized.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)/);
   if (!match) return null;
 
   let meta = {};
