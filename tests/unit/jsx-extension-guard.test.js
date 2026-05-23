@@ -30,20 +30,25 @@ const JSX_PATTERNS = [
 ];
 
 describe("jsx-extension-guard", () => {
-  it("no .js file in src/ contains JSX syntax", () => {
-    const jsFiles = walk(SRC_DIR, ".js");
+  it("no .js or .ts file in src/ contains JSX syntax", () => {
+    const jsFiles = [
+      ...walk(SRC_DIR, ".js"),
+      ...walk(SRC_DIR, ".ts").filter((f) => !f.endsWith(".d.ts")),
+    ];
     const violating = [];
 
     for (const file of jsFiles) {
       const content = stripStrings(fs.readFileSync(file, "utf8"));
-      if (JSX_PATTERNS.some((p) => p.test(content))) {
+      // Strip TypeScript generics: Foo<Type> → Foo
+      const noGenerics = content.replace(/<[^>]+>/g, "");
+      if (JSX_PATTERNS.some((p) => p.test(noGenerics))) {
         violating.push(path.relative(SRC_DIR, file));
       }
     }
 
     if (violating.length > 0) {
       throw new Error(
-        `JSX syntax found in .js files (rename to .jsx):\n  ${violating.join("\n  ")}`,
+        `JSX syntax found in .js/.ts files (rename to .jsx/.tsx):\n  ${violating.join("\n  ")}`,
       );
     }
   });
