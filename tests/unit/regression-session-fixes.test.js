@@ -1,0 +1,299 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// ---------------------------------------------------------------------------
+// Regression tests for fixes from the 2026-05-22/23 session.
+// Each test guards against a specific bug that was fixed.
+// ---------------------------------------------------------------------------
+
+const C = require("../../src/helpers/ipc-contracts");
+
+function createIpcMain() {
+  const handlers = {};
+  return {
+    handle: vi.fn((channel, fn) => {
+      handlers[channel] = fn;
+    }),
+    _handlers: handlers,
+  };
+}
+
+// 1. FUNASR.STATUS spread order — success field computed AFTER spread
+describe("FUNASR.STATUS spread order regression", () => {
+  it("defaults to success:true when checkStatus returns no success field", async () => {
+    const envHandlers = require("../../src/helpers/ipc/environmentHandlers");
+    const ipcMain = createIpcMain();
+
+    const managers = {
+      environmentManager: { exportConfig: vi.fn(), validateEnvironment: vi.fn() },
+      funasrManager: {
+        checkPythonInstallation: vi.fn(),
+        installPython: vi.fn(),
+        checkFunASRInstallation: vi.fn(),
+        checkStatus: vi.fn(async () => ({ server_running: true })),
+        modelsInitialized: false,
+        serverReady: false,
+        initializationPromise: null,
+        installFunASR: vi.fn(),
+        restartServer: vi.fn(),
+        findPythonExecutable: vi.fn(),
+      },
+      logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
+    };
+
+    envHandlers.register(ipcMain, managers);
+    const result = await ipcMain._handlers[C.FUNASR.STATUS]();
+
+    // Without the spread fix, this would be undefined (spread overrode it)
+    expect(result.success).toBe(true);
+    expect(result.models_initialized).toBe(false);
+  });
+
+  it("propagates success:false when checkStatus explicitly fails", async () => {
+    const envHandlers = require("../../src/helpers/ipc/environmentHandlers");
+    const ipcMain = createIpcMain();
+
+    const managers = {
+      environmentManager: { exportConfig: vi.fn(), validateEnvironment: vi.fn() },
+      funasrManager: {
+        checkPythonInstallation: vi.fn(),
+        installPython: vi.fn(),
+        checkFunASRInstallation: vi.fn(),
+        checkStatus: vi.fn(async () => ({ success: false, error: "something broke" })),
+        modelsInitialized: false,
+        serverReady: false,
+        initializationPromise: null,
+        installFunASR: vi.fn(),
+        restartServer: vi.fn(),
+        findPythonExecutable: vi.fn(),
+      },
+      logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
+    };
+
+    envHandlers.register(ipcMain, managers);
+    const result = await ipcMain._handlers[C.FUNASR.STATUS]();
+
+    expect(result.success).toBe(false);
+  });
+
+  it("preserves success:true from checkStatus", async () => {
+    const envHandlers = require("../../src/helpers/ipc/environmentHandlers");
+    const ipcMain = createIpcMain();
+
+    const managers = {
+      environmentManager: { exportConfig: vi.fn(), validateEnvironment: vi.fn() },
+      funasrManager: {
+        checkPythonInstallation: vi.fn(),
+        installPython: vi.fn(),
+        checkFunASRInstallation: vi.fn(),
+        checkStatus: vi.fn(async () => ({ success: true, server_running: true })),
+        modelsInitialized: true,
+        serverReady: true,
+        initializationPromise: null,
+        installFunASR: vi.fn(),
+        restartServer: vi.fn(),
+        findPythonExecutable: vi.fn(),
+      },
+      logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
+    };
+
+    envHandlers.register(ipcMain, managers);
+    const result = await ipcMain._handlers[C.FUNASR.STATUS]();
+
+    expect(result.success).toBe(true);
+    expect(result.models_initialized).toBe(true);
+    expect(result.server_ready).toBe(true);
+  });
+});
+
+// 2. TRANSCRIPTION.SAVE canonical return shape
+describe("TRANSCRIPTION.SAVE return shape regression", () => {
+  beforeEach(() => { vi.resetModules(); });
+
+  it("returns {success:true} on successful save", async () => {
+    const { register } = require("../../src/helpers/ipc/transcriptionHandlers");
+    const ipcMain = createIpcMain();
+
+    const managers = {
+      databaseManager: {
+        saveTranscription: vi.fn(() => ({ lastInsertRowid: 42, changes: 1 })),
+      },
+      logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
+    };
+
+    register(ipcMain, managers);
+    const result = await ipcMain._handlers[C.TRANSCRIPTION.SAVE](
+      {},
+      { text: "hello", raw_text: "hello" }
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.lastInsertRowid).toBe(42);
+  });
+
+  it("returns {success:false, error} on failure", async () => {
+    const { register } = require("../../src/helpers/ipc/transcriptionHandlers");
+    const ipcMain = createIpcMain();
+
+    const managers = {
+      databaseManager: {
+        saveTranscription: vi.fn(() => { throw new Error("DB locked"); }),
+      },
+      logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
+    };
+
+    register(ipcMain, managers);
+    const result = await ipcMain._handlers[C.TRANSCRIPTION.SAVE](
+      {},
+      { text: "hello", raw_text: "hello" }
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("DB locked");
+  });
+});
+
+// 3. SETTINGS_UPDATE broadcast on save
+describe("SETTINGS_UPDATE broadcast regression", () => {
+  beforeEach(() => { vi.resetModules(); });
+
+  function createManagers() {
+    const sendSpy = vi.fn();
+    return {
+      managers: {
+        databaseManager: {
+          getSetting: vi.fn(() => "val"),
+          setSetting: vi.fn(() => true),
+          getAllSettings: vi.fn(() => ({})),
+          resetSettings: vi.fn(() => true),
+        },
+        logger: { error: vi.fn() },
+        windowManager: {
+          mainWindow: { isDestroyed: vi.fn(() => false), webContents: { send: sendSpy } },
+        },
+      },
+      sendSpy,
+    };
+  }
+
+  it("sends SETTINGS_UPDATE event on save-setting", async () => {
+    const { register } = require("../../src/helpers/ipc/settingsHandlers");
+    const ipcMain = createIpcMain();
+    const { managers, sendSpy } = createManagers();
+
+    register(ipcMain, managers);
+    await ipcMain._handlers[C.SETTINGS.SAVE]({}, "test-key", "test-value");
+
+    expect(sendSpy).toHaveBeenCalledWith(
+      C.EVENTS.SETTINGS_UPDATE,
+      expect.objectContaining({ key: "test-key" })
+    );
+  });
+
+  it("sends SETTINGS_UPDATE event on set-setting", async () => {
+    const { register } = require("../../src/helpers/ipc/settingsHandlers");
+    const ipcMain = createIpcMain();
+    const { managers, sendSpy } = createManagers();
+
+    register(ipcMain, managers);
+    await ipcMain._handlers[C.SETTINGS.SET]({}, "test-key", "test-value");
+
+    expect(sendSpy).toHaveBeenCalledWith(
+      C.EVENTS.SETTINGS_UPDATE,
+      expect.objectContaining({ key: "test-key" })
+    );
+  });
+
+  it("sends SETTINGS_UPDATE event on reset-settings", async () => {
+    const { register } = require("../../src/helpers/ipc/settingsHandlers");
+    const ipcMain = createIpcMain();
+    const { managers, sendSpy } = createManagers();
+
+    register(ipcMain, managers);
+    await ipcMain._handlers[C.SETTINGS.RESET]();
+
+    expect(sendSpy).toHaveBeenCalledWith(
+      C.EVENTS.SETTINGS_UPDATE,
+      expect.objectContaining({ key: null })
+    );
+  });
+});
+
+// 4. aiPrompts returns {system, user} structure
+describe("aiPrompts system/user structure regression", () => {
+  it("buildPrompt returns {system, user} for optimize mode", () => {
+    const { buildPrompt } = require("../../src/helpers/aiPrompts");
+    const result = buildPrompt("optimize", "测试文本");
+
+    expect(result).toHaveProperty("system");
+    expect(result).toHaveProperty("user");
+    expect(typeof result.system).toBe("string");
+    expect(typeof result.user).toBe("string");
+    expect(result.user).toContain("<transcript>");
+    expect(result.user).toContain("测试文本");
+  });
+
+  it("buildPrompt returns {system, user} for optimize_long mode", () => {
+    const { buildPrompt } = require("../../src/helpers/aiPrompts");
+    const result = buildPrompt("optimize_long", "长文本测试");
+
+    expect(result).toHaveProperty("system");
+    expect(result).toHaveProperty("user");
+    expect(result.user).toContain("<transcript>");
+  });
+
+  it("buildPrompt falls back to optimize for unknown mode", () => {
+    const { buildPrompt } = require("../../src/helpers/aiPrompts");
+    const result = buildPrompt("unknown_mode", "文本");
+
+    expect(result).toHaveProperty("system");
+    expect(result).toHaveProperty("user");
+  });
+
+  it("system prompt contains core rules", () => {
+    const { buildPrompt } = require("../../src/helpers/aiPrompts");
+    const { system } = buildPrompt("optimize", "文本");
+
+    expect(system).toContain("绝对禁止");
+    expect(system).toContain("输出要求");
+  });
+});
+
+// 5. SSRF validation in processTextWithAI (not just checkAIStatus)
+describe("processTextWithAI SSRF regression", () => {
+  beforeEach(() => { vi.resetModules(); });
+
+  it("rejects internal base URL in process flow", async () => {
+    const { processTextWithAI } = require("../../src/helpers/ipc/aiHandlers");
+
+    const db = {
+      getSetting: vi.fn(async (key) => {
+        if (key === "ai_api_key") return "sk-test";
+        if (key === "ai_base_url") return "https://192.168.1.1/v1";
+        if (key === "ai_model") return "gpt-3.5-turbo";
+        return null;
+      }),
+    };
+    const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+
+    const result = await processTextWithAI("test", "optimize", db, logger);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("https");
+  });
+
+  it("rejects http base URL in process flow", async () => {
+    const { processTextWithAI } = require("../../src/helpers/ipc/aiHandlers");
+
+    const db = {
+      getSetting: vi.fn(async (key) => {
+        if (key === "ai_api_key") return "sk-test";
+        if (key === "ai_base_url") return "http://api.openai.com/v1";
+        if (key === "ai_model") return "gpt-3.5-turbo";
+        return null;
+      }),
+    };
+    const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+
+    const result = await processTextWithAI("test", "optimize", db, logger);
+    expect(result.success).toBe(false);
+  });
+});
