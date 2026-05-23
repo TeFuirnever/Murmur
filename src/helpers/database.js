@@ -95,9 +95,48 @@ class DatabaseManager {
 
     // 创建索引
     this.db.exec(`
-      CREATE INDEX IF NOT EXISTS idx_transcriptions_created_at 
+      CREATE INDEX IF NOT EXISTS idx_transcriptions_created_at
       ON transcriptions(created_at DESC)
     `);
+
+    this._createFtsIndex();
+  }
+
+  _createFtsIndex() {
+    try {
+      this.db.exec(`
+        CREATE VIRTUAL TABLE IF NOT EXISTS transcriptions_fts
+        USING fts5(text, raw_text, processed_text, content=transcriptions, content_rowid=id, tokenize="trigram")
+      `);
+
+      this.db.exec(`
+        CREATE TRIGGER IF NOT EXISTS transcriptions_ai AFTER INSERT ON transcriptions BEGIN
+          INSERT INTO transcriptions_fts(rowid, text, raw_text, processed_text)
+          VALUES (new.id, new.text, new.raw_text, new.processed_text);
+        END
+      `);
+
+      this.db.exec(`
+        CREATE TRIGGER IF NOT EXISTS transcriptions_ad AFTER DELETE ON transcriptions BEGIN
+          INSERT INTO transcriptions_fts(transcriptions_fts, rowid, text, raw_text, processed_text)
+          VALUES ('delete', old.id, old.text, old.raw_text, old.processed_text);
+        END
+      `);
+
+      this.db.exec(`
+        CREATE TRIGGER IF NOT EXISTS transcriptions_au AFTER UPDATE ON transcriptions BEGIN
+          INSERT INTO transcriptions_fts(transcriptions_fts, rowid, text, raw_text, processed_text)
+          VALUES ('delete', old.id, old.text, old.raw_text, old.processed_text);
+          INSERT INTO transcriptions_fts(rowid, text, raw_text, processed_text)
+          VALUES (new.id, new.text, new.raw_text, new.processed_text);
+        END
+      `);
+
+      // Rebuild index for existing data
+      this.db.exec("INSERT INTO transcriptions_fts(transcriptions_fts) VALUES ('rebuild')");
+    } catch (_e) {
+      // FTS5 not available — searchTranscriptions will use LIKE fallback
+    }
   }
 
   _migrateSchema() {
@@ -239,6 +278,27 @@ class DatabaseManager {
   }
 
   searchTranscriptions(query, limit = 50) {
+    // Short queries (< 3 chars) use LIKE — trigram tokenizer needs 3+ chars
+    if (query.length < 3) {
+      return this._searchLike(query, limit);
+    }
+
+    try {
+      const safeQuery = '"' + query.replace(/"/g, '""') + '"';
+      const stmt = this.db.prepare(`
+        SELECT t.* FROM transcriptions t
+        JOIN transcriptions_fts f ON t.id = f.rowid
+        WHERE transcriptions_fts MATCH ?
+        ORDER BY rank
+        LIMIT ?
+      `);
+      return stmt.all(safeQuery, limit);
+    } catch (_e) {
+      return this._searchLike(query, limit);
+    }
+  }
+
+  _searchLike(query, limit) {
     const stmt = this.db.prepare(`
       SELECT * FROM transcriptions
       WHERE text LIKE ? ESCAPE '\\' OR raw_text LIKE ? ESCAPE '\\' OR processed_text LIKE ? ESCAPE '\\'
