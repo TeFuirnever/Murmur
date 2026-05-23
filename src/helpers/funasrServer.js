@@ -19,10 +19,18 @@ class FunASRServer {
     this.healthMonitorInterval = null;
     this.restartCount = 0;
     this.maxRestarts = 3;
+    this._startupParams = null;
+    this._stopping = false;
+  }
+
+  _saveStartupParams(params) {
+    this._startupParams = params;
   }
 
   async _startFunASRServer(pythonEnv, pythonCmd, serverPath, modelCachePath) {
     try {
+      this._saveStartupParams({ pythonEnv, pythonCmd, serverPath, modelCachePath });
+      this._stopping = false;
       this.logger.info && this.logger.info("启动FunASR服务器...");
 
       if (!fs.existsSync(serverPath)) {
@@ -104,6 +112,8 @@ class FunASRServer {
           this.modelsInitialized = false;
           if (!initResponseReceived) {
             reject(new Error("FunASR服务器进程异常退出"));
+          } else if (!this._stopping) {
+            this._handleServerCrash();
           }
         });
 
@@ -176,7 +186,23 @@ class FunASRServer {
       this.logger.warn(
         `FunASR server crash detected, restart attempt ${this.restartCount}/${this.maxRestarts}`,
       );
-    throw new Error("FunASR server crashed, restart needed");
+    if (this._startupParams) {
+      const { pythonEnv, pythonCmd, serverPath, modelCachePath } =
+        this._startupParams;
+      this.serverProcess = null;
+      this.serverReady = false;
+      try {
+        await this._startFunASRServer(
+          pythonEnv,
+          pythonCmd,
+          serverPath,
+          modelCachePath,
+        );
+      } catch (err) {
+        this.logger.error &&
+          this.logger.error("FunASR server restart failed", err.message);
+      }
+    }
   }
 
   async _sendServerCommand(command) {
@@ -187,6 +213,7 @@ class FunASRServer {
   }
 
   async _stopFunASRServer() {
+    this._stopping = true;
     this._stopHealthMonitor();
     if (this.serverProcess) {
       try {
