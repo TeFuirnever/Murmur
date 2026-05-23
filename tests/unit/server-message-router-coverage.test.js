@@ -265,6 +265,26 @@ describe("ServerMessageRouter - extended coverage", () => {
     expect(result.success).toBe(true);
   });
 
+  it("sendCommand rejects when stdin.write throws", async () => {
+    router.attach(proc);
+    proc.stdin.write = () => {
+      throw new Error("EPIPE");
+    };
+    await expect(router.sendCommand("test")).rejects.toThrow(
+      "FunASR服务器写入失败",
+    );
+  });
+
+  it("sendRaw rejects when stdin.write throws", async () => {
+    router.attach(proc);
+    proc.stdin.write = () => {
+      throw new Error("EPIPE");
+    };
+    await expect(router.sendRaw({ action: "test" })).rejects.toThrow(
+      "FunASR服务器写入失败",
+    );
+  });
+
   it("_purgeExpired removes stale entries via cleanup interval", async () => {
     vi.useFakeTimers();
     router.attach(proc);
