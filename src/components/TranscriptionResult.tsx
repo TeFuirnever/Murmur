@@ -1,9 +1,21 @@
-import { useState } from "react";
+import * as React from "react";
+
+interface Segment {
+  start_ms: number;
+  end_ms: number;
+  text: string;
+}
+
+interface TranscriptionResultProps {
+  text?: string;
+  segments?: Segment[];
+  duration?: number;
+}
 
 /**
  * 格式化毫秒为 MM:SS
  */
-function formatTimestamp(ms) {
+function formatTimestamp(ms?: number): string {
   if (!ms && ms !== 0) return "00:00";
   const totalSeconds = Math.floor(ms / 1000);
   const minutes = Math.floor(totalSeconds / 60);
@@ -14,7 +26,7 @@ function formatTimestamp(ms) {
 /**
  * 格式化时长秒数为可读字符串
  */
-function formatDuration(seconds) {
+function formatDuration(seconds?: number): string {
   if (!seconds) return "";
   const mins = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
@@ -26,8 +38,8 @@ function formatDuration(seconds) {
  * 转录结果展示组件
  * 显示完整文本和按时间段的分段详情
  */
-export default function TranscriptionResult({ text, segments, duration }) {
-  const [expandedSegment, setExpandedSegment] = useState(null);
+export default function TranscriptionResult({ text, segments, duration }: TranscriptionResultProps) {
+  const [expandedSegment, setExpandedSegment] = React.useState<string | number | null>(null);
 
   const hasSegments = segments && segments.length > 0;
 
@@ -80,11 +92,7 @@ export default function TranscriptionResult({ text, segments, duration }) {
               {segments.map((segment, index) => (
                 <div
                   key={index}
-                  className={`flex gap-3 p-2 rounded-lg text-sm transition-colors ${
-                    expandedSegment === index
-                      ? "bg-[#e8f4fd] dark:bg-[#0a2540]"
-                      : "hover:bg-[#f5f5f7] dark:hover:bg-[#383838]/50"
-                  }`}
+                  className="flex gap-3 p-2 rounded-lg text-sm transition-colors hover:bg-[#f5f5f7] dark:hover:bg-[#383838]/50"
                 >
                   <span className="text-xs text-[#86868b] font-mono whitespace-nowrap pt-0.5 flex-shrink-0">
                     {formatTimestamp(segment.start_ms)} -{" "}

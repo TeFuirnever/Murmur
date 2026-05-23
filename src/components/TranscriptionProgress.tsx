@@ -1,9 +1,17 @@
 import React from "react";
 
+interface TranscriptionProgressProps {
+  phase?: string;
+  message?: string;
+  processedMs?: number;
+  totalMs?: number;
+  onCancel: () => void;
+}
+
 /**
  * 格式化毫秒为 M:SS 格式
  */
-function formatMs(ms) {
+function formatMs(ms?: number): string {
   if (!ms && ms !== 0) return "--:--";
   const totalSeconds = Math.floor(ms / 1000);
   const minutes = Math.floor(totalSeconds / 60);
@@ -27,7 +35,7 @@ export default function TranscriptionProgress({
   processedMs,
   totalMs,
   onCancel,
-}) {
+}: TranscriptionProgressProps) {
   const currentPhaseIndex = PHASES.findIndex((p) => p.key === phase);
 
   return (

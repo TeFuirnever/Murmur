@@ -1,7 +1,18 @@
+interface FileInfo {
+  fileName: string;
+  fileSize: number;
+  extension?: string;
+}
+
+interface FileDropZoneProps {
+  fileInfo: FileInfo | null;
+  onSelectFile: () => void;
+}
+
 /**
  * 格式化文件大小为可读字符串
  */
-function formatFileSize(bytes) {
+function formatFileSize(bytes: number): string {
   if (bytes < 1024) return bytes + " B";
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
   return (bytes / (1024 * 1024)).toFixed(1) + " MB";
@@ -11,7 +22,7 @@ function formatFileSize(bytes) {
  * 文件拖放/选择区域组件
  * 点击选择音频文件，未来支持拖拽
  */
-export default function FileDropZone({ fileInfo, onSelectFile }) {
+export default function FileDropZone({ fileInfo, onSelectFile }: FileDropZoneProps) {
   if (fileInfo) {
     return (
       <div className="bg-[#f5f5f7] dark:bg-[#2c2c2e] rounded-xl p-4 border border-[#d2d2d7] dark:border-[#383838]">

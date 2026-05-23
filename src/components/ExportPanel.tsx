@@ -1,4 +1,4 @@
-import { useState } from "react";
+import * as React from "react";
 import { toast } from "sonner";
 
 const EXPORT_FORMATS = [
@@ -9,12 +9,16 @@ const EXPORT_FORMATS = [
   { key: "docx", label: "DOCX", desc: "Word文档" },
 ];
 
+interface ExportPanelProps {
+  transcriptionId: number;
+}
+
 /**
  * 导出面板组件
  * 提供多种格式的导出按钮
  */
-export default function ExportPanel({ transcriptionId }) {
-  const [exportingFormat, setExportingFormat] = useState(null);
+export default function ExportPanel({ transcriptionId }: ExportPanelProps) {
+  const [exportingFormat, setExportingFormat] = React.useState<string | null>(null);
 
   const handleExport = async (format) => {
     if (!window.electronAPI || !window.electronAPI.exportTranscription) {
