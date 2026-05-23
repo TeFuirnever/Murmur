@@ -173,7 +173,7 @@ async function checkAIStatus(testConfig, databaseManager, logger) {
       return {
         available: false,
         error: "请填写有效的 https API 地址（不支持 http 或内网地址）",
-        details: "仅支持 OpenAI、阿里云百炼、智谱 BigModel",
+        details: "请确认 API 地址为有效的 https 端点",
       };
     }
 

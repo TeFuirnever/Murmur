@@ -67,9 +67,9 @@ Instructions for AI agents working. All content in English.
 ### Bug Fixes
 
 1. Reproduce the issue.
-2. Add a failing or regression test.
+2. **Write a failing or regression test FIRST** — never fix then backfill tests. This ensures the test genuinely captures the bug and guards against regressions (TDD for bugs).
 3. Implement the minimal fix.
-4. Verify tests pass.
+4. Verify tests pass (the new test should flip from red to green).
 5. State potential risks + test recommendations.
 
 ### Subagents & Lessons
@@ -100,7 +100,7 @@ Instructions for AI agents working. All content in English.
 
 - **Build gate:** `pnpm lint` + `pnpm test` MUST both pass before any commit is considered ready for merge.
 - **Basic:** `pnpm lint` + `pnpm test`
-- **Bug fix:** reproduce the bug, add a failing test first, then fix and verify; no implementation-only fixes.
+- **Bug fix:** reproduce the bug, add a failing test **first**, then fix and verify; no implementation-only fixes, no fix-then-backfill tests.
 - **High-risk** (session flow, IPC, security, privacy, release packaging): include a risk statement and fresh verification evidence.
 
 ### Commit Guidance
