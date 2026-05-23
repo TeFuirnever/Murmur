@@ -5,6 +5,7 @@ const {
   safeStorage,
   ipcMain,
 } = require("electron");
+const path = require("path");
 
 // 导入日志管理器
 const LogManager = require("./src/helpers/logManager");
@@ -139,6 +140,7 @@ const hotkeyManager = new HotkeyManager();
 // 初始化数据库
 const dataDirectory = environmentManager.ensureDataDirectory();
 databaseManager.initialize(dataDirectory);
+databaseManager.setFileConfigPath(path.join(dataDirectory, "murmur.json"));
 
 // 使用所有管理器初始化IPC处理器
 registerIPCHandlers(ipcMain, {
