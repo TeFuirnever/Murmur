@@ -1,4 +1,4 @@
-const { app, net, BrowserWindow, Notification } = require("electron");
+const { app, shell, net, BrowserWindow, Notification } = require("electron");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
@@ -175,7 +175,10 @@ function register(ipcMain, managers) {
         }
       }
 
-      fileStream.close();
+      await new Promise((resolve, reject) => {
+        fileStream.on("error", reject);
+        fileStream.end(() => resolve());
+      });
       currentDownload = null;
 
       // Verify SHA256
@@ -242,7 +245,6 @@ function register(ipcMain, managers) {
       logger?.warn?.("安装路径不在临时目录:", filePath);
       return false;
     }
-    const { shell } = require("electron");
     shell.openPath(resolved);
     app.quit();
     return true;
