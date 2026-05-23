@@ -36,6 +36,18 @@ const SettingsPage = () => {
   });
 
   const [customModel, setCustomModel] = useState(false);
+  const [providerPresets, setProviderPresets] = useState<
+    {
+      name: string;
+      label: string;
+      base_url: string;
+      models: string[];
+      requires_api_key: boolean;
+    }[]
+  >([]);
+  const [detectedLocalModels, setDetectedLocalModels] = useState<
+    { name: string; label: string; models: string[] }[]
+  >([]);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -124,6 +136,12 @@ const SettingsPage = () => {
     }
   }, [loadSettings]);
 
+  useEffect(() => {
+    if (!window.electronAPI) return;
+    window.electronAPI.getAIProviderPresets().then(setProviderPresets).catch(() => {});
+    window.electronAPI.detectLocalModels().then(setDetectedLocalModels).catch(() => {});
+  }, []);
+
   // 保存设置
   const saveSettings = async () => {
     try {
@@ -174,62 +192,23 @@ const SettingsPage = () => {
     }));
   };
 
-  // AI provider presets — convenience only, users can also enter any
-  // https endpoint manually. To add a provider, append to this array.
-  const AI_PROVIDER_PRESETS = [
-    {
-      label: "OpenAI",
-      baseUrl: "https://api.openai.com/v1",
-      model: "gpt-4o-mini",
-    },
-    {
-      label: "阿里云通义",
-      baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-      model: "qwen3-30b-a3b-instruct-2507",
-    },
-    {
-      label: "智谱 GLM",
-      baseUrl: "https://open.bigmodel.cn/api/paas/v4",
-      model: "glm-4-flash",
-    },
-    {
-      label: "DeepSeek",
-      baseUrl: "https://api.deepseek.com/v1",
-      model: "deepseek-chat",
-    },
-    {
-      label: "硅基流动",
-      baseUrl: "https://api.siliconflow.cn/v1",
-      model: "Qwen/Qwen2.5-7B-Instruct",
-    },
-    {
-      label: "Groq",
-      baseUrl: "https://api.groq.com/openai/v1",
-      model: "llama-3.3-70b-versatile",
-    },
-    {
-      label: "Moonshot",
-      baseUrl: "https://api.moonshot.cn/v1",
-      model: "moonshot-v1-8k",
-    },
-    {
-      label: "MiniMax",
-      baseUrl: "https://api.minimaxi.com/v1",
-      model: "MiniMax-Text-01",
-    },
-    {
-      label: "Ollama (本地)",
-      baseUrl: "http://localhost:11434/v1",
-      model: "qwen2.5:7b",
-      noApiKey: true,
-    },
-    {
-      label: "LM Studio (本地)",
-      baseUrl: "http://localhost:1234/v1",
-      model: "loaded-model",
-      noApiKey: true,
-    },
-  ];
+  // AI provider presets loaded from backend + local model detection
+  const isLocalDetected = (name: string) =>
+    detectedLocalModels.some((d) => d.name === name);
+
+  const getDetectedModels = (name: string) =>
+    detectedLocalModels.find((d) => d.name === name)?.models || [];
+
+  const AI_PROVIDER_PRESETS = providerPresets.length > 0
+    ? providerPresets.map((p) => ({
+        label: isLocalDetected(p.name) ? `${p.label} ✓` : p.label,
+        baseUrl: p.base_url,
+        model: isLocalDetected(p.name)
+          ? getDetectedModels(p.name)[0] || p.models[0]
+          : p.models[0],
+        noApiKey: !p.requires_api_key,
+      }))
+    : [];
 
   const applyProviderPreset = (preset: Record<string, unknown>) => {
     setSettings((prev) => ({

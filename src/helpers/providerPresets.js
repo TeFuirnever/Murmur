@@ -42,6 +42,20 @@ const PROVIDER_PRESETS = [
     requires_api_key: true,
   },
   {
+    name: "moonshot",
+    label: "Moonshot",
+    base_url: "https://api.moonshot.cn/v1",
+    models: ["moonshot-v1-8k", "moonshot-v1-32k"],
+    requires_api_key: true,
+  },
+  {
+    name: "minimax",
+    label: "MiniMax",
+    base_url: "https://api.minimaxi.com/v1",
+    models: ["MiniMax-Text-01"],
+    requires_api_key: true,
+  },
+  {
     name: "ollama",
     label: "Ollama (本地)",
     base_url: "http://localhost:11434/v1",

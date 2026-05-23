@@ -70,6 +70,27 @@ describe("providerPresets", () => {
       expect(openai.base_url).toContain("openai.com");
     });
 
+    it("includes Groq preset", () => {
+      const presets = getProviderPresets();
+      const groq = presets.find((p) => p.name === "groq");
+      expect(groq).toBeDefined();
+      expect(groq.base_url).toContain("groq.com");
+    });
+
+    it("includes Moonshot preset", () => {
+      const presets = getProviderPresets();
+      const moonshot = presets.find((p) => p.name === "moonshot");
+      expect(moonshot).toBeDefined();
+      expect(moonshot.base_url).toContain("moonshot.cn");
+    });
+
+    it("includes MiniMax preset", () => {
+      const presets = getProviderPresets();
+      const minimax = presets.find((p) => p.name === "minimax");
+      expect(minimax).toBeDefined();
+      expect(minimax.base_url).toContain("minimaxi.com");
+    });
+
     it("all base URLs are valid https (except local models)", () => {
       const presets = getProviderPresets();
       for (const p of presets) {
