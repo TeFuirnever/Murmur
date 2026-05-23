@@ -40,3 +40,14 @@
 
 ## sandbox 决策评估
 v1 release 后写 ADR 评估 `sandbox: true` 的收益与维护成本。
+
+## P3：内部代码区分 ASR vs AI 概念
+UI 文案本轮已澄清（"语音识别"≠"AI 文本优化"），但内部仍混用 `model` 一词：
+- `ipc-contracts.js` 的 `MODELS.*` 实际只指 ASR — 可重命名为 `ASR_MODELS.*`
+- `useModelStatus` hook 名同上 — 可改 `useASRModelStatus`
+- 写 ADR 文档化两类模型的边界，新人 onboarding 看一眼就懂
+
+破坏面较大，v1 发布后再统一重构。
+
+## `useModelStatus` 现在多了一条 onSettingsUpdate 订阅
+本轮加的 SETTINGS_UPDATE 监听器与 P2-B 双订阅叠加，每次保存设置触发**两次** `checkModelStatus`。修双订阅时一起解决。

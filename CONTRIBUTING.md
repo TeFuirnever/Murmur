@@ -114,7 +114,7 @@ chore: 升级 Electron 到 v37
 FunASR Python 进程
 ```
 
-- **IPC 通道**：定义在 `ipcHandlers.js`，通过 `preload.js` 暴露为 `window.electronAPI`
+- **IPC 通道**：常量定义在 `src/helpers/ipc-contracts.js`，处理器按领域拆分在 `src/helpers/ipc/`，通过 `preload.js` 暴露为 `window.electronAPI`
 - **FunASR 通信**：Node.js spawn Python 子进程，通过 JSON over stdin/stdout 通信
 - **消息路由**：`ServerMessageRouter` 管理 UUID 请求-响应匹配
 
@@ -168,8 +168,8 @@ FunASR 以 Python 子进程方式运行，生命周期由 `FunASRManager`（`src
 
 | 模块 | 文件 | 职责 |
 |------|------|------|
-| FunASRManager | `src/helpers/funasrManager.js` | Python 子进程管理、模型检查、音频转录、健康监控 |
-| IPC Handlers | `src/helpers/ipcHandlers.js` | Electron IPC 消息处理，桥接渲染进程与主进程 |
+| FunASRManager | `src/helpers/funasrManager.js` | FunASR 门面，委托到 `funasrServer.js`、`modelManager.js`、`pythonEnvironment.js`、`audioFileHelpers.js` |
+| IPC Handlers | `src/helpers/ipc/` | 按 9 个领域拆分的 Electron IPC 处理器，常量定义在 `ipc-contracts.js` |
 | DatabaseManager | `src/helpers/database.js` | SQLite CRUD、schema 迁移、数据查询分页 |
 | WindowManager | `src/helpers/windowManager.js` | 窗口创建、大小管理、浮动控件 |
 | ClipboardManager | `src/helpers/clipboard.js` | 自动粘贴到光标位置（macOS osascript / Electron clipboard） |

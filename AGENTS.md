@@ -1,4 +1,4 @@
-<!-- Generated: 2026-04-13 | Updated: 2026-04-22 -->
+<!-- Generated: 2026-04-13 | Updated: 2026-05-23 -->
 
 # AGENTS.md
 
@@ -30,7 +30,7 @@ Instructions for AI agents working. All content in English.
 2. For bug fixes: reproduce the issue, add a failing or regression test first, then submit the fix.
 3. For non-trivial work, define verifiable success criteria before implementation.
 4. After submitting code: state potential risks + test recommendations.
-5. All user-visible text MUST go through i18n; no hardcoded strings.
+5. User-visible strings should be clear and consistent with existing terminology (e.g., "语音识别" for ASR, "AI 文本优化" for AI processing).
 
 **Core Principles:**
 
@@ -49,11 +49,13 @@ Instructions for AI agents working. All content in English.
 - Use the active planning workflow for non-trivial tasks, architectural decisions, or work that spans multiple moving parts.
 - If new evidence invalidates the current approach, stop and re-plan instead of forcing the original path through.
 - Treat these areas as high-risk and apply stronger planning, review, and verification:
-  - `electron/main/` and preload boundaries
-  - `packages/ipc-contracts/` and IPC channel changes
-  - `packages/gateway/`, `packages/bastion/`, and MCP/security flows
-  - session flow, auth, privacy, and packaging/release behavior
-  - user-visible text and i18n resources
+  - `main.js` and `preload.js` boundaries (Electron IPC bridge)
+  - `src/helpers/ipc-contracts.js` and IPC channel changes
+  - `src/helpers/ipc/` handler modules (domain-scoped IPC handlers)
+  - `src/helpers/funasrManager.js` and its sub-modules (Python subprocess lifecycle)
+  - `src/helpers/windowManager.js` (sandbox, CSP, window creation)
+  - `src/helpers/database.js` (safeStorage encryption, schema)
+  - packaging/release and electron-builder configuration
 
 ### Change Discipline
 
@@ -77,35 +79,27 @@ Instructions for AI agents working. All content in English.
 
 ## Code Rules
 
-### TypeScript
+### JavaScript / React
 
-- No `any`, `as any`, `@ts-ignore`, `@ts-expect-error`.
-- Prefer type inference; add explicit annotations when intent is unclear.
 - No empty `catch` — log, rethrow, or handle errors intentionally.
 - Error handling: always handle real error paths (main process, IPC, network); skip defensive code only for states that truly cannot occur.
 - No magic numbers or hardcoded config.
-
-```typescript
-// WRONG
-const msg = '确定要删除吗？';
-
-// RIGHT
-const msg = t('common.confirmDelete');
-```
+- Use existing IPC contract constants from `src/helpers/ipc-contracts.js` — zero hardcoded channel strings.
+- ESLint with 0 warnings, 0 errors.
 
 ### Prohibited
 
-1. No bypassing OpenClaw contracts for private protocols.
-2. No modifying core session flow without test coverage.
-3. No silent error swallowing in main process.
-4. No hardcoded user-facing text.
+1. No modifying FunASR Python subprocess lifecycle without test coverage.
+2. No silent error swallowing in main process.
+3. No hardcoded IPC channel strings — use `ipc-contracts.js` constants.
+4. No new IPC handler files without registering in `src/helpers/ipc/index.js`.
 
 ## Verification
 
 ### Delivery Gates
 
-- **Build gate:** `./build.sh` MUST pass (exit code 0) before any commit is considered ready for merge. This is the single source of truth for project health — it runs lint, typecheck, tests, and packaging in one shot. No "it works on my machine" exceptions.
-- **Basic:** `pnpm lint` + `pnpm typecheck` + `pnpm test` + `pnpm test:i18n`
+- **Build gate:** `pnpm lint` + `pnpm test` MUST both pass before any commit is considered ready for merge.
+- **Basic:** `pnpm lint` + `pnpm test`
 - **Bug fix:** reproduce the bug, add a failing test first, then fix and verify; no implementation-only fixes.
 - **High-risk** (session flow, IPC, security, privacy, release packaging): include a risk statement and fresh verification evidence.
 
@@ -116,20 +110,21 @@ const msg = t('common.confirmDelete');
 
 ## Documentation
 
-- **Wiki** (`.omc/wiki/`) is the AI navigation layer — start there for quick reference.
-- **docs/README.md** is the human-readable master index.
-- Each `docs/core/` subdirectory has a README.md with reading order.
-- **Do not add AGENTS.md to docs subdirectories.** The wiki + README combination is sufficient for navigation.
-- When adding new docs: place in the correct subdirectory, update `docs/README.md` index, and add to wiki if significant.
+- `README.md` — project overview, install, build, tech stack, structure
+- `CHANGELOG.md` — versioned change log
+- `CONTRIBUTING.md` — dev setup, code style, PR process, architecture overview
+- `SECURITY.md` — security policy and measures
+- `docs/faq.md` — user FAQ (bilingual)
+- `docs/troubleshooting.md` — troubleshooting guide (bilingual)
+- `docs/follow-ups.md` — tracked technical debt and deferred items
 
 ## Reference
 
 - Project overview & tech stack → `README.md`
-- Technical architecture → `docs/overall-technical-architecture.md`
-- Architecture modules → `docs/architecture/`
-- Configuration → `docs/configuration.md`
-- AI providers → `docs/providers.md`
-- Wiki quick reference → `.omc/wiki/`
+- Architecture & data flow → `CONTRIBUTING.md` (架构概览 section)
+- IPC contracts → `src/helpers/ipc-contracts.js`
+- AI prompt templates → `src/helpers/aiPrompts.js`
+- Security measures → `SECURITY.md`
 
 # 
 
