@@ -53,7 +53,7 @@ export interface ElectronAPI {
   getAvailableModels: () => Promise<ModelInfo[]>;
   getCurrentModel: () => Promise<string>;
   switchModel: (modelName: string) => Promise<{ success: boolean; error?: string }>;
-  onModelDownloadProgress: (callback: (progress: DownloadProgress) => void) => () => void;
+  onModelDownloadProgress: (callback: (eventOrProgress: any, progress?: DownloadProgress) => void) => () => void;
 
   // AI text processing
   processText: (text: string, mode: string) => Promise<AIProcessResult>;
@@ -106,7 +106,7 @@ export interface ElectronAPI {
   importAudioFile: () => Promise<FileTranscriptionResult>;
   transcribeFile: (audioPath: string, options?: Record<string, unknown>) => Promise<FileTranscriptionResult>;
   cancelFileTranscription: () => Promise<{ success: boolean }>;
-  onFileTranscriptionProgress: (callback: (data: { progress: number; status: string }) => void) => () => void;
+  onFileTranscriptionProgress: (callback: (data: { progress?: number; status?: string; phase?: string; message?: string; processed_ms?: number; total_ms?: number }) => void) => () => void;
 
   // AI review
   aiReviewTranscription: (id: number, template?: string) => Promise<AIReviewResult>;
@@ -130,7 +130,7 @@ export interface ElectronAPI {
 
   // Misc
   openExternal: (url: string) => Promise<void>;
-  log: (level: string, message: string) => Promise<void>;
+  log: (level: string, message: string, data?: unknown) => Promise<void>;
   getAppPath: (name: string) => Promise<string>;
   showItemInFolder: (path: string) => Promise<void>;
   reloadWindow: () => Promise<void>;
@@ -138,7 +138,7 @@ export interface ElectronAPI {
 
   // Event listeners
   onTranscriptionUpdate: (callback: (data: TranscriptionRecord) => void) => () => void;
-  onProcessingUpdate: (callback: (data: { status: string; progress?: number }) => void) => () => void;
+  onProcessingUpdate: (callback: (eventOrData: any, data?: { status?: string; progress?: number; type?: string; isLoading?: boolean; isReady?: boolean }) => void) => () => void;
   onError: (callback: (data: { error: string }) => void) => () => void;
   onSettingsUpdate: (callback: (data: Record<string, unknown>) => void) => () => void;
 

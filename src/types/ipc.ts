@@ -78,6 +78,18 @@ export interface FileTranscriptionResult {
   text?: string;
   id?: number;
   error?: string;
+  canceled?: boolean;
+  filePath?: string;
+  fileName?: string;
+  fileSize?: number;
+  extension?: string;
+  duration?: number;
+  segments?: Array<{ start_ms: number; end_ms: number; text: string }>;
+  confidence?: number;
+  language?: string;
+  processed_text?: string;
+  raw_text?: string;
+  file_size?: number;
 }
 
 export interface ExportResult {
@@ -118,12 +130,16 @@ export interface FunASRStatusResult {
   models_downloaded: boolean;
   missing_models?: string[];
   initializing: boolean;
+  models_initialized?: boolean;
+  status_message?: string;
 }
 
 export interface ModelCheckResult {
+  success?: boolean;
   models_downloaded: boolean;
   missing_models: string[];
   model_path?: string;
+  error?: string;
 }
 
 export interface DownloadProgress {
@@ -131,6 +147,7 @@ export interface DownloadProgress {
   status: string;
   current_file?: string;
   error?: string;
+  overall_progress?: number;
 }
 
 export interface ModelInfo {

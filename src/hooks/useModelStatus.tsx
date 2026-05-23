@@ -1,20 +1,33 @@
-import {
-  useState,
-  useEffect,
-  useCallback,
-  createContext,
-  useContext,
-} from "react";
+import * as React from "react";
 
-const ModelStatusContext = createContext(null);
+interface ModelStatus {
+  isLoading: boolean;
+  isReady: boolean;
+  isDownloading: boolean;
+  modelsDownloaded: boolean;
+  error: string | null;
+  progress: number;
+  downloadProgress: number;
+  missingModels: string[];
+  stage: string;
+}
+
+interface ModelStatusContextValue extends ModelStatus {
+  checkModelStatus: () => Promise<void>;
+  downloadModels: () => Promise<{ success: boolean; error?: string }>;
+  getDownloadProgress: () => Promise<import("../types/ipc").DownloadProgress | { success: boolean }>;
+  checkModelFiles: () => Promise<import("../types/ipc").ModelCheckResult>;
+}
+
+const ModelStatusContext = React.createContext<ModelStatusContextValue | null>(null);
 
 const isSettingsPage = () => {
   const urlParams = new URLSearchParams(window.location.search);
   return urlParams.get("page") === "settings";
 };
 
-export function ModelStatusProvider({ children }) {
-  const [modelStatus, setModelStatus] = useState({
+export function ModelStatusProvider({ children }: { children: React.ReactNode }) {
+  const [modelStatus, setModelStatus] = React.useState<ModelStatus>({
     isLoading: true,
     isReady: false,
     isDownloading: false,
@@ -26,33 +39,33 @@ export function ModelStatusProvider({ children }) {
     stage: "checking",
   });
 
-  const checkModelFiles = useCallback(async () => {
+  const checkModelFiles = React.useCallback(async (): Promise<import("../types/ipc").ModelCheckResult> => {
     try {
       if (window.electronAPI) {
         const result = await window.electronAPI.checkModelFiles();
         return result;
       }
-      return { success: false, models_downloaded: false };
+      return { success: false, models_downloaded: false, missing_models: [] };
     } catch (error) {
       console.error("检查模型文件失败:", error);
-      return { success: false, models_downloaded: false };
+      return { success: false, models_downloaded: false, missing_models: [] };
     }
   }, []);
 
-  const checkServerStatus = useCallback(async () => {
+  const checkServerStatus = React.useCallback(async (): Promise<import("../types/ipc").FunASRStatusResult> => {
     try {
       if (window.electronAPI) {
         const status = await window.electronAPI.checkFunASRStatus();
         return status;
       }
-      return { success: false };
+      return { success: false, installed: false, models_downloaded: false, initializing: false };
     } catch (error) {
       console.error("检查服务器状态失败:", error);
-      return { success: false };
+      return { success: false, installed: false, models_downloaded: false, initializing: false };
     }
   }, []);
 
-  const checkModelStatus = useCallback(async () => {
+  const checkModelStatus = React.useCallback(async () => {
     try {
       if (!window.electronAPI) {
         setModelStatus((prev) => ({
@@ -140,7 +153,7 @@ export function ModelStatusProvider({ children }) {
     }
   }, [checkModelFiles, checkServerStatus]);
 
-  const downloadModels = useCallback(async () => {
+  const downloadModels = React.useCallback(async () => {
     try {
       if (!window.electronAPI) {
         throw new Error("Electron API 不可用");
@@ -202,7 +215,7 @@ export function ModelStatusProvider({ children }) {
     }
   }, [checkModelStatus]);
 
-  const getDownloadProgress = useCallback(async () => {
+  const getDownloadProgress = React.useCallback(async () => {
     try {
       if (window.electronAPI) {
         const progress = await window.electronAPI.getDownloadProgress();
@@ -215,7 +228,7 @@ export function ModelStatusProvider({ children }) {
     }
   }, []);
 
-  useEffect(() => {
+  React.useEffect(() => {
     if (isSettingsPage()) {
       console.log("设置页面，跳过模型状态检查");
       return;
@@ -223,7 +236,7 @@ export function ModelStatusProvider({ children }) {
     checkModelStatus();
   }, [checkModelStatus]);
 
-  useEffect(() => {
+  React.useEffect(() => {
     if (isSettingsPage() || modelStatus.isReady || modelStatus.isDownloading) {
       return;
     }
@@ -237,7 +250,7 @@ export function ModelStatusProvider({ children }) {
     return () => clearInterval(interval);
   }, [modelStatus.isReady, modelStatus.isDownloading, checkModelStatus]);
 
-  useEffect(() => {
+  React.useEffect(() => {
     if (window.electronAPI && window.electronAPI.onModelDownloadProgress) {
       const unsubscribe = window.electronAPI.onModelDownloadProgress(
         (event, progress) => {
@@ -253,7 +266,7 @@ export function ModelStatusProvider({ children }) {
     }
   }, []);
 
-  useEffect(() => {
+  React.useEffect(() => {
     if (window.electronAPI && window.electronAPI.onProcessingUpdate) {
       const unsubscribe = window.electronAPI.onProcessingUpdate(
         (event, data) => {
@@ -272,7 +285,7 @@ export function ModelStatusProvider({ children }) {
     }
   }, []);
 
-  useEffect(() => {
+  React.useEffect(() => {
     if (isSettingsPage()) return;
     if (!window.electronAPI?.onSettingsUpdate) return;
     const unsubscribe = window.electronAPI.onSettingsUpdate(() => {
@@ -298,7 +311,7 @@ export function ModelStatusProvider({ children }) {
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const useModelStatus = () => {
-  const context = useContext(ModelStatusContext);
+  const context = React.useContext(ModelStatusContext);
   if (!context) {
     throw new Error("useModelStatus must be used within a ModelStatusProvider");
   }

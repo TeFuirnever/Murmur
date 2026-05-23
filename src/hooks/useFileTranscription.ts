@@ -1,16 +1,41 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import * as React from "react";
+
+type TranscriptionState = "idle" | "selected" | "transcribing" | "done" | "error" | "cancelled";
+
+interface FileInfo {
+  filePath: string;
+  fileName: string;
+  fileSize: number;
+  extension?: string;
+}
+
+interface TranscriptionProgress {
+  phase?: string;
+  message?: string;
+  processed_ms?: number;
+  total_ms?: number;
+}
+
+interface TranscriptionResult {
+  id?: number;
+  text?: string;
+  segments?: Array<{ start_ms: number; end_ms: number; text: string }>;
+  duration?: number;
+  success?: boolean;
+  error?: string;
+}
 
 /**
  * 文件转录Hook
  * 管理音频文件选择、转录进度、结果等状态
  */
 export function useFileTranscription() {
-  const [state, setState] = useState("idle"); // idle | selected | transcribing | done | error | cancelled
-  const [fileInfo, setFileInfo] = useState(null);
-  const [progress, setProgress] = useState(null);
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState(null);
-  const progressCleanup = useRef(null);
+  const [state, setState] = React.useState<TranscriptionState>("idle");
+  const [fileInfo, setFileInfo] = React.useState<FileInfo | null>(null);
+  const [progress, setProgress] = React.useState<TranscriptionProgress | null>(null);
+  const [result, setResult] = React.useState<TranscriptionResult | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const progressCleanup = React.useRef<(() => void) | null>(null);
 
   const cleanupProgress = () => {
     if (progressCleanup.current) {
@@ -19,9 +44,9 @@ export function useFileTranscription() {
     }
   };
 
-  useEffect(() => cleanupProgress, []);
+  React.useEffect(() => cleanupProgress, []);
 
-  const selectFile = useCallback(async () => {
+  const selectFile = React.useCallback(async () => {
     if (!window.electronAPI || !window.electronAPI.importAudioFile) {
       setError("Electron API 不可用");
       setState("error");
@@ -56,7 +81,7 @@ export function useFileTranscription() {
     }
   }, []);
 
-  const startTranscription = useCallback(async () => {
+  const startTranscription = React.useCallback(async () => {
     if (!fileInfo) {
       setError("请先选择音频文件");
       setState("error");
@@ -107,7 +132,7 @@ export function useFileTranscription() {
     }
   }, [fileInfo]);
 
-  const cancelTranscription = useCallback(async () => {
+  const cancelTranscription = React.useCallback(async () => {
     try {
       if (window.electronAPI && window.electronAPI.cancelFileTranscription) {
         await window.electronAPI.cancelFileTranscription();
@@ -122,7 +147,7 @@ export function useFileTranscription() {
     setProgress(null);
   }, []);
 
-  const reset = useCallback(() => {
+  const reset = React.useCallback(() => {
     cleanupProgress();
     setState("idle");
     setFileInfo(null);

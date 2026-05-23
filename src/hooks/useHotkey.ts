@@ -1,16 +1,16 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import * as React from "react";
 
 /**
  * 热键管理Hook
  * 处理全局快捷键功能，包括F2双击功能
  */
 export const useHotkey = () => {
-  const [hotkey, setHotkey] = useState("CommandOrControl+Shift+Space");
-  const [isRegistered, setIsRegistered] = useState(false);
-  const registeredHotkeyRef = useRef(null); // 跟踪已注册的热键
+  const [hotkey, setHotkey] = React.useState("CommandOrControl+Shift+Space");
+  const [isRegistered, setIsRegistered] = React.useState(false);
+  const registeredHotkeyRef = React.useRef<string | null>(null);
 
   // 获取当前热键
-  useEffect(() => {
+  React.useEffect(() => {
     const getCurrentHotkey = async () => {
       try {
         if (window.electronAPI) {
@@ -32,7 +32,7 @@ export const useHotkey = () => {
   // 移除F2双击相关的复杂逻辑，专注于传统热键
 
   // 注册传统热键 - 添加防重复注册机制
-  const registerHotkey = async (newHotkey) => {
+  const registerHotkey = async (newHotkey: string): Promise<boolean> => {
     try {
       // 防重复注册：如果已经注册了相同的热键，直接返回成功
       if (registeredHotkeyRef.current === newHotkey && isRegistered) {
@@ -59,7 +59,7 @@ export const useHotkey = () => {
   };
 
   // 注销传统热键
-  const unregisterHotkey = async (hotkeyToUnregister) => {
+  const unregisterHotkey = async (hotkeyToUnregister?: string) => {
     try {
       if (window.electronAPI) {
         const result = await window.electronAPI.unregisterHotkey(
@@ -77,7 +77,7 @@ export const useHotkey = () => {
   };
 
   // 同步录音状态到主进程
-  const syncRecordingState = useCallback(async (isRecording) => {
+  const syncRecordingState = React.useCallback(async (isRecording: boolean) => {
     try {
       if (window.electronAPI) {
         await window.electronAPI.setRecordingState(isRecording);
@@ -90,7 +90,7 @@ export const useHotkey = () => {
   }, []);
 
   // 格式化热键显示
-  const formatHotkey = (hotkeyString) => {
+  const formatHotkey = (hotkeyString: string): string => {
     return hotkeyString
       .replace(
         "CommandOrControl",

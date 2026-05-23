@@ -1,15 +1,15 @@
-import { useState, useCallback, useRef } from "react";
+import * as React from "react";
 
 /**
  * 窗口拖拽Hook
  * 处理窗口拖拽功能
  */
 export const useWindowDrag = () => {
-  const [isDragging, setIsDragging] = useState(false);
-  const dragStartPos = useRef({ x: 0, y: 0 });
-  const hasMoved = useRef(false);
+  const [isDragging, setIsDragging] = React.useState(false);
+  const dragStartPos = React.useRef({ x: 0, y: 0 });
+  const hasMoved = React.useRef(false);
 
-  const handleMouseDown = useCallback((e) => {
+  const handleMouseDown = React.useCallback((e: React.MouseEvent) => {
     setIsDragging(true);
     hasMoved.current = false;
     dragStartPos.current = { x: e.clientX, y: e.clientY };
@@ -21,8 +21,8 @@ export const useWindowDrag = () => {
     }
   }, []);
 
-  const handleMouseMove = useCallback(
-    (e) => {
+  const handleMouseMove = React.useCallback(
+    (e: React.MouseEvent) => {
       if (isDragging) {
         const deltaX = Math.abs(e.clientX - dragStartPos.current.x);
         const deltaY = Math.abs(e.clientY - dragStartPos.current.y);
@@ -36,7 +36,7 @@ export const useWindowDrag = () => {
     [isDragging],
   );
 
-  const handleMouseUp = useCallback((_e) => {
+  const handleMouseUp = React.useCallback((_e: React.MouseEvent) => {
     setIsDragging(false);
 
     // 重置拖拽状态
@@ -45,7 +45,7 @@ export const useWindowDrag = () => {
     }, 100);
   }, []);
 
-  const handleClick = useCallback((e) => {
+  const handleClick = React.useCallback((e: React.MouseEvent) => {
     // 如果发生了拖拽，阻止点击事件
     if (hasMoved.current) {
       e.preventDefault();

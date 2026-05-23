@@ -1,13 +1,18 @@
-import { useState, useRef, useCallback } from "react";
+import * as React from "react";
 import { useModelStatus } from "./useModelStatus";
 
-export function determineProcessingMode(text) {
+export function determineProcessingMode(text: string): "optimize_long" | "optimize" {
   const textLength = text.trim().length;
   const wordCount = text.trim().split(/\s+/).length;
   if (textLength > 150 || wordCount > 30) {
     return "optimize_long";
   }
   return "optimize";
+}
+
+interface UseRecordingOptions {
+  onTranscriptionComplete?: (text: string | Record<string, unknown>) => void;
+  onAIOptimizationComplete?: (text: string | Record<string, unknown>) => void;
 }
 
 /**
@@ -17,27 +22,26 @@ export function determineProcessingMode(text) {
 export const useRecording = ({
   onTranscriptionComplete,
   onAIOptimizationComplete,
-} = {}) => {
-  const [isRecording, setIsRecording] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [isOptimizing, setIsOptimizing] = useState(false);
-  const [error, setError] = useState(null);
-  const [audioData, setAudioData] = useState(null);
+}: UseRecordingOptions = {}) => {
+  const [isRecording, setIsRecording] = React.useState(false);
+  const [isProcessing, setIsProcessing] = React.useState(false);
+  const [isOptimizing, setIsOptimizing] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [audioData, setAudioData] = React.useState<Blob | null>(null);
 
-  const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
-  const streamRef = useRef(null);
-  const cancelledRef = useRef(false);
-  const optimizationTimeoutRef = useRef(null);
+  const mediaRecorderRef = React.useRef<MediaRecorder | null>(null);
+  const audioChunksRef = React.useRef<Blob[]>([]);
+  const streamRef = React.useRef<MediaStream | null>(null);
+  const cancelledRef = React.useRef(false);
+  const optimizationTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 添加防重复处理机制
-  const processingRef = useRef({
+  const processingRef = React.useRef({
     isProcessingAudio: false,
     lastProcessTime: 0,
   });
 
-  const onTranscriptionCompleteRef = useRef();
-  const onAIOptimizationCompleteRef = useRef();
+  const onTranscriptionCompleteRef = React.useRef<((text: string | Record<string, unknown>) => void) | undefined>(undefined);
+  const onAIOptimizationCompleteRef = React.useRef<((text: string | Record<string, unknown>) => void) | undefined>(undefined);
   onTranscriptionCompleteRef.current = onTranscriptionComplete;
   onAIOptimizationCompleteRef.current = onAIOptimizationComplete;
 
@@ -45,7 +49,7 @@ export const useRecording = ({
   const modelStatus = useModelStatus();
 
   // 开始录音
-  const startRecording = useCallback(async () => {
+  const startRecording = React.useCallback(async () => {
     try {
       setError(null);
       cancelledRef.current = false;
@@ -140,7 +144,7 @@ export const useRecording = ({
   }, [modelStatus.isReady, modelStatus.isLoading, modelStatus.error]);
 
   // 停止录音
-  const stopRecording = useCallback(() => {
+  const stopRecording = React.useCallback(() => {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
 
@@ -153,7 +157,7 @@ export const useRecording = ({
   }, [isRecording]);
 
   // 处理音频
-  const processAudio = useCallback(async (audioBlob) => {
+  const processAudio = React.useCallback(async (audioBlob: Blob) => {
     processingRef.current.isProcessingAudio = true;
 
     try {
@@ -164,15 +168,15 @@ export const useRecording = ({
         const uint8Array = new Uint8Array(arrayBuffer);
 
         const transcriptionResult =
-          await window.electronAPI.transcribeAudio(uint8Array);
+          await window.electronAPI.transcribeAudio(arrayBuffer);
 
         if (transcriptionResult.success) {
           const raw_text = transcriptionResult.text;
 
           // 准备转录数据
-          const transcriptionData = {
+          const transcriptionData: Record<string, unknown> = {
             raw_text: raw_text,
-            text: raw_text, // 初始文本设为原始文本
+            text: raw_text,
             confidence: transcriptionResult.confidence || 0,
             language: transcriptionResult.language || "zh-CN",
             duration: transcriptionResult.duration || 0,
@@ -193,12 +197,12 @@ export const useRecording = ({
             if (cancelledRef.current) return;
             try {
               // 从设置中读取是否启用AI优化
-              const useAI = await window.electronAPI.getSetting(
+              const useAI = (await window.electronAPI.getSetting(
                 "enable_ai_optimization",
                 true,
-              );
+              )) as boolean;
 
-              let finalData = { ...transcriptionData };
+              let finalData: Record<string, unknown> = { ...transcriptionData };
 
               if (useAI) {
                 try {
@@ -219,7 +223,7 @@ export const useRecording = ({
                         30000,
                       ),
                     ),
-                  ]);
+                  ]) as import("../types/ipc").AIProcessResult;
 
                   if (result && result.success) {
                     const processed_text = result.text;
@@ -268,7 +272,7 @@ export const useRecording = ({
                   );
                 }
                 const savedResult =
-                  await window.electronAPI.saveTranscription(finalData);
+                  await window.electronAPI.saveTranscription(finalData as any);
                 if (window.electronAPI && window.electronAPI.log) {
                   window.electronAPI.log(
                     "info",
@@ -340,7 +344,7 @@ export const useRecording = ({
   }, []);
 
   // 转换音频格式为WAV
-  const convertToWav = useCallback(async (audioBlob) => {
+  const convertToWav = React.useCallback(async (audioBlob: Blob): Promise<Blob | null> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
 
@@ -349,7 +353,7 @@ export const useRecording = ({
         try {
           const arrayBuffer = reader.result;
 
-          audioContext = new (window.AudioContext || window.webkitAudioContext)(
+          audioContext = new (window.AudioContext || (window as any).webkitAudioContext)(
             {
               sampleRate: 16000,
             },
@@ -427,7 +431,7 @@ export const useRecording = ({
   };
 
   // 取消录音
-  const cancelRecording = useCallback(() => {
+  const cancelRecording = React.useCallback(() => {
     cancelledRef.current = true;
     if (optimizationTimeoutRef.current) {
       clearTimeout(optimizationTimeoutRef.current);
@@ -450,7 +454,7 @@ export const useRecording = ({
   }, []);
 
   // 获取录音权限状态
-  const checkPermissions = useCallback(async () => {
+  const checkPermissions = React.useCallback(async () => {
     try {
       const result = await navigator.permissions.query({ name: "microphone" });
       return result.state; // 'granted', 'denied', 'prompt'

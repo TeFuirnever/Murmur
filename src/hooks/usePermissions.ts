@@ -1,11 +1,16 @@
-import { useState, useCallback } from "react";
+import * as React from "react";
 
-export const usePermissions = (showAlertDialog) => {
-  const [micPermissionGranted, setMicPermissionGranted] = useState(false);
+interface AlertDialog {
+  title: string;
+  description: string;
+}
+
+export const usePermissions = (showAlertDialog?: (alert: AlertDialog) => void) => {
+  const [micPermissionGranted, setMicPermissionGranted] = React.useState(false);
   const [accessibilityPermissionGranted, setAccessibilityPermissionGranted] =
-    useState(false);
+    React.useState(false);
 
-  const requestMicPermission = useCallback(async () => {
+  const requestMicPermission = React.useCallback(async () => {
     try {
       await navigator.mediaDevices.getUserMedia({ audio: true });
       setMicPermissionGranted(true);
@@ -33,7 +38,7 @@ export const usePermissions = (showAlertDialog) => {
     }
   }, [showAlertDialog]);
 
-  const testAccessibilityPermission = useCallback(async () => {
+  const testAccessibilityPermission = React.useCallback(async () => {
     if (!window.electronAPI?.pasteText) {
       setAccessibilityPermissionGranted(false);
       if (showAlertDialog) {
