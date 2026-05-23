@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { Toaster } from "sonner";
 import "./index.css";
 import { assertElectronAPI } from "./bootstrap/assertElectronAPI.js";
+import type { TranscriptionRecord } from "./types/ipc";
 // 历史记录页面组件
 // eslint-disable-next-line react-refresh/only-export-components
 const HistoryPage = () => {
@@ -68,12 +69,14 @@ const HistoryContent = ({
 }: {
   onCopy: (text: string) => Promise<void>;
 }) => {
-  const [transcriptions, setTranscriptions] = React.useState([]);
+  const [transcriptions, setTranscriptions] = React.useState<
+    TranscriptionRecord[]
+  >([]);
   const [loading, setLoading] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState("");
-  const [filteredTranscriptions, setFilteredTranscriptions] = React.useState(
-    [],
-  );
+  const [filteredTranscriptions, setFilteredTranscriptions] = React.useState<
+    TranscriptionRecord[]
+  >([]);
 
   // 加载转录历史
   const loadTranscriptions = async () => {

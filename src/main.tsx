@@ -77,7 +77,7 @@ class ErrorBoundary extends React.Component<
                   <div>
                     <strong>堆栈:</strong>
                     <pre className="whitespace-pre-wrap">
-                      {this.state.errorInfo.componentStack}
+                      {this.state.errorInfo?.componentStack}
                     </pre>
                   </div>
                 </div>
@@ -202,7 +202,7 @@ if (!assertElectronAPI()) {
   // 已渲染 fallback，直接退出，不再 createRoot
 } else {
   // 渲染应用
-  const root = ReactDOM.createRoot(document.getElementById("root"));
+  const root = ReactDOM.createRoot(document.getElementById("root")!);
 
   root.render(
     <React.StrictMode>

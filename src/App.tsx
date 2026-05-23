@@ -45,8 +45,12 @@ export default function App() {
     useWindowDrag();
   const modelStatus = useModelStatus();
 
-  const handleRecordingCompleteRef = useRef(null);
-  const handleAIOptimizationCompleteRef = useRef(null);
+  const handleRecordingCompleteRef = useRef<
+    ((...args: unknown[]) => void) | null
+  >(null);
+  const handleAIOptimizationCompleteRef = useRef<
+    ((...args: unknown[]) => void) | null
+  >(null);
 
   const {
     isRecording,
@@ -56,10 +60,12 @@ export default function App() {
     stopRecording,
     error: recordingError,
   } = useRecording({
-    onTranscriptionComplete: (...args) =>
-      handleRecordingCompleteRef.current?.(...args),
-    onAIOptimizationComplete: (...args) =>
-      handleAIOptimizationCompleteRef.current?.(...args),
+    onTranscriptionComplete: (...args) => {
+      handleRecordingCompleteRef.current?.(...args);
+    },
+    onAIOptimizationComplete: (...args) => {
+      handleAIOptimizationCompleteRef.current?.(...args);
+    },
   });
 
   // 防重复粘贴的引用
@@ -255,16 +261,13 @@ export default function App() {
   useEffect(() => {
     const initializeHotkey = async () => {
       try {
-        // 注册默认热键 CommandOrControl+Shift+Space
         await registerHotkey("CommandOrControl+Shift+Space");
       } catch {
         // 热键注册失败时静默处理，不影响应用功能
       }
     };
 
-    if (registerHotkey) {
-      initializeHotkey();
-    }
+    initializeHotkey();
   }, [registerHotkey]);
 
   // 处理关闭窗口
@@ -695,7 +698,7 @@ export default function App() {
               modelStatus.stage === "downloading") && (
               <div className="mb-6">
                 <ModelDownloadProgress
-                  modelStatus={modelStatus}
+                  modelStatus={modelStatus as any}
                   onDownload={handleDownloadModels}
                 />
               </div>

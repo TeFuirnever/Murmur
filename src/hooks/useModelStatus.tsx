@@ -276,10 +276,11 @@ export function ModelStatusProvider({
     if (window.electronAPI && window.electronAPI.onModelDownloadProgress) {
       const unsubscribe = window.electronAPI.onModelDownloadProgress(
         (event, progress) => {
+          const p = progress ?? event;
           setModelStatus((prev) => ({
             ...prev,
             downloadProgress:
-              progress.overall_progress || progress.progress || 0,
+              p.overall_progress || p.progress || 0,
             stage: "downloading",
           }));
         },
@@ -292,13 +293,14 @@ export function ModelStatusProvider({
     if (window.electronAPI && window.electronAPI.onProcessingUpdate) {
       const unsubscribe = window.electronAPI.onProcessingUpdate(
         (event, data) => {
-          if (data.type === "model_initialization") {
+          const d = data ?? event;
+          if (d.type === "model_initialization") {
             setModelStatus((prev) => ({
               ...prev,
-              isLoading: data.isLoading,
-              isReady: data.isReady,
-              progress: data.progress || prev.progress,
-              stage: data.isReady ? "ready" : "loading",
+              isLoading: d.isLoading,
+              isReady: d.isReady,
+              progress: d.progress || prev.progress,
+              stage: d.isReady ? "ready" : "loading",
             }));
           }
         },

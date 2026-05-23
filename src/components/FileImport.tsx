@@ -60,7 +60,7 @@ export default function FileImport() {
           segments={result.segments}
           duration={result.duration}
         />
-        <ExportPanel transcriptionId={result.id} />
+        <ExportPanel transcriptionId={result.id!} />
         <button
           onClick={reset}
           className="w-full py-2 px-4 text-sm font-medium text-[#86868b] hover:text-[#1d1d1f] dark:hover:text-[#f5f5f7] hover:bg-[#f5f5f7] dark:hover:bg-[#2c2c2e] rounded-lg transition-colors"

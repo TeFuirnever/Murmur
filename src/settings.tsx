@@ -4,6 +4,12 @@ import "./index.css";
 import { Toaster, toast } from "sonner";
 import { useTranslation } from "react-i18next";
 import { assertElectronAPI } from "./bootstrap/assertElectronAPI.js";
+import type {
+  AICheckStatusResult,
+  UpdateCheckResult,
+  UpdateProgressData,
+  UpdateCompleteData,
+} from "./types/ipc";
 import {
   Settings,
   Save,
@@ -53,14 +59,18 @@ const SettingsPage = () => {
   const [saving, setSaving] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState(null);
+  const [testResult, setTestResult] = useState<AICheckStatusResult | null>(
+    null,
+  );
 
   // 更新检查
   const [appVersion, setAppVersion] = useState("");
   const [checkingUpdate, setCheckingUpdate] = useState(false);
-  const [updateInfo, setUpdateInfo] = useState(null);
-  const [downloadProgress, setDownloadProgress] = useState(null);
-  const [downloadedUpdate, setDownloadedUpdate] = useState(null);
+  const [updateInfo, setUpdateInfo] = useState<UpdateCheckResult | null>(null);
+  const [downloadProgress, setDownloadProgress] =
+    useState<UpdateProgressData | null>(null);
+  const [downloadedUpdate, setDownloadedUpdate] =
+    useState<UpdateCompleteData | null>(null);
 
   // 权限管理
   const showAlert = (alert: { title: string; description: string }) => {
@@ -296,7 +306,11 @@ const SettingsPage = () => {
         setUpdateInfo(result);
       }
     } catch (_error) {
-      setUpdateInfo({ hasUpdate: false, error: "检查更新失败" });
+      setUpdateInfo({
+        hasUpdate: false,
+        currentVersion: appVersion,
+        error: "检查更新失败",
+      });
     } finally {
       setCheckingUpdate(false);
     }
@@ -311,9 +325,9 @@ const SettingsPage = () => {
     });
     try {
       await window.electronAPI.downloadUpdate({
-        downloadUrl: updateInfo.downloadUrl,
-        checksumsUrl: updateInfo.checksumsUrl,
-        latestVersion: updateInfo.latestVersion,
+        downloadUrl: updateInfo.downloadUrl!,
+        checksumsUrl: updateInfo.checksumsUrl!,
+        latestVersion: updateInfo.latestVersion!,
       });
     } catch (_error) {
       setDownloadProgress(null);
@@ -331,7 +345,7 @@ const SettingsPage = () => {
     });
     const unsub3 = window.electronAPI.onUpdateDownloadError?.((data) => {
       setDownloadProgress(null);
-      setUpdateInfo((prev: typeof settings) =>
+      setUpdateInfo((prev: UpdateCheckResult | null) =>
         prev ? { ...prev, error: data.error } : prev,
       );
     });
@@ -1022,7 +1036,9 @@ export { SettingsPage };
 
 // 如果是直接访问settings.html，则渲染应用
 if (document.getElementById("settings-root") && assertElectronAPI()) {
-  const root = ReactDOM.createRoot(document.getElementById("settings-root"));
+  const root = ReactDOM.createRoot(
+    document.getElementById("settings-root")!,
+  );
   root.render(
     <React.Fragment>
       <SettingsPage />

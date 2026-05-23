@@ -52,7 +52,7 @@ export default function TranscriptionResult({
   return (
     <div className="space-y-4">
       {/* 头部：时长信息 */}
-      {duration > 0 && (
+      {(duration ?? 0) > 0 && (
         <div className="flex items-center gap-2 text-sm text-[#86868b]">
           <svg
             className="w-4 h-4"

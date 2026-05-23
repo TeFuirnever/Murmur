@@ -194,7 +194,7 @@ const HistoryModal: React.FC<HistoryModalProps> = ({
                     <div className="flex space-x-2">
                       <button
                         onClick={() =>
-                          handleCopy(item.processed_text || item.text)
+                          handleCopy(item.processed_text || item.text || "")
                         }
                         className="p-1 hover:bg-[#d2d2d7] dark:hover:bg-[#636366] rounded transition-colors"
                         title="复制文本"

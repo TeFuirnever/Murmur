@@ -87,10 +87,10 @@ export const ModelStatusIndicator: React.FC<ModelStatusIndicatorProps> = ({
   };
 
   const getProgressText = () => {
-    if (modelStatus.isDownloading && modelStatus.downloadProgress > 0) {
+    if (modelStatus.isDownloading && (modelStatus.downloadProgress ?? 0) > 0) {
       return `${modelStatus.downloadProgress}%`;
     }
-    if (modelStatus.isLoading && modelStatus.progress > 0) {
+    if (modelStatus.isLoading && (modelStatus.progress ?? 0) > 0) {
       return `${modelStatus.progress}%`;
     }
     return null;

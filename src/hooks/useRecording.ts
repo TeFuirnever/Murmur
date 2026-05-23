@@ -172,6 +172,7 @@ export const useRecording = ({
       const wavBlob = await convertToWav(audioBlob);
 
       if (window.electronAPI) {
+        if (!wavBlob) throw new Error("音频格式转换失败");
         const arrayBuffer = await wavBlob.arrayBuffer();
         const uint8Array = new Uint8Array(arrayBuffer);
 
@@ -179,7 +180,7 @@ export const useRecording = ({
           await window.electronAPI.transcribeAudio(arrayBuffer);
 
         if (transcriptionResult.success) {
-          const raw_text = transcriptionResult.text;
+          const raw_text = transcriptionResult.text || "";
 
           // 准备转录数据
           const transcriptionData: Record<string, unknown> = {
@@ -249,7 +250,7 @@ export const useRecording = ({
                       window.electronAPI.log(
                         "info",
                         "AI文本优化成功",
-                        processed_text.substring(0, 50) + "...",
+                        (processed_text ?? "").substring(0, 50) + "...",
                       );
                     }
                   } else {
@@ -363,7 +364,7 @@ export const useRecording = ({
         reader.onload = async () => {
           let audioContext = null;
           try {
-            const arrayBuffer = reader.result;
+            const arrayBuffer = reader.result as ArrayBuffer;
 
             audioContext = new (
               window.AudioContext || (window as any).webkitAudioContext

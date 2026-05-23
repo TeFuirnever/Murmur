@@ -111,16 +111,16 @@ export default function TranscriptionProgress({
       </div>
 
       {/* ASR阶段时间进度 */}
-      {phase === "asr" && totalMs > 0 && (
+      {phase === "asr" && (totalMs ?? 0) > 0 && (
         <div className="text-center mb-4">
           <span className="text-sm text-[#86868b]">
-            已处理 {formatMs(processedMs)} / {formatMs(totalMs)}
+            已处理 {formatMs(processedMs ?? 0)} / {formatMs(totalMs ?? 0)}
           </span>
           <div className="w-full h-1.5 bg-[#e8e8ed] dark:bg-[#383838] rounded-full mt-2 overflow-hidden">
             <div
               className="h-full bg-[#0071e3] rounded-full transition-all duration-300"
               style={{
-                width: `${totalMs > 0 ? Math.min((processedMs / totalMs) * 100, 100) : 0}%`,
+                width: `${(totalMs ?? 0) > 0 ? Math.min(((processedMs ?? 0) / (totalMs ?? 0)) * 100, 100) : 0}%`,
               }}
             />
           </div>

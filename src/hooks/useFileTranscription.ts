@@ -74,9 +74,9 @@ export function useFileTranscription() {
       }
 
       setFileInfo({
-        filePath: response.filePath,
-        fileName: response.fileName,
-        fileSize: response.fileSize,
+        filePath: response.filePath!,
+        fileName: response.fileName!,
+        fileSize: response.fileSize!,
         extension: response.extension,
       });
       setState("selected");
