@@ -57,7 +57,11 @@
       "incomplete": "配置不完整",
       "providers": {
         "tongyi": "阿里云通义",
-        "zhipu": "智谱 GLM"
+        "zhipu": "智谱 GLM",
+        "siliconflow": "硅基流动",
+        "groq": "Groq",
+        "ollama": "Ollama (本地)",
+        "lmstudio": "LM Studio (本地)"
       }
     },
     "recognition": {

@@ -14,7 +14,8 @@ describe("edge cases: template + file config", () => {
     });
 
     it("handles Windows line endings (\\r\\n)", () => {
-      const content = "---\r\nname: win\r\nlabel: Win\r\n---\r\nWindows content.";
+      const content =
+        "---\r\nname: win\r\nlabel: Win\r\n---\r\nWindows content.";
       const result = parseTemplateFile(content, "win.md");
       expect(result).not.toBeNull();
       expect(result.name).toBe("win");
@@ -126,9 +127,7 @@ describe("edge cases: template + file config", () => {
     });
 
     it("accepts https:// with valid hostname", () => {
-      expect(
-        validateAIBaseUrl("https://api.deepseek.com/v1"),
-      ).toBe(true);
+      expect(validateAIBaseUrl("https://api.deepseek.com/v1")).toBe(true);
     });
 
     it("allows 127.0.0.1 when allowLocalhost is true", () => {

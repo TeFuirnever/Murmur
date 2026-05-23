@@ -57,7 +57,11 @@
       "incomplete": "Configuration incomplete",
       "providers": {
         "tongyi": "Alibaba Tongyi",
-        "zhipu": "Zhipu GLM"
+        "zhipu": "Zhipu GLM",
+        "siliconflow": "SiliconFlow",
+        "groq": "Groq",
+        "ollama": "Ollama (Local)",
+        "lmstudio": "LM Studio (Local)"
       }
     },
     "recognition": {
