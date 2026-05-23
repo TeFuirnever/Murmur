@@ -2,7 +2,7 @@ const { app, shell, net, BrowserWindow, Notification } = require("electron");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const C = require("../ipc-contracts");
+const C = require("./ipc-contracts");
 
 const GITHUB_API =
   "https://api.github.com/repos/TeFuirnever/Murmur/releases/latest";
