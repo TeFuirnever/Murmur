@@ -226,7 +226,7 @@ class ModelManager {
     );
   }
 
-  async downloadModels(progressCallback = null, pythonCmd = "python3") {
+  async downloadModels(progressCallback = null, pythonCmd) {
     const checkResult = await this.checkModelFiles();
     if (checkResult.models_downloaded) {
       return { success: true, message: "模型文件已下载" };
