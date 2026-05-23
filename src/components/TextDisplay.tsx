@@ -1,4 +1,3 @@
-import React from "react";
 import { Copy, Download } from "lucide-react";
 import { LoadingDots } from "./ui/loading-dots";
 

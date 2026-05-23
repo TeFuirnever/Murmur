@@ -1,4 +1,3 @@
-import React from "react";
 
 export const LoadingIndicator = ({ size = 20 }: { size?: number }) => {
   return (
