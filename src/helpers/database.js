@@ -1,6 +1,7 @@
 const Database = require("better-sqlite3");
 const path = require("path");
 const fs = require("fs");
+const { loadFileConfig } = require("./fileConfig");
 
 class DatabaseManager {
   constructor(logger = null) {
@@ -9,11 +10,18 @@ class DatabaseManager {
     this.logger = logger;
     this.safeStorage = null;
     this._encryptedKeys = new Set(["ai_api_key"]);
+    this._fileConfigPath = null;
+    this._fileConfigCache = null;
   }
 
   setSafeStorage(safeStorage) {
     this.safeStorage = safeStorage;
     this._migrateSettings();
+  }
+
+  setFileConfigPath(configPath) {
+    this._fileConfigPath = configPath;
+    this._fileConfigCache = loadFileConfig(configPath);
   }
 
   _encryptValue(value) {
@@ -290,6 +298,10 @@ class DatabaseManager {
       } catch (_error) {
         return result.value;
       }
+    }
+
+    if (this._fileConfigCache && key in this._fileConfigCache) {
+      return this._fileConfigCache[key];
     }
 
     return defaultValue;
