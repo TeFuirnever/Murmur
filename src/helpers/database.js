@@ -63,6 +63,14 @@ class DatabaseManager {
     this.db = new Database(this.dbPath);
     this.db.pragma("journal_mode = WAL");
     this.db.pragma("busy_timeout = 5000");
+
+    const integrity = this.db.pragma("integrity_check");
+    if (integrity[0]?.integrity_check !== "ok") {
+      if (this.logger?.warn) {
+        this.logger.warn("Database integrity check failed", integrity);
+      }
+    }
+
     this.createTables();
     this._migrateSchema();
   }
