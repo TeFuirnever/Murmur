@@ -31,9 +31,19 @@ describe("windowHandlers", () => {
       isDestroyed: vi.fn(() => false),
     };
 
+    const historyWindow = {
+      setAlwaysOnTop: vi.fn(),
+    };
+    const settingsWindow = {
+      setAlwaysOnTop: vi.fn(),
+    };
+
     managers = {
       windowManager: {
         mainWindow,
+        historyWindow,
+        settingsWindow,
+        setDefaultAlwaysOnTop: vi.fn(),
         showHistoryWindow: vi.fn(),
         closeHistoryWindow: vi.fn(),
         hideHistoryWindow: vi.fn(),
@@ -96,9 +106,12 @@ describe("windowHandlers", () => {
     expect(result).toBe(true);
   });
 
-  it("set-always-on-top sets the flag", () => {
+  it("set-always-on-top sets the flag on all windows", () => {
     const result = ipcMain._handlers["set-always-on-top"]({}, true);
+    expect(managers.windowManager.setDefaultAlwaysOnTop).toHaveBeenCalledWith(true);
     expect(managers.windowManager.mainWindow.setAlwaysOnTop).toHaveBeenCalledWith(true);
+    expect(managers.windowManager.historyWindow.setAlwaysOnTop).toHaveBeenCalledWith(true);
+    expect(managers.windowManager.settingsWindow.setAlwaysOnTop).toHaveBeenCalledWith(true);
     expect(result).toEqual({ success: true });
   });
 });

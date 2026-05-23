@@ -107,7 +107,7 @@ class WindowManager {
       height: 700,
       show: false,
       title: "转录历史 - Murmur",
-      alwaysOnTop: true,
+      alwaysOnTop: this._alwaysOnTop,
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
@@ -144,7 +144,7 @@ class WindowManager {
       height: 600,
       show: false,
       title: "设置 - Murmur",
-      alwaysOnTop: true,
+      alwaysOnTop: this._alwaysOnTop,
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
@@ -171,16 +171,15 @@ class WindowManager {
   }
 
   showHistoryWindow() {
-    if (this.historyWindow) {
+    const show = () => {
       this.historyWindow.show();
       this.historyWindow.focus();
-      this.historyWindow.setAlwaysOnTop(true);
+      this.historyWindow.setAlwaysOnTop(this._alwaysOnTop);
+    };
+    if (this.historyWindow) {
+      show();
     } else {
-      this.createHistoryWindow().then(() => {
-        this.historyWindow.show();
-        this.historyWindow.focus();
-        this.historyWindow.setAlwaysOnTop(true);
-      });
+      this.createHistoryWindow().then(show);
     }
   }
 
@@ -197,16 +196,15 @@ class WindowManager {
   }
 
   showSettingsWindow() {
-    if (this.settingsWindow) {
+    const show = () => {
       this.settingsWindow.show();
       this.settingsWindow.focus();
-      this.settingsWindow.setAlwaysOnTop(true);
+      this.settingsWindow.setAlwaysOnTop(this._alwaysOnTop);
+    };
+    if (this.settingsWindow) {
+      show();
     } else {
-      this.createSettingsWindow().then(() => {
-        this.settingsWindow.show();
-        this.settingsWindow.focus();
-        this.settingsWindow.setAlwaysOnTop(true);
-      });
+      this.createSettingsWindow().then(show);
     }
   }
 

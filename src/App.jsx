@@ -258,6 +258,9 @@ export default function App() {
   const lastPasteRef = useRef({ text: "", timestamp: 0 });
   const PASTE_DEBOUNCE_TIME = 1000; // 1秒内相同文本不重复粘贴
 
+  // 缓存设置项，避免每次操作都走 IPC
+  const settingsRef = useRef({ auto_paste: "paste", close_behavior: "hide" });
+
   // 安全粘贴函数
   const safePaste = useCallback(async (text) => {
     const now = Date.now();
@@ -276,15 +279,20 @@ export default function App() {
 
     try {
       if (window.electronAPI) {
-        await window.electronAPI.pasteText(text);
-        toast.success("文本已自动粘贴到当前输入框");
+        const autoPaste = settingsRef.current.auto_paste;
+        if (autoPaste === "clipboard_only") {
+          await window.electronAPI.copyText(text);
+          toast.success("文本已复制到剪贴板");
+        } else {
+          await window.electronAPI.pasteText(text);
+          toast.success("文本已自动粘贴到当前输入框");
+        }
       } else {
-        // Web环境下只能复制到剪贴板
         await navigator.clipboard.writeText(text);
         toast.info("文本已复制到剪贴板，请手动粘贴");
       }
     } catch {
-      toast.error("粘贴失败", {
+      toast.error("操作失败", {
         description:
           "请检查辅助功能权限。文本已复制到剪贴板 - 请手动使用 Cmd+V 粘贴。",
       });
@@ -455,7 +463,12 @@ export default function App() {
   // 处理关闭窗口
   const handleClose = () => {
     if (window.electronAPI) {
-      window.electronAPI.hideWindow();
+      const closeBehavior = settingsRef.current.close_behavior;
+      if (closeBehavior === "quit") {
+        window.electronAPI.closeApp();
+      } else {
+        window.electronAPI.hideWindow();
+      }
     }
   };
 
@@ -478,6 +491,32 @@ export default function App() {
       });
       return unsub;
     }
+  }, []);
+
+  // 缓存设置项：挂载时加载一次
+  useEffect(() => {
+    if (!window.electronAPI?.getSetting) return;
+    window.electronAPI.getSetting("auto_paste", "paste").then((v) => {
+      settingsRef.current.auto_paste = v;
+    });
+    window.electronAPI.getSetting("close_behavior", "hide").then((v) => {
+      settingsRef.current.close_behavior = v;
+    });
+  }, []);
+
+  // 设置变更时刷新缓存
+  useEffect(() => {
+    if (!window.electronAPI?.onSettingsUpdate) return;
+    const unsub = window.electronAPI.onSettingsUpdate(() => {
+      if (!window.electronAPI?.getSetting) return;
+      window.electronAPI.getSetting("auto_paste", "paste").then((v) => {
+        settingsRef.current.auto_paste = v;
+      });
+      window.electronAPI.getSetting("close_behavior", "hide").then((v) => {
+        settingsRef.current.close_behavior = v;
+      });
+    });
+    return unsub;
   }, []);
 
   // 处理打开设置

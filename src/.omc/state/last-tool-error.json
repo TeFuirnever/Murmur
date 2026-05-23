@@ -1,7 +1,0 @@
-{
-  "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"cd src && npx vite build 2>&1 | tail -5\",\"description\":\"Post-deslop build verification\"}",
-  "error": "Exit code 1\n/usr/bin/bash: line 1: cd: src: No such file or directory",
-  "timestamp": "2026-05-10T17:18:02.846Z",
-  "retry_count": 2
-}

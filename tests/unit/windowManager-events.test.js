@@ -111,4 +111,56 @@ describe("windowManager — real module execution with mocked electron", () => {
       expect.objectContaining({ alwaysOnTop: true }),
     );
   });
+
+  it("history window respects alwaysOnTop setting", async () => {
+    const WindowManager = requireCJS("../../src/helpers/windowManager.js");
+    const wm = new WindowManager();
+    wm.setDefaultAlwaysOnTop(false);
+    process.env.NODE_ENV = "development";
+    await wm.createHistoryWindow();
+
+    expect(MockBrowserWindow).toHaveBeenLastCalledWith(
+      expect.objectContaining({ alwaysOnTop: false }),
+    );
+  });
+
+  it("settings window respects alwaysOnTop setting", async () => {
+    const WindowManager = requireCJS("../../src/helpers/windowManager.js");
+    const wm = new WindowManager();
+    wm.setDefaultAlwaysOnTop(false);
+    process.env.NODE_ENV = "development";
+    await wm.createSettingsWindow();
+
+    expect(MockBrowserWindow).toHaveBeenLastCalledWith(
+      expect.objectContaining({ alwaysOnTop: false }),
+    );
+  });
+
+  it("showHistoryWindow uses current alwaysOnTop value", async () => {
+    const WindowManager = requireCJS("../../src/helpers/windowManager.js");
+    const wm = new WindowManager();
+    wm.setDefaultAlwaysOnTop(false);
+    process.env.NODE_ENV = "development";
+    await wm.createHistoryWindow();
+
+    const setAlwaysOnTopSpy = vi.fn();
+    wm.historyWindow.setAlwaysOnTop = setAlwaysOnTopSpy;
+
+    wm.showHistoryWindow();
+    expect(setAlwaysOnTopSpy).toHaveBeenCalledWith(false);
+  });
+
+  it("showSettingsWindow uses current alwaysOnTop value", async () => {
+    const WindowManager = requireCJS("../../src/helpers/windowManager.js");
+    const wm = new WindowManager();
+    wm.setDefaultAlwaysOnTop(false);
+    process.env.NODE_ENV = "development";
+    await wm.createSettingsWindow();
+
+    const setAlwaysOnTopSpy = vi.fn();
+    wm.settingsWindow.setAlwaysOnTop = setAlwaysOnTopSpy;
+
+    wm.showSettingsWindow();
+    expect(setAlwaysOnTopSpy).toHaveBeenCalledWith(false);
+  });
 });

@@ -147,22 +147,37 @@ function initializeApp() {
   // 设置中文语言环境
   document.documentElement.lang = "zh-CN";
 
-  // 添加系统主题检测
-  if (
-    window.matchMedia &&
-    window.matchMedia("(prefers-color-scheme: dark)").matches
-  ) {
-    document.documentElement.classList.add("dark");
+  // 主题：优先使用用户保存的设置，否则跟随系统
+  const applyTheme = (theme) => {
+    const root = document.documentElement;
+    if (theme === "dark") {
+      root.classList.add("dark");
+    } else if (theme === "light") {
+      root.classList.remove("dark");
+    } else {
+      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      root.classList.toggle("dark", prefersDark);
+    }
+  };
+
+  // 立即应用系统主题，防止闪烁
+  applyTheme("system");
+
+  // 再用用户保存的偏好覆盖
+  if (window.electronAPI?.getSetting) {
+    window.electronAPI.getSetting("theme", "system").then(applyTheme);
   }
 
-  // 监听系统主题变化
+  // 监听系统主题变化（仅 system 模式下生效）
   window
     .matchMedia("(prefers-color-scheme: dark)")
     .addEventListener("change", (e) => {
-      if (e.matches) {
-        document.documentElement.classList.add("dark");
-      } else {
-        document.documentElement.classList.remove("dark");
+      if (window.electronAPI?.getSetting) {
+        window.electronAPI.getSetting("theme", "system").then((theme) => {
+          if (theme === "system") {
+            document.documentElement.classList.toggle("dark", e.matches);
+          }
+        });
       }
     });
 }

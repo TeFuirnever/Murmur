@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
 import { Toaster, toast } from "sonner";
@@ -27,6 +27,10 @@ const SettingsPage = () => {
     ai_base_url: "https://api.openai.com/v1",
     ai_model: "gpt-3.5-turbo",
     enable_ai_optimization: true,
+    window_always_on_top: true,
+    auto_paste: "paste",
+    close_behavior: "hide",
+    theme: "system",
   });
 
   const [customModel, setCustomModel] = useState(false);
@@ -57,15 +61,19 @@ const SettingsPage = () => {
     testAccessibilityPermission,
   } = usePermissions(showAlert);
 
-  // 加载设置
-  useEffect(() => {
-    loadSettings();
-    if (window.electronAPI) {
-      window.electronAPI.getAppVersion().then(setAppVersion);
+  const applyTheme = (theme) => {
+    const root = document.documentElement;
+    if (theme === "dark") {
+      root.classList.add("dark");
+    } else if (theme === "light") {
+      root.classList.remove("dark");
+    } else {
+      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      root.classList.toggle("dark", prefersDark);
     }
-  }, []);
+  };
 
-  const loadSettings = async () => {
+  const loadSettings = useCallback(async () => {
     try {
       setLoading(true);
       if (window.electronAPI) {
@@ -74,10 +82,14 @@ const SettingsPage = () => {
           ai_api_key: allSettings.ai_api_key || "",
           ai_base_url: allSettings.ai_base_url || "https://api.openai.com/v1",
           ai_model: allSettings.ai_model || "gpt-3.5-turbo",
-          enable_ai_optimization: allSettings.enable_ai_optimization !== false, // 默认为true
-          window_always_on_top: allSettings.window_always_on_top !== false, // 默认为true
+          enable_ai_optimization: allSettings.enable_ai_optimization !== false,
+          window_always_on_top: allSettings.window_always_on_top !== false,
+          auto_paste: allSettings.auto_paste || "paste",
+          close_behavior: allSettings.close_behavior || "hide",
+          theme: allSettings.theme || "system",
         };
         setSettings((prev) => ({ ...prev, ...loadedSettings }));
+        applyTheme(loadedSettings.theme);
 
         // 检查是否使用自定义模型
         const predefinedModels = [
@@ -96,7 +108,15 @@ const SettingsPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  // 加载设置
+  useEffect(() => {
+    loadSettings();
+    if (window.electronAPI) {
+      window.electronAPI.getAppVersion().then(setAppVersion);
+    }
+  }, [loadSettings]);
 
   // 保存设置
   const saveSettings = async () => {
@@ -116,6 +136,16 @@ const SettingsPage = () => {
           "enable_ai_optimization",
           settings.enable_ai_optimization,
         );
+        await window.electronAPI.setSetting(
+          "window_always_on_top",
+          settings.window_always_on_top,
+        );
+        await window.electronAPI.setSetting("auto_paste", settings.auto_paste);
+        await window.electronAPI.setSetting(
+          "close_behavior",
+          settings.close_behavior,
+        );
+        await window.electronAPI.setSetting("theme", settings.theme);
 
         toast.success("设置保存成功");
       }
@@ -294,6 +324,116 @@ const SettingsPage = () => {
       {/* 主要内容 - 可滚动 */}
       <div className="flex-1 overflow-y-auto min-h-0">
         <div className="max-w-2xl mx-auto p-6 pb-8">
+          {/* 通用设置 */}
+          <div className="bg-white dark:bg-[#2c2c2e] rounded-xl shadow-lg border border-[#d2d2d7] dark:border-[#3a3a3c] mb-6">
+            <div className="p-6">
+              <div className="mb-4">
+                <h2 className="text-lg font-semibold text-[#1d1d1f] dark:text-[#f5f5f7] text-heading">
+                  通用设置
+                </h2>
+                <p className="text-xs text-[#86868b] mt-1">
+                  调整应用的基本行为和外观。
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                {/* 窗口置顶 */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
+                      窗口始终置顶
+                    </label>
+                    <p className="text-xs text-[#86868b]">将应用窗口保持在最前面</p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={settings.window_always_on_top !== false}
+                    onClick={() => {
+                      const newVal = settings.window_always_on_top === false;
+                      handleInputChange("window_always_on_top", newVal);
+                      if (window.electronAPI?.setAlwaysOnTop) {
+                        window.electronAPI.setAlwaysOnTop(newVal);
+                      }
+                    }}
+                    className={`${
+                      settings.window_always_on_top !== false
+                        ? "bg-[#0071e3]"
+                        : "bg-[#d2d2d7] dark:bg-[#3a3a3c]"
+                    } relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-2`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`${
+                        settings.window_always_on_top !== false
+                          ? "translate-x-4"
+                          : "translate-x-0"
+                      } inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+                    />
+                  </button>
+                </div>
+
+                {/* 自动粘贴行为 */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
+                      转录完成后
+                    </label>
+                    <p className="text-xs text-[#86868b]">语音识别完成后的操作方式</p>
+                  </div>
+                  <select
+                    value={settings.auto_paste}
+                    onChange={(e) => handleInputChange("auto_paste", e.target.value)}
+                    className="text-sm px-3 py-1.5 border border-[#d2d2d7] dark:border-[#3a3a3c] rounded-lg bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7] focus:ring-2 focus:ring-[#0071e3] focus:border-transparent"
+                  >
+                    <option value="paste">自动粘贴到当前应用</option>
+                    <option value="clipboard_only">仅复制到剪贴板</option>
+                  </select>
+                </div>
+
+                {/* 关闭行为 */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
+                      关闭窗口时
+                    </label>
+                    <p className="text-xs text-[#86868b]">点击关闭按钮后的行为</p>
+                  </div>
+                  <select
+                    value={settings.close_behavior}
+                    onChange={(e) => handleInputChange("close_behavior", e.target.value)}
+                    className="text-sm px-3 py-1.5 border border-[#d2d2d7] dark:border-[#3a3a3c] rounded-lg bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7] focus:ring-2 focus:ring-[#0071e3] focus:border-transparent"
+                  >
+                    <option value="hide">隐藏到菜单栏</option>
+                    <option value="quit">退出应用</option>
+                  </select>
+                </div>
+
+                {/* 外观主题 */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
+                      外观
+                    </label>
+                    <p className="text-xs text-[#86868b]">应用的颜色主题</p>
+                  </div>
+                  <select
+                    value={settings.theme}
+                    onChange={(e) => {
+                      handleInputChange("theme", e.target.value);
+                      applyTheme(e.target.value);
+                    }}
+                    className="text-sm px-3 py-1.5 border border-[#d2d2d7] dark:border-[#3a3a3c] rounded-lg bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7] focus:ring-2 focus:ring-[#0071e3] focus:border-transparent"
+                  >
+                    <option value="system">跟随系统</option>
+                    <option value="light">浅色</option>
+                    <option value="dark">深色</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* 权限管理部分 */}
           <div className="bg-white dark:bg-[#2c2c2e] rounded-xl shadow-lg border border-[#d2d2d7] dark:border-[#3a3a3c] mb-6">
             <div className="p-6">
@@ -369,39 +509,6 @@ const SettingsPage = () => {
                       aria-hidden="true"
                       className={`${
                         settings.enable_ai_optimization
-                          ? "translate-x-4"
-                          : "translate-x-0"
-                      } inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
-                    />
-                  </button>
-                </div>
-
-                {/* 窗口置顶 */}
-                <div className="flex items-center justify-between pt-2">
-                  <label className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
-                    窗口始终置顶
-                  </label>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={settings.window_always_on_top !== false}
-                    onClick={() => {
-                      const newVal = settings.window_always_on_top === false;
-                      handleInputChange("window_always_on_top", newVal);
-                      if (window.electronAPI?.setAlwaysOnTop) {
-                        window.electronAPI.setAlwaysOnTop(newVal);
-                      }
-                    }}
-                    className={`${
-                      settings.window_always_on_top !== false
-                        ? "bg-[#0071e3]"
-                        : "bg-[#d2d2d7] dark:bg-[#3a3a3c]"
-                    } relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-2`}
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={`${
-                        settings.window_always_on_top !== false
                           ? "translate-x-4"
                           : "translate-x-0"
                       } inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}

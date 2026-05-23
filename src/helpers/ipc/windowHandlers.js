@@ -52,12 +52,15 @@ function register(ipcMain, managers) {
   });
 
   ipcMain.handle(C.WINDOW.SET_TOP, (event, enabled) => {
-    const win = windowManager.mainWindow;
-    if (win) {
-      win.setAlwaysOnTop(enabled);
-      return { success: true };
+    windowManager.setDefaultAlwaysOnTop(enabled);
+    for (const win of [
+      windowManager.mainWindow,
+      windowManager.historyWindow,
+      windowManager.settingsWindow,
+    ]) {
+      if (win) win.setAlwaysOnTop(enabled);
     }
-    return { success: false };
+    return { success: true };
   });
 
   ipcMain.handle(C.WINDOW.OPEN_HISTORY, () => {

@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.removeListener(C.EVENTS.WINDOW_MAXIMIZE_CHANGE, handler);
   },
   closeWindow: () => ipcRenderer.invoke(C.WINDOW.CLOSE),
+  closeApp: () => ipcRenderer.invoke(C.WINDOW.CLOSE_APP),
   setAlwaysOnTop: (enabled) => ipcRenderer.invoke(C.WINDOW.SET_TOP, enabled),
 
   // 录音相关
