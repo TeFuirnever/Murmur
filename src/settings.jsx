@@ -45,6 +45,8 @@ const SettingsPage = () => {
   const [appVersion, setAppVersion] = useState("");
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updateInfo, setUpdateInfo] = useState(null);
+  const [downloadProgress, setDownloadProgress] = useState(null);
+  const [downloadedUpdate, setDownloadedUpdate] = useState(null);
 
   // 权限管理
   const showAlert = (alert) => {
@@ -280,6 +282,40 @@ const SettingsPage = () => {
       setCheckingUpdate(false);
     }
   };
+
+  const startDownload = async () => {
+    if (!updateInfo?.hasUpdate || !updateInfo?.downloadUrl) return;
+    setDownloadProgress({ progress: 0, downloaded: 0, total: updateInfo.downloadSize || 0 });
+    try {
+      await window.electronAPI.downloadUpdate({
+        downloadUrl: updateInfo.downloadUrl,
+        checksumsUrl: updateInfo.checksumsUrl,
+        latestVersion: updateInfo.latestVersion,
+      });
+    } catch (_error) {
+      setDownloadProgress(null);
+    }
+  };
+
+  useEffect(() => {
+    if (!window.electronAPI) return;
+    const unsub1 = window.electronAPI.onUpdateDownloadProgress?.((data) => {
+      setDownloadProgress(data);
+    });
+    const unsub2 = window.electronAPI.onUpdateDownloadComplete?.((data) => {
+      setDownloadProgress(null);
+      setDownloadedUpdate(data);
+    });
+    const unsub3 = window.electronAPI.onUpdateDownloadError?.((data) => {
+      setDownloadProgress(null);
+      setUpdateInfo((prev) => prev ? { ...prev, error: data.error } : prev);
+    });
+    return () => {
+      unsub1?.();
+      unsub2?.();
+      unsub3?.();
+    };
+  }, []);
 
   // 关闭窗口
   const handleClose = () => {
@@ -793,40 +829,91 @@ const SettingsPage = () => {
               </div>
 
               {/* 更新检查 */}
-              <div className="mt-3 flex items-center justify-between">
-                <button
-                  onClick={checkForUpdates}
-                  disabled={checkingUpdate}
-                  className="flex items-center space-x-2 px-3 py-1.5 text-sm text-[#0071e3] hover:bg-[#e8f4fd] dark:hover:bg-blue-900/30 rounded-lg transition-colors disabled:opacity-50"
-                >
-                  {checkingUpdate ? (
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                  ) : (
-                    <RefreshCw className="w-3 h-3" />
-                  )}
-                  <span>{checkingUpdate ? "检查中..." : "检查更新"}</span>
-                </button>
-
-                {updateInfo?.hasUpdate && (
+              <div className="mt-3">
+                <div className="flex items-center justify-between">
                   <button
-                    onClick={() =>
-                      window.electronAPI?.openExternal?.(updateInfo.releaseUrl)
-                    }
-                    className="flex items-center space-x-1.5 px-3 py-1.5 text-sm bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                    onClick={checkForUpdates}
+                    disabled={checkingUpdate}
+                    className="flex items-center space-x-2 px-3 py-1.5 text-sm text-[#0071e3] hover:bg-[#e8f4fd] dark:hover:bg-blue-900/30 rounded-lg transition-colors disabled:opacity-50"
                   >
-                    <Download className="w-3 h-3" />
-                    <span>v{updateInfo.latestVersion} 可用</span>
+                    {checkingUpdate ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-3 h-3" />
+                    )}
+                    <span>{checkingUpdate ? "检查中..." : "检查更新"}</span>
                   </button>
+
+                  {updateInfo && !updateInfo.hasUpdate && !updateInfo.error && (
+                    <span className="text-xs text-[#86868b]">已是最新版本</span>
+                  )}
+
+                  {updateInfo?.error && (
+                    <span className="text-xs text-red-500">
+                      {updateInfo.error}
+                    </span>
+                  )}
+                </div>
+
+                {updateInfo?.hasUpdate && !downloadProgress && !downloadedUpdate && (
+                  <div className="mt-2 p-2 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-medium text-green-700 dark:text-green-400">
+                        v{updateInfo.latestVersion} 可用
+                      </span>
+                      <span className="text-xs text-[#86868b]">
+                        {updateInfo.downloadSize ? `${(updateInfo.downloadSize / 1048576).toFixed(1)} MB` : ""}
+                      </span>
+                    </div>
+                    {updateInfo.releaseNotes && (
+                      <p className="text-xs text-[#1d1d1f]/60 dark:text-[#f5f5f7]/60 mb-2 line-clamp-3 whitespace-pre-line">
+                        {updateInfo.releaseNotes.replace(/## What's Changed.*$/s, "").slice(0, 300)}
+                      </p>
+                    )}
+                    <button
+                      onClick={startDownload}
+                      className="flex items-center space-x-1.5 px-3 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                    >
+                      <Download className="w-3 h-3" />
+                      <span>下载更新</span>
+                    </button>
+                  </div>
                 )}
 
-                {updateInfo && !updateInfo.hasUpdate && !updateInfo.error && (
-                  <span className="text-xs text-[#86868b]">已是最新版本</span>
+                {downloadProgress && (
+                  <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-blue-700 dark:text-blue-400">
+                        下载中... {downloadProgress.progress}%
+                      </span>
+                      <button
+                        onClick={() => window.electronAPI?.cancelUpdateDownload?.()}
+                        className="text-xs text-[#86868b] hover:text-red-500"
+                      >
+                        取消
+                      </button>
+                    </div>
+                    <div className="w-full bg-blue-200 dark:bg-blue-900 rounded-full h-1.5">
+                      <div
+                        className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
+                        style={{ width: `${downloadProgress.progress}%` }}
+                      />
+                    </div>
+                  </div>
                 )}
 
-                {updateInfo?.error && (
-                  <span className="text-xs text-red-500">
-                    {updateInfo.error}
-                  </span>
+                {downloadedUpdate && (
+                  <div className="mt-2 p-2 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                    <p className="text-xs text-green-700 dark:text-green-400 mb-2">
+                      v{downloadedUpdate.version} 下载完成 (SHA256 已验证)
+                    </p>
+                    <button
+                      onClick={() => window.electronAPI?.installUpdate?.(downloadedUpdate.filePath)}
+                      className="flex items-center space-x-1.5 px-3 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                    >
+                      <span>安装并重启</span>
+                    </button>
+                  </div>
                 )}
               </div>
             </div>

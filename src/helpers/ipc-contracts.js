@@ -98,6 +98,12 @@ module.exports = {
     INSERT: "insert-text-directly",
     MACOS_A11Y: "enable-macos-accessibility",
   },
+  UPDATE: {
+    CHECK: "check-update",
+    DOWNLOAD: "download-update",
+    CANCEL: "cancel-update-download",
+    INSTALL: "install-update",
+  },
   SYSTEM: {
     INFO: "get-system-info",
     DEBUG_INFO: "get-system-debug-info",
@@ -128,5 +134,8 @@ module.exports = {
     FILE_TRANSCRIPTION_PROGRESS: "file-transcription-progress",
     PYTHON_INSTALL_PROGRESS: "python-install-progress",
     FUNASR_INSTALL_PROGRESS: "funasr-install-progress",
+    UPDATE_DOWNLOAD_PROGRESS: "update-download-progress",
+    UPDATE_DOWNLOAD_COMPLETE: "update-download-complete",
+    UPDATE_DOWNLOAD_ERROR: "update-download-error",
   },
 };

@@ -86,7 +86,31 @@ export interface ElectronAPI {
   testAccessibilityPermission: () => Promise<unknown>;
   openSystemPermissions: () => Promise<void>;
   getAppVersion: () => Promise<string>;
-  checkForUpdates: () => Promise<unknown>;
+
+  // Update management
+  checkForUpdates: () => Promise<{
+    hasUpdate: boolean;
+    currentVersion: string;
+    latestVersion?: string;
+    releaseUrl?: string;
+    releaseNotes?: string;
+    downloadUrl?: string;
+    downloadSize?: number;
+    checksumsUrl?: string;
+    message?: string;
+    error?: string;
+  }>;
+  downloadUpdate: (updateInfo: {
+    downloadUrl: string;
+    checksumsUrl: string;
+    latestVersion: string;
+  }) => Promise<{ success: boolean; filePath?: string; hashValid?: boolean; error?: string }>;
+  cancelUpdateDownload: () => Promise<{ success: boolean; error?: string }>;
+  installUpdate: (filePath: string) => Promise<boolean>;
+  onUpdateDownloadProgress: (callback: (data: { progress: number; downloaded: number; total: number }) => void) => () => void;
+  onUpdateDownloadComplete: (callback: (data: { filePath: string; version: string; hashValid: boolean }) => void) => () => void;
+  onUpdateDownloadError: (callback: (data: { error: string }) => void) => () => void;
+
   openExternal: (url: string) => Promise<void>;
   log: (level: string, message: string) => Promise<void>;
 

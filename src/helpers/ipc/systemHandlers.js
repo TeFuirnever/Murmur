@@ -1,16 +1,6 @@
-const { app, shell, BrowserWindow, net } = require("electron");
+const { app, shell, BrowserWindow } = require("electron");
 const path = require("path");
 const C = require("../ipc-contracts");
-
-function semverGt(a, b) {
-  const pa = a.split(".").map(Number);
-  const pb = b.split(".").map(Number);
-  for (let i = 0; i < 3; i++) {
-    if ((pa[i] || 0) > (pb[i] || 0)) return true;
-    if ((pa[i] || 0) < (pb[i] || 0)) return false;
-  }
-  return false;
-}
 
 function register(ipcMain, managers) {
   const { logger, funasrManager, clipboardManager } = managers;
@@ -107,38 +97,8 @@ function register(ipcMain, managers) {
   });
 
   ipcMain.handle(C.SYSTEM.UPDATES, async () => {
-    try {
-      const currentVersion = app.getVersion();
-      const response = await net.fetch(
-        "https://api.github.com/repos/TeFuirnever/Murmur/releases/latest",
-      );
-      if (!response.ok) {
-        return { hasUpdate: false, currentVersion, error: "无法检查更新" };
-      }
-      const data = await response.json();
-      if (!data || typeof data.tag_name !== "string") {
-        return { hasUpdate: false, currentVersion, error: "更新信息格式异常" };
-      }
-      const latestVersion = data.tag_name.replace(/^v/, "");
-      const hasUpdate = semverGt(latestVersion, currentVersion);
-      return {
-        hasUpdate,
-        currentVersion,
-        latestVersion,
-        releaseUrl: data.html_url,
-        releaseNotes: data.body || "",
-        message: hasUpdate
-          ? `发现新版本 v${latestVersion}`
-          : "当前已是最新版本",
-      };
-    } catch (error) {
-      logger?.warn?.("检查更新失败", error);
-      return {
-        hasUpdate: false,
-        currentVersion: app.getVersion(),
-        error: "检查更新失败",
-      };
-    }
+    // Update checking moved to updateManager.js
+    return { hasUpdate: false, error: "请使用新的更新检查接口" };
   });
 
   ipcMain.handle(C.SYSTEM.LOG, (event, level, message, data) => {

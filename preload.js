@@ -117,7 +117,29 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // 应用信息
   getAppVersion: () => ipcRenderer.invoke(C.SYSTEM.VERSION),
-  checkForUpdates: () => ipcRenderer.invoke(C.SYSTEM.UPDATES),
+  checkForUpdates: () => ipcRenderer.invoke(C.UPDATE.CHECK),
+  downloadUpdate: (updateInfo) =>
+    ipcRenderer.invoke(C.UPDATE.DOWNLOAD, updateInfo),
+  cancelUpdateDownload: () => ipcRenderer.invoke(C.UPDATE.CANCEL),
+  installUpdate: (filePath) => ipcRenderer.invoke(C.UPDATE.INSTALL, filePath),
+  onUpdateDownloadProgress: (callback) => {
+    const handler = (event, data) => callback(data);
+    ipcRenderer.on(C.EVENTS.UPDATE_DOWNLOAD_PROGRESS, handler);
+    return () =>
+      ipcRenderer.removeListener(C.EVENTS.UPDATE_DOWNLOAD_PROGRESS, handler);
+  },
+  onUpdateDownloadComplete: (callback) => {
+    const handler = (event, data) => callback(data);
+    ipcRenderer.on(C.EVENTS.UPDATE_DOWNLOAD_COMPLETE, handler);
+    return () =>
+      ipcRenderer.removeListener(C.EVENTS.UPDATE_DOWNLOAD_COMPLETE, handler);
+  },
+  onUpdateDownloadError: (callback) => {
+    const handler = (event, data) => callback(data);
+    ipcRenderer.on(C.EVENTS.UPDATE_DOWNLOAD_ERROR, handler);
+    return () =>
+      ipcRenderer.removeListener(C.EVENTS.UPDATE_DOWNLOAD_ERROR, handler);
+  },
   openExternal: (url) => ipcRenderer.invoke(C.SYSTEM.OPEN_EXTERNAL, url),
 
   // 调试和日志

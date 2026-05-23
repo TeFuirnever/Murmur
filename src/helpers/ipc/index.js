@@ -7,6 +7,7 @@ const windowHandlers = require("./windowHandlers");
 const hotkeyHandlers = require("./hotkeyHandlers");
 const clipboardHandlers = require("./clipboardHandlers");
 const systemHandlers = require("./systemHandlers");
+const updateHandlers = require("../updateManager");
 
 function registerAll(ipcMain, managers) {
   environmentHandlers.register(ipcMain, managers);
@@ -18,6 +19,7 @@ function registerAll(ipcMain, managers) {
   hotkeyHandlers.register(ipcMain, managers);
   clipboardHandlers.register(ipcMain, managers);
   systemHandlers.register(ipcMain, managers);
+  updateHandlers.register(ipcMain, managers);
 }
 
 module.exports = { registerAll };
