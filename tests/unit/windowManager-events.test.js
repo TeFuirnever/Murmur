@@ -88,4 +88,27 @@ describe("windowManager — real module execution with mocked electron", () => {
       false,
     );
   });
+
+  it("respects setDefaultAlwaysOnTop(false) in BrowserWindow options", async () => {
+    const WindowManager = requireCJS("../../src/helpers/windowManager.js");
+    const wm = new WindowManager();
+    wm.setDefaultAlwaysOnTop(false);
+    process.env.NODE_ENV = "development";
+    await wm.createMainWindow();
+
+    expect(MockBrowserWindow).toHaveBeenCalledWith(
+      expect.objectContaining({ alwaysOnTop: false }),
+    );
+  });
+
+  it("defaults to alwaysOnTop: true when setDefaultAlwaysOnTop not called", async () => {
+    const WindowManager = requireCJS("../../src/helpers/windowManager.js");
+    const wm = new WindowManager();
+    process.env.NODE_ENV = "development";
+    await wm.createMainWindow();
+
+    expect(MockBrowserWindow).toHaveBeenCalledWith(
+      expect.objectContaining({ alwaysOnTop: true }),
+    );
+  });
 });

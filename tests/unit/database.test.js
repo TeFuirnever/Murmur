@@ -103,4 +103,15 @@ describe("DatabaseManager", () => {
       expect(db.getSetting("key")).toBeNull();
     });
   });
+
+  describe("SQLite pragmas", () => {
+    it("sets journal_mode to WAL and busy_timeout", () => {
+      // File-based temp DB (not :memory:), so WAL pragma takes effect
+      const mode = db.db.pragma("journal_mode", { simple: true });
+      expect(mode).toBe("wal");
+
+      const timeout = db.db.pragma("busy_timeout", { simple: true });
+      expect(timeout).toBe(5000);
+    });
+  });
 });
