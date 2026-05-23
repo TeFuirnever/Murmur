@@ -1,5 +1,25 @@
+const path = require("path");
 const C = require("../ipc-contracts");
-const { buildPrompt } = require("../aiPrompts");
+const { buildPrompt, loadCustomTemplates } = require("../aiPrompts");
+
+const BUILT_IN_MODES = [
+  { name: "optimize", label: "智能润色" },
+  { name: "optimize_long", label: "长文本整理" },
+  { name: "format", label: "格式化" },
+  { name: "correct", label: "校对纠错" },
+  { name: "summarize", label: "摘要总结" },
+  { name: "enhance", label: "内容优化" },
+];
+
+function getAIModes(templatesDir) {
+  const custom = loadCustomTemplates(templatesDir);
+  const customNames = new Set(custom.map((t) => t.name));
+  const builtIn = BUILT_IN_MODES.filter((m) => !customNames.has(m.name));
+  return [
+    ...builtIn,
+    ...custom.map((t) => ({ name: t.name, label: t.label })),
+  ];
+}
 
 function isLocalhost(host) {
   if (!host) return false;
@@ -41,7 +61,7 @@ function validateAIBaseUrl(baseUrl, { allowLocalhost = false } = {}) {
   }
 }
 
-async function processTextWithAI(text, mode, databaseManager, logger) {
+async function processTextWithAI(text, mode, databaseManager, logger, options = {}) {
   try {
     const apiKey = await databaseManager.getSetting("ai_api_key");
     const baseUrl =
@@ -71,7 +91,10 @@ async function processTextWithAI(text, mode, databaseManager, logger) {
       };
     }
 
-    const { system, user } = buildPrompt(mode, text);
+    const customTemplates = options.templatesDir
+      ? loadCustomTemplates(options.templatesDir)
+      : [];
+    const { system, user } = buildPrompt(mode, text, { customTemplates });
 
     const requestData = {
       model: model,
@@ -303,14 +326,22 @@ async function checkAIStatus(testConfig, databaseManager, logger) {
 
 function register(ipcMain, managers) {
   const { databaseManager, logger } = managers;
+  const templatesDir = managers.templatesDir || (() => {
+    const { app } = require("electron");
+    return path.join(app.getPath("userData"), "templates");
+  })();
 
   ipcMain.handle(C.AI.PROCESS, async (event, text, mode = "optimize") => {
-    return await processTextWithAI(text, mode, databaseManager, logger);
+    return await processTextWithAI(text, mode, databaseManager, logger, { templatesDir });
   });
 
   ipcMain.handle(C.AI.CHECK_STATUS, async (event, testConfig = null) => {
     return await checkAIStatus(testConfig, databaseManager, logger);
   });
+
+  ipcMain.handle(C.AI.GET_MODES, async () => {
+    return getAIModes(templatesDir);
+  });
 }
 
-module.exports = { register, processTextWithAI, checkAIStatus, validateAIBaseUrl };
+module.exports = { register, processTextWithAI, checkAIStatus, validateAIBaseUrl, getAIModes };

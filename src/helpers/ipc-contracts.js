@@ -52,6 +52,7 @@ module.exports = {
   AI: {
     PROCESS: "process-text",
     CHECK_STATUS: "check-ai-status",
+    GET_MODES: "get-ai-modes",
   },
   SETTINGS: {
     GET: "get-setting",
