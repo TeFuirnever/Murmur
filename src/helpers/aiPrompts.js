@@ -1,4 +1,64 @@
-function buildPrompt(mode, text) {
+function parseTemplateFile(content, fileName) {
+  const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)/);
+  if (!match) return null;
+
+  let meta = {};
+  try {
+    const yaml = match[1];
+    for (const line of yaml.split("\n")) {
+      const idx = line.indexOf(":");
+      if (idx > 0) {
+        const key = line.slice(0, idx).trim();
+        const val = line
+          .slice(idx + 1)
+          .trim()
+          .replace(/^["']|["']$/g, "");
+        meta[key] = val;
+      }
+    }
+  } catch {
+    return null;
+  }
+
+  const name = meta.name || fileName.replace(/\.md$/i, "");
+  const system = match[2].trim();
+  if (!system) return null;
+
+  return {
+    name,
+    label: meta.label || name,
+    system,
+    user: meta.user_template || "<transcript>\n{text}\n</transcript>",
+  };
+}
+
+function loadCustomTemplates(templatesDir) {
+  const fs = require("fs");
+  const path = require("path");
+
+  if (!fs.existsSync(templatesDir)) return [];
+  const files = fs.readdirSync(templatesDir).filter((f) => f.endsWith(".md"));
+
+  const templates = [];
+  for (const file of files) {
+    try {
+      const content = fs.readFileSync(path.join(templatesDir, file), "utf-8");
+      const parsed = parseTemplateFile(content, file);
+      if (parsed) templates.push(parsed);
+    } catch {}
+  }
+  return templates;
+}
+
+function buildPrompt(mode, text, { customTemplates = [] } = {}) {
+  const custom = customTemplates.find((t) => t.name === mode);
+  if (custom) {
+    return {
+      system: custom.system,
+      user: custom.user.replace(/\{text\}/g, text),
+    };
+  }
+
   const modes = {
     optimize: {
       system: `你是一位专业的语音转录文本润色助手。
@@ -110,4 +170,4 @@ function buildPrompt(mode, text) {
   return modes[mode] || modes.optimize;
 }
 
-module.exports = { buildPrompt };
+module.exports = { buildPrompt, parseTemplateFile, loadCustomTemplates };
