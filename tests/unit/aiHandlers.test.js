@@ -50,6 +50,10 @@ describe("aiHandlers", () => {
         "get-ai-modes",
         expect.any(Function),
       );
+      expect(ipcMain.handle).toHaveBeenCalledWith(
+        "get-ai-provider-presets",
+        expect.any(Function),
+      );
     });
   });
 
