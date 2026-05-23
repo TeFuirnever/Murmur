@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 
+/** @type {string[]} */
 const FILE_CONFIGURABLE_KEYS = [
   "ai_base_url",
   "ai_model",
@@ -13,6 +14,10 @@ const FILE_CONFIGURABLE_KEYS = [
   "show_notifications",
 ];
 
+/**
+ * @param {string} configPath
+ * @returns {Record<string, unknown>}
+ */
 function loadFileConfig(configPath) {
   try {
     if (!fs.existsSync(configPath)) return {};
@@ -32,6 +37,10 @@ function loadFileConfig(configPath) {
   }
 }
 
+/**
+ * @param {string} configPath
+ * @param {Record<string, unknown>} settings
+ */
 function saveFileConfig(configPath, settings) {
   const allowed = new Set(FILE_CONFIGURABLE_KEYS);
   const filtered = {};

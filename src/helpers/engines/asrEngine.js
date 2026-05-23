@@ -1,3 +1,24 @@
+/**
+ * @typedef {Object} ASREngine
+ * @property {(audioData: ArrayBuffer|Blob, options?: Record<string, unknown>) => Promise<import("../../types/ipc").FileTranscriptionResult>} transcribeAudio
+ * @property {(audioPath: string, options?: Record<string, unknown>) => Promise<import("../../types/ipc").FileTranscriptionResult>} transcribeFile
+ * @property {() => Promise<{success: boolean}>} cancelTranscription
+ * @property {() => Promise<import("../../types/ipc").FunASRStatusResult>} checkStatus
+ * @property {() => Promise<void>} shutdown
+ */
+
+/**
+ * @typedef {Object} ASREngineRegistry
+ * @property {(name: string, engine: ASREngine) => boolean} register
+ * @property {(name: string) => ASREngine | undefined} get
+ * @property {() => string[]} list
+ * @property {(name: string) => boolean} setDefault
+ * @property {() => string | undefined} getDefault
+ * @property {(name: string) => boolean} setActive
+ * @property {() => ASREngine | undefined} getActive
+ */
+
+/** @type {string[]} */
 const REQUIRED_METHODS = [
   "transcribeAudio",
   "transcribeFile",
@@ -6,6 +27,10 @@ const REQUIRED_METHODS = [
   "shutdown",
 ];
 
+/**
+ * @param {unknown} engine
+ * @returns {engine is ASREngine}
+ */
 function validateASREngine(engine) {
   if (!engine || typeof engine !== "object") return false;
   return REQUIRED_METHODS.every(
@@ -13,6 +38,9 @@ function validateASREngine(engine) {
   );
 }
 
+/**
+ * @returns {ASREngineRegistry}
+ */
 function createASREngineRegistry() {
   const engines = new Map();
   let defaultName;

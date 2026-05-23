@@ -1,3 +1,22 @@
+/**
+ * @typedef {Object} PromptTemplate
+ * @property {string} name
+ * @property {string} label
+ * @property {string} system
+ * @property {string} user
+ */
+
+/**
+ * @typedef {Object} PromptResult
+ * @property {string} system
+ * @property {string} user
+ */
+
+/**
+ * @param {string} content
+ * @param {string} fileName
+ * @returns {PromptTemplate | null}
+ */
 function parseTemplateFile(content, fileName) {
   const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)/);
   if (!match) return null;
@@ -32,6 +51,10 @@ function parseTemplateFile(content, fileName) {
   };
 }
 
+/**
+ * @param {string} templatesDir
+ * @returns {PromptTemplate[]}
+ */
 function loadCustomTemplates(templatesDir) {
   const fs = require("fs");
   const path = require("path");
@@ -50,6 +73,12 @@ function loadCustomTemplates(templatesDir) {
   return templates;
 }
 
+/**
+ * @param {string} mode
+ * @param {string} text
+ * @param {{ customTemplates?: PromptTemplate[] }} [options]
+ * @returns {PromptResult}
+ */
 function buildPrompt(mode, text, { customTemplates = [] } = {}) {
   const custom = customTemplates.find((t) => t.name === mode);
   if (custom) {
