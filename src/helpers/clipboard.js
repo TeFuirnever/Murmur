@@ -84,7 +84,7 @@ class ClipboardManager {
   async pasteText(text) {
     try {
       // 首先保存原始剪贴板内容
-      const originalClipboard = clipboard.readText();
+      const originalClipboard = clipboard.readText() || "";
       this.safeLog(
         "💾 已保存原始剪贴板内容",
         originalClipboard.substring(0, 50) + "...",
@@ -389,7 +389,7 @@ class ClipboardManager {
   async readClipboard() {
     try {
       const text = clipboard.readText();
-      return text;
+      return text || "";
     } catch (error) {
       throw error;
     }
