@@ -1,10 +1,11 @@
 {
   "compilerOptions": {
     "baseUrl": ".",
+    "checkJs": true,
     "paths": {
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "main.js", "preload.js"],
   "exclude": ["node_modules"]
 }

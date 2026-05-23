@@ -1,3 +1,11 @@
+/**
+ * @typedef {Object} IpcContracts
+ * Central registry of all IPC channel names used between main and renderer processes.
+ */
+
+/**
+ * @type {IpcContracts}
+ */
 module.exports = {
   ENVIRONMENT: {
     GET_CONFIG: "get-config",
