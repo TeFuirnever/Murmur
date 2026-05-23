@@ -24,6 +24,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Build preload bundle
+        run: pnpm run build:preload
+
       - name: Lint
         run: pnpm lint
 
