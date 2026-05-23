@@ -4,10 +4,9 @@ const fs = require("fs");
 const { dialog } = require("electron");
 const C = require("../ipc-contracts");
 const exportFormatters = require("../exportFormatters");
-const { processTextWithAI } = require("./aiHandlers");
 
 function register(ipcMain, managers) {
-  const { funasrManager, databaseManager, logger } = managers;
+  const { funasrManager, databaseManager, logger, processTextWithAI } = managers;
 
   ipcMain.handle(C.TRANSCRIPTION.AUDIO, async (event, audioData, options) => {
     return await funasrManager.transcribeAudio(audioData, options);

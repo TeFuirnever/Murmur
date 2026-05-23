@@ -139,6 +139,7 @@ describe("TRANSCRIPTION.SAVE return shape regression", () => {
         saveTranscription: vi.fn(() => ({ lastInsertRowid: 42, changes: 1 })),
       },
       logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
+      processTextWithAI: vi.fn(),
     };
 
     register(ipcMain, managers);
@@ -162,6 +163,7 @@ describe("TRANSCRIPTION.SAVE return shape regression", () => {
         }),
       },
       logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
+      processTextWithAI: vi.fn(),
     };
 
     register(ipcMain, managers);

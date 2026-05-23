@@ -1,7 +1,7 @@
 const environmentHandlers = require("./environmentHandlers");
 const modelHandlers = require("./modelHandlers");
-const transcriptionHandlers = require("./transcriptionHandlers");
 const aiHandlers = require("./aiHandlers");
+const transcriptionHandlers = require("./transcriptionHandlers");
 const settingsHandlers = require("./settingsHandlers");
 const windowHandlers = require("./windowHandlers");
 const hotkeyHandlers = require("./hotkeyHandlers");
@@ -38,8 +38,11 @@ function registerAll(ipcMain, managers) {
   const wrappedIpc = wrapWithRateLimits(ipcMain);
   environmentHandlers.register(wrappedIpc, managers);
   modelHandlers.register(wrappedIpc, managers);
-  transcriptionHandlers.register(wrappedIpc, managers);
   aiHandlers.register(wrappedIpc, managers);
+  transcriptionHandlers.register(wrappedIpc, {
+    ...managers,
+    processTextWithAI: aiHandlers.processTextWithAI,
+  });
   settingsHandlers.register(wrappedIpc, managers);
   windowHandlers.register(wrappedIpc, managers);
   hotkeyHandlers.register(wrappedIpc, managers);
