@@ -47,7 +47,9 @@ describe("Phase 1: CI/CD configuration", () => {
     });
 
     it("should have .nvmrc pinning Node 22", () => {
-      const nvmrc = fs.readFileSync(path.join(rootDir, ".nvmrc"), "utf8").trim();
+      const nvmrc = fs
+        .readFileSync(path.join(rootDir, ".nvmrc"), "utf8")
+        .trim();
       expect(nvmrc).toBe("22");
     });
 

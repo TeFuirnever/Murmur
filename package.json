@@ -37,6 +37,8 @@
     "format": "prettier --write \"*.{js,json,md,yml}\" \"src/**/*.{js,jsx,css}\" \"tests/**/*.js\" \"scripts/**/*.js\"",
     "format:check": "prettier --check \"*.{js,json,md,yml}\" \"src/**/*.{js,jsx,css}\" \"tests/**/*.js\" \"scripts/**/*.js\"",
     "license:check": "license-checker --failOn \"GPL-*;AGPL-*\" --excludePrivatePackages",
+    "ci:check": "node scripts/ci-check.js",
+    "ci:fix": "node scripts/ci-check.js --fix",
     "preview": "cd src && vite preview",
     "clean": "node cleanup.js && rm -rf python"
   },
