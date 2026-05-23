@@ -41,7 +41,7 @@ export default function ExportPanel({ transcriptionId }: ExportPanelProps) {
         toast.error(response?.error || "导出失败");
       }
     } catch (err) {
-      toast.error("导出失败: " + (err.message || "未知错误"));
+      toast.error("导出失败: " + ((err as Error).message || "未知错误"));
     } finally {
       setExportingFormat(null);
     }

@@ -125,7 +125,7 @@ export const useRecording = ({
           // 处理音频
           await processAudio(audioBlob);
         } catch (err) {
-          setError(`音频处理失败: ${err.message}`);
+          setError(`音频处理失败: ${(err as Error).message}`);
         } finally {
           setIsProcessing(false);
         }
@@ -145,7 +145,7 @@ export const useRecording = ({
       mediaRecorder.start(1000); // 每秒收集一次数据
       setIsRecording(true);
     } catch (err) {
-      setError(`无法开始录音: ${err.message}`);
+      setError(`无法开始录音: ${(err as Error).message}`);
       setIsRecording(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -325,7 +325,7 @@ export const useRecording = ({
               if (window.electronAPI && window.electronAPI.log) {
                 window.electronAPI.log("error", "处理和保存转录时出错:", err);
               }
-              setError("转录处理失败: " + (err.message || "未知错误"));
+              setError("转录处理失败: " + ((err as Error).message || "未知错误"));
             } finally {
               setIsOptimizing(false);
             }
@@ -348,7 +348,7 @@ export const useRecording = ({
         return mockResult;
       }
     } catch (err) {
-      throw new Error(`音频处理失败: ${err.message}`);
+      throw new Error(`音频处理失败: ${(err as Error).message}`);
     } finally {
       processingRef.current.isProcessingAudio = false;
     }
@@ -378,7 +378,7 @@ export const useRecording = ({
 
             resolve(wavBlob);
           } catch (err) {
-            reject(new Error(`音频格式转换失败: ${err.message}`));
+            reject(new Error(`音频格式转换失败: ${(err as Error).message}`));
           } finally {
             if (audioContext) audioContext.close();
           }

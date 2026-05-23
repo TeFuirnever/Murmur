@@ -28,8 +28,8 @@ describe("Phase 2: Type safety gradual enhancement", () => {
       expect(tsconfig.compilerOptions.checkJs).toBeFalsy();
     });
 
-    it("should not be strict initially", () => {
-      expect(tsconfig.compilerOptions.strict).toBeFalsy();
+    it("should have strict mode enabled for full type safety", () => {
+      expect(tsconfig.compilerOptions.strict).toBe(true);
     });
 
     it("should target ESNext modules for Vite compatibility", () => {

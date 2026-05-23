@@ -168,7 +168,7 @@ export function ModelStatusProvider({
         ...prev,
         isLoading: false,
         isReady: false,
-        error: error.message || "模型状态检查失败",
+        error: (error as Error).message || "模型状态检查失败",
         progress: 0,
         stage: "error",
       }));
@@ -215,7 +215,7 @@ export function ModelStatusProvider({
           setModelStatus((prev) => ({
             ...prev,
             isLoading: false,
-            error: "重启服务器失败: " + restartError.message,
+            error: "重启服务器失败: " + (restartError as Error).message,
             stage: "error",
           }));
         }
@@ -230,10 +230,10 @@ export function ModelStatusProvider({
         ...prev,
         isDownloading: false,
         isLoading: false,
-        error: error.message || "下载模型失败",
+        error: (error as Error).message || "下载模型失败",
         stage: "error",
       }));
-      return { success: false, error: error.message };
+      return { success: false, error: (error as Error).message };
     }
   }, [checkModelStatus]);
 

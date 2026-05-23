@@ -46,10 +46,10 @@ export default function App() {
   const modelStatus = useModelStatus();
 
   const handleRecordingCompleteRef = useRef<
-    ((...args: unknown[]) => void) | null
+    ((result: string | Record<string, unknown>) => void) | null
   >(null);
   const handleAIOptimizationCompleteRef = useRef<
-    ((...args: unknown[]) => void) | null
+    ((result: string | Record<string, unknown>) => void) | null
   >(null);
 
   const {
@@ -60,11 +60,11 @@ export default function App() {
     stopRecording,
     error: recordingError,
   } = useRecording({
-    onTranscriptionComplete: (...args) => {
-      handleRecordingCompleteRef.current?.(...args);
+    onTranscriptionComplete: (result: string | Record<string, unknown>) => {
+      handleRecordingCompleteRef.current?.(result);
     },
-    onAIOptimizationComplete: (...args) => {
-      handleAIOptimizationCompleteRef.current?.(...args);
+    onAIOptimizationComplete: (result: string | Record<string, unknown>) => {
+      handleAIOptimizationCompleteRef.current?.(result);
     },
   });
 
@@ -115,8 +115,8 @@ export default function App() {
 
   // 处理录音完成（FunASR识别完成）
   const handleRecordingComplete = useCallback(
-    async (transcriptionResult: Record<string, unknown>) => {
-      if (transcriptionResult.success && transcriptionResult.text) {
+    async (transcriptionResult: string | Record<string, unknown>) => {
+      if (typeof transcriptionResult !== "string" && transcriptionResult.success && transcriptionResult.text) {
         // 立即显示FunASR识别的原始文本
         setOriginalText(transcriptionResult.text as string);
         setShowTextArea(true);
@@ -134,8 +134,9 @@ export default function App() {
 
   // 处理AI优化完成
   const handleAIOptimizationComplete = useCallback(
-    async (optimizedResult: Record<string, unknown>) => {
+    async (optimizedResult: string | Record<string, unknown>) => {
       if (
+        typeof optimizedResult !== "string" &&
         optimizedResult.success &&
         optimizedResult.enhanced_by_ai &&
         optimizedResult.text
@@ -172,7 +173,7 @@ export default function App() {
         toast.success("文本已复制到剪贴板");
       }
     } catch (error) {
-      toast.error(`无法复制文本到剪贴板: ${error.message}`);
+      toast.error(`无法复制文本到剪贴板: ${(error as Error).message}`);
     }
   };
 
@@ -209,7 +210,7 @@ export default function App() {
         toast.error(`❌ 模型下载失败: ${result.error}`);
       }
     } catch (error) {
-      toast.error(`❌ 模型下载失败: ${error.message}`);
+      toast.error(`❌ 模型下载失败: ${(error as Error).message}`);
     }
   }, [modelStatus]);
 

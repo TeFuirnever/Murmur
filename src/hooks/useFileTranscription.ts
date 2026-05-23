@@ -84,7 +84,7 @@ export function useFileTranscription() {
       setResult(null);
       setProgress(null);
     } catch (err) {
-      setError(err.message || "选择文件时出错");
+      setError((err as Error).message || "选择文件时出错");
       setState("error");
     }
   }, []);
@@ -135,7 +135,7 @@ export function useFileTranscription() {
       }
     } catch (err) {
       cleanupProgress();
-      setError(err.message || "转录过程中出错");
+      setError((err as Error).message || "转录过程中出错");
       setState("error");
     }
   }, [fileInfo]);

@@ -286,10 +286,10 @@ const SettingsPage = () => {
       console.error("测试AI配置失败:", error);
       setTestResult({
         available: false,
-        error: error.message || "测试失败",
+        error: (error as Error).message || "测试失败",
       });
       toast.error("测试失败", {
-        description: error.message || "未知错误",
+        description: (error as Error).message || "未知错误",
       });
     } finally {
       setTesting(false);
