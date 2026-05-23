@@ -19,12 +19,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: pnpm
 
       - name: Install dependencies
         run: pnpm install
 
       - name: Lint
         run: pnpm lint
+
+      - name: Security audit
+        run: pnpm audit --audit-level moderate
+        continue-on-error: true
 
       - name: Test
         run: pnpm test

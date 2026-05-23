@@ -18,7 +18,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 22
+          cache: pnpm
 
       - name: Install dependencies
         run: pnpm install
@@ -28,6 +29,10 @@ jobs:
 
       - name: Lint
         run: pnpm lint
+
+      - name: Security audit
+        run: pnpm audit --audit-level moderate
+        continue-on-error: true
 
       - name: Test with coverage
         run: pnpm test -- --coverage
@@ -45,6 +50,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: pnpm
 
       - uses: actions/setup-python@v5
         with:
@@ -64,6 +70,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Generate SHA256 checksums
+        run: |
+          cd dist
+          shasum -a 256 *.dmg *.zip 2>/dev/null > checksums-sha256.txt || true
+          cat checksums-sha256.txt
+
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -71,6 +83,7 @@ jobs:
           path: |
             dist/*.dmg
             dist/*.zip
+            dist/checksums-sha256.txt
 
   build-win:
     needs: test
@@ -85,6 +98,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: pnpm
 
       - uses: actions/setup-python@v5
         with:
@@ -107,6 +121,18 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Generate SHA256 checksums
+        shell: pwsh
+        run: |
+          Set-Location dist
+          $files = Get-ChildItem -Filter "*.exe" ; Get-ChildItem -Filter "*.zip"
+          $hashes = foreach ($f in (Get-ChildItem -Include "*.exe","*.zip" -File)) {
+            $hash = (Get-FileHash -Path $f.FullName -Algorithm SHA256).Hash.ToLower()
+            "$hash  $($f.Name)"
+          }
+          $hashes | Out-File -Encoding utf8 checksums-sha256.txt
+          Get-Content checksums-sha256.txt
+
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -114,6 +140,7 @@ jobs:
           path: |
             dist/*.exe
             dist/*.zip
+            dist/checksums-sha256.txt
 
   release:
     needs: [build-mac, build-win]
@@ -125,12 +152,18 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
 
+      - name: Merge SHA256 checksums
+        run: |
+          cat Murmur-macOS/checksums-sha256.txt Murmur-Windows/checksums-sha256.txt > checksums-sha256.txt
+          cat checksums-sha256.txt
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             Murmur-macOS/*
             Murmur-Windows/*
+            checksums-sha256.txt
           generate_release_notes: false
           body: |
             ## What's Changed
@@ -143,6 +176,8 @@ jobs:
             |----------|------|
             | macOS (Apple Silicon) | `Murmur-*.dmg` |
             | Windows | `Murmur-Setup-*.exe` |
+
+            **Verify download integrity**: compare your file's SHA256 with `checksums-sha256.txt`.
 
             **Prerequisites**: Install [ffmpeg](https://ffmpeg.org) for audio format conversion (mp3/m4a support).
             - macOS: `brew install ffmpeg`
