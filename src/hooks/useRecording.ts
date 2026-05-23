@@ -435,7 +435,7 @@ export const useRecording = ({
       for (let channel = 0; channel < numberOfChannels; channel++) {
         const sample = Math.max(
           -1,
-          Math.min(1, audioBuffer.getChannelData(channel)[i]),
+          Math.min(1, audioBuffer.getChannelData(channel)[i] ?? 0),
         );
         view.setInt16(offset, sample * 0x7fff, true);
         offset += 2;
