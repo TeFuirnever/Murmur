@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+vi.mock("electron", () => ({
+  app: { getPath: vi.fn(() => "/tmp/test-user-data") },
+}));
+
 // ---------------------------------------------------------------------------
 // Regression tests for fixes from the 2026-05-22/23 session.
 // Each test guards against a specific bug that was fixed.
@@ -322,5 +326,42 @@ describe("processTextWithAI SSRF regression", () => {
 
     const result = await processTextWithAI("test", "optimize", db, logger);
     expect(result.success).toBe(false);
+  });
+});
+
+// 6. downloadModels must call findPythonExecutable — not use stale pythonCmd
+describe("downloadModels python path regression", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  function createManager() {
+    const FunASRManager = require("../../src/helpers/funasrManager");
+    const mgr = new FunASRManager();
+    // Override internal methods to avoid real filesystem/electron calls
+    mgr.pythonEnv.findPythonExecutable = vi.fn(async () => "/resolved/python3");
+    mgr.modelManager.downloadModels = vi.fn(async () => ({ success: true }));
+    return mgr;
+  }
+
+  it("calls findPythonExecutable before passing path to modelManager", async () => {
+    const mgr = createManager();
+    await mgr.downloadModels();
+
+    expect(mgr.pythonEnv.findPythonExecutable).toHaveBeenCalled();
+    expect(mgr.modelManager.downloadModels).toHaveBeenCalledWith(
+      undefined,
+      "/resolved/python3",
+    );
+  });
+
+  it("does not fall back to hardcoded python3 when pythonCmd is null", async () => {
+    const mgr = createManager();
+    mgr.pythonEnv.pythonCmd = null;
+    await mgr.downloadModels();
+
+    const passedCmd = mgr.modelManager.downloadModels.mock.calls[0][1];
+    expect(passedCmd).not.toBe("python3");
+    expect(passedCmd).toBe("/resolved/python3");
   });
 });

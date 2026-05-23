@@ -74,11 +74,9 @@ class FunASRManager {
   getDownloadProgress() {
     return this.modelManager.getDownloadProgress();
   }
-  downloadModels(cb) {
-    return this.modelManager.downloadModels(
-      cb,
-      this.pythonEnv.pythonCmd || "python3",
-    );
+  async downloadModels(cb) {
+    const pythonCmd = await this.pythonEnv.findPythonExecutable();
+    return this.modelManager.downloadModels(cb, pythonCmd);
   }
 
   // Transcription delegation
