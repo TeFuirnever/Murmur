@@ -124,6 +124,69 @@ describe("FUNASR.STATUS spread order regression", () => {
   });
 });
 
+// 7. FUNASR.STATUS includes user-friendly status_message
+describe("FUNASR.STATUS status_message", () => {
+  function createEnvManagers(overrides = {}) {
+    return {
+      environmentManager: { exportConfig: vi.fn(), validateEnvironment: vi.fn() },
+      funasrManager: {
+        checkPythonInstallation: vi.fn(),
+        installPython: vi.fn(),
+        checkFunASRInstallation: vi.fn(),
+        checkStatus: vi.fn(async () => ({ server_running: true })),
+        modelsInitialized: false,
+        serverReady: false,
+        initializationPromise: null,
+        installFunASR: vi.fn(),
+        restartServer: vi.fn(),
+        findPythonExecutable: vi.fn(),
+        ...overrides,
+      },
+      logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
+    };
+  }
+
+  it("includes status_message when server is ready", async () => {
+    const envHandlers = require("../../src/helpers/ipc/environmentHandlers");
+    const ipcMain = createIpcMain();
+    const managers = createEnvManagers({
+      modelsInitialized: true,
+      serverReady: true,
+    });
+
+    envHandlers.register(ipcMain, managers);
+    const result = await ipcMain._handlers[C.FUNASR.STATUS]();
+
+    expect(result.status_message).toBeDefined();
+    expect(typeof result.status_message).toBe("string");
+  });
+
+  it("includes status_message when initializing", async () => {
+    const envHandlers = require("../../src/helpers/ipc/environmentHandlers");
+    const ipcMain = createIpcMain();
+    const managers = createEnvManagers({
+      initializationPromise: Promise.resolve(),
+    });
+
+    envHandlers.register(ipcMain, managers);
+    const result = await ipcMain._handlers[C.FUNASR.STATUS]();
+
+    expect(result.status_message).toBeDefined();
+    expect(result.is_initializing).toBe(true);
+  });
+
+  it("includes status_message when not ready", async () => {
+    const envHandlers = require("../../src/helpers/ipc/environmentHandlers");
+    const ipcMain = createIpcMain();
+    const managers = createEnvManagers();
+
+    envHandlers.register(ipcMain, managers);
+    const result = await ipcMain._handlers[C.FUNASR.STATUS]();
+
+    expect(result.status_message).toBeDefined();
+  });
+});
+
 // 2. TRANSCRIPTION.SAVE canonical return shape
 describe("TRANSCRIPTION.SAVE return shape regression", () => {
   beforeEach(() => {

@@ -125,7 +125,13 @@
   "recording": {
     "recording": "Recording",
     "paused": "Paused",
-    "ready": "Ready"
+    "ready": "Ready",
+    "statusReady": "Speech recognition service is ready",
+    "statusInitializing": "Speech recognition service is initializing...",
+    "statusModelsNeeded": "Speech recognition models not downloaded yet",
+    "statusPythonNeeded": "Python environment is not installed",
+    "statusFunasrNeeded": "FunASR is not installed",
+    "statusNotReady": "Speech recognition service is not ready"
   },
   "common": {
     "confirm": "Confirm",

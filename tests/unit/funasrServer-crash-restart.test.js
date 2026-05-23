@@ -1,6 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { EventEmitter } from "events";
-import { PassThrough } from "stream";
 
 vi.mock("electron", () => ({
   app: { getPath: vi.fn(() => "/tmp/test-user-data") },

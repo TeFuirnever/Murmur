@@ -27,12 +27,32 @@ function register(ipcMain, managers) {
 
   ipcMain.handle(C.FUNASR.STATUS, async () => {
     const status = await funasrManager.checkStatus();
+    const modelsInitialized = funasrManager.modelsInitialized;
+    const serverReady = funasrManager.serverReady;
+    const isInitializing = funasrManager.initializationPromise !== null;
+
+    let status_message;
+    if (serverReady && modelsInitialized) {
+      status_message = "ready";
+    } else if (isInitializing) {
+      status_message = "initializing";
+    } else if (status?.models_downloaded === false) {
+      status_message = "models_not_downloaded";
+    } else if (!status?.python_installed) {
+      status_message = "python_not_installed";
+    } else if (!status?.funasr_installed) {
+      status_message = "funasr_not_installed";
+    } else {
+      status_message = "not_ready";
+    }
+
     return {
       ...status,
       success: status?.success !== false,
-      models_initialized: funasrManager.modelsInitialized,
-      server_ready: funasrManager.serverReady,
-      is_initializing: funasrManager.initializationPromise !== null,
+      models_initialized: modelsInitialized,
+      server_ready: serverReady,
+      is_initializing: isInitializing,
+      status_message,
     };
   });
 

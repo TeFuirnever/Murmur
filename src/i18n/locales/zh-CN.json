@@ -125,7 +125,13 @@
   "recording": {
     "recording": "录音中",
     "paused": "已暂停",
-    "ready": "准备就绪"
+    "ready": "准备就绪",
+    "statusReady": "语音识别服务已就绪",
+    "statusInitializing": "语音识别服务正在初始化...",
+    "statusModelsNeeded": "语音识别模型尚未下载，请先下载模型",
+    "statusPythonNeeded": "Python 环境尚未安装",
+    "statusFunasrNeeded": "FunASR 尚未安装",
+    "statusNotReady": "语音识别服务未就绪"
   },
   "common": {
     "confirm": "确认",
