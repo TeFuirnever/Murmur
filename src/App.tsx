@@ -9,8 +9,6 @@ import { useModelStatus } from "./hooks/useModelStatus";
 import {
   Settings,
   History,
-  Copy,
-  Download,
   Minus,
   Square,
   X,
