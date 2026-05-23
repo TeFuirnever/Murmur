@@ -64,7 +64,7 @@ const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, onCopy }) 
   }, [isOpen]);
 
   // 删除转录记录
-  const handleDelete = async (id) => {
+  const handleDelete = async (id: number) => {
     if (!window.electronAPI) return;
 
     try {
@@ -78,7 +78,7 @@ const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, onCopy }) 
   };
 
   // 复制文本
-  const handleCopy = async (text) => {
+  const handleCopy = async (text: string) => {
     try {
       if (onCopy) {
         await onCopy(text);
@@ -92,7 +92,7 @@ const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, onCopy }) 
   };
 
   // 格式化日期
-  const formatDate = (dateString) => {
+  const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
     const diffTime = Math.abs(now.getTime() - date.getTime());

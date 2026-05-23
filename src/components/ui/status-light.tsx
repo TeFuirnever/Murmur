@@ -2,11 +2,17 @@
  * 状态灯组件
  * 使用三种颜色的圆形指示灯显示模型状态
  */
+interface StatusLightProps {
+  modelStatus: { isLoading: boolean; error: string | null; isReady: boolean };
+  size?: string;
+  showTooltip?: boolean;
+}
+
 export const StatusLight = ({
   modelStatus,
   size = "w-3 h-3",
   showTooltip = true,
-}) => {
+}: StatusLightProps) => {
   const getLightColor = () => {
     if (modelStatus.isLoading) {
       return "bg-[#ff9500]"; // 黄灯 - 加载中

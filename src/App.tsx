@@ -22,7 +22,7 @@ import FileImport from "./components/FileImport";
 
 // 动态导入设置页面组件
 const SettingsPage = React.lazy(() =>
-  import("./settings.jsx").then((module) => ({ default: module.SettingsPage })),
+  import("./settings").then((module) => ({ default: module.SettingsPage })),
 );
 
 // 声波图标组件（空闲/悬停状态）
@@ -66,7 +66,7 @@ const LoadingIndicator = ({ size = 20 }) => {
 };
 
 // 语音波形指示器组件（处理状态）
-const VoiceWaveIndicator = ({ isListening }) => {
+const VoiceWaveIndicator = ({ isListening }: { isListening: boolean }) => {
   return (
     <div className="flex items-center justify-center gap-0.5">
       {[...Array(4)].map((_, i) => (
@@ -86,7 +86,7 @@ const VoiceWaveIndicator = ({ isListening }) => {
 };
 
 // 增强的工具提示组件
-const Tooltip = ({ children, content, position = "top" }) => {
+const Tooltip = ({ children, content, position = "top" }: { children: React.ReactNode; content: React.ReactNode; position?: string }) => {
   const [isVisible, setIsVisible] = useState(false);
 
   const getPositionClasses = () => {
@@ -135,6 +135,13 @@ const TextDisplay = ({
   onCopy,
   onExport,
   onPaste,
+}: {
+  originalText: string;
+  processedText: string;
+  isProcessing: boolean;
+  onCopy: (text: string) => void;
+  onExport: (text: string) => void;
+  onPaste: (text: string) => void;
 }) => {
   if (!originalText && !processedText) {
     return null; // 当没有文本时不显示任何内容，避免重复
@@ -265,7 +272,7 @@ export default function App() {
   const settingsRef = useRef({ auto_paste: "paste", close_behavior: "hide" });
 
   // 安全粘贴函数
-  const safePaste = useCallback(async (text) => {
+  const safePaste = useCallback(async (text: string) => {
     const now = Date.now();
     const lastPaste = lastPasteRef.current;
 
@@ -303,10 +310,10 @@ export default function App() {
   }, []);
 
   // 处理录音完成（FunASR识别完成）
-  const handleRecordingComplete = useCallback(async (transcriptionResult) => {
+  const handleRecordingComplete = useCallback(async (transcriptionResult: Record<string, unknown>) => {
     if (transcriptionResult.success && transcriptionResult.text) {
       // 立即显示FunASR识别的原始文本
-      setOriginalText(transcriptionResult.text);
+      setOriginalText(transcriptionResult.text as string);
       setShowTextArea(true);
 
       // 清空之前的处理结果，等待AI优化
@@ -320,17 +327,17 @@ export default function App() {
 
   // 处理AI优化完成
   const handleAIOptimizationComplete = useCallback(
-    async (optimizedResult) => {
+    async (optimizedResult: Record<string, unknown>) => {
       if (
         optimizedResult.success &&
         optimizedResult.enhanced_by_ai &&
         optimizedResult.text
       ) {
         // 显示AI优化后的文本
-        setProcessedText(optimizedResult.text);
+        setProcessedText(optimizedResult.text as string);
 
         // 自动粘贴AI优化后的文本
-        await safePaste(optimizedResult.text);
+        await safePaste(optimizedResult.text as string);
 
         toast.success("🤖 AI文本优化完成并已自动粘贴！");
       } else {
@@ -348,7 +355,7 @@ export default function App() {
   handleAIOptimizationCompleteRef.current = handleAIOptimizationComplete;
 
   // 处理复制文本
-  const handleCopyText = async (text) => {
+  const handleCopyText = async (text: string) => {
     try {
       if (window.electronAPI) {
         await window.electronAPI.copyText(text);
@@ -363,7 +370,7 @@ export default function App() {
   };
 
   // 处理导出文本
-  const handleExportText = async (text) => {
+  const handleExportText = async (text: string) => {
     try {
       if (window.electronAPI) {
         await window.electronAPI.exportTranscriptions("txt");
@@ -566,7 +573,7 @@ export default function App() {
 
   // 监听键盘事件
   useEffect(() => {
-    const handleKeyPress = (e) => {
+    const handleKeyPress = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         handleClose();
       }

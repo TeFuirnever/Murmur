@@ -51,7 +51,7 @@ const SettingsPage = () => {
   const [downloadedUpdate, setDownloadedUpdate] = useState(null);
 
   // 权限管理
-  const showAlert = (alert) => {
+  const showAlert = (alert: { title: string; description: string }) => {
     toast(alert.title, {
       description: alert.description,
       duration: 4000,
@@ -65,7 +65,7 @@ const SettingsPage = () => {
     testAccessibilityPermission,
   } = usePermissions(showAlert);
 
-  const applyTheme = (theme) => {
+  const applyTheme = (theme: string) => {
     const root = document.documentElement;
     if (theme === "dark") {
       root.classList.add("dark");
@@ -167,7 +167,7 @@ const SettingsPage = () => {
   };
 
   // 处理输入变化
-  const handleInputChange = (key, value) => {
+  const handleInputChange = (key: string, value: unknown) => {
     setSettings((prev) => ({
       ...prev,
       [key]: value,
@@ -231,11 +231,11 @@ const SettingsPage = () => {
     },
   ];
 
-  const applyProviderPreset = (preset) => {
+  const applyProviderPreset = (preset: Record<string, unknown>) => {
     setSettings((prev) => ({
       ...prev,
-      ai_base_url: preset.baseUrl,
-      ai_model: preset.model,
+      ai_base_url: preset.baseUrl as string,
+      ai_model: preset.model as string,
     }));
     setCustomModel(true);
     toast.info(`已应用 ${preset.label} 预设`);
@@ -344,7 +344,7 @@ const SettingsPage = () => {
     });
     const unsub3 = window.electronAPI.onUpdateDownloadError?.((data) => {
       setDownloadProgress(null);
-      setUpdateInfo((prev) => (prev ? { ...prev, error: data.error } : prev));
+      setUpdateInfo((prev: typeof settings) => (prev ? { ...prev, error: data.error } : prev));
     });
     return () => {
       unsub1?.();

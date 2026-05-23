@@ -20,7 +20,7 @@ interface ExportPanelProps {
 export default function ExportPanel({ transcriptionId }: ExportPanelProps) {
   const [exportingFormat, setExportingFormat] = React.useState<string | null>(null);
 
-  const handleExport = async (format) => {
+  const handleExport = async (format: string) => {
     if (!window.electronAPI || !window.electronAPI.exportTranscription) {
       toast.error("导出功能不可用");
       return;

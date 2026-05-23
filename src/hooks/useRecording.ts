@@ -380,7 +380,7 @@ export const useRecording = ({
   }, []);
 
   // AudioBuffer转WAV格式
-  const audioBufferToWav = (audioBuffer) => {
+  const audioBufferToWav = (audioBuffer: AudioBuffer) => {
     const length = audioBuffer.length;
     const sampleRate = audioBuffer.sampleRate;
     const numberOfChannels = audioBuffer.numberOfChannels;
@@ -394,9 +394,9 @@ export const useRecording = ({
     const view = new DataView(buffer);
 
     // WAV文件头
-    const writeString = (offset, string) => {
-      for (let i = 0; i < string.length; i++) {
-        view.setUint8(offset + i, string.charCodeAt(i));
+    const writeString = (offset: number, str: string) => {
+      for (let i = 0; i < str.length; i++) {
+        view.setUint8(offset + i, str.charCodeAt(i));
       }
     };
 
