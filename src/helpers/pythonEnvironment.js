@@ -186,7 +186,7 @@ class PythonEnvironment {
   }
 
   isPythonVersionSupported(version) {
-    return version && version.major === 3;
+    return !!(version && version.major === 3 && version.minor >= 8);
   }
 
   async installPython(progressCallback = null) {

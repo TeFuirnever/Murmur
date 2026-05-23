@@ -75,7 +75,7 @@ class FunASRManager {
     return this.modelManager.getDownloadProgress();
   }
   downloadModels(cb) {
-    return this.modelManager.downloadModels(cb);
+    return this.modelManager.downloadModels(cb, this.pythonEnv.pythonCmd || "python3");
   }
 
   // Transcription delegation

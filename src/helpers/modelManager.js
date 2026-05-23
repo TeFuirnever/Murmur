@@ -226,7 +226,7 @@ class ModelManager {
     );
   }
 
-  async downloadModels(progressCallback = null) {
+  async downloadModels(progressCallback = null, pythonCmd = "python3") {
     const checkResult = await this.checkModelFiles();
     if (checkResult.models_downloaded) {
       return { success: true, message: "模型文件已下载" };
@@ -247,7 +247,7 @@ class ModelManager {
 
     return new Promise((resolve, reject) => {
       const downloadProcess = spawn(
-        "python3",
+        pythonCmd,
         [scriptPath, "--output", cachePath],
         {
           stdio: ["pipe", "pipe", "pipe"],

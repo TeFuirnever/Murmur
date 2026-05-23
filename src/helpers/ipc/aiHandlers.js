@@ -1,24 +1,40 @@
 const C = require("../ipc-contracts");
 const { buildPrompt } = require("../aiPrompts");
 
-// Validate that the configured AI base URL is a public https endpoint.
-// We deliberately do NOT maintain a provider allowlist: users bring their
-// own API key, so restricting providers offers no security benefit and
-// breaks any non-listed compatible service. We only block obviously
-// dangerous targets (non-https, internal/loopback hosts) to prevent SSRF.
-function validateAIBaseUrl(baseUrl) {
+function isLocalhost(host) {
+  if (!host) return false;
+  host = host.toLowerCase();
+  if (host === "localhost" || host.endsWith(".localhost")) return true;
+  if (host === "0.0.0.0" || host === "::1" || host === "[::1]") return true;
+  if (/^127\./.test(host)) return true;
+  return false;
+}
+
+function isPrivateNetwork(host) {
+  if (!host) return false;
+  if (/^10\./.test(host)) return true;
+  if (/^192\.168\./.test(host)) return true;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return true;
+  if (/^169\.254\./.test(host)) return true;
+  return false;
+}
+
+// Validate that the configured AI base URL is safe.
+// When allowLocalhost is true (for local models like Ollama/LM Studio),
+// localhost/loopback addresses and http protocol are allowed.
+function validateAIBaseUrl(baseUrl, { allowLocalhost = false } = {}) {
   try {
     const url = new URL(baseUrl);
-    if (url.protocol !== "https:") return false;
     const host = url.hostname.toLowerCase();
     if (!host) return false;
-    if (host === "localhost" || host.endsWith(".localhost")) return false;
-    if (host === "0.0.0.0" || host === "::1" || host === "[::1]") return false;
-    if (/^127\./.test(host)) return false;
-    if (/^10\./.test(host)) return false;
-    if (/^192\.168\./.test(host)) return false;
-    if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return false;
-    if (/^169\.254\./.test(host)) return false;
+
+    if (allowLocalhost && isLocalhost(host)) {
+      return url.protocol === "http:" || url.protocol === "https:";
+    }
+
+    if (url.protocol !== "https:") return false;
+    if (isLocalhost(host)) return false;
+    if (isPrivateNetwork(host)) return false;
     return true;
   } catch {
     return false;
@@ -28,20 +44,22 @@ function validateAIBaseUrl(baseUrl) {
 async function processTextWithAI(text, mode, databaseManager, logger) {
   try {
     const apiKey = await databaseManager.getSetting("ai_api_key");
-    if (!apiKey) {
+    const baseUrl =
+      (await databaseManager.getSetting("ai_base_url")) ||
+      "https://api.openai.com/v1";
+    const isLocal = isLocalhost(new URL(baseUrl).hostname);
+
+    if (!apiKey && !isLocal) {
       return {
         success: false,
         error: "请先在设置页面配置AI API密钥",
       };
     }
 
-    const baseUrl =
-      (await databaseManager.getSetting("ai_base_url")) ||
-      "https://api.openai.com/v1";
     const model =
       (await databaseManager.getSetting("ai_model")) || "gpt-3.5-turbo";
 
-    if (!validateAIBaseUrl(baseUrl)) {
+    if (!validateAIBaseUrl(baseUrl, { allowLocalhost: isLocal })) {
       return {
         success: false,
         error: "请填写有效的 https API 地址（不支持 http 或内网地址）",
@@ -68,12 +86,14 @@ async function processTextWithAI(text, mode, databaseManager, logger) {
       inputLength: text.length,
     });
 
+    const headers = { "Content-Type": "application/json" };
+    if (apiKey) {
+      headers.Authorization = `Bearer ${apiKey}`;
+    }
+
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
+      headers,
       body: JSON.stringify(requestData),
     });
 
@@ -279,4 +299,4 @@ function register(ipcMain, managers) {
   });
 }
 
-module.exports = { register, processTextWithAI, checkAIStatus };
+module.exports = { register, processTextWithAI, checkAIStatus, validateAIBaseUrl };
