@@ -12,8 +12,8 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)](#安装)
-[![Tests](https://img.shields.io/badge/tests-399%20passing-brightgreen)](tests/)
-[![Coverage](https://img.shields.io/badge/coverage-97%25-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-521%20passing-brightgreen)](tests/)
+[![Coverage](https://img.shields.io/badge/coverage-95%25-brightgreen)](tests/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 <!-- TODO: 添加产品演示 GIF -->
@@ -81,6 +81,7 @@ winget install TeFuirnever.Murmur
 | 硅基流动             | api.siliconflow.cn     |      ✅      |
 | Groq                 | api.groq.com           |      ✅      |
 | Moonshot             | api.moonshot.cn        |      ✅      |
+| MiniMax              | api.minimaxi.com       |      ✅      |
 | **Ollama (本地)**    | localhost:11434        |      ❌      |
 | **LM Studio (本地)** | localhost:1234         |      ❌      |
 
@@ -119,7 +120,7 @@ pnpm dev
 
 ```bash
 pnpm dev          # 启动开发模式
-pnpm test         # 运行测试（399 tests）
+pnpm test         # 运行测试（521 tests）
 pnpm lint         # 代码检查
 pnpm typecheck    # TypeScript 类型检查
 pnpm ci:check     # 本地运行所有 CI 门禁
@@ -149,6 +150,9 @@ pnpm ci:check     # 本地运行所有 CI 门禁
 - [x] 多语言支持（中文/English）
 - [x] 自动更新检测
 - [x] 无障碍（ARIA + 键盘导航）
+- [x] GPU 自动检测（CUDA > MPS > CPU）
+- [x] TypeScript 严格模式
+- [x] 文件配置支持（~/.murmur.json）
 - [ ] 实时流式转录（200ms 延迟）
 - [ ] CLI 模式
 - [ ] ASR 多引擎支持（whisper.cpp）
