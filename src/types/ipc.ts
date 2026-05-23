@@ -38,6 +38,20 @@ export interface AIMode {
   label: string;
 }
 
+export interface AIProviderPreset {
+  name: string;
+  label: string;
+  base_url: string;
+  models: string[];
+  requires_api_key: boolean;
+}
+
+export interface LocalModelDetection {
+  name: string;
+  label: string;
+  models: string[];
+}
+
 // ─── Transcription ───
 
 export interface TranscriptionRecord {

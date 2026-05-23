@@ -59,6 +59,8 @@ export interface ElectronAPI {
   processText: (text: string, mode: string) => Promise<AIProcessResult>;
   checkAIStatus: (testConfig?: { ai_api_key?: string; ai_base_url?: string; ai_model?: string }) => Promise<AICheckStatusResult>;
   getAIModes: () => Promise<AIMode[]>;
+  getAIProviderPresets: () => Promise<AIProviderPreset[]>;
+  detectLocalModels: () => Promise<LocalModelDetection[]>;
 
   // Clipboard
   pasteText: (text: string) => Promise<void>;
