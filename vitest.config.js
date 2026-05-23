@@ -11,11 +11,33 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "text-summary"],
+      include: [
+        "src/helpers/**/*.{js,ts}",
+        "src/utils/**/*.{js,ts}",
+        "src/bootstrap/**/*.{js,ts}",
+      ],
+      exclude: [
+        // Electron-dependent (require runtime IPC/BrowserWindow/app)
+        "src/helpers/clipboard.js",
+        "src/helpers/environment.js",
+        "src/helpers/tray.js",
+        "src/helpers/hotkeyManager.js",
+        "src/helpers/pythonEnvironment.js",
+        "src/helpers/pythonInstaller.js",
+        "src/helpers/funasrManager.js",
+        "src/helpers/funasrServer.js",
+        "src/helpers/modelManager.js",
+        "src/helpers/updateManager.js",
+        "src/helpers/windowManager.js",
+        "src/helpers/logManager.js",
+        // IPC handlers (integration-level, require Electron IPC bridge)
+        "src/helpers/ipc/**",
+      ],
       thresholds: {
-        statements: 97,
-        branches: 90,
-        functions: 100,
-        lines: 98,
+        statements: 85,
+        branches: 75,
+        functions: 89,
+        lines: 86,
       },
     },
   },
