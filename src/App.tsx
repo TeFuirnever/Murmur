@@ -351,12 +351,8 @@ export default function App() {
   const handleCopyText = async (text) => {
     try {
       if (window.electronAPI) {
-        const result = await window.electronAPI.copyText(text);
-        if (result.success) {
-          toast.success("文本已复制到剪贴板");
-        } else {
-          throw new Error(result.error || "复制失败");
-        }
+        await window.electronAPI.copyText(text);
+        toast.success("文本已复制到剪贴板");
       } else {
         await navigator.clipboard.writeText(text);
         toast.success("文本已复制到剪贴板");
@@ -500,10 +496,10 @@ export default function App() {
   useEffect(() => {
     if (!window.electronAPI?.getSetting) return;
     window.electronAPI.getSetting("auto_paste", "paste").then((v) => {
-      settingsRef.current.auto_paste = v;
+      settingsRef.current.auto_paste = v as string;
     });
     window.electronAPI.getSetting("close_behavior", "hide").then((v) => {
-      settingsRef.current.close_behavior = v;
+      settingsRef.current.close_behavior = v as string;
     });
   }, []);
 
@@ -513,10 +509,10 @@ export default function App() {
     const unsub = window.electronAPI.onSettingsUpdate(() => {
       if (!window.electronAPI?.getSetting) return;
       window.electronAPI.getSetting("auto_paste", "paste").then((v) => {
-        settingsRef.current.auto_paste = v;
+        settingsRef.current.auto_paste = v as string;
       });
       window.electronAPI.getSetting("close_behavior", "hide").then((v) => {
-        settingsRef.current.close_behavior = v;
+        settingsRef.current.close_behavior = v as string;
       });
     });
     return unsub;
@@ -544,7 +540,7 @@ export default function App() {
     if (window.electronAPI) {
       // 监听传统热键触发
       const unsubscribeHotkey = window.electronAPI.onHotkeyTriggered(
-        (_event, _data) => {
+        () => {
           toggleRecording();
         },
       );

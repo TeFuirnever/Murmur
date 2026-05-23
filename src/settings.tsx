@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
 import { Toaster, toast } from "sonner";
@@ -85,14 +85,14 @@ const SettingsPage = () => {
       if (window.electronAPI) {
         const allSettings = await window.electronAPI.getAllSettings();
         const loadedSettings = {
-          ai_api_key: allSettings.ai_api_key || "",
-          ai_base_url: allSettings.ai_base_url || "https://api.openai.com/v1",
-          ai_model: allSettings.ai_model || "gpt-3.5-turbo",
+          ai_api_key: (allSettings.ai_api_key || "") as string,
+          ai_base_url: (allSettings.ai_base_url || "https://api.openai.com/v1") as string,
+          ai_model: (allSettings.ai_model || "gpt-3.5-turbo") as string,
           enable_ai_optimization: allSettings.enable_ai_optimization !== false,
           window_always_on_top: allSettings.window_always_on_top !== false,
-          auto_paste: allSettings.auto_paste || "paste",
-          close_behavior: allSettings.close_behavior || "hide",
-          theme: allSettings.theme || "system",
+          auto_paste: (allSettings.auto_paste || "paste") as string,
+          close_behavior: (allSettings.close_behavior || "hide") as string,
+          theme: (allSettings.theme || "system") as string,
         };
         setSettings((prev) => ({ ...prev, ...loadedSettings }));
         applyTheme(loadedSettings.theme);

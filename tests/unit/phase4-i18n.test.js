@@ -113,7 +113,7 @@ describe("Phase 4: Internationalization i18n", () => {
     let mainContent;
 
     beforeAll(() => {
-      mainContent = fs.readFileSync(path.join(rootDir, "src/main.jsx"), "utf8");
+      mainContent = fs.readFileSync(path.join(rootDir, "src/main.tsx"), "utf8");
     });
 
     it("should import i18n configuration", () => {
@@ -126,7 +126,7 @@ describe("Phase 4: Internationalization i18n", () => {
 
     beforeAll(() => {
       settingsContent = fs.readFileSync(
-        path.join(rootDir, "src/settings.jsx"),
+        path.join(rootDir, "src/settings.tsx"),
         "utf8",
       );
     });
@@ -149,7 +149,7 @@ describe("Phase 4: Internationalization i18n", () => {
 
     beforeAll(() => {
       settingsContent = fs.readFileSync(
-        path.join(rootDir, "src/settings.jsx"),
+        path.join(rootDir, "src/settings.tsx"),
         "utf8",
       );
     });

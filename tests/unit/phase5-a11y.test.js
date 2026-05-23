@@ -10,11 +10,11 @@ function readFile(relPath) {
 }
 
 describe("Phase 5: Accessibility a11y", () => {
-  describe("Main App.jsx ARIA labels", () => {
+  describe("Main App.tsx ARIA labels", () => {
     let content;
 
     beforeAll(() => {
-      content = readFile("src/App.jsx");
+      content = readFile("src/App.tsx");
     });
 
     it("should have aria-label on recording button", () => {
@@ -30,7 +30,7 @@ describe("Phase 5: Accessibility a11y", () => {
     let content;
 
     beforeAll(() => {
-      content = readFile("src/settings.jsx");
+      content = readFile("src/settings.tsx");
     });
 
     it("should have aria-label on close button", () => {
@@ -47,7 +47,7 @@ describe("Phase 5: Accessibility a11y", () => {
     let appContent;
 
     beforeAll(() => {
-      appContent = readFile("src/App.jsx");
+      appContent = readFile("src/App.tsx");
     });
 
     it("should have tabIndex or keyboard event handlers", () => {
@@ -76,7 +76,7 @@ describe("Phase 5: Accessibility a11y", () => {
     let content;
 
     beforeAll(() => {
-      content = readFile("src/App.jsx");
+      content = readFile("src/App.tsx");
     });
 
     it("should have aria-hidden on decorative SVG or icon elements", () => {

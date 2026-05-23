@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import App from "./App.jsx";
+import App from "./App";
 import "./index.css";
 import "./i18n";
 import { Toaster } from "./components/ui/sonner";
@@ -12,9 +12,15 @@ const isElectron = () => {
   return typeof window !== "undefined" && window.electronAPI;
 };
 
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+  errorInfo: React.ErrorInfo | null;
+}
+
 // 错误边界组件
-class ErrorBoundary extends React.Component {
-  constructor(props) {
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, ErrorBoundaryState> {
+  constructor(props: { children: React.ReactNode }) {
     super(props);
     this.state = { hasError: false, error: null, errorInfo: null };
   }
@@ -149,7 +155,7 @@ function initializeApp() {
   document.documentElement.lang = "zh-CN";
 
   // 主题：优先使用用户保存的设置，否则跟随系统
-  const applyTheme = (theme) => {
+  const applyTheme = (theme: string) => {
     const root = document.documentElement;
     if (theme === "dark") {
       root.classList.add("dark");
@@ -208,8 +214,8 @@ if (!assertElectronAPI()) {
 
   // 开发环境下的热重载支持
   if (process.env.NODE_ENV === "development") {
-    if (import.meta.hot) {
-      import.meta.hot.accept("./App.jsx", (newModule) => {
+    if ((import.meta as any).hot) {
+      (import.meta as any).hot.accept("./App", (newModule: any) => {
         if (newModule) {
           const NextApp = newModule.default;
           root.render(
@@ -242,9 +248,9 @@ if (!assertElectronAPI()) {
     observer.observe({ entryTypes: ["measure"] });
 
     // 监控内存使用
-    if (performance.memory) {
+    if ((performance as any).memory) {
       setInterval(() => {
-        const memory = performance.memory;
+        const memory = (performance as any).memory;
         console.log(
           `内存使用: ${(memory.usedJSHeapSize / 1024 / 1024).toFixed(2)}MB / ${(memory.totalJSHeapSize / 1024 / 1024).toFixed(2)}MB`,
         );

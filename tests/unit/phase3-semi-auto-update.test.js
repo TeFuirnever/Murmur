@@ -138,7 +138,7 @@ describe("Phase 3: Semi-auto update", () => {
 
     beforeAll(() => {
       settingsContent = fs.readFileSync(
-        path.join(rootDir, "src/settings.jsx"),
+        path.join(rootDir, "src/settings.tsx"),
         "utf8",
       );
     });
