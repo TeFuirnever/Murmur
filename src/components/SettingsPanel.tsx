@@ -1,10 +1,15 @@
+import * as React from "react";
 import { Mic, Shield, Settings } from "lucide-react";
 import { usePermissions } from "../hooks/usePermissions";
 import PermissionCard from "./ui/permission-card";
 import { toast } from "sonner";
 
-const SettingsPanel = ({ onClose }) => {
-  const showAlert = (alert) => {
+interface SettingsPanelProps {
+  onClose: () => void;
+}
+
+const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
+  const showAlert = (alert: { title: string; description: string }) => {
     toast(alert.title, {
       description: alert.description,
       duration: 4000,
