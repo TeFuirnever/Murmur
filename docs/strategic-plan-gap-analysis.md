@@ -753,3 +753,49 @@ Apache License 2.0
 ### Tier 2 验证
 8. **T2-1**: 即刻/V2EX 帖子发布后有用户反馈
 9. **T2-2**: 竞品对比文档完成，B 站视频有 100+ 播放
+
+---
+
+## 十一、执行进度（2026-05-23 更新）
+
+### 已完成
+
+| 编号 | 任务 | 完成日期 | 关键产出 |
+|------|------|---------|---------|
+| T0-1 | 修复 `downloadModels` 硬编码 `python3` | 2026-05-23 | `modelManager.js` 接受 pythonCmd 参数 |
+| T0-2 | 修复 Python 版本检测（需 3.8+） | 2026-05-23 | `isPythonVersionSupported` + `!!()` 修复 |
+| T0-3 | 重构 SSRF 防护支持本地模型 | 2026-05-23 | `validateAIBaseUrl` + `isLocalhost()` + `isPrivateNetwork()` + ADR 001 |
+| T1-1a | 本地模型后端支持 | 2026-05-23 | `processTextWithAI`/`checkAIStatus` 自动检测 localhost |
+| T1-1b | AI Provider Presets 注册表 | 2026-05-23 | 8 个预置 provider + `getAIProviderPresets` IPC |
+| T1-1c | 本地模型自动检测 | 2026-05-23 | 探测 Ollama/LM Studio + `detectLocalModels` IPC |
+| T1-1d | 设置页 Provider 预设 | 2026-05-23 | SiliconFlow/Groq/Ollama/LM Studio 预设按钮 + 本地模型跳过 API key |
+| T1-2 | 自定义 Prompt 模板系统 | 2026-05-23 | `parseTemplateFile` + `loadCustomTemplates` + `getAIModes` IPC + ADR 002 |
+| T1-4 | ASR 引擎抽象接口 | 2026-05-23 | `validateASREngine` + `createASREngineRegistry` + FunASRManager 验证 + ADR 003 |
+| B4 | 文件配置 ~/.murmur.json | 2026-05-23 | `loadFileConfig` + `saveFileConfig` + DB fallback 链 + ADR 004 |
+| TS-0 | TypeScript Phase 0 | 2026-05-23 | `typecheck` script + `@types/node` + CI step |
+| TS-1 | TypeScript Phase 1 | 2026-05-23 | `src/types/ipc.ts` + 精确 `electronAPI.d.ts` |
+| TS-2 | TypeScript Phase 2 | 2026-05-23 | JSDoc 类型注解 (aiPrompts, fileConfig, asrEngine) |
+| Bug | clipboard.readText() null safety | 2026-05-23 | `|| ""` fallback |
+
+### 待执行
+
+| 编号 | 任务 | 优先级 | 状态 |
+|------|------|--------|------|
+| T1-3 | 快速体验模式 | P1 | 未开始 |
+| T2-1 | 中国社区建设 | P1 | 未开始 |
+| T2-2 | 竞品定位文档 + 演示 | P1 | 未开始 |
+| T2-2.5 | README 重写 | P1 | 未开始 |
+| T2-3 | 爱发电 + 微信赞赏 | P2 | 未开始 |
+| T3-1 | CLI 模式 | P2 | 未开始 |
+| TS-3 | 前端 TS 迁移 | P2 | 未开始 |
+
+### 指标
+
+| 指标 | 会话前 | 当前 |
+|------|--------|------|
+| 测试数量 | 335 | 399 |
+| 测试文件 | 37 | 42 |
+| typecheck | ✅ | ✅ |
+| lint | ✅ | ✅ |
+| renderer build | ✅ | ✅ |
+| commits | ~80 | 97 |
