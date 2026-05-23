@@ -98,10 +98,11 @@ Instructions for AI agents working. All content in English.
 
 ### Delivery Gates
 
-- **Build gate:** `pnpm lint` + `pnpm test` MUST both pass before any commit is considered ready for merge.
-- **Basic:** `pnpm lint` + `pnpm test`
+- **All commits MUST pass `pnpm ci:check` before push.** This mirrors CI and runs: format check, lint, license check, test with coverage, build:preload, build:renderer.
+- **Quick check:** `pnpm lint` + `pnpm test` for rapid iteration during development.
 - **Bug fix:** reproduce the bug, add a failing test **first**, then fix and verify; no implementation-only fixes, no fix-then-backfill tests.
 - **High-risk** (session flow, IPC, security, privacy, release packaging): include a risk statement and fresh verification evidence.
+- **Gate failure:** run `/ci-gate` or `node scripts/ci-check.js --json` to diagnose; use `--fix` for auto-fixable issues.
 
 ### Commit Guidance
 
@@ -125,6 +126,7 @@ Instructions for AI agents working. All content in English.
 - IPC contracts → `src/helpers/ipc-contracts.js`
 - AI prompt templates → `src/helpers/aiPrompts.js`
 - Security measures → `SECURITY.md`
+- CI gate check → `scripts/ci-check.js` and `/ci-gate` skill
 
 #
 
