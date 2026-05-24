@@ -12,35 +12,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - i18n internationalization: i18next integration with zh-CN/en translations and language selector in settings
 - Accessibility: ARIA labels, keyboard navigation, focus-visible styles, decorative aria-hidden
 - Semi-auto update with SHA256 verification, progress UI, and system notification
-- TypeScript infrastructure: tsconfig.json, jsconfig.json, electronAPI.d.ts for editor intellisense
+- TypeScript strict mode: `strictNullChecks`, `noImplicitAny`, `noUncheckedIndexedAccess` across entire frontend
+- Full TypeScript migration: all hooks, components, and pages migrated to TS/TSX
+- AI provider presets: 8 providers (OpenAI, DeepSeek, Qwen, GLM, SiliconFlow, Groq, Ollama, LM Studio) with auto-fill
+- Local model auto-detection: probes Ollama (11434) and LM Studio (1234) with 2s timeout
+- Custom AI prompt templates with user-defined system/user prompts
+- Quick experience mode: per-model download progress, optional punc model for faster startup
+- Configurable AI temperature and max_tokens settings
+- File-based config (`~/.murmur.json`): DB-first with file fallback, bidirectional sync
+- ASR engine abstraction interface for future multi-engine support
+- SQLite FTS5 full-text search with trigram tokenizer for CJK text
+- SQLite integrity check on startup
+- IPC rate limiting for expensive handlers
+- FunASR server auto-restart on crash with health monitor (30s ping/pong)
+- GPU auto-detection (CUDA > MPS > CPU)
 - E2E testing with Playwright: launch, settings, and IPC integration tests
 - CI gate enforcement: format check, coverage thresholds, license compliance, build verification
 - Local CI gate script (`scripts/ci-check.js`) with `--fix`, `--json`, `--quiet`, `--e2e` modes
-- CI gate AI skill (`.claude/skills/ci-gate.md`) for assisted failure diagnosis
 - Dependabot configuration for npm and GitHub Actions
 - Node version pinning via `.nvmrc`
+- 548 unit tests with 94%+ coverage (statements/branches/functions/lines)
 
 ### Changed
 
-- AI prompt engineering overhaul: system/user role separation + XML `<transcript>` tags (ChatGPT/Manus/Claude best practices)
+- Audio format conversion: replaced system ffmpeg dependency with Python librosa/soundfile (zero new deps)
+- AI prompt engineering overhaul: system/user role separation + XML `<transcript>` tags
 - SSRF protection for AI base URLs: https-only + RFC1918 loopback blocking in handler layer
 - CSP `connect-src` relaxed to `https:` (SSRF guard now enforced in `aiHandlers.js`, not CSP)
 - Log sanitization: AI requests log `inputLength`/`outputLength` instead of full text content
 - AI processing mode auto-selects based on transcript length (`optimize` vs `optimize_long`)
+- FunASR decomposition: monolithic `funasrManager.js` → thin facade + 4 sub-modules
+- IPC architecture: monolithic `ipcHandlers.js` → 9 domain-scoped handler modules
+- App.tsx refactored: extracted 5 inline components for maintainability
 
 ### Fixed
 
-- Model verification: `_verifyModel()` now correctly handles directory-based models (APFS `statSync` size semantics)
-- Contract mismatch: `FUNASR.STATUS` spread order corrected — `success` field placed after spread to prevent override
-- Contract mismatch: `TRANSCRIPTION.SAVE` handler wrapped with canonical `{success, error}` return shape
-- Contract mismatch: `saveTranscription` preload signature aligned with handler (single `data` object)
-- Settings save button no longer blocks users who have AI optimization disabled
-- Error surfacing: recording flow now shows save/AI failures to the user
-- Settings changes broadcast via `SETTINGS_UPDATE` event for live model status refresh
+- Audio import: librosa converts MP3/OGG to WAV without requiring system ffmpeg
+- MPS device: skipped Apple GPU due to FunASR float64 incompatibility, falls back to CPU
+- Hotkey registration: shows toast warning when shortcut is occupied by another app
+- FunASR initialization: failure path no longer skips preInitializeModels
+- Audio duration: bare except now logs warnings for diagnostic visibility
+- History page: shows toast on load/delete failures
+- Model verification: correctly handles directory-based models (APFS `statSync` size semantics)
+- Contract mismatch: `FUNASR.STATUS` spread order corrected
+- Contract mismatch: `saveTranscription` preload signature aligned with handler
+- Settings save button no longer blocks users with AI optimization disabled
+- Clipboard null safety: `clipboard.readText()` returns null when empty
 
 ### Removed
 
 - Dead `useTextProcessing.js` hook (handleTranscription was never called)
+- System ffmpeg dependency for audio conversion (replaced by Python librosa)
 
 ### Security
 
