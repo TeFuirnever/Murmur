@@ -107,8 +107,8 @@ function register(ipcMain, managers) {
             segments: result.segments ? JSON.stringify(result.segments) : null,
             duration: result.duration || null,
           });
-          if (dbResult && dbResult.id) {
-            result.id = dbResult.id;
+          if (dbResult && dbResult.lastInsertRowid) {
+            result.id = dbResult.lastInsertRowid;
           }
         } catch (dbErr) {
           logger.error("保存转录结果到数据库失败:", dbErr);

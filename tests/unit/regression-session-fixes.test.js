@@ -588,3 +588,51 @@ describe("TRANSCRIBE_FILE /Volumes/ path validation regression", () => {
     expect(result.error).toContain("路径不在允许范围内");
   });
 });
+
+// 6. TRANSCRIBE_FILE sets result.id from lastInsertRowid (not dbResult.id)
+describe("TRANSCRIBE_FILE result.id regression", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  function createEvent() {
+    return {
+      sender: { send: vi.fn() },
+    };
+  }
+
+  function createManagers() {
+    return {
+      databaseManager: {
+        saveTranscription: vi.fn(() => ({ lastInsertRowid: 99, changes: 1 })),
+      },
+      logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
+      processTextWithAI: vi.fn(),
+    };
+  }
+
+  it("sets result.id from lastInsertRowid after successful transcription", async () => {
+    const { register } = require("../../src/helpers/ipc/transcriptionHandlers");
+    const ipcMain = createIpcMain();
+
+    const managers = createManagers();
+    managers.funasrManager = {
+      transcribeFile: vi.fn(async () => ({
+        success: true,
+        text: "hello world",
+        segments: [],
+        duration: 5,
+      })),
+    };
+
+    register(ipcMain, managers);
+    const result = await ipcMain._handlers[C.TRANSCRIPTION.TRANSCRIBE_FILE](
+      createEvent(),
+      "/Volumes/test.wav",
+      {},
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.id).toBe(99);
+  });
+});
