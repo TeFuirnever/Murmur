@@ -1,5 +1,10 @@
 import * as React from "react";
 
+interface ModelProgressEntry {
+  progress: number;
+  status: "waiting" | "downloading" | "completed" | "error";
+}
+
 interface ModelStatus {
   isLoading: boolean;
   isReady: boolean;
@@ -10,6 +15,7 @@ interface ModelStatus {
   downloadProgress: number;
   missingModels: string[];
   stage: string;
+  modelProgress: Record<string, ModelProgressEntry>;
 }
 
 interface ModelStatusContextValue extends ModelStatus {
@@ -45,6 +51,7 @@ export function ModelStatusProvider({
     downloadProgress: 0,
     missingModels: [],
     stage: "checking",
+    modelProgress: {},
   });
 
   const checkModelFiles = React.useCallback(async (): Promise<
@@ -277,12 +284,28 @@ export function ModelStatusProvider({
       const unsubscribe = window.electronAPI.onModelDownloadProgress(
         (event, progress) => {
           const p = progress ?? event;
-          setModelStatus((prev) => ({
-            ...prev,
-            downloadProgress:
-              p.overall_progress || p.progress || 0,
-            stage: "downloading",
-          }));
+          const modelKey = p.model || p.stage;
+          setModelStatus((prev) => {
+            const mp = { ...prev.modelProgress };
+            if (modelKey && ["asr", "vad", "punc"].includes(modelKey)) {
+              mp[modelKey] = {
+                progress: p.progress || 0,
+                status:
+                  p.stage === "completed"
+                    ? "completed"
+                    : p.stage === "error"
+                      ? "error"
+                      : "downloading",
+              };
+            }
+            return {
+              ...prev,
+              downloadProgress:
+                p.overall_progress || p.progress || 0,
+              modelProgress: mp,
+              stage: "downloading",
+            };
+          });
         },
       );
       return unsubscribe;

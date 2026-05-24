@@ -114,7 +114,7 @@ class FunASRManager {
       this.pythonEnv.clearFunASRInstallCache();
 
       const modelStatus = await this.checkModelFiles();
-      if (!modelStatus.models_downloaded) {
+      if (!modelStatus.minimum_ready && !modelStatus.models_downloaded) {
         throw new Error("模型文件未下载，无法启动服务器");
       }
 
@@ -194,7 +194,7 @@ class FunASRManager {
 
       let error = "FunASR未安装";
       if (installStatus.installed) {
-        if (!modelStatus.models_downloaded) {
+        if (!modelStatus.minimum_ready && !modelStatus.models_downloaded) {
           error = "模型文件未下载，请先下载模型";
         } else {
           error = "FunASR服务器正在启动中...";
@@ -202,10 +202,11 @@ class FunASRManager {
       }
 
       return {
-        success: installStatus.installed && modelStatus.models_downloaded,
+        success: installStatus.installed && (modelStatus.minimum_ready || modelStatus.models_downloaded),
         error: error,
         installed: installStatus.installed,
         models_downloaded: modelStatus.models_downloaded,
+        minimum_ready: modelStatus.minimum_ready || false,
         missing_models: modelStatus.missing_models || [],
         initializing: this.server.initializationPromise !== null,
       };

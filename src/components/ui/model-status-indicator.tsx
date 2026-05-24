@@ -7,6 +7,11 @@ import {
   Clock,
 } from "lucide-react";
 
+interface ModelProgress {
+  progress: number;
+  status: "waiting" | "downloading" | "completed" | "error";
+}
+
 interface ModelStatus {
   stage: string;
   isDownloading?: boolean;
@@ -14,6 +19,7 @@ interface ModelStatus {
   downloadProgress?: number;
   progress?: number;
   error?: string;
+  modelProgress?: Record<string, ModelProgress>;
 }
 
 interface ModelStatusIndicatorProps {
@@ -242,6 +248,14 @@ export const ModelDownloadProgress: React.FC<ModelDownloadProgressProps> = ({
   }
 
   if (modelStatus.stage === "downloading") {
+    const models = modelStatus.modelProgress
+      ? [
+          { key: "asr", label: "ASR 语音识别", size: "840MB" },
+          { key: "vad", label: "VAD 语音检测", size: "1.6MB" },
+          { key: "punc", label: "标点恢复", size: "278MB" },
+        ]
+      : [];
+
     return (
       <div className="bg-[#0071e3]/5 dark:bg-[#0071e3]/10 border border-[#0071e3]/20 dark:border-[#0071e3]/30 rounded-lg p-4">
         <div className="space-y-3">
@@ -257,29 +271,66 @@ export const ModelDownloadProgress: React.FC<ModelDownloadProgressProps> = ({
                 </p>
               </div>
             </div>
-            {onCancel && (
-              <button
-                onClick={onCancel}
-                className="px-3 py-1 text-xs text-[#0071e3] hover:text-[#0071e3]/80 transition-colors"
-              >
-                取消
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              {onCancel && (
+                <button
+                  onClick={onCancel}
+                  className="px-3 py-1 text-xs text-[#0071e3] hover:text-[#0071e3]/80 transition-colors"
+                >
+                  取消
+                </button>
+              )}
+              <span className="text-sm font-medium text-[#0071e3]">
+                {modelStatus.downloadProgress || 0}%
+              </span>
+            </div>
           </div>
 
-          {/* 进度条 */}
-          <div className="space-y-2">
-            <div className="flex justify-between text-xs text-[#0071e3]/80 dark:text-[#0071e3]/70">
-              <span>下载进度</span>
-              <span>{modelStatus.downloadProgress || 0}%</span>
-            </div>
-            <div className="w-full bg-[#0071e3]/20 dark:bg-[#0071e3]/30 rounded-full h-2">
-              <div
-                className="bg-[#0071e3] h-2 rounded-full transition-all duration-300"
-                style={{ width: `${modelStatus.downloadProgress || 0}%` }}
-              />
-            </div>
+          {/* 总进度条 */}
+          <div className="w-full bg-[#0071e3]/20 dark:bg-[#0071e3]/30 rounded-full h-2">
+            <div
+              className="bg-[#0071e3] h-2 rounded-full transition-all duration-300"
+              style={{ width: `${modelStatus.downloadProgress || 0}%` }}
+            />
           </div>
+
+          {/* 每个模型的进度 */}
+          {modelStatus.modelProgress && (
+            <div className="space-y-2 mt-2">
+              {models.map((m) => {
+                const mp = modelStatus.modelProgress![m.key];
+                if (!mp) return null;
+                const done = mp.status === "completed";
+                return (
+                  <div key={m.key} className="flex items-center gap-2 text-xs">
+                    <span
+                      className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                        done
+                          ? "model-done bg-[#34c759]"
+                          : mp.status === "downloading"
+                            ? "bg-[#0071e3] animate-pulse"
+                            : "bg-[#86868b]/40"
+                      }`}
+                    />
+                    <span className="text-[#1d1d1f]/70 dark:text-[#f5f5f7]/70 min-w-[100px]">
+                      {m.label}
+                    </span>
+                    <div className="flex-1 bg-[#0071e3]/10 dark:bg-[#0071e3]/15 rounded-full h-1">
+                      <div
+                        className={`h-1 rounded-full transition-all duration-300 ${
+                          done ? "bg-[#34c759]" : "bg-[#0071e3]"
+                        }`}
+                        style={{ width: `${mp.progress}%` }}
+                      />
+                    </div>
+                    <span className="text-[#86868b] dark:text-[#98989d] w-10 text-right">
+                      {done ? "✓" : `${mp.progress}%`}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     );

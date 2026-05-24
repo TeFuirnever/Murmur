@@ -16,16 +16,19 @@ class ModelManager {
         cache_path:
           "speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
         expected_size: 840 * 1024 * 1024,
+        required: true,
       },
       vad: {
         name: "damo/speech_fsmn_vad_zh-cn-16k-common-pytorch",
         cache_path: "speech_fsmn_vad_zh-cn-16k-common-pytorch",
         expected_size: 1.6 * 1024 * 1024,
+        required: true,
       },
       punc: {
         name: "damo/punc_ct-transformer_zh-cn-common-vocab272727-pytorch",
         cache_path: "punc_ct-transformer_zh-cn-common-vocab272727-pytorch",
         expected_size: 278 * 1024 * 1024,
+        required: false,
       },
     };
   }
@@ -121,6 +124,7 @@ class ModelManager {
     }
 
     let allDownloaded = true;
+    let minimumReady = true;
     const missingModels = [];
     const modelDetails = {};
 
@@ -132,17 +136,20 @@ class ModelManager {
         if (!isComplete) {
           allDownloaded = false;
           missingModels.push(modelType);
+          if (config.required) minimumReady = false;
         }
       } else {
         allDownloaded = false;
         missingModels.push(modelType);
         modelDetails[modelType] = { downloaded: false };
+        if (config.required) minimumReady = false;
       }
     }
 
     const result = {
       success: true,
       models_downloaded: allDownloaded,
+      minimum_ready: minimumReady,
       missing_models: missingModels,
       model_details: modelDetails,
       cache_path: cachePath,

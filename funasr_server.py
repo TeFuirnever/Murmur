@@ -246,7 +246,7 @@ class FunASRServer:
             return False
 
     def initialize(self):
-        """并行初始化FunASR模型"""
+        """并行初始化FunASR模型（标点模型为可选）"""
         if self.initialized:
             return {"success": True, "message": "模型已初始化"}
 
@@ -295,22 +295,26 @@ class FunASRServer:
                         "type": "timeout_error",
                     }
 
-            # 检查加载结果
-            failed_models = [name for name, success in results.items() if not success]
+            # ASR和VAD是必需的，标点模型可选
+            required_models = ["asr", "vad"]
+            failed_required = [name for name in required_models if not results.get(name)]
+            punc_ok = results.get("punc", False)
 
-            if failed_models:
-                error_msg = f"以下模型加载失败: {', '.join(failed_models)}"
+            if failed_required:
+                error_msg = f"以下必需模型加载失败: {', '.join(failed_required)}"
                 logger.error(error_msg)
                 return {"success": False, "error": error_msg, "type": "init_error"}
 
             total_time = time.time() - start_time
             self.initialized = True
+            status = "所有" if punc_ok else "核心（标点模型未加载）"
             logger.info(
-                f"所有FunASR模型并行初始化完成，总耗时: {total_time:.2f}秒"
+                f"FunASR{status}模型初始化完成，总耗时: {total_time:.2f}秒"
             )
             return {
                 "success": True,
-                "message": f"FunASR模型并行初始化成功，耗时: {total_time:.2f}秒",
+                "message": f"FunASR{status}模型初始化成功，耗时: {total_time:.2f}秒",
+                "punc_loaded": punc_ok,
             }
 
         except ImportError as e:
@@ -711,6 +715,7 @@ class FunASRServer:
             "speech_fsmn_vad_zh-cn-16k-common-pytorch",
             "punc_ct-transformer_zh-cn-common-vocab272727-pytorch",
         ]
+        required_repos = repos[:2]  # ASR + VAD are required; punc is optional
 
         def _repo_ready(repo_dir):
             # 目录存在且包含任意常见权重/配置文件即认为已就绪
@@ -725,17 +730,17 @@ class FunASRServer:
                     return True
             return False
 
-        missing = []
-        for r in repos:
+        missing_required = []
+        for r in required_repos:
             rd = os.path.join(cache_path, r)
             if not _repo_ready(rd):
-                missing.append(r)
+                missing_required.append(r)
 
-        if not missing:
+        if not missing_required:
             logger.info("模型文件存在，开始初始化")
             init_result = self.initialize()
         else:
-            logger.info(f"模型文件不存在或不完整：{', '.join(missing)}，跳过初始化")
+            logger.info(f"必需模型文件不存在或不完整：{', '.join(missing_required)}，跳过初始化")
             init_result = {
                 "success": False,
                 "error": "模型文件未下载，请先下载模型",
