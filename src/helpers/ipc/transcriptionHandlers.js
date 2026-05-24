@@ -214,7 +214,7 @@ function register(ipcMain, managers) {
       const result = databaseManager.saveTranscription(data);
       return {
         success: true,
-        lastInsertRowid: result.lastInsertRowid ?? result.id,
+        lastInsertRowid: result.lastInsertRowid,
         changes: result.changes,
       };
     } catch (error) {

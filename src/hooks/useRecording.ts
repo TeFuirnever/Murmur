@@ -291,8 +291,8 @@ export const useRecording = ({
                 const savedResult = await window.electronAPI.saveTranscription(
                   finalData as any,
                 );
-                if (savedResult?.id && onSaveCompleteRef.current) {
-                  onSaveCompleteRef.current({ id: savedResult.id });
+                if (savedResult?.lastInsertRowid && onSaveCompleteRef.current) {
+                  onSaveCompleteRef.current({ id: savedResult.lastInsertRowid });
                 }
                 if (window.electronAPI && window.electronAPI.log) {
                   window.electronAPI.log(
