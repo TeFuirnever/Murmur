@@ -106,6 +106,11 @@ export interface ElectronAPI {
   deleteTranscription: (
     id: number,
   ) => Promise<{ success: boolean; error?: string }>;
+  diarizeAudio: (id: number) => Promise<{
+    success: boolean;
+    segments?: Array<{ start_ms: number; end_ms: number; text: string; speaker: string }>;
+    error?: string;
+  }>;
   clearAllTranscriptions: () => Promise<{ success: boolean; error?: string }>;
   searchTranscriptions: (
     query: string,

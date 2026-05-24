@@ -103,7 +103,7 @@ function register(ipcMain, managers) {
             text: result.text,
             processed_text: result.raw_text || result.text,
             source_type: "file",
-            source_file_path: path.basename(audioPath),
+            source_file_path: audioPath,
             segments: result.segments ? JSON.stringify(result.segments) : null,
             duration: result.duration || null,
           });
@@ -121,6 +121,29 @@ function register(ipcMain, managers) {
 
   ipcMain.handle(C.TRANSCRIPTION.CANCEL, async () => {
     return await funasrManager.cancelTranscription();
+  });
+
+  ipcMain.handle(C.TRANSCRIPTION.DIARIZE, async (_event, id) => {
+    try {
+      const row = databaseManager.getTranscriptionById(id);
+      if (!row) return { success: false, error: "转录记录不存在" };
+
+      let segments = [];
+      if (row.segments) {
+        try { segments = JSON.parse(row.segments); } catch {}
+      }
+      if (!segments.length) return { success: false, error: "无分段数据" };
+
+      // Find audio file path — stored in source_file_path or as wav temp
+      const audioPath = row.source_file_path || row.audio_path;
+      if (!audioPath) return { success: false, error: "音频文件不存在" };
+
+      const result = await funasrManager.diarizeAudio(audioPath, segments);
+      return result;
+    } catch (err) {
+      logger.error("说话人分离失败:", err);
+      return { success: false, error: err.message };
+    }
   });
 
   ipcMain.handle(

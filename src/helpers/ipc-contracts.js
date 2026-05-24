@@ -49,6 +49,7 @@ module.exports = {
     EXPORT: "export-transcription",
     EXPORT_ALL: "export-transcriptions",
     AI_REVIEW: "ai-review-transcription",
+    DIARIZE: "diarize-transcription",
   },
   AI: {
     PROCESS: "process-text",

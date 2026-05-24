@@ -44,6 +44,8 @@ export function useFileTranscription() {
   );
   const [result, setResult] = React.useState<TranscriptionResult | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [isOptimizing, setOptimizing] = React.useState(false);
+  const [optimizedText, setOptimizedText] = React.useState<string | null>(null);
   const progressCleanup = React.useRef<(() => void) | null>(null);
 
   const cleanupProgress = () => {
@@ -162,6 +164,53 @@ export function useFileTranscription() {
         cleanupProgress();
         setResult(response);
         setState("done");
+
+        // 触发AI处理（如果启用）
+        if (
+          window.electronAPI?.processText &&
+          window.electronAPI?.getSetting
+        ) {
+          try {
+            const defaultMode = (await window.electronAPI.getSetting(
+              "default_mode",
+              null,
+            )) as string | null;
+            const useAI =
+              defaultMode === null
+                ? ((await window.electronAPI.getSetting(
+                    "enable_ai_optimization",
+                    true,
+                  )) as boolean)
+                : defaultMode !== "off";
+
+            if (useAI && response.text) {
+              const mode =
+                !defaultMode || defaultMode === "auto"
+                  ? (response.text.trim().length > 150 ||
+                      response.text.trim().split(/\s+/).length > 30
+                      ? "optimize_long"
+                      : "optimize")
+                  : defaultMode;
+              setOptimizing(true);
+              const aiResult = await Promise.race([
+                window.electronAPI.processText(response.text, mode),
+                new Promise((_, reject) =>
+                  setTimeout(
+                    () => reject(new Error("AI优化超时，已使用原文")),
+                    30000,
+                  ),
+                ),
+              ]) as { success?: boolean; text?: string };
+              if (aiResult?.success && aiResult?.text) {
+                setOptimizedText(aiResult.text);
+              }
+            }
+          } catch {
+            // AI处理失败不阻塞转录结果展示
+          } finally {
+            setOptimizing(false);
+          }
+        }
       } else {
         cleanupProgress();
         setError(response.error || "转录失败");
@@ -204,6 +253,8 @@ export function useFileTranscription() {
     progress,
     result,
     error,
+    isOptimizing,
+    optimizedText,
     selectFile,
     selectFileFromPath,
     startTranscription,

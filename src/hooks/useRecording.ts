@@ -211,17 +211,26 @@ export const useRecording = ({
           optimizationTimeoutRef.current = setTimeout(async () => {
             if (cancelledRef.current) return;
             try {
-              // 从设置中读取是否启用AI优化
-              const useAI = (await window.electronAPI.getSetting(
-                "enable_ai_optimization",
-                true,
-              )) as boolean;
+              // 从设置中读取AI处理模式（默认：auto）
+              let defaultMode = (await window.electronAPI.getSetting(
+                "default_mode",
+                null,
+              )) as string | null;
+
+              // 迁移旧设置：enable_ai_optimization false → "off"
+              if (defaultMode === null) {
+                const useAI = (await window.electronAPI.getSetting(
+                  "enable_ai_optimization",
+                  true,
+                )) as boolean;
+                defaultMode = useAI ? "auto" : "off";
+              }
 
               const finalData: Record<string, unknown> = {
                 ...transcriptionData,
               };
 
-              if (useAI) {
+              if (defaultMode !== "off") {
                 try {
                   if (window.electronAPI && window.electronAPI.log) {
                     window.electronAPI.log(
@@ -231,7 +240,10 @@ export const useRecording = ({
                     );
                   }
 
-                  const mode = determineProcessingMode(raw_text);
+                  const mode =
+                    defaultMode === "auto" || !defaultMode
+                      ? determineProcessingMode(raw_text)
+                      : defaultMode;
                   const result = (await Promise.race([
                     window.electronAPI.processText(raw_text, mode),
                     new Promise((_, reject) =>
@@ -304,7 +316,7 @@ export const useRecording = ({
 
                 // 通知UI更新并触发复制操作
                 if (
-                  useAI &&
+                  defaultMode !== "off" &&
                   finalData.processed_text &&
                   finalData.processed_text !== raw_text
                 ) {

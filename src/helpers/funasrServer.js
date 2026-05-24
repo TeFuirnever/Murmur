@@ -367,6 +367,19 @@ class FunASRServer {
     }
   }
 
+  async diarizeAudio(audioPath, segments) {
+    if (!this.serverReady) return { success: false, error: "服务器未就绪" };
+    try {
+      return await this.messageRouter.sendCommand(
+        "diarize",
+        { audio_path: audioPath, segments },
+        { timeout: 120000 },
+      );
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  }
+
   async cancelTranscription() {
     if (!this.serverReady) return { success: false, error: "服务器未就绪" };
     try {

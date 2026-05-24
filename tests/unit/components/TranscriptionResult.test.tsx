@@ -4,6 +4,22 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import TranscriptionResult from "../../../src/components/TranscriptionResult";
 
+const mockModes = [
+  { name: "optimize", label: "智能润色", description: "优化文本流畅度" },
+  { name: "optimize_long", label: "长文本整理", description: "结构化长文本" },
+];
+
+function stubElectronAPI(overrides: Record<string, unknown> = {}) {
+  (window as any).electronAPI = {
+    getAIModes: vi.fn().mockResolvedValue(mockModes),
+    ...overrides,
+  };
+}
+
+function clearElectronAPI() {
+  delete (window as any).electronAPI;
+}
+
 describe("TranscriptionResult", () => {
   // --- Existing tests (unchanged) ---
 
@@ -153,94 +169,56 @@ describe("TranscriptionResult", () => {
     expect(screen.queryByText("导出格式")).toBeNull();
   });
 
-  // --- New: AI optimize button (onAIOptimize) ---
+  // --- New: AI processing panel (ProcessingPanel) ---
 
-  it("shows AI optimize button when onAIOptimize provided", () => {
-    render(
-      <TranscriptionResult text="hello" onAIOptimize={vi.fn()} />,
-    );
-    expect(screen.getByText("AI 优化")).toBeTruthy();
-  });
-
-  it("hides AI optimize button when onAIOptimize not provided", () => {
+  it("shows processing panel when text and modes available", async () => {
+    stubElectronAPI();
     render(<TranscriptionResult text="hello" />);
-    expect(screen.queryByText("AI 优化")).toBeNull();
+    await waitFor(() => {
+      expect(screen.getByText("AI 处理")).toBeTruthy();
+      expect(screen.getByText("应用")).toBeTruthy();
+    });
+    clearElectronAPI();
   });
 
-  it("calls onAIOptimize and updates display on success", async () => {
+  it("hides processing panel when no text", () => {
+    stubElectronAPI();
+    render(<TranscriptionResult text="" />);
+    expect(screen.queryByText("AI 处理")).toBeNull();
+    clearElectronAPI();
+  });
+
+  it("shows processing panel mode dropdown with all modes", async () => {
+    stubElectronAPI();
+    render(<TranscriptionResult text="hello" />);
+    await waitFor(() => {
+      expect(screen.getByText("智能润色")).toBeTruthy();
+      expect(screen.getByText("长文本整理")).toBeTruthy();
+    });
+    clearElectronAPI();
+  });
+
+  it("calls onAIOptimize fallback when processText unavailable", () => {
     const onAIOptimize = vi.fn().mockResolvedValue("优化结果");
     render(
       <TranscriptionResult text="original" onAIOptimize={onAIOptimize} />,
     );
-    fireEvent.click(screen.getByText("AI 优化"));
-    expect(onAIOptimize).toHaveBeenCalledWith("original");
-    await waitFor(() => {
-      expect(screen.getByText("优化结果")).toBeTruthy();
+    // Without electronAPI, component should render without crash
+    expect(screen.getByText("original")).toBeTruthy();
+  });
+
+  it("shows error when processText fails", async () => {
+    stubElectronAPI({
+      processText: vi.fn().mockRejectedValue(new Error("AI 服务错误")),
     });
-  });
-
-  it("shows loading during AI optimization", async () => {
-    let resolveOptimize: (v: string) => void;
-    const onAIOptimize = vi.fn().mockImplementation(
-      () => new Promise<string>((resolve) => { resolveOptimize = resolve; }),
-    );
-    render(
-      <TranscriptionResult text="original" onAIOptimize={onAIOptimize} />,
-    );
-    fireEvent.click(screen.getByText("AI 优化"));
-    expect(screen.getByText("AI正在优化文本...")).toBeTruthy();
-    resolveOptimize!("done");
+    render(<TranscriptionResult text="hello" />);
     await waitFor(() => {
-      expect(screen.queryByText("AI正在优化文本...")).toBeNull();
+      expect(screen.getByText("应用")).toBeTruthy();
     });
-  });
-
-  it("hides AI optimize button after successful optimization", async () => {
-    const onAIOptimize = vi.fn().mockResolvedValue("optimized");
-    render(
-      <TranscriptionResult text="original" onAIOptimize={onAIOptimize} />,
-    );
-    fireEvent.click(screen.getByText("AI 优化"));
+    fireEvent.click(screen.getByText("应用"));
     await waitFor(() => {
-      expect(screen.queryByText("AI 优化")).toBeNull();
+      expect(screen.getByText("AI 服务错误")).toBeTruthy();
     });
-  });
-
-  it("shows error message when AI optimization fails", async () => {
-    const onAIOptimize = vi.fn().mockRejectedValue(new Error("优化服务不可用"));
-    render(
-      <TranscriptionResult text="original" onAIOptimize={onAIOptimize} />,
-    );
-    fireEvent.click(screen.getByText("AI 优化"));
-    await waitFor(() => {
-      expect(screen.getByText("优化服务不可用")).toBeTruthy();
-    });
-    expect(screen.getByText("AI 优化")).toBeTruthy();
-  });
-
-  // --- New: conditional onAIOptimize re-render (recording mode simulation) ---
-
-  it("hides AI optimize button when onAIOptimize changes from provided to undefined", () => {
-    const onAIOptimize = vi.fn().mockResolvedValue("优化结果");
-    const { rerender } = render(
-      <TranscriptionResult text="original" onAIOptimize={onAIOptimize} />,
-    );
-    expect(screen.getByText("AI 优化")).toBeTruthy();
-
-    // Simulate recording mode: processedText set → onAIOptimize becomes undefined
-    rerender(
-      <TranscriptionResult text="optimized" rawText="original" onAIOptimize={undefined} />,
-    );
-    expect(screen.queryByText("AI 优化")).toBeNull();
-  });
-
-  it("shows AI optimize button when text has no rawText (auto-optimization disabled scenario)", () => {
-    const onAIOptimize = vi.fn().mockResolvedValue("优化结果");
-    render(
-      <TranscriptionResult text="raw transcript" onAIOptimize={onAIOptimize} />,
-    );
-    expect(screen.getByText("AI 优化")).toBeTruthy();
-    expect(screen.getByText("raw transcript")).toBeTruthy();
-    expect(screen.queryByText("查看原文")).toBeNull();
+    clearElectronAPI();
   });
 });

@@ -86,6 +86,9 @@ class FunASRManager {
   transcribeFile(audioPath, options) {
     return this.server.transcribeFile(audioPath, options);
   }
+  diarizeAudio(audioPath, segments) {
+    return this.server.diarizeAudio(audioPath, segments);
+  }
   cancelTranscription() {
     return this.server.cancelTranscription();
   }

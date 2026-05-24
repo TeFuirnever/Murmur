@@ -62,6 +62,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getTranscriptionStats: () => ipcRenderer.invoke(C.TRANSCRIPTION.STATS),
   deleteTranscription: (id) => ipcRenderer.invoke(C.TRANSCRIPTION.DELETE, id),
   clearAllTranscriptions: () => ipcRenderer.invoke(C.TRANSCRIPTION.CLEAR),
+  diarizeAudio: (id) => ipcRenderer.invoke(C.TRANSCRIPTION.DIARIZE, id),
 
   // 设置管理
   getSettings: () => ipcRenderer.invoke(C.SETTINGS.GET_LEGACY),

@@ -44,6 +44,7 @@ export interface AICheckStatusResult {
 export interface AIMode {
   name: string;
   label: string;
+  description: string;
 }
 
 export interface AIProviderPreset {
@@ -78,6 +79,8 @@ export interface TranscriptionRecord {
 export interface TranscriptionSaveResult {
   success: boolean;
   id?: number;
+  lastInsertRowid?: number;
+  changes?: number;
   error?: string;
 }
 

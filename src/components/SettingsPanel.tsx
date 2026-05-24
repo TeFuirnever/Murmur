@@ -9,6 +9,42 @@ interface SettingsPanelProps {
 }
 
 const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
+  const [aiMode, setAiMode] = React.useState<string>("auto");
+  const [aiModeLoaded, setAiModeLoaded] = React.useState(false);
+
+  React.useEffect(() => {
+    if (window.electronAPI?.getSetting) {
+      (async () => {
+        try {
+          const saved = (await window.electronAPI.getSetting(
+            "default_mode",
+            null,
+          )) as string | null;
+          if (saved) {
+            setAiMode(saved);
+          } else {
+            const useAI = (await window.electronAPI.getSetting(
+              "enable_ai_optimization",
+              true,
+            )) as boolean;
+            setAiMode(useAI ? "auto" : "off");
+          }
+        } catch {}
+        setAiModeLoaded(true);
+      })();
+    } else {
+      setAiModeLoaded(true);
+    }
+  }, []);
+
+  const handleAiModeChange = async (mode: string) => {
+    setAiMode(mode);
+    if (window.electronAPI?.saveSetting) {
+      try {
+        await window.electronAPI.saveSetting("default_mode", mode);
+      } catch {}
+    }
+  };
   const showAlert = (alert: { title: string; description: string }) => {
     toast(alert.title, {
       description: alert.description,
@@ -71,6 +107,39 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
                 onRequest={testAccessibilityPermission}
                 buttonText="测试权限"
               />
+            </div>
+          </div>
+
+          {/* AI处理设置 */}
+          <div className="border-t pt-8">
+            <h3 className="text-lg font-semibold text-[#1d1d1f] mb-4 text-heading">
+              AI 处理
+            </h3>
+            <p className="text-sm text-[#86868b] mb-4">
+              选择录音和文件转录后自动应用的 AI 处理模式。
+            </p>
+            <div className="bg-[#f5f5f7] dark:bg-[#1c1c1e] p-4 rounded-lg">
+              <label
+                htmlFor="ai-mode-select"
+                className="block text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7] mb-2"
+              >
+                默认处理模式
+              </label>
+              <select
+                id="ai-mode-select"
+                value={aiMode}
+                onChange={(e) => handleAiModeChange(e.target.value)}
+                disabled={!aiModeLoaded}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50"
+              >
+                <option value="auto">自动（根据文本长度智能选择）</option>
+                <option value="optimize">智能润色</option>
+                <option value="optimize_long">长文本整理</option>
+                <option value="off">关闭自动处理</option>
+              </select>
+              <p className="text-xs text-[#86868b] mt-2">
+                关闭后仍可在转录结果页面手动选择处理模式。
+              </p>
             </div>
           </div>
 

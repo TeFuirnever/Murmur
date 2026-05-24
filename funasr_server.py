@@ -71,6 +71,7 @@ class FunASRServer:
         self.asr_model = None
         self.vad_model = None
         self.punc_model = None
+        self.cam_model = None
         self.initialized = False
         self.running = True
         self.transcription_count = 0
@@ -795,6 +796,116 @@ class FunASRServer:
 
         logger.info("输出线程退出")
 
+    def _load_cam_model(self):
+        """懒加载CAM++声纹模型（仅在首次diarize调用时加载）"""
+        if self.cam_model is not None:
+            return
+
+        import psutil
+
+        mem = psutil.virtual_memory()
+        avail_gb = mem.available / (1024 ** 3)
+        if avail_gb < 2.0:
+            raise RuntimeError(
+                f"内存不足，需要至少2GB可用内存，当前可用: {avail_gb:.1f}GB"
+            )
+
+        import time
+
+        from funasr import AutoModel
+
+        logger.info("正在加载CAM++声纹模型...")
+        start = time.time()
+        self.cam_model = AutoModel(
+            model="damo/speech_campplus_sv_zh-cn_16k-common",
+            model_revision="v2.0.4",
+        )
+        elapsed = time.time() - start
+        logger.info(f"CAM++模型加载完成，耗时: {elapsed:.2f}秒")
+
+    def diarize_audio(self, audio_path, segments):
+        """
+        对已有segments进行说话人识别。
+        参数:
+            audio_path: 音频文件路径
+            segments: [{start_ms, end_ms, text}, ...]
+        返回:
+            segments列表，每个元素增加speaker字段
+        """
+        import librosa
+        import numpy as np
+
+        if not segments or len(segments) == 0:
+            return {"success": False, "error": "无分段数据"}
+
+        try:
+            self._load_cam_model()
+        except RuntimeError as e:
+            return {"success": False, "error": str(e)}
+
+        # 加载整个音频文件到内存
+        audio, sr = librosa.load(audio_path, sr=16000, mono=True)
+
+        embeddings = []
+        valid_indices = []
+        for i, seg in enumerate(segments):
+            start_sample = int(seg["start_ms"] / 1000.0 * sr)
+            end_sample = int(seg["end_ms"] / 1000.0 * sr)
+            start_sample = max(0, start_sample)
+            end_sample = min(len(audio), end_sample)
+
+            if end_sample - start_sample < sr * 0.1:
+                continue  # 跳过大短的片段（<100ms）
+
+            chunk = audio[start_sample:end_sample]
+            # 使用CAM++提取声纹嵌入
+            result = self.cam_model(chunk, output_dir=None)
+            if result and len(result) > 0:
+                emb = result[0].get("spk_embedding") or result[0].get("embedding")
+                if emb is not None:
+                    embeddings.append(np.array(emb).flatten())
+                    valid_indices.append(i)
+
+        if len(embeddings) == 0:
+            for seg in segments:
+                seg["speaker"] = "Speaker"
+            return {"success": True, "segments": segments}
+
+        # 余弦相似度聚类
+        embeddings = np.stack(embeddings)  # (N, D)
+        N = len(embeddings)
+        threshold = 0.7
+        labels = list(range(N))  # 初始每个embedding一个cluster
+
+        for i in range(N):
+            for j in range(i + 1, N):
+                sim = np.dot(embeddings[i], embeddings[j]) / (
+                    np.linalg.norm(embeddings[i]) * np.linalg.norm(embeddings[j]) + 1e-8
+                )
+                if sim > threshold:
+                    # 合并cluster
+                    root_i = labels[i]
+                    root_j = labels[j]
+                    new_label = min(root_i, root_j)
+                    for k in range(N):
+                        if labels[k] == root_i or labels[k] == root_j:
+                            labels[k] = new_label
+
+        # 重映射label到连续编号
+        unique_labels = sorted(set(labels))
+        label_map = {old: f"Speaker {chr(65 + idx)}" for idx, old in enumerate(unique_labels)}
+        if len(unique_labels) == 1:
+            label_map[unique_labels[0]] = "Speaker"
+
+        speaker_for_index = {}
+        for vi, label_id in zip(valid_indices, labels):
+            speaker_for_index[vi] = label_map[label_id]
+
+        for i, seg in enumerate(segments):
+            seg["speaker"] = speaker_for_index.get(i, "Speaker")
+
+        return {"success": True, "segments": segments}
+
     def run(self):
         """运行服务器主循环"""
         logger.info("FunASR服务器启动")
@@ -909,6 +1020,10 @@ class FunASRServer:
                 elif command.get("action") == "cancel_transcription":
                     self.cancel_event.set()
                     result = {"success": True, "message": "取消信号已发送"}
+                elif command.get("action") == "diarize":
+                    audio_path = command.get("audio_path")
+                    segments = command.get("segments", [])
+                    result = self.diarize_audio(audio_path, segments)
                 elif command.get("action") == "ping":
                     result = {"success": True, "action": "pong"}
                 elif command.get("action") == "exit":
