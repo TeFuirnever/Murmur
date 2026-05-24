@@ -443,8 +443,11 @@ class FunASRServer:
                 return {"success": False, "error": result}
             audio_path = result
 
-            # 获取音频时长
-            duration = self._get_audio_duration(audio_path)
+            # 使用 librosa 将非 WAV 转为 16kHz 单声道 WAV
+            wav_path, was_converted = self._convert_to_wav(audio_path)
+
+            # 获取音频时长（从转换后的 WAV 获取更准确）
+            duration = self._get_audio_duration(wav_path)
 
             # 发送进度：VAD阶段
             self.response_queue.put({
@@ -461,7 +464,7 @@ class FunASRServer:
 
             vad_segments = []
             if use_vad and self.vad_model:
-                vad_result = self.vad_model.generate(input=audio_path)
+                vad_result = self.vad_model.generate(input=wav_path)
                 if vad_result and len(vad_result) > 0:
                     vad_segments = vad_result[0].get("value", [])
 
@@ -480,7 +483,7 @@ class FunASRServer:
                 return {"success": False, "error": "转录已取消", "request_id": request_id}
 
             asr_result = self.asr_model.generate(
-                input=audio_path,
+                input=wav_path,
                 batch_size_s=60
             )
             if asr_result and len(asr_result) > 0:
@@ -562,7 +565,7 @@ class FunASRServer:
             if self.transcription_count % 5 == 0:
                 self._cleanup_memory()
 
-            return {
+            result = {
                 "success": True,
                 "text": text,
                 "raw_text": raw_text,
@@ -574,11 +577,41 @@ class FunASRServer:
             }
         except Exception as e:
             logger.error(f"文件转录异常: {str(e)}\n{traceback.format_exc()}")
-            return {
+            result = {
                 "success": False,
                 "error": str(e),
                 "request_id": request_id
             }
+        finally:
+            if was_converted and wav_path != audio_path:
+                try:
+                    os.unlink(wav_path)
+                except Exception:
+                    pass
+        return result
+
+    def _convert_to_wav(self, audio_path):
+        """使用 librosa/soundfile 将非 WAV 音频转为 16kHz 单声道 WAV 临时文件"""
+        ext = os.path.splitext(audio_path)[1].lower()
+        if ext in ('.wav', '.flac'):
+            return audio_path, False
+
+        try:
+            import librosa
+            import soundfile as sf
+
+            y, sr = librosa.load(audio_path, sr=16000, mono=True)
+            tmp = tempfile.NamedTemporaryFile(
+                suffix='.wav', delete=False,
+                prefix='murmur_conv_', dir=tempfile.gettempdir()
+            )
+            sf.write(tmp.name, y, 16000)
+            tmp.close()
+            logger.info(f"librosa 转换完成: {audio_path} -> {tmp.name}")
+            return tmp.name, True
+        except Exception as e:
+            logger.warning(f"librosa 转换失败: {e}")
+            return audio_path, False
 
     def _get_audio_duration(self, audio_path):
         """获取音频时长"""

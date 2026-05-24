@@ -5,7 +5,6 @@ const ServerMessageRouter = require("./serverMessageRouter");
 const {
   createTempAudioFile,
   cleanupTempFile,
-  convertAudioFile,
 } = require("./audioFileHelpers");
 
 class FunASRServer {
@@ -359,17 +358,10 @@ class FunASRServer {
       }
     }
 
-    let wavPath = audioPath;
-    let converted = false;
     try {
-      if (ext !== ".wav" && ext !== ".flac") {
-        wavPath = await convertAudioFile(this.logger, audioPath);
-        converted = true;
-      }
-
       return await this.messageRouter.sendCommand(
         "transcribe_file",
-        { audio_path: wavPath, options },
+        { audio_path: audioPath, options },
         {
           timeout: 600000,
           timeoutError: "文件转录超时（10分钟）",
@@ -382,14 +374,6 @@ class FunASRServer {
         error: err.message,
         code: "TRANSCRIPTION_FAILED",
       };
-    } finally {
-      if (converted && wavPath !== audioPath) {
-        try {
-          fs.unlinkSync(wavPath);
-        } catch (e) {
-          this.logger?.warn?.("WAV cleanup failed", e.message);
-        }
-      }
     }
   }
 
