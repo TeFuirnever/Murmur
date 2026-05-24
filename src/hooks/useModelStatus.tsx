@@ -120,9 +120,10 @@ export function ModelStatusProvider({
       }
 
       const modelsDownloaded = modelFiles.models_downloaded;
+      const minimumReady = (modelFiles as any).minimum_ready || modelsDownloaded;
       const missingModels = modelFiles.missing_models || [];
 
-      if (!modelsDownloaded) {
+      if (!minimumReady) {
         setModelStatus((prev) => ({
           ...prev,
           isLoading: false,

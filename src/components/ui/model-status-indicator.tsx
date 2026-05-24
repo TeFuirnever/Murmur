@@ -227,7 +227,7 @@ export const ModelDownloadProgress: React.FC<ModelDownloadProgressProps> = ({
                 需要下载语音识别模型
               </h3>
               <p className="text-xs text-orange-600 dark:text-orange-300">
-                首次使用需下载约1.1GB的本地语音模型（FunASR）
+                首次使用需下载语音识别模型（核心约840MB，含标点约1.1GB）
               </p>
             </div>
           </div>
