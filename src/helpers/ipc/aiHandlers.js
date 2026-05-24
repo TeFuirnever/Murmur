@@ -88,6 +88,10 @@ async function processTextWithAI(
 
     const model =
       (await databaseManager.getSetting("ai_model")) || "gpt-3.5-turbo";
+    const temperature =
+      parseFloat(await databaseManager.getSetting("ai_temperature")) || 0.3;
+    const maxTokens =
+      parseInt(await databaseManager.getSetting("ai_max_tokens"), 10) || 2000;
 
     if (!validateAIBaseUrl(baseUrl, { allowLocalhost: isLocal })) {
       return {
@@ -107,8 +111,8 @@ async function processTextWithAI(
         { role: "system", content: system },
         { role: "user", content: user },
       ],
-      temperature: 0.3,
-      max_tokens: 2000,
+      temperature: temperature,
+      max_tokens: maxTokens,
       stream: false,
     };
 

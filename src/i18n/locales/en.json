@@ -55,6 +55,8 @@
       "missingKey": "Please enter your API key first",
       "emptyKey": "API key cannot be empty",
       "incomplete": "Configuration incomplete",
+      "ai_temperature": "Creativity (Temperature)",
+      "ai_max_tokens": "Max Output Length",
       "providers": {
         "tongyi": "Alibaba Tongyi",
         "zhipu": "Zhipu GLM",

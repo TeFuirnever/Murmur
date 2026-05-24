@@ -34,6 +34,8 @@ const SettingsPage = () => {
     ai_api_key: "",
     ai_base_url: "https://api.openai.com/v1",
     ai_model: "gpt-3.5-turbo",
+    ai_temperature: 0.3,
+    ai_max_tokens: 2000,
     enable_ai_optimization: true,
     window_always_on_top: true,
     auto_paste: "paste",
@@ -111,6 +113,10 @@ const SettingsPage = () => {
           ai_base_url: (allSettings.ai_base_url ||
             "https://api.openai.com/v1") as string,
           ai_model: (allSettings.ai_model || "gpt-3.5-turbo") as string,
+          ai_temperature:
+            parseFloat(allSettings.ai_temperature as string) || 0.3,
+          ai_max_tokens:
+            parseInt(allSettings.ai_max_tokens as string, 10) || 2000,
           enable_ai_optimization: allSettings.enable_ai_optimization !== false,
           window_always_on_top: allSettings.window_always_on_top !== false,
           auto_paste: (allSettings.auto_paste || "paste") as string,
@@ -176,6 +182,14 @@ const SettingsPage = () => {
           settings.ai_base_url,
         );
         await window.electronAPI.setSetting("ai_model", settings.ai_model);
+        await window.electronAPI.setSetting(
+          "ai_temperature",
+          settings.ai_temperature,
+        );
+        await window.electronAPI.setSetting(
+          "ai_max_tokens",
+          settings.ai_max_tokens,
+        );
         await window.electronAPI.setSetting(
           "enable_ai_optimization",
           settings.enable_ai_optimization,
@@ -772,6 +786,67 @@ const SettingsPage = () => {
                   <p className="mt-1 text-xs text-[#86868b]">
                     选择用于文本优化的AI模型。推荐使用阿里云Qwen3模型获得更好的中文处理效果。
                   </p>
+
+                  {/* AI 参数调节 */}
+                  <div className="mt-4 space-y-3">
+                    <div>
+                      <div className="flex justify-between">
+                        <label className="text-xs font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
+                          {t("settings.ai_temperature", "创造性 (Temperature)")}
+                        </label>
+                        <span className="text-xs text-[#86868b]">
+                          {settings.ai_temperature.toFixed(1)}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.1"
+                        value={settings.ai_temperature}
+                        onChange={(e) =>
+                          handleInputChange(
+                            "ai_temperature",
+                            parseFloat(e.target.value),
+                          )
+                        }
+                        className="w-full h-1.5 bg-[#d2d2d7] dark:bg-[#3a3a3c] rounded-full appearance-none cursor-pointer accent-[#0071e3]"
+                      />
+                      <div className="flex justify-between text-[10px] text-[#86868b]">
+                        <span>精确</span>
+                        <span>创造</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between">
+                        <label className="text-xs font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
+                          {t("settings.ai_max_tokens", "最大输出长度")}
+                        </label>
+                        <span className="text-xs text-[#86868b]">
+                          {settings.ai_max_tokens}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="500"
+                        max="4096"
+                        step="256"
+                        value={settings.ai_max_tokens}
+                        onChange={(e) =>
+                          handleInputChange(
+                            "ai_max_tokens",
+                            parseInt(e.target.value, 10),
+                          )
+                        }
+                        className="w-full h-1.5 bg-[#d2d2d7] dark:bg-[#3a3a3c] rounded-full appearance-none cursor-pointer accent-[#0071e3]"
+                      />
+                      <div className="flex justify-between text-[10px] text-[#86868b]">
+                        <span>500</span>
+                        <span>4096</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 

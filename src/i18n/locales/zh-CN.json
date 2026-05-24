@@ -55,6 +55,8 @@
       "missingKey": "请先输入API密钥",
       "emptyKey": "API密钥不能为空",
       "incomplete": "配置不完整",
+      "ai_temperature": "创造性 (Temperature)",
+      "ai_max_tokens": "最大输出长度",
       "providers": {
         "tongyi": "阿里云通义",
         "zhipu": "智谱 GLM",

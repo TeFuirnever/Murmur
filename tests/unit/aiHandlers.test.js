@@ -8,6 +8,14 @@ vi.mock("electron", () => ({
   },
 }));
 
+function mockFetch(response) {
+  global.fetch = vi.fn(async () => ({
+    ok: true,
+    status: 200,
+    json: async () => response,
+  }));
+}
+
 describe("aiHandlers", () => {
   let register;
   let processTextWithAI;
@@ -74,6 +82,67 @@ describe("aiHandlers", () => {
       );
       expect(result.success).toBe(false);
       expect(result.error).toContain("API密钥");
+    });
+
+    it("uses configurable temperature and max_tokens from settings", async () => {
+      const db = {
+        getSetting: vi.fn(async (key) => {
+          if (key === "ai_api_key") return "test-key";
+          if (key === "ai_base_url") return "https://api.openai.com/v1";
+          if (key === "ai_model") return "gpt-4";
+          if (key === "ai_temperature") return 0.7;
+          if (key === "ai_max_tokens") return 4000;
+          return null;
+        }),
+      };
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+
+      mockFetch({
+        choices: [{ message: { content: "优化后文本" } }],
+        usage: { total_tokens: 100 },
+      });
+
+      const result = await processTextWithAI(
+        "原始文本",
+        "optimize",
+        db,
+        logger,
+      );
+
+      expect(result.success).toBe(true);
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          method: "POST",
+        }),
+      );
+
+      const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+      expect(body.temperature).toBe(0.7);
+      expect(body.max_tokens).toBe(4000);
+    });
+
+    it("uses default temperature and max_tokens when not configured", async () => {
+      const db = {
+        getSetting: vi.fn(async (key) => {
+          if (key === "ai_api_key") return "test-key";
+          if (key === "ai_base_url") return "https://api.openai.com/v1";
+          if (key === "ai_model") return "gpt-3.5-turbo";
+          return null;
+        }),
+      };
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+
+      mockFetch({
+        choices: [{ message: { content: "优化后" } }],
+        usage: { total_tokens: 50 },
+      });
+
+      await processTextWithAI("test", "optimize", db, logger);
+
+      const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+      expect(body.temperature).toBe(0.3);
+      expect(body.max_tokens).toBe(2000);
     });
   });
 
