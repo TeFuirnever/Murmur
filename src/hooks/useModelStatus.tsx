@@ -120,8 +120,7 @@ export function ModelStatusProvider({
       }
 
       const modelsDownloaded = modelFiles.models_downloaded;
-      const minimumReady =
-        modelFiles.minimum_ready || modelsDownloaded;
+      const minimumReady = modelFiles.minimum_ready || modelsDownloaded;
       const missingModels = modelFiles.missing_models || [];
 
       if (!minimumReady) {
