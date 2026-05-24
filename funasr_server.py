@@ -436,6 +436,9 @@ class FunASRServer:
         request_id = options.get("request_id", "")
         self.cancel_event.clear()  # 开始新转录前重置取消信号
 
+        wav_path = audio_path
+        was_converted = False
+
         try:
             # 路径验证
             valid, result = self._validate_audio_path(audio_path)
@@ -591,7 +594,11 @@ class FunASRServer:
         return result
 
     def _convert_to_wav(self, audio_path):
-        """使用 librosa/soundfile 将非 WAV 音频转为 16kHz 单声道 WAV 临时文件"""
+        """使用 librosa/soundfile 将非 WAV 音频转为 16kHz 单声道 WAV 临时文件
+
+        FLAC 直接返回，依赖 FunASR/soundfile 原生支持。
+        WAV 以外的格式转换失败时抛出 RuntimeError。
+        """
         ext = os.path.splitext(audio_path)[1].lower()
         if ext in ('.wav', '.flac'):
             return audio_path, False
@@ -611,7 +618,7 @@ class FunASRServer:
             return tmp.name, True
         except Exception as e:
             logger.warning(f"librosa 转换失败: {e}")
-            return audio_path, False
+            raise RuntimeError(f"音频格式转换失败（{ext}）: {e}。请确认已安装 librosa 和 soundfile") from e
 
     def _get_audio_duration(self, audio_path):
         """获取音频时长"""

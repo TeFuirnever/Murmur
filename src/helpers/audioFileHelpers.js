@@ -81,6 +81,7 @@ async function cleanupTempFile(tempAudioPath) {
   }
 }
 
+// Reserved for Layer 2/3 fallback (Web Audio API / on-demand ffmpeg)
 async function convertAudioFile(logger, inputPath) {
   const ext = path.extname(inputPath).toLowerCase();
   if ([".wav", ".flac"].includes(ext)) return inputPath;
