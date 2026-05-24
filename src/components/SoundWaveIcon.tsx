@@ -1,4 +1,3 @@
-
 export const SoundWaveIcon = ({
   size = 16,
   isActive = false,

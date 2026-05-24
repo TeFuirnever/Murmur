@@ -202,7 +202,9 @@ class FunASRManager {
       }
 
       return {
-        success: installStatus.installed && (modelStatus.minimum_ready || modelStatus.models_downloaded),
+        success:
+          installStatus.installed &&
+          (modelStatus.minimum_ready || modelStatus.models_downloaded),
         error: error,
         installed: installStatus.installed,
         models_downloaded: modelStatus.models_downloaded,

@@ -120,7 +120,8 @@ export function ModelStatusProvider({
       }
 
       const modelsDownloaded = modelFiles.models_downloaded;
-      const minimumReady = (modelFiles as any).minimum_ready || modelsDownloaded;
+      const minimumReady =
+        (modelFiles as any).minimum_ready || modelsDownloaded;
       const missingModels = modelFiles.missing_models || [];
 
       if (!minimumReady) {
@@ -301,8 +302,7 @@ export function ModelStatusProvider({
             }
             return {
               ...prev,
-              downloadProgress:
-                p.overall_progress || p.progress || 0,
+              downloadProgress: p.overall_progress || p.progress || 0,
               modelProgress: mp,
               stage: "downloading",
             };

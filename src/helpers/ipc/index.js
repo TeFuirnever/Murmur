@@ -23,10 +23,7 @@ function wrapWithRateLimits(ipcMain) {
   ipcMain.handle = function (channel, handler) {
     const limits = RATE_LIMITS[channel];
     if (limits) {
-      return originalHandle(
-        channel,
-        createRateLimitedHandler(handler, limits),
-      );
+      return originalHandle(channel, createRateLimitedHandler(handler, limits));
     }
     return originalHandle(channel, handler);
   };

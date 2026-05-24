@@ -6,7 +6,8 @@ const C = require("../ipc-contracts");
 const exportFormatters = require("../exportFormatters");
 
 function register(ipcMain, managers) {
-  const { funasrManager, databaseManager, logger, processTextWithAI } = managers;
+  const { funasrManager, databaseManager, logger, processTextWithAI } =
+    managers;
 
   ipcMain.handle(C.TRANSCRIPTION.AUDIO, async (event, audioData, options) => {
     return await funasrManager.transcribeAudio(audioData, options);

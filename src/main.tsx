@@ -177,7 +177,9 @@ function initializeApp() {
 
   // 再用用户保存的偏好覆盖
   if (window.electronAPI?.getSetting) {
-    window.electronAPI.getSetting("theme", "system").then((theme: unknown) => applyTheme(theme as string));
+    window.electronAPI
+      .getSetting("theme", "system")
+      .then((theme: unknown) => applyTheme(theme as string));
   }
 
   // 监听系统主题变化（仅 system 模式下生效）

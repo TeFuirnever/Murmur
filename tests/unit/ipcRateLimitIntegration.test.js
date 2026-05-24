@@ -21,7 +21,10 @@ describe("IPC rate limit integration", () => {
 
   function createManagers() {
     return {
-      environmentManager: { exportConfig: vi.fn(), validateEnvironment: vi.fn() },
+      environmentManager: {
+        exportConfig: vi.fn(),
+        validateEnvironment: vi.fn(),
+      },
       funasrManager: {
         checkPythonInstallation: vi.fn(),
         installPython: vi.fn(),

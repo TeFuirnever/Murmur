@@ -141,7 +141,9 @@ class DatabaseManager {
       `);
 
       // Rebuild index for existing data
-      this.db.exec("INSERT INTO transcriptions_fts(transcriptions_fts) VALUES ('rebuild')");
+      this.db.exec(
+        "INSERT INTO transcriptions_fts(transcriptions_fts) VALUES ('rebuild')",
+      );
     } catch (_e) {
       // FTS5 not available — searchTranscriptions will use LIKE fallback
     }

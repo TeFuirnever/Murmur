@@ -29,7 +29,12 @@ class FunASRServer {
 
   async _startFunASRServer(pythonEnv, pythonCmd, serverPath, modelCachePath) {
     try {
-      this._saveStartupParams({ pythonEnv, pythonCmd, serverPath, modelCachePath });
+      this._saveStartupParams({
+        pythonEnv,
+        pythonCmd,
+        serverPath,
+        modelCachePath,
+      });
       this._stopping = false;
       this.logger.info && this.logger.info("启动FunASR服务器...");
 

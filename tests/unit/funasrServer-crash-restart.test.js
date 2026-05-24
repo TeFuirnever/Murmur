@@ -21,7 +21,12 @@ describe("FunASR server auto-restart", () => {
 
   it("saves startup params for restart", () => {
     const server = new FunASRServer(logger);
-    server._saveStartupParams({ pythonEnv: "env", pythonCmd: "python3", serverPath: "/path/server.py", modelCachePath: "/models" });
+    server._saveStartupParams({
+      pythonEnv: "env",
+      pythonCmd: "python3",
+      serverPath: "/path/server.py",
+      modelCachePath: "/models",
+    });
     expect(server._startupParams).toEqual({
       pythonEnv: "env",
       pythonCmd: "python3",
@@ -34,7 +39,12 @@ describe("FunASR server auto-restart", () => {
     const server = new FunASRServer(logger);
     server.restartCount = 4;
     server.maxRestarts = 3;
-    server._startupParams = { pythonEnv: {}, pythonCmd: "python3", serverPath: "/path", modelCachePath: "/models" };
+    server._startupParams = {
+      pythonEnv: {},
+      pythonCmd: "python3",
+      serverPath: "/path",
+      modelCachePath: "/models",
+    };
     server._startFunASRServer = vi.fn();
 
     await server._handleServerCrash();
@@ -47,7 +57,12 @@ describe("FunASR server auto-restart", () => {
     const server = new FunASRServer(logger);
     server.restartCount = 1;
     server.maxRestarts = 3;
-    const params = { pythonEnv: {}, pythonCmd: "python3", serverPath: "/path", modelCachePath: "/models" };
+    const params = {
+      pythonEnv: {},
+      pythonCmd: "python3",
+      serverPath: "/path",
+      modelCachePath: "/models",
+    };
     server._startupParams = params;
     server._startFunASRServer = vi.fn(async () => {});
     server.serverProcess = null;
@@ -68,7 +83,12 @@ describe("FunASR server auto-restart", () => {
     const server = new FunASRServer(logger);
     server.restartCount = 0;
     server.maxRestarts = 3;
-    server._startupParams = { pythonEnv: {}, pythonCmd: "python3", serverPath: "/path", modelCachePath: "/models" };
+    server._startupParams = {
+      pythonEnv: {},
+      pythonCmd: "python3",
+      serverPath: "/path",
+      modelCachePath: "/models",
+    };
     server._startFunASRServer = vi.fn(async () => {});
 
     await server._handleServerCrash();

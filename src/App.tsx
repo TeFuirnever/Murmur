@@ -6,14 +6,7 @@ import { useHotkey } from "./hooks/useHotkey";
 import { useWindowDrag } from "./hooks/useWindowDrag";
 import { useRecording } from "./hooks/useRecording";
 import { useModelStatus } from "./hooks/useModelStatus";
-import {
-  Settings,
-  History,
-  Minus,
-  Square,
-  X,
-  Maximize2,
-} from "lucide-react";
+import { Settings, History, Minus, Square, X, Maximize2 } from "lucide-react";
 import SettingsPanel from "./components/SettingsPanel";
 import { ModelDownloadProgress } from "./components/ui/model-status-indicator";
 import FileImport from "./components/FileImport";
@@ -116,7 +109,11 @@ export default function App() {
   // 处理录音完成（FunASR识别完成）
   const handleRecordingComplete = useCallback(
     async (transcriptionResult: string | Record<string, unknown>) => {
-      if (typeof transcriptionResult !== "string" && transcriptionResult.success && transcriptionResult.text) {
+      if (
+        typeof transcriptionResult !== "string" &&
+        transcriptionResult.success &&
+        transcriptionResult.text
+      ) {
         // 立即显示FunASR识别的原始文本
         setOriginalText(transcriptionResult.text as string);
         setShowTextArea(true);

@@ -325,7 +325,9 @@ export const useRecording = ({
               if (window.electronAPI && window.electronAPI.log) {
                 window.electronAPI.log("error", "处理和保存转录时出错:", err);
               }
-              setError("转录处理失败: " + ((err as Error).message || "未知错误"));
+              setError(
+                "转录处理失败: " + ((err as Error).message || "未知错误"),
+              );
             } finally {
               setIsOptimizing(false);
             }

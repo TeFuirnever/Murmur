@@ -56,12 +56,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   saveTranscription: (data) => ipcRenderer.invoke(C.TRANSCRIPTION.SAVE, data),
   getTranscriptions: (limit, offset) =>
     ipcRenderer.invoke(C.TRANSCRIPTION.GET_ALL, limit, offset),
-  getTranscription: (id) =>
-    ipcRenderer.invoke(C.TRANSCRIPTION.GET, id),
+  getTranscription: (id) => ipcRenderer.invoke(C.TRANSCRIPTION.GET, id),
   searchTranscriptions: (query, limit) =>
     ipcRenderer.invoke(C.TRANSCRIPTION.SEARCH, query, limit),
-  getTranscriptionStats: () =>
-    ipcRenderer.invoke(C.TRANSCRIPTION.STATS),
+  getTranscriptionStats: () => ipcRenderer.invoke(C.TRANSCRIPTION.STATS),
   deleteTranscription: (id) => ipcRenderer.invoke(C.TRANSCRIPTION.DELETE, id),
   clearAllTranscriptions: () => ipcRenderer.invoke(C.TRANSCRIPTION.CLEAR),
 

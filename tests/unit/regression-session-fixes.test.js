@@ -128,7 +128,10 @@ describe("FUNASR.STATUS spread order regression", () => {
 describe("FUNASR.STATUS status_message", () => {
   function createEnvManagers(overrides = {}) {
     return {
-      environmentManager: { exportConfig: vi.fn(), validateEnvironment: vi.fn() },
+      environmentManager: {
+        exportConfig: vi.fn(),
+        validateEnvironment: vi.fn(),
+      },
       funasrManager: {
         checkPythonInstallation: vi.fn(),
         installPython: vi.fn(),

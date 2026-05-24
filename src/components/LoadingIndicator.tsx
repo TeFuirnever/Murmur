@@ -1,4 +1,3 @@
-
 export const LoadingIndicator = ({ size = 20 }: { size?: number }) => {
   return (
     <div className="flex items-center justify-center gap-0.5">
