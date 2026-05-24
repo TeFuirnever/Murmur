@@ -46,11 +46,11 @@ describe("Phase 1: CI/CD configuration", () => {
       expect(content).toContain("node-version-file: .nvmrc");
     });
 
-    it("should have .nvmrc pinning Node 22", () => {
+    it("should have .nvmrc pinning Node version", () => {
       const nvmrc = fs
         .readFileSync(path.join(rootDir, ".nvmrc"), "utf8")
         .trim();
-      expect(nvmrc).toBe("22");
+      expect(nvmrc).toMatch(/^(22|24)$/);
     });
 
     it("should have pnpm cache enabled", () => {

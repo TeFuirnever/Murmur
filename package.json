@@ -14,7 +14,7 @@
     "dev:renderer": "cd src && vite",
     "build:preload": "esbuild preload.js --bundle --platform=node --format=cjs --external:electron --outfile=dist-preload/preload.js",
     "build": "npm run build:preload && cd src && vite build && cd .. && electron-builder",
-    "postinstall": "electron-builder install-app-deps",
+    "postinstall": "electron-rebuild",
     "build:renderer": "cd src && vite build",
     "prepare:python": "pip install funasr modelscope torch torchaudio librosa numpy && python download_models.py",
     "prepare:python:uv": "uv sync && uv run python download_models.py",
