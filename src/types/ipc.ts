@@ -145,6 +145,7 @@ export interface FunASRStatusResult {
 export interface ModelCheckResult {
   success?: boolean;
   models_downloaded: boolean;
+  minimum_ready?: boolean;
   missing_models: string[];
   model_path?: string;
   error?: string;

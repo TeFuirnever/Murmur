@@ -424,6 +424,7 @@ class DatabaseManager {
       if (key in allSettings) filtered[key] = allSettings[key];
     }
     saveFileConfig(this._fileConfigPath, filtered);
+    this._fileConfigCache = loadFileConfig(this._fileConfigPath);
   }
 
   backup(backupPath) {

@@ -6,11 +6,18 @@ const ALLOWED_SETTING_KEYS = new Set([
   "ai_api_key",
   "ai_base_url",
   "ai_model",
+  "ai_temperature",
+  "ai_max_tokens",
   "enable_ai_optimization",
   "window_always_on_top",
   "auto_paste",
   "close_behavior",
   "theme",
+  "hotkey",
+  "language",
+  "auto_start",
+  "minimize_to_tray",
+  "show_notifications",
   "model_download_path",
 ]);
 
