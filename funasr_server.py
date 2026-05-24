@@ -105,13 +105,20 @@ class FunASRServer:
 
     @staticmethod
     def _detect_device():
-        """Auto-detect best available compute device: CUDA > MPS > CPU"""
+        """Auto-detect best available compute device: CUDA > CPU
+
+        MPS (Apple GPU) is intentionally skipped because FunASR uses float64
+        in cif_predictor.py and complex_utils.py, which MPS does not support.
+        M-series CPU performance is sufficient for Paraformer-large inference.
+        """
         try:
             import torch
             if torch.cuda.is_available():
                 return "cuda"
-            if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-                return "mps"
+            # MPS skipped: FunASR uses torch.float64 in CIF predictor and
+            # complex_utils, which triggers:
+            #   TypeError: Cannot convert a MPS Tensor to float64 dtype
+            # as the MPS framework doesn't support float64
         except ImportError:
             pass
         return "cpu"
