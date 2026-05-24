@@ -186,6 +186,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // 文件转录相关
   importAudioFile: () => ipcRenderer.invoke(C.TRANSCRIPTION.IMPORT_FILE),
+  validateAudioFile: (filePath) => ipcRenderer.invoke(C.TRANSCRIPTION.VALIDATE_FILE, filePath),
   transcribeFile: (audioPath, options) =>
     ipcRenderer.invoke(C.TRANSCRIPTION.TRANSCRIBE_FILE, audioPath, options),
   cancelFileTranscription: () => ipcRenderer.invoke(C.TRANSCRIPTION.CANCEL),
@@ -207,7 +208,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 contextBridge.exposeInMainWorld("constants", {
   APP_NAME: "Murmur",
   VERSION: "1.0.0",
-  SUPPORTED_AUDIO_FORMATS: ["wav", "mp3", "m4a", "flac"],
+  SUPPORTED_AUDIO_FORMATS: ["wav", "mp3", "m4a", "flac", "ogg", "wma", "aac"],
   SUPPORTED_EXPORT_FORMATS: ["txt", "docx", "srt", "vtt", "md"],
   DEFAULT_HOTKEY: "CommandOrControl+Shift+Space",
   MAX_RECORDING_DURATION: 300000, // 5分钟

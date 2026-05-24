@@ -441,7 +441,10 @@ class FunASRServer:
             options = {}
 
         request_id = options.get("request_id", "")
-        self.cancel_event.clear()  # 开始新转录前重置取消信号
+        self.cancel_event.clear()
+        import time
+        _t0 = time.time()
+        logger.info(f"transcribe_file_audio START request_id={request_id} path={audio_path}")
 
         wav_path = audio_path
         was_converted = False
@@ -454,17 +457,33 @@ class FunASRServer:
             audio_path = result
 
             # 使用 librosa 将非 WAV 转为 16kHz 单声道 WAV
+            # 注意：格式列表需与 _convert_to_wav() 保持同步
+            ext = os.path.splitext(audio_path)[1].lower()
+            if ext not in ('.wav', '.flac') and os.path.getsize(audio_path) > 5 * 1024 * 1024:
+                logger.info(f"convert phase START request_id={request_id} ext={ext}")
+                self.response_queue.put({
+                    "request_id": request_id,
+                    "type": "progress",
+                    "phase": "convert",
+                    "message": f"正在转换 {ext} 音频...",
+                    "progress_pct": 0,
+                })
             wav_path, was_converted = self._convert_to_wav(audio_path)
+            if was_converted:
+                logger.info(f"convert phase END request_id={request_id} elapsed={time.time()-_t0:.2f}s")
 
             # 获取音频时长（从转换后的 WAV 获取更准确）
             duration = self._get_audio_duration(wav_path)
 
             # 发送进度：VAD阶段
+            _t_vad = time.time()
+            logger.info(f"VAD phase START request_id={request_id} duration={duration:.2f}s")
             self.response_queue.put({
                 "request_id": request_id,
                 "type": "progress",
                 "phase": "vad",
-                "message": "语音检测中..."
+                "message": "语音检测中...",
+                "progress_pct": 5,
             })
 
             # VAD 处理
@@ -477,25 +496,58 @@ class FunASRServer:
                 vad_result = self.vad_model.generate(input=wav_path)
                 if vad_result and len(vad_result) > 0:
                     vad_segments = vad_result[0].get("value", [])
+            logger.info(f"VAD phase END request_id={request_id} elapsed={time.time()-_t_vad:.2f}s segments={len(vad_segments)}")
 
-            # ASR 阶段 — 单次全文件推理（VAD 仅用于进度估算和备用分段）
+            # ASR 阶段 — 单次全文件推理 + RTF 估算进度
+            _t_asr = time.time()
             total_ms = int(duration * 1000) if duration else 0
+            rtf_estimate = 0.08
+            estimated_time_s = max(total_ms * rtf_estimate / 1000, 2)
+            logger.info(f"ASR phase START request_id={request_id} total_ms={total_ms} estimated_s={estimated_time_s:.1f}")
+
             self.response_queue.put({
                 "request_id": request_id,
                 "type": "progress",
                 "phase": "asr",
                 "message": "语音识别中...",
-                "processed_ms": 0,
-                "total_ms": total_ms
+                "total_ms": total_ms,
+                "progress_pct": 10,
             })
 
             if self.cancel_event.is_set():
                 return {"success": False, "error": "转录已取消", "request_id": request_id}
 
-            asr_result = self.asr_model.generate(
-                input=wav_path,
-                batch_size_s=60
-            )
+            # 后台线程定时报告 RTF 估算进度
+            timer_stop = threading.Event()
+
+            def asr_progress_timer():
+                start = time.time()
+                while not timer_stop.is_set() and not self.cancel_event.is_set():
+                    elapsed = time.time() - start
+                    pct = min(10 + elapsed / estimated_time_s * 85, 95)
+                    self.response_queue.put({
+                        "request_id": request_id,
+                        "type": "progress",
+                        "phase": "asr",
+                        "message": f"语音识别中... {int(pct)}%",
+                        "total_ms": total_ms,
+                        "progress_pct": round(pct, 1),
+                    })
+                    if elapsed >= estimated_time_s:
+                        break
+                    timer_stop.wait(0.5)
+
+            timer_thread = threading.Thread(target=asr_progress_timer, daemon=True)
+            timer_thread.start()
+
+            try:
+                asr_result = self.asr_model.generate(
+                    input=wav_path,
+                    batch_size_s=60
+                )
+            finally:
+                timer_stop.set()
+                timer_thread.join(timeout=1)
             if asr_result and len(asr_result) > 0:
                 raw_text = asr_result[0].get("text", "")
 
@@ -545,27 +597,31 @@ class FunASRServer:
                             })
                         offset += seg_len
 
-            self.response_queue.put({
-                "request_id": request_id,
-                "type": "progress",
-                "phase": "asr",
-                "message": "语音识别中...",
-                "processed_ms": total_ms,
-                "total_ms": total_ms
-            })
+            logger.info(f"ASR phase END request_id={request_id} elapsed={time.time()-_t_asr:.2f}s text_len={len(raw_text)}")
+
             # 标点恢复
+            _t_punc = time.time()
+            if self.cancel_event.is_set():
+                logger.info(f"PUNC phase SKIPPED (cancelled) request_id={request_id}")
+                return {"success": False, "error": "转录已取消", "request_id": request_id}
+
             self.response_queue.put({
                 "request_id": request_id,
                 "type": "progress",
                 "phase": "punc",
-                "message": "标点恢复中..."
+                "message": "标点恢复中...",
+                "progress_pct": 96,
             })
 
             text = raw_text
             if self.punc_model and text:
+                logger.info(f"PUNC phase START request_id={request_id} text_len={len(text)}")
                 punc_result = self.punc_model.generate(input=text)
+                logger.info(f"PUNC phase END request_id={request_id} elapsed={time.time()-_t_punc:.2f}s")
                 if punc_result and len(punc_result) > 0:
                     text = punc_result[0].get("text", raw_text)
+            else:
+                logger.info(f"PUNC phase SKIP (no model or empty text) request_id={request_id}")
 
             # 智能合并 segments
             segments = self._merge_segments(raw_segments) if raw_segments else []
@@ -585,6 +641,7 @@ class FunASRServer:
                 "confidence": 0.9,
                 "language": "zh-CN"
             }
+            logger.info(f"transcribe_file_audio COMPLETE request_id={request_id} total_elapsed={time.time()-_t0:.2f}s")
         except Exception as e:
             logger.error(f"文件转录异常: {str(e)}\n{traceback.format_exc()}")
             result = {
@@ -702,9 +759,11 @@ class FunASRServer:
 
                 try:
                     if action == "transcribe_file":
+                        opts = task.get("options", {})
+                        opts["request_id"] = request_id
                         result = self.transcribe_file_audio(
                             task.get("audio_path"),
-                            task.get("options", {})
+                            opts,
                         )
                     else:
                         result = {"success": False, "error": f"推理线程不支持的动作: {action}"}

@@ -36,6 +36,7 @@ module.exports = {
   TRANSCRIPTION: {
     AUDIO: "transcribe-audio",
     IMPORT_FILE: "import-audio-file",
+    VALIDATE_FILE: "validate-audio-file",
     TRANSCRIBE_FILE: "transcribe-file",
     CANCEL: "cancel-file-transcription",
     SAVE: "save-transcription",
@@ -141,4 +142,5 @@ module.exports = {
     UPDATE_DOWNLOAD_COMPLETE: "update-download-complete",
     UPDATE_DOWNLOAD_ERROR: "update-download-error",
   },
+  AUDIO_EXTENSIONS: [".wav", ".mp3", ".m4a", ".flac", ".ogg", ".wma", ".aac"],
 };

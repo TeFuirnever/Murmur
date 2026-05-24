@@ -943,10 +943,7 @@ const SettingsPage = () => {
                 <button
                   onClick={saveSettings}
                   aria-label="保存设置"
-                  disabled={
-                    saving ||
-                    (settings.enable_ai_optimization && !settings.ai_api_key)
-                  }
+                  disabled={saving}
                   className="flex items-center space-x-2 px-4 py-1.5 text-sm bg-[#0071e3] hover:bg-[#0077ed] text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {saving ? (

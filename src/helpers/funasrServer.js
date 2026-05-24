@@ -2,10 +2,8 @@ const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const ServerMessageRouter = require("./serverMessageRouter");
-const {
-  createTempAudioFile,
-  cleanupTempFile,
-} = require("./audioFileHelpers");
+const { createTempAudioFile, cleanupTempFile } = require("./audioFileHelpers");
+const C = require("./ipc-contracts");
 
 class FunASRServer {
   constructor(logger = null) {
@@ -305,15 +303,7 @@ class FunASRServer {
 
   async transcribeFile(audioPath, options = {}) {
     const MAX_FILE_SIZE = 500 * 1024 * 1024;
-    const ALLOWED_EXT = [
-      ".wav",
-      ".mp3",
-      ".m4a",
-      ".flac",
-      ".ogg",
-      ".wma",
-      ".aac",
-    ];
+    const ALLOWED_EXT = C.AUDIO_EXTENSIONS;
 
     if (!audioPath || typeof audioPath !== "string") {
       return { success: false, error: "无效的文件路径", code: "INVALID_PATH" };

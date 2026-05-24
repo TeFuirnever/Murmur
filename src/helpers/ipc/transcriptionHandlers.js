@@ -44,9 +44,42 @@ function register(ipcMain, managers) {
   });
 
   ipcMain.handle(
+    C.TRANSCRIPTION.VALIDATE_FILE,
+    async (_event, filePath) => {
+      const allowedExts = C.AUDIO_EXTENSIONS;
+      const ext = path.extname(filePath).toLowerCase();
+      if (!allowedExts.includes(ext)) {
+        return { success: false, error: "不支持的音频格式: " + ext };
+      }
+      const resolved = path.resolve(filePath);
+      const homedir = os.homedir();
+      const tmpdir = os.tmpdir();
+      if (!resolved.startsWith(homedir) && !resolved.startsWith(tmpdir) && !resolved.startsWith("/Volumes/")) {
+        return { success: false, error: "路径不在允许范围内" };
+      }
+      try {
+        const stat = fs.statSync(filePath);
+        const MAX_FILE_SIZE = 500 * 1024 * 1024;
+        if (stat.size > MAX_FILE_SIZE) {
+          return { success: false, error: "文件超过500MB限制" };
+        }
+        return {
+          success: true,
+          filePath,
+          fileName: path.basename(filePath),
+          fileSize: stat.size,
+          extension: ext,
+        };
+      } catch {
+        return { success: false, error: "文件不存在或无法访问" };
+      }
+    },
+  );
+
+  ipcMain.handle(
     C.TRANSCRIPTION.TRANSCRIBE_FILE,
     async (event, audioPath, options = {}) => {
-      const allowedExts = [".wav", ".mp3", ".m4a", ".flac"];
+      const allowedExts = C.AUDIO_EXTENSIONS;
       const ext = path.extname(audioPath).toLowerCase();
       if (!allowedExts.includes(ext)) {
         return { success: false, error: "不支持的音频格式: " + ext };
@@ -54,7 +87,7 @@ function register(ipcMain, managers) {
       const resolved = path.resolve(audioPath);
       const homedir = os.homedir();
       const tmpdir = os.tmpdir();
-      if (!resolved.startsWith(homedir) && !resolved.startsWith(tmpdir)) {
+      if (!resolved.startsWith(homedir) && !resolved.startsWith(tmpdir) && !resolved.startsWith("/Volumes/")) {
         return { success: false, error: "路径不在允许范围内" };
       }
       const result = await funasrManager.transcribeFile(audioPath, {

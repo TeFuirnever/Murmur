@@ -433,3 +433,158 @@ describe("downloadModels python path regression", () => {
     expect(passedCmd).toBe("/resolved/python3");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Regression tests for 2026-05-24 session bugs.
+// BUG 0: request_id not passed to transcribe_file_audio → progress dropped
+// BUG 1: allowedExts missing .ogg/.wma/.aac → file dialog allows but handler rejects
+// BUG 3: path validation rejects /Volumes/ → external storage files blocked
+// ---------------------------------------------------------------------------
+
+describe("TRANSCRIBE_FILE allowed extensions regression", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  const mockManagers = () => ({
+    funasrManager: {
+      transcribeFile: vi.fn(async () => ({
+        success: true,
+        text: "test",
+        segments: [],
+        duration: 1,
+      })),
+    },
+    databaseManager: {
+      saveTranscription: vi.fn(() => ({ id: 1 })),
+    },
+    logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
+    processTextWithAI: vi.fn(),
+  });
+
+  const createEvent = () => ({
+    sender: { send: vi.fn() },
+  });
+
+  it("accepts .ogg files (was rejected before BUG 1 fix)", async () => {
+    const { register } = require("../../src/helpers/ipc/transcriptionHandlers");
+    const ipcMain = createIpcMain();
+    const managers = mockManagers();
+    register(ipcMain, managers);
+
+    const os = require("os");
+    const result = await ipcMain._handlers[C.TRANSCRIPTION.TRANSCRIBE_FILE](
+      createEvent(),
+      `${os.homedir()}/test.ogg`,
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+  });
+
+  it("accepts .wma files (was rejected before BUG 1 fix)", async () => {
+    const { register } = require("../../src/helpers/ipc/transcriptionHandlers");
+    const ipcMain = createIpcMain();
+    const managers = mockManagers();
+    register(ipcMain, managers);
+
+    const os = require("os");
+    const result = await ipcMain._handlers[C.TRANSCRIPTION.TRANSCRIBE_FILE](
+      createEvent(),
+      `${os.homedir()}/test.wma`,
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+  });
+
+  it("accepts .aac files (was rejected before BUG 1 fix)", async () => {
+    const { register } = require("../../src/helpers/ipc/transcriptionHandlers");
+    const ipcMain = createIpcMain();
+    const managers = mockManagers();
+    register(ipcMain, managers);
+
+    const os = require("os");
+    const result = await ipcMain._handlers[C.TRANSCRIPTION.TRANSCRIBE_FILE](
+      createEvent(),
+      `${os.homedir()}/test.aac`,
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+  });
+
+  it("still rejects unsupported formats like .txt", async () => {
+    const { register } = require("../../src/helpers/ipc/transcriptionHandlers");
+    const ipcMain = createIpcMain();
+    const managers = mockManagers();
+    register(ipcMain, managers);
+
+    const result = await ipcMain._handlers[C.TRANSCRIPTION.TRANSCRIBE_FILE](
+      createEvent(),
+      "/Users/test/file.txt",
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("不支持的音频格式");
+  });
+});
+
+describe("TRANSCRIBE_FILE /Volumes/ path validation regression", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it("accepts files from /Volumes/ (was rejected before BUG 3 fix)", async () => {
+    const { register } = require("../../src/helpers/ipc/transcriptionHandlers");
+    const ipcMain = createIpcMain();
+    const managers = {
+      funasrManager: {
+        transcribeFile: vi.fn(async () => ({
+          success: true,
+          text: "test",
+          segments: [],
+          duration: 1,
+        })),
+      },
+      databaseManager: {
+        saveTranscription: vi.fn(() => ({ id: 1 })),
+      },
+      logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
+      processTextWithAI: vi.fn(),
+    };
+    register(ipcMain, managers);
+
+    const createEvent = () => ({ sender: { send: vi.fn() } });
+    const result = await ipcMain._handlers[C.TRANSCRIPTION.TRANSCRIBE_FILE](
+      createEvent(),
+      "/Volumes/ExternalDisk/recordings/meeting.wav",
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+  });
+
+  it("still rejects paths outside homedir, tmpdir, and /Volumes/", async () => {
+    const { register } = require("../../src/helpers/ipc/transcriptionHandlers");
+    const ipcMain = createIpcMain();
+    const managers = {
+      funasrManager: {
+        transcribeFile: vi.fn(async () => ({ success: true, text: "x" })),
+      },
+      databaseManager: { saveTranscription: vi.fn() },
+      logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
+      processTextWithAI: vi.fn(),
+    };
+    register(ipcMain, managers);
+
+    const createEvent = () => ({ sender: { send: vi.fn() } });
+    const result = await ipcMain._handlers[C.TRANSCRIPTION.TRANSCRIBE_FILE](
+      createEvent(),
+      "/opt/secret/file.wav",
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("路径不在允许范围内");
+  });
+});

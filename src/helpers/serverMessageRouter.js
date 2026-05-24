@@ -13,18 +13,19 @@ class ServerMessageRouter {
 
   attach(serverProcess) {
     this.serverProcess = serverProcess;
+    let buffer = "";
 
     serverProcess.stdout.on("data", (data) => {
-      const lines = data
-        .toString()
-        .split("\n")
-        .filter((l) => l.trim());
+      buffer += data.toString();
+      const lines = buffer.split("\n");
+      buffer = lines.pop();
       for (const line of lines) {
+        if (!line.trim()) continue;
         try {
           const msg = JSON.parse(line);
           this._dispatch(msg);
         } catch {
-          // ignore non-JSON
+          this.logger.warn("Failed to parse stdout JSON", line.length);
         }
       }
     });
@@ -126,15 +127,11 @@ class ServerMessageRouter {
       return;
     }
 
-    clearTimeout(entry.timer);
-    this.pending.delete(requestId);
-
     if (msg.type === "progress") {
-      // Progress messages don't resolve the promise — call onProgress callback
       if (entry.onProgress) {
         entry.onProgress(msg);
       }
-      // Re-register so the final result still resolves
+      clearTimeout(entry.timer);
       this.pending.set(requestId, {
         ...entry,
         timer: setTimeout(() => {
@@ -145,6 +142,8 @@ class ServerMessageRouter {
       return;
     }
 
+    clearTimeout(entry.timer);
+    this.pending.delete(requestId);
     entry.resolve(msg);
   }
 

@@ -144,6 +144,16 @@ export interface ElectronAPI {
 
   // File transcription
   importAudioFile: () => Promise<FileTranscriptionResult>;
+  validateAudioFile: (
+    filePath: string,
+  ) => Promise<{
+    success: boolean;
+    filePath?: string;
+    fileName?: string;
+    fileSize?: number;
+    extension?: string;
+    error?: string;
+  }>;
   transcribeFile: (
     audioPath: string,
     options?: Record<string, unknown>,
@@ -157,6 +167,7 @@ export interface ElectronAPI {
       message?: string;
       processed_ms?: number;
       total_ms?: number;
+      progress_pct?: number;
     }) => void,
   ) => () => void;
 

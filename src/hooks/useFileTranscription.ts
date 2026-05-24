@@ -20,6 +20,7 @@ interface TranscriptionProgress {
   message?: string;
   processed_ms?: number;
   total_ms?: number;
+  progress_pct?: number;
 }
 
 interface TranscriptionResult {
@@ -53,6 +54,37 @@ export function useFileTranscription() {
   };
 
   React.useEffect(() => cleanupProgress, []);
+
+  const selectFileFromPath = React.useCallback(async (filePath: string) => {
+    if (!window.electronAPI?.validateAudioFile) {
+      setError("Electron API 不可用");
+      setState("error");
+      return;
+    }
+
+    try {
+      const response = await window.electronAPI.validateAudioFile(filePath);
+      if (!response.success) {
+        setError(response.error || "文件验证失败");
+        setState("error");
+        return;
+      }
+
+      setFileInfo({
+        filePath: response.filePath!,
+        fileName: response.fileName!,
+        fileSize: response.fileSize!,
+        extension: response.extension,
+      });
+      setState("selected");
+      setError(null);
+      setResult(null);
+      setProgress(null);
+    } catch (err) {
+      setError((err as Error).message || "验证文件时出错");
+      setState("error");
+    }
+  }, []);
 
   const selectFile = React.useCallback(async () => {
     if (!window.electronAPI || !window.electronAPI.importAudioFile) {
@@ -124,12 +156,14 @@ export function useFileTranscription() {
         {},
       );
 
-      cleanupProgress();
-
       if (response.success) {
+        setProgress({ phase: "done", message: "转录完成", progress_pct: 100 });
+        await new Promise((r) => setTimeout(r, 600));
+        cleanupProgress();
         setResult(response);
         setState("done");
       } else {
+        cleanupProgress();
         setError(response.error || "转录失败");
         setState("error");
       }
@@ -171,6 +205,7 @@ export function useFileTranscription() {
     result,
     error,
     selectFile,
+    selectFileFromPath,
     startTranscription,
     cancelTranscription,
     reset,

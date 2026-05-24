@@ -15,6 +15,7 @@ export function determineProcessingMode(
 interface UseRecordingOptions {
   onTranscriptionComplete?: (text: string | Record<string, unknown>) => void;
   onAIOptimizationComplete?: (text: string | Record<string, unknown>) => void;
+  onSaveComplete?: (result: { id: number }) => void;
 }
 
 /**
@@ -24,6 +25,7 @@ interface UseRecordingOptions {
 export const useRecording = ({
   onTranscriptionComplete,
   onAIOptimizationComplete,
+  onSaveComplete,
 }: UseRecordingOptions = {}) => {
   const [isRecording, setIsRecording] = React.useState(false);
   const [isProcessing, setIsProcessing] = React.useState(false);
@@ -50,8 +52,12 @@ export const useRecording = ({
   const onAIOptimizationCompleteRef = React.useRef<
     ((text: string | Record<string, unknown>) => void) | undefined
   >(undefined);
+  const onSaveCompleteRef = React.useRef<
+    ((result: { id: number }) => void) | undefined
+  >(undefined);
   onTranscriptionCompleteRef.current = onTranscriptionComplete;
   onAIOptimizationCompleteRef.current = onAIOptimizationComplete;
+  onSaveCompleteRef.current = onSaveComplete;
 
   // 使用模型状态Hook
   const modelStatus = useModelStatus();
@@ -285,6 +291,9 @@ export const useRecording = ({
                 const savedResult = await window.electronAPI.saveTranscription(
                   finalData as any,
                 );
+                if (savedResult?.id && onSaveCompleteRef.current) {
+                  onSaveCompleteRef.current({ id: savedResult.id });
+                }
                 if (window.electronAPI && window.electronAPI.log) {
                   window.electronAPI.log(
                     "info",

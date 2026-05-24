@@ -4,17 +4,17 @@ import { toast } from "sonner";
 import { LoadingDots } from "./components/ui/loading-dots";
 import { useHotkey } from "./hooks/useHotkey";
 import { useWindowDrag } from "./hooks/useWindowDrag";
-import { useRecording } from "./hooks/useRecording";
+import { useRecording, determineProcessingMode } from "./hooks/useRecording";
 import { useModelStatus } from "./hooks/useModelStatus";
 import { Settings, History, Minus, Square, X, Maximize2 } from "lucide-react";
 import SettingsPanel from "./components/SettingsPanel";
 import { ModelDownloadProgress } from "./components/ui/model-status-indicator";
 import FileImport from "./components/FileImport";
+import TranscriptionResult from "./components/TranscriptionResult";
 import { SoundWaveIcon } from "./components/SoundWaveIcon";
 import { LoadingIndicator } from "./components/LoadingIndicator";
 import { VoiceWaveIndicator } from "./components/VoiceWaveIndicator";
 import { Tooltip } from "./components/Tooltip";
-import { TextDisplay } from "./components/TextDisplay";
 
 // 动态导入设置页面组件
 const SettingsPage = React.lazy(() =>
@@ -32,6 +32,8 @@ export default function App() {
   const [, setShowTextArea] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [appMode, setAppMode] = useState("recording"); // recording | file-import
+  const [savedRecordingId, setSavedRecordingId] = useState<number | null>(null);
+  const [recordingDuration, setRecordingDuration] = useState<number>(0);
   const [isMaximized, setIsMaximized] = useState(false);
 
   const { handleMouseDown, handleMouseMove, handleMouseUp, handleClick } =
@@ -58,6 +60,9 @@ export default function App() {
     },
     onAIOptimizationComplete: (result: string | Record<string, unknown>) => {
       handleAIOptimizationCompleteRef.current?.(result);
+    },
+    onSaveComplete: (result: { id: number }) => {
+      setSavedRecordingId(result.id);
     },
   });
 
@@ -121,6 +126,11 @@ export default function App() {
         // 清空之前的处理结果，等待AI优化
         setProcessedText("");
 
+        // 记录音频时长
+        if (transcriptionResult.duration) {
+          setRecordingDuration(transcriptionResult.duration as number);
+        }
+
         // 注意：不在这里保存到数据库，由 useRecording.js 统一处理保存逻辑
 
         toast.success("🎤 语音识别完成，AI正在优化文本...");
@@ -174,26 +184,26 @@ export default function App() {
     }
   };
 
-  // 处理导出文本
-  const handleExportText = async (text: string) => {
-    try {
-      if (window.electronAPI) {
-        await window.electronAPI.exportTranscriptions("txt");
-        toast.success("文本已导出到文件");
-      } else {
-        // Web环境下载文件
-        const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `Murmur转录_${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}.txt`;
-        a.click();
-        URL.revokeObjectURL(url);
-      }
-    } catch {
-      toast.error("无法导出文本文件");
+  const handleRecordingAIOptimize = useCallback(async (text: string) => {
+    if (!window.electronAPI?.processText) {
+      throw new Error("AI 优化功能不可用");
     }
-  };
+    const mode = determineProcessingMode(text);
+    const result = await window.electronAPI.processText(text, mode);
+    if (result?.success && result.text) {
+      setProcessedText(result.text);
+      return result.text;
+    }
+    throw new Error(result?.error || "AI 优化失败");
+  }, []);
+
+  const resetRecordingState = useCallback(() => {
+    setOriginalText("");
+    setProcessedText("");
+    setSavedRecordingId(null);
+    setRecordingDuration(0);
+    setShowTextArea(false);
+  }, []);
 
   // 处理模型下载
   const handleDownloadModels = useCallback(async () => {
@@ -704,17 +714,28 @@ export default function App() {
               </div>
             )}
 
-            {/* 文本显示区域 - 可滚动 */}
-            <div className="flex-1 text-area-scroll">
-              <TextDisplay
-                originalText={originalText}
-                processedText={processedText}
-                isProcessing={isOptimizing}
-                onCopy={handleCopyText}
-                onExport={handleExportText}
-                onPaste={safePaste}
-              />
-            </div>
+            {/* 转录结果 */}
+            {originalText && !isRecording && !isRecordingProcessing ? (
+              <div className="flex-1 text-area-scroll space-y-4">
+                <TranscriptionResult
+                  text={processedText || originalText}
+                  rawText={processedText ? originalText : undefined}
+                  id={savedRecordingId ?? undefined}
+                  duration={recordingDuration || undefined}
+                  isOptimizing={isOptimizing}
+                  onCopy={handleCopyText}
+                  onAIOptimize={!processedText ? handleRecordingAIOptimize : undefined}
+                />
+                <button
+                  onClick={resetRecordingState}
+                  className="w-full py-2 px-4 text-sm font-medium text-white bg-[#0071e3] hover:bg-[#0077ed] rounded-lg transition-colors shadow-sm"
+                >
+                  开始新录音
+                </button>
+              </div>
+            ) : (
+              <div className="flex-1" />
+            )}
           </>
         )}
 

@@ -10,9 +10,14 @@ describe("TranscriptionProgress", () => {
     expect(screen.getByText("正在处理...")).toBeTruthy();
   });
 
-  it("shows custom message", () => {
+  it("shows custom message when phase not in PHASE_LABELS", () => {
     render(<TranscriptionProgress message="识别中..." onCancel={() => {}} />);
     expect(screen.getByText("识别中...")).toBeTruthy();
+  });
+
+  it("shows phase label for known phase", () => {
+    render(<TranscriptionProgress phase="asr" onCancel={() => {}} />);
+    expect(screen.getByText("语音识别中")).toBeTruthy();
   });
 
   it("calls onCancel when cancel button clicked", () => {
@@ -22,47 +27,89 @@ describe("TranscriptionProgress", () => {
     expect(onCancel).toHaveBeenCalledOnce();
   });
 
-  it("renders all 3 phase labels", () => {
-    render(<TranscriptionProgress onCancel={() => {}} />);
-    expect(screen.getByText("语音检测")).toBeTruthy();
-    expect(screen.getByText("语音识别")).toBeTruthy();
-    expect(screen.getByText("标点恢复")).toBeTruthy();
+  it("hides cancel button when done", () => {
+    render(<TranscriptionProgress phase="done" onCancel={() => {}} />);
+    expect(screen.getByText("转录完成")).toBeTruthy();
+    expect(screen.queryByText("取消转录")).toBeNull();
   });
 
-  it("highlights current phase", () => {
+  it("shows indeterminate progress bar during ASR phase without progressPct", () => {
     const { container } = render(
-      <TranscriptionProgress phase="asr" onCancel={() => {}} />,
+      <TranscriptionProgress phase="asr" totalMs={10000} onCancel={() => {}} />,
     );
-    const phases = container.querySelectorAll(".rounded-full");
-    // phase index 1 (asr) should have animate-pulse
-    expect(phases[1].classList.contains("animate-pulse")).toBe(true);
-    // phase index 0 (vad) should be completed — no animate-pulse, not default gray
-    expect(phases[0].classList.contains("animate-pulse")).toBe(false);
+    expect(screen.getByText(/音频时长/)).toBeTruthy();
+    expect(container.querySelector(".animate-indeterminate")).toBeTruthy();
   });
 
-  it("shows progress bar during ASR phase with time info", () => {
-    render(
-      <TranscriptionProgress
-        phase="asr"
-        processedMs={5000}
-        totalMs={10000}
-        onCancel={() => {}}
-      />,
+  it("shows progress bar with correct width for ASR with progressPct", () => {
+    const { container } = render(
+      <TranscriptionProgress phase="asr" totalMs={60000} progressPct={50} onCancel={() => {}} />,
     );
-    expect(screen.getByText(/已处理/)).toBeTruthy();
-    expect(screen.getByText(/0:05/)).toBeTruthy();
-    expect(screen.getByText(/0:10/)).toBeTruthy();
+    expect(screen.getByText(/音频时长/)).toBeTruthy();
+    expect(container.querySelector(".animate-indeterminate")).toBeNull();
+    const bar = container.querySelector("[style]");
+    expect(bar?.getAttribute("style")).toContain("width: 50%");
   });
 
-  it("hides progress bar when not in ASR phase", () => {
-    render(
-      <TranscriptionProgress
-        phase="vad"
-        processedMs={5000}
-        totalMs={10000}
-        onCancel={() => {}}
-      />,
+  it("shows progress bar without percentage text", () => {
+    const { container } = render(
+      <TranscriptionProgress phase="asr" totalMs={5000} progressPct={50} onCancel={() => {}} />,
     );
-    expect(screen.queryByText(/已处理/)).toBeNull();
+    expect(screen.getByText(/音频时长/)).toBeTruthy();
+    expect(screen.queryByText(/50%/)).toBeNull();
+    const bar = container.querySelector("[style]");
+    expect(bar?.getAttribute("style")).toContain("width: 50%");
+  });
+
+  it("shows progress bar for VAD phase with progressPct", () => {
+    const { container } = render(
+      <TranscriptionProgress phase="vad" progressPct={8} onCancel={() => {}} />,
+    );
+    expect(screen.getByText("语音检测中")).toBeTruthy();
+    const bar = container.querySelector("[style]");
+    expect(bar?.getAttribute("style")).toContain("width: 8%");
+  });
+
+  it("shows progress bar for punc phase with progressPct", () => {
+    const { container } = render(
+      <TranscriptionProgress phase="punc" progressPct={96} onCancel={() => {}} />,
+    );
+    expect(screen.getByText("标点恢复中")).toBeTruthy();
+    const bar = container.querySelector("[style]");
+    expect(bar?.getAttribute("style")).toContain("width: 96%");
+  });
+
+  it("shows progress bar for convert phase with progressPct", () => {
+    const { container } = render(
+      <TranscriptionProgress phase="convert" progressPct={2} onCancel={() => {}} />,
+    );
+    expect(screen.getByText("格式转换中")).toBeTruthy();
+    const bar = container.querySelector("[style]");
+    expect(bar?.getAttribute("style")).toContain("width: 2%");
+  });
+
+  it("shows no progress bar when not in ASR phase and no progressPct", () => {
+    const { container } = render(
+      <TranscriptionProgress phase="vad" totalMs={10000} onCancel={() => {}} />,
+    );
+    expect(container.querySelector("[style]")).toBeNull();
+    expect(container.querySelector(".animate-indeterminate")).toBeNull();
+  });
+
+  it("shows green checkmark and bar when done", () => {
+    const { container } = render(
+      <TranscriptionProgress phase="done" progressPct={100} onCancel={() => {}} />,
+    );
+    expect(screen.getByText("转录完成")).toBeTruthy();
+    const bar = container.querySelector("[style]");
+    expect(bar?.getAttribute("style")).toContain("width: 100%");
+    expect(bar?.classList.contains("bg-[#30d158]")).toBe(true);
+  });
+
+  it("shows fileName when provided", () => {
+    render(
+      <TranscriptionProgress fileName="test.m4a" onCancel={() => {}} />,
+    );
+    expect(screen.getByText("test.m4a")).toBeTruthy();
   });
 });

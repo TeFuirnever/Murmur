@@ -9,8 +9,7 @@ let _detectFFmpeg = null;
 
 function _defaultDetectFFmpeg() {
   try {
-    const cmd =
-      process.platform === "win32" ? "where ffmpeg" : "which ffmpeg";
+    const cmd = process.platform === "win32" ? "where ffmpeg" : "which ffmpeg";
     const result = execSync(cmd, {
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
