@@ -156,7 +156,7 @@ class FunASRManager {
     } catch (error) {
       this.logger.warn &&
         this.logger.warn("FunASR启动初始化失败，但不影响应用启动", error);
-      this.isInitialized = true;
+      this.preInitializeModels();
     }
   }
 

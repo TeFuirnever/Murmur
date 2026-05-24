@@ -1,6 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { Toaster } from "sonner";
+import { Toaster, toast } from "sonner";
 import "./index.css";
 import { assertElectronAPI } from "./bootstrap/assertElectronAPI.js";
 import type { TranscriptionRecord } from "./types/ipc";
@@ -89,6 +89,7 @@ const HistoryContent = ({
       setFilteredTranscriptions(result || []);
     } catch (error) {
       console.error("加载历史记录失败:", error);
+      toast.error("加载历史记录失败");
     } finally {
       setLoading(false);
     }
@@ -124,6 +125,7 @@ const HistoryContent = ({
       setTranscriptions((prev) => prev.filter((item) => item.id !== id));
     } catch (error) {
       console.error("删除记录失败:", error);
+      toast.error("删除记录失败");
     }
   };
 

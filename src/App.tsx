@@ -261,7 +261,9 @@ export default function App() {
       try {
         await registerHotkey("CommandOrControl+Shift+Space");
       } catch {
-        // 热键注册失败时静默处理，不影响应用功能
+        toast.warning(
+          "快捷键注册失败，可能被其他应用占用。可在设置中更换快捷键。",
+        );
       }
     };
 
