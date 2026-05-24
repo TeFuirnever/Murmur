@@ -1,8 +1,43 @@
-const { spawn } = require("child_process");
+const { spawn, execSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const os = require("os");
+
+let _ffmpegPath = undefined;
+let _detectFFmpeg = null;
+
+function _defaultDetectFFmpeg() {
+  try {
+    const cmd =
+      process.platform === "win32" ? "where ffmpeg" : "which ffmpeg";
+    const result = execSync(cmd, {
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+    if (result) {
+      return result.split("\n")[0].trim();
+    }
+  } catch {}
+  return null;
+}
+
+function getFFmpegPath() {
+  if (_ffmpegPath !== undefined) return _ffmpegPath;
+  const detect = _detectFFmpeg || _defaultDetectFFmpeg;
+  const result = detect();
+  _ffmpegPath = result ? result.split("\n")[0].trim() : null;
+  return _ffmpegPath;
+}
+
+function _resetFFmpegCache() {
+  _ffmpegPath = undefined;
+}
+
+function _setFFmpegDetector(fn) {
+  _detectFFmpeg = fn;
+  _resetFFmpegCache();
+}
 
 async function createTempAudioFile(logger, audioBlob) {
   const tempDir = os.tmpdir();
@@ -46,15 +81,20 @@ async function cleanupTempFile(tempAudioPath) {
   }
 }
 
-function getFFmpegPath() {
-  return "ffmpeg";
-}
-
 async function convertAudioFile(logger, inputPath) {
   const ext = path.extname(inputPath).toLowerCase();
   if ([".wav", ".flac"].includes(ext)) return inputPath;
 
   const ffmpegPath = getFFmpegPath();
+  if (!ffmpegPath) {
+    throw new Error(
+      "未找到 ffmpeg。mp3/m4a 等格式转换需要 ffmpeg，请先安装：\n" +
+        "  macOS:   brew install ffmpeg\n" +
+        "  Windows: winget install ffmpeg\n" +
+        "  Linux:   sudo apt install ffmpeg",
+    );
+  }
+
   const outputName = `funasr_conv_${crypto.randomUUID()}.wav`;
   const outputPath = path.join(os.tmpdir(), outputName);
 
@@ -114,5 +154,7 @@ module.exports = {
   createTempAudioFile,
   cleanupTempFile,
   getFFmpegPath,
+  _resetFFmpegCache,
+  _setFFmpegDetector,
   convertAudioFile,
 };

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import fs from "fs";
 import path from "path";
 import os from "os";
@@ -7,6 +7,8 @@ const {
   createTempAudioFile,
   cleanupTempFile,
   getFFmpegPath,
+  _resetFFmpegCache,
+  _setFFmpegDetector,
   convertAudioFile,
 } = require("../../src/helpers/audioFileHelpers");
 
@@ -25,12 +27,35 @@ afterEach(async () => {
     } catch {}
   }
   createdFiles.length = 0;
+  _resetFFmpegCache();
 });
 
 describe("audioFileHelpers", () => {
   describe("getFFmpegPath", () => {
-    it("returns ffmpeg", () => {
-      expect(getFFmpegPath()).toBe("ffmpeg");
+    it("returns null when ffmpeg is not installed", () => {
+      _setFFmpegDetector(() => null);
+      expect(getFFmpegPath()).toBeNull();
+    });
+
+    it("returns resolved path when ffmpeg is installed", () => {
+      _setFFmpegDetector(() => "/usr/local/bin/ffmpeg");
+      expect(getFFmpegPath()).toBe("/usr/local/bin/ffmpeg");
+    });
+
+    it("trims whitespace from detected path", () => {
+      _setFFmpegDetector(() => "/usr/local/bin/ffmpeg\n");
+      expect(getFFmpegPath()).toBe("/usr/local/bin/ffmpeg");
+    });
+
+    it("caches result across calls", () => {
+      let callCount = 0;
+      _setFFmpegDetector(() => {
+        callCount++;
+        return "/opt/homebrew/bin/ffmpeg";
+      });
+      getFFmpegPath();
+      getFFmpegPath();
+      expect(callCount).toBe(1);
     });
   });
 
@@ -100,21 +125,42 @@ describe("audioFileHelpers", () => {
   });
 
   describe("convertAudioFile", () => {
-    it("returns input path for .wav files", async () => {
-      const result = await convertAudioFile(mockLogger, "/some/file.wav");
+    it("returns input path for .wav files (no ffmpeg needed)", async () => {
+      _setFFmpegDetector(() => null);
+      const result = await convertAudioFile(
+        { info: vi.fn() },
+        "/some/file.wav",
+      );
       expect(result).toBe("/some/file.wav");
     });
 
     it("returns input path for .flac files", async () => {
-      const result = await convertAudioFile(mockLogger, "/some/file.flac");
+      const result = await convertAudioFile(
+        { info: vi.fn() },
+        "/some/file.flac",
+      );
       expect(result).toBe("/some/file.flac");
     });
 
-    it("rejects when ffmpeg is not available", async () => {
-      // ffmpeg likely not available in test env
+    it("throws friendly error when ffmpeg not found for mp3", async () => {
+      _setFFmpegDetector(() => null);
       await expect(
-        convertAudioFile(mockLogger, "/some/file.mp3"),
-      ).rejects.toThrow();
+        convertAudioFile({ info: vi.fn(), warn: vi.fn() }, "/some/file.mp3"),
+      ).rejects.toThrow("未找到 ffmpeg");
+    });
+
+    it("error message includes brew install hint", async () => {
+      _setFFmpegDetector(() => null);
+      await expect(
+        convertAudioFile({ info: vi.fn(), warn: vi.fn() }, "/some/file.m4a"),
+      ).rejects.toThrow("brew install");
+    });
+
+    it("error message includes apt install hint", async () => {
+      _setFFmpegDetector(() => null);
+      await expect(
+        convertAudioFile({ info: vi.fn(), warn: vi.fn() }, "/some/file.aac"),
+      ).rejects.toThrow("apt install");
     });
   });
 });
