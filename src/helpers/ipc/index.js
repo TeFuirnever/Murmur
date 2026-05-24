@@ -1,3 +1,4 @@
+const C = require("../ipc-contracts");
 const environmentHandlers = require("./environmentHandlers");
 const modelHandlers = require("./modelHandlers");
 const aiHandlers = require("./aiHandlers");
@@ -13,11 +14,11 @@ const createRateLimitedHandler = require("../ipcRateLimiter");
 function wrapWithRateLimits(ipcMain) {
   const originalHandle = ipcMain.handle.bind(ipcMain);
   const RATE_LIMITS = {
-    "process-text": { maxCalls: 20, windowMs: 60_000 },
-    "check-ai-status": { maxCalls: 30, windowMs: 60_000 },
-    "save-transcription": { maxCalls: 30, windowMs: 60_000 },
-    "download-models": { maxCalls: 3, windowMs: 300_000 },
-    "install-funasr": { maxCalls: 3, windowMs: 300_000 },
+    [C.AI.PROCESS]: { maxCalls: 20, windowMs: 60_000 },
+    [C.AI.CHECK_STATUS]: { maxCalls: 30, windowMs: 60_000 },
+    [C.TRANSCRIPTION.SAVE]: { maxCalls: 30, windowMs: 60_000 },
+    [C.MODELS.DOWNLOAD]: { maxCalls: 3, windowMs: 300_000 },
+    [C.FUNASR.INSTALL]: { maxCalls: 3, windowMs: 300_000 },
   };
 
   ipcMain.handle = function (channel, handler) {

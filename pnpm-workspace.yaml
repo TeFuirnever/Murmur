@@ -1,5 +1,5 @@
 allowBuilds:
-  '@tailwindcss/oxide': true
+  "@tailwindcss/oxide": true
   better-sqlite3: true
   electron: true
   esbuild: true

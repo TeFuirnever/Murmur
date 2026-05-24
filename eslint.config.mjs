@@ -5,7 +5,20 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist/", "dist-main/", "dist-preload/", "node_modules/", "src/dist/", "src/node_modules/", "src/coverage/", ".venv/", "python/", ".omc/"] },
+  {
+    ignores: [
+      "dist/",
+      "dist-main/",
+      "dist-preload/",
+      "node_modules/",
+      "src/dist/",
+      "src/node_modules/",
+      "src/coverage/",
+      ".venv/",
+      "python/",
+      ".omc/",
+    ],
+  },
 
   // TypeScript parser + recommended rules
   ...tseslint.configs.recommended,

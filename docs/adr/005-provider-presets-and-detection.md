@@ -9,6 +9,7 @@
 ## 决策
 
 两层方案：
+
 1. **Provider Presets 注册表**：预定义 8 个已知 provider（OpenAI、DeepSeek、通义千问、智谱 GLM、硅基流动、Groq、Ollama、LM Studio），包含 base URL 和推荐模型
 2. **Local Model Auto-Detection**：启动时探测 localhost:11434 (Ollama) 和 localhost:1234 (LM Studio)，2 秒超时
 

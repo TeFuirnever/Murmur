@@ -9,6 +9,7 @@ Backend Node.js files (`src/helpers/*.js`, `main.js`, `preload.js`) use `require
 ## Decision
 
 Prepare infrastructure for gradual backend migration without forcing it now:
+
 1. Install `tsx` runtime (`electron --require tsx/cjs .`) for dev mode
 2. Add `esbuild` build script (`build:main`) for production bundling
 3. Keep all backend files as `.js` until migration is done file-by-file

@@ -5,6 +5,7 @@
 ## Context
 
 The codebase had `strict: false` in tsconfig.json, allowing null/undefined values to pass through unchecked. This caused runtime errors in:
+
 - `catch (err)` blocks where `err.message` was accessed without type narrowing
 - `useState(null)` inferred as `never`, preventing property access
 - Optional IPC result fields accessed without null checks
@@ -12,6 +13,7 @@ The codebase had `strict: false` in tsconfig.json, allowing null/undefined value
 ## Decision
 
 Enable `strict: true` in tsconfig.json, fixing all resulting type errors:
+
 - Type catch variables as `Error` via `(err as Error).message`
 - Type useState with proper union types (e.g., `UpdateCheckResult | null`)
 - Add non-null assertions (`!`) after runtime guards

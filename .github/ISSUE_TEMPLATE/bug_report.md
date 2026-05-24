@@ -33,6 +33,7 @@ What actually happened?
 ## Logs
 
 If applicable, paste relevant log output from:
+
 - macOS: `~/Library/Application Support/murmur/logs/`
 - Windows: `%APPDATA%/murmur/logs/`
 

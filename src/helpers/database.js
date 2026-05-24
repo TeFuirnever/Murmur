@@ -140,10 +140,20 @@ class DatabaseManager {
         END
       `);
 
-      // Rebuild index for existing data
-      this.db.exec(
-        "INSERT INTO transcriptions_fts(transcriptions_fts) VALUES ('rebuild')",
-      );
+      // Rebuild only if FTS index is empty (first creation after migration)
+      const ftsCount = this.db
+        .prepare("SELECT count(*) AS cnt FROM transcriptions_fts")
+        .get();
+      if (ftsCount.cnt === 0) {
+        const baseCount = this.db
+          .prepare("SELECT count(*) AS cnt FROM transcriptions")
+          .get();
+        if (baseCount.cnt > 0) {
+          this.db.exec(
+            "INSERT INTO transcriptions_fts(transcriptions_fts) VALUES ('rebuild')",
+          );
+        }
+      }
     } catch (_e) {
       // FTS5 not available — searchTranscriptions will use LIKE fallback
     }

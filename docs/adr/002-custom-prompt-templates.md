@@ -9,12 +9,14 @@ Murmur 内置 6 种 AI 润色模式（optimize, optimize_long, format, correct, 
 ## 决策
 
 引入基于 Markdown 文件的模板系统：
+
 - 模板文件存放在 `{userData}/templates/` 目录
 - 使用 YAML frontmatter 定义元数据（name, label, user_template）
 - 文件正文作为 system prompt
 - `{text}` 占位符用于用户文本替换
 
 接口设计：
+
 - `parseTemplateFile(content, fileName)` — 解析单个模板文件
 - `loadCustomTemplates(templatesDir)` — 从目录加载所有模板
 - `buildPrompt(mode, text, { customTemplates })` — 扩展为支持自定义模板

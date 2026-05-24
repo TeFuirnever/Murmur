@@ -58,7 +58,9 @@ describe("ModelDownloadProgress", () => {
       />,
     );
     // VAD should show completed state
-    expect(screen.getByText(/VAD/).closest("div")?.querySelector(".model-done")).toBeTruthy();
+    expect(
+      screen.getByText(/VAD/).closest("div")?.querySelector(".model-done"),
+    ).toBeTruthy();
   });
 
   it("returns null for non-download stages", () => {

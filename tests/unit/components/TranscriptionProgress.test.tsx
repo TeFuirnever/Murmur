@@ -11,9 +11,7 @@ describe("TranscriptionProgress", () => {
   });
 
   it("shows custom message", () => {
-    render(
-      <TranscriptionProgress message="识别中..." onCancel={() => {}} />,
-    );
+    render(<TranscriptionProgress message="识别中..." onCancel={() => {}} />);
     expect(screen.getByText("识别中...")).toBeTruthy();
   });
 

@@ -10,6 +10,7 @@
 ## Decision
 
 Use SQLite FTS5 with the `trigram` tokenizer:
+
 - Creates `transcriptions_fts` virtual table mirroring text columns
 - Triggers keep FTS index in sync with INSERT/UPDATE/DELETE
 - `rebuild` on startup ensures existing data is indexed

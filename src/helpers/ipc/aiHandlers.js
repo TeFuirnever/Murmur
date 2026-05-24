@@ -13,8 +13,24 @@ const BUILT_IN_MODES = [
   { name: "enhance", label: "内容优化" },
 ];
 
+const TEMPLATE_CACHE_TTL_MS = 30_000;
+let templateCache = { dir: null, time: 0, templates: [] };
+
+function getCachedTemplates(templatesDir) {
+  const now = Date.now();
+  if (
+    templateCache.dir === templatesDir &&
+    now - templateCache.time < TEMPLATE_CACHE_TTL_MS
+  ) {
+    return templateCache.templates;
+  }
+  const templates = loadCustomTemplates(templatesDir);
+  templateCache = { dir: templatesDir, time: now, templates };
+  return templates;
+}
+
 function getAIModes(templatesDir) {
-  const custom = loadCustomTemplates(templatesDir);
+  const custom = getCachedTemplates(templatesDir);
   const customNames = new Set(custom.map((t) => t.name));
   const builtIn = BUILT_IN_MODES.filter((m) => !customNames.has(m.name));
   return [...builtIn, ...custom.map((t) => ({ name: t.name, label: t.label }))];
@@ -101,7 +117,7 @@ async function processTextWithAI(
     }
 
     const customTemplates = options.templatesDir
-      ? loadCustomTemplates(options.templatesDir)
+      ? getCachedTemplates(options.templatesDir)
       : [];
     const { system, user } = buildPrompt(mode, text, { customTemplates });
 

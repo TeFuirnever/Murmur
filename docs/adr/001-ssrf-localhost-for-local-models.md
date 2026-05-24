@@ -9,10 +9,12 @@ Murmur 的 AI 文本润色功能通过 `validateAIBaseUrl` 阻止所有 localhos
 ## 决策
 
 将 SSRF 防护分为两种模式：
+
 - **云端模式**（默认）：严格阻止 localhost、RFC1918、loopback 地址，仅允许 HTTPS
 - **本地模式**：允许 localhost/loopback + HTTP，仍阻止 RFC1918 私有网络
 
 当 `processTextWithAI` 或 `checkAIStatus` 检测到 base URL 为 localhost 时，自动切换为本地模式，同时：
+
 - API key 变为可选（本地模型通常不需要认证）
 - Authorization header 条件化（无 key 时不发送）
 

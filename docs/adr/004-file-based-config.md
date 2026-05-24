@@ -5,6 +5,7 @@
 ## 上下文
 
 Murmur 的所有设置存储在 SQLite 数据库中，加密字段使用 safeStorage。这对于 GUI 应用是足够的，但不支持：
+
 - 文本编辑器快速修改配置
 - 版本控制共享配置
 - CLI 模式读取配置
@@ -13,6 +14,7 @@ Murmur 的所有设置存储在 SQLite 数据库中，加密字段使用 safeSto
 ## 决策
 
 引入 `~/.murmur.json`（实际路径为 `{userData}/murmur.json`）文件配置：
+
 - `loadFileConfig(path)` — 读取并过滤安全字段
 - `saveFileConfig(path, settings)` — 写入白名单字段
 - DatabaseManager 的 `getSetting` 方法改为三级优先链：DB > 文件 > 默认值

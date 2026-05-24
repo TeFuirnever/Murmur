@@ -10,6 +10,7 @@
 ## Decision
 
 Auto-detect the best available device at startup using PyTorch detection:
+
 1. `torch.cuda.is_available()` → `"cuda"` (NVIDIA GPUs)
 2. `torch.backends.mps.is_available()` → `"mps"` (Apple Silicon)
 3. Fallback → `"cpu"`
