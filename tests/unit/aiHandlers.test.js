@@ -16,6 +16,29 @@ function mockFetch(response) {
   }));
 }
 
+function mockFetchError(status, body) {
+  global.fetch = vi.fn(async () => ({
+    ok: false,
+    status,
+    statusText: `HTTP ${status}`,
+    text: async () => JSON.stringify(body),
+  }));
+}
+
+function setupDb(overrides = {}) {
+  const defaults = {
+    ai_api_key: "test-key",
+    ai_base_url: "https://api.openai.com/v1",
+    ai_model: "gpt-3.5-turbo",
+    ai_temperature: 0.3,
+    ai_max_tokens: 2000,
+  };
+  const settings = { ...defaults, ...overrides };
+  return {
+    getSetting: vi.fn(async (key) => settings[key] ?? null),
+  };
+}
+
 describe("aiHandlers", () => {
   let register;
   let processTextWithAI;
@@ -144,6 +167,41 @@ describe("aiHandlers", () => {
       expect(body.temperature).toBe(0.3);
       expect(body.max_tokens).toBe(2000);
     });
+
+    it("returns error on HTTP 401 response", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+
+      mockFetchError(401, {
+        error: { message: "Invalid API key" },
+      });
+
+      const result = await processTextWithAI("test", "optimize", db, logger);
+      expect(result.success).toBe(false);
+      expect(result.error).toBeTruthy();
+    });
+
+    it("returns error on HTTP 500 response", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+
+      mockFetchError(500, { error: "Internal Server Error" });
+
+      const result = await processTextWithAI("test", "optimize", db, logger);
+      expect(result.success).toBe(false);
+      expect(result.error).toBeTruthy();
+    });
+
+    it("returns error when choices array is empty", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+
+      mockFetch({ choices: [] });
+
+      const result = await processTextWithAI("test", "optimize", db, logger);
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("格式错误");
+    });
   });
 
   describe("checkAIStatus", () => {
@@ -174,6 +232,54 @@ describe("aiHandlers", () => {
       const result = await checkAIStatus(null, db, logger);
       expect(result.available).toBe(false);
       expect(result.error).toContain("https");
+    });
+
+    it("returns mapped error on HTTP 401", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+
+      mockFetchError(401, {
+        error: { message: "Unauthorized" },
+      });
+
+      const result = await checkAIStatus(null, db, logger);
+      expect(result.available).toBe(false);
+      expect(result.error).toContain("无效");
+    });
+
+    it("returns mapped error on HTTP 429", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+
+      mockFetchError(429, {
+        error: { message: "Rate limited" },
+      });
+
+      const result = await checkAIStatus(null, db, logger);
+      expect(result.available).toBe(false);
+      expect(result.error).toContain("频率");
+    });
+
+    it("returns mapped error on HTTP 500", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+
+      mockFetchError(500, { error: "Internal Server Error" });
+
+      const result = await checkAIStatus(null, db, logger);
+      expect(result.available).toBe(false);
+      expect(result.error).toContain("内部错误");
+    });
+
+    it("returns error when response has empty choices", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+
+      mockFetch({ choices: [] });
+
+      const result = await checkAIStatus(null, db, logger);
+      expect(result.available).toBe(false);
+      expect(result.error).toBeTruthy();
     });
   });
 
