@@ -5,6 +5,8 @@ const path = require("path");
 const FILE_CONFIGURABLE_KEYS = [
   "ai_base_url",
   "ai_model",
+  "ai_temperature",
+  "ai_max_tokens",
   "hotkey",
   "language",
   "theme",
