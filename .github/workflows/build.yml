@@ -182,9 +182,7 @@ jobs:
 
             **Verify download integrity**: compare your file's SHA256 with `checksums-sha256.txt`.
 
-            **Prerequisites**: Install [ffmpeg](https://ffmpeg.org) for audio format conversion (mp3/m4a support).
-            - macOS: `brew install ffmpeg`
-            - Windows: `winget install ffmpeg`
+            **Prerequisites**: None for basic usage. Audio format conversion (mp3/ogg) is handled by the built-in Python environment.
 
             **First launch**: Murmur downloads the FunASR model (~1GB) on first run.
 
