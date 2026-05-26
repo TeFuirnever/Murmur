@@ -724,7 +724,9 @@ export default function App() {
                   duration={recordingDuration || undefined}
                   isOptimizing={isOptimizing}
                   onCopy={handleCopyText}
-                  onAIOptimize={!processedText ? handleRecordingAIOptimize : undefined}
+                  onAIOptimize={
+                    !processedText ? handleRecordingAIOptimize : undefined
+                  }
                 />
                 <button
                   onClick={resetRecordingState}

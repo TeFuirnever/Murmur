@@ -43,38 +43,39 @@ function register(ipcMain, managers) {
     }
   });
 
-  ipcMain.handle(
-    C.TRANSCRIPTION.VALIDATE_FILE,
-    async (_event, filePath) => {
-      const allowedExts = C.AUDIO_EXTENSIONS;
-      const ext = path.extname(filePath).toLowerCase();
-      if (!allowedExts.includes(ext)) {
-        return { success: false, error: "不支持的音频格式: " + ext };
+  ipcMain.handle(C.TRANSCRIPTION.VALIDATE_FILE, async (_event, filePath) => {
+    const allowedExts = C.AUDIO_EXTENSIONS;
+    const ext = path.extname(filePath).toLowerCase();
+    if (!allowedExts.includes(ext)) {
+      return { success: false, error: "不支持的音频格式: " + ext };
+    }
+    const resolved = path.resolve(filePath);
+    const homedir = os.homedir();
+    const tmpdir = os.tmpdir();
+    if (
+      !resolved.startsWith(homedir) &&
+      !resolved.startsWith(tmpdir) &&
+      !resolved.startsWith("/Volumes/")
+    ) {
+      return { success: false, error: "路径不在允许范围内" };
+    }
+    try {
+      const stat = fs.statSync(filePath);
+      const MAX_FILE_SIZE = 500 * 1024 * 1024;
+      if (stat.size > MAX_FILE_SIZE) {
+        return { success: false, error: "文件超过500MB限制" };
       }
-      const resolved = path.resolve(filePath);
-      const homedir = os.homedir();
-      const tmpdir = os.tmpdir();
-      if (!resolved.startsWith(homedir) && !resolved.startsWith(tmpdir) && !resolved.startsWith("/Volumes/")) {
-        return { success: false, error: "路径不在允许范围内" };
-      }
-      try {
-        const stat = fs.statSync(filePath);
-        const MAX_FILE_SIZE = 500 * 1024 * 1024;
-        if (stat.size > MAX_FILE_SIZE) {
-          return { success: false, error: "文件超过500MB限制" };
-        }
-        return {
-          success: true,
-          filePath,
-          fileName: path.basename(filePath),
-          fileSize: stat.size,
-          extension: ext,
-        };
-      } catch {
-        return { success: false, error: "文件不存在或无法访问" };
-      }
-    },
-  );
+      return {
+        success: true,
+        filePath,
+        fileName: path.basename(filePath),
+        fileSize: stat.size,
+        extension: ext,
+      };
+    } catch {
+      return { success: false, error: "文件不存在或无法访问" };
+    }
+  });
 
   ipcMain.handle(
     C.TRANSCRIPTION.TRANSCRIBE_FILE,
@@ -87,7 +88,11 @@ function register(ipcMain, managers) {
       const resolved = path.resolve(audioPath);
       const homedir = os.homedir();
       const tmpdir = os.tmpdir();
-      if (!resolved.startsWith(homedir) && !resolved.startsWith(tmpdir) && !resolved.startsWith("/Volumes/")) {
+      if (
+        !resolved.startsWith(homedir) &&
+        !resolved.startsWith(tmpdir) &&
+        !resolved.startsWith("/Volumes/")
+      ) {
         return { success: false, error: "路径不在允许范围内" };
       }
       const result = await funasrManager.transcribeFile(audioPath, {
@@ -130,7 +135,9 @@ function register(ipcMain, managers) {
 
       let segments = [];
       if (row.segments) {
-        try { segments = JSON.parse(row.segments); } catch {}
+        try {
+          segments = JSON.parse(row.segments);
+        } catch {}
       }
       if (!segments.length) return { success: false, error: "无分段数据" };
 

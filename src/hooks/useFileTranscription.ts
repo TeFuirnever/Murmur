@@ -166,10 +166,7 @@ export function useFileTranscription() {
         setState("done");
 
         // 触发AI处理（如果启用）
-        if (
-          window.electronAPI?.processText &&
-          window.electronAPI?.getSetting
-        ) {
+        if (window.electronAPI?.processText && window.electronAPI?.getSetting) {
           try {
             const defaultMode = (await window.electronAPI.getSetting(
               "default_mode",
@@ -186,13 +183,13 @@ export function useFileTranscription() {
             if (useAI && response.text) {
               const mode =
                 !defaultMode || defaultMode === "auto"
-                  ? (response.text.trim().length > 150 ||
-                      response.text.trim().split(/\s+/).length > 30
-                      ? "optimize_long"
-                      : "optimize")
+                  ? response.text.trim().length > 150 ||
+                    response.text.trim().split(/\s+/).length > 30
+                    ? "optimize_long"
+                    : "optimize"
                   : defaultMode;
               setOptimizing(true);
-              const aiResult = await Promise.race([
+              const aiResult = (await Promise.race([
                 window.electronAPI.processText(response.text, mode),
                 new Promise((_, reject) =>
                   setTimeout(
@@ -200,7 +197,7 @@ export function useFileTranscription() {
                     30000,
                   ),
                 ),
-              ]) as { success?: boolean; text?: string };
+              ])) as { success?: boolean; text?: string };
               if (aiResult?.success && aiResult?.text) {
                 setOptimizedText(aiResult.text);
               }

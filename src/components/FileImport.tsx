@@ -20,7 +20,11 @@ export default function FileImport() {
   if (state === "idle" || state === "selected") {
     return (
       <div className="space-y-4">
-        <FileDropZone fileInfo={fileInfo} onSelectFile={selectFile} onSelectFileFromPath={selectFileFromPath} />
+        <FileDropZone
+          fileInfo={fileInfo}
+          onSelectFile={selectFile}
+          onSelectFileFromPath={selectFileFromPath}
+        />
         {state === "selected" && (
           <button
             onClick={startTranscription}
@@ -55,7 +59,11 @@ export default function FileImport() {
           await navigator.clipboard.writeText(text);
         }
       } catch {
-        try { await navigator.clipboard.writeText(text); } catch { /* no clipboard available */ }
+        try {
+          await navigator.clipboard.writeText(text);
+        } catch {
+          /* no clipboard available */
+        }
       }
     };
 
@@ -63,7 +71,9 @@ export default function FileImport() {
       if (!window.electronAPI?.aiReviewTranscription || !result.id) {
         throw new Error("AI 优化功能不可用");
       }
-      const reviewResult = await window.electronAPI.aiReviewTranscription(result.id);
+      const reviewResult = await window.electronAPI.aiReviewTranscription(
+        result.id,
+      );
       if (reviewResult.success && reviewResult.reviewText) {
         return reviewResult.reviewText;
       }
@@ -95,12 +105,24 @@ export default function FileImport() {
       <div className="space-y-4">
         <div className="bg-[#ff3b30]/5 dark:bg-[#3a1c1c] rounded-xl p-4 border border-[#ff3b30]/40">
           <div className="flex items-start gap-3">
-            <svg className="w-5 h-5 text-[#ff3b30] flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24">
-              <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <svg
+              className="w-5 h-5 text-[#ff3b30] flex-shrink-0 mt-0.5"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
             </svg>
             <div>
               <p className="text-sm font-medium text-[#ff3b30]">转录失败</p>
-              <p className="text-sm text-[#ff3b30]/80 mt-1">{error || "未知错误"}</p>
+              <p className="text-sm text-[#ff3b30]/80 mt-1">
+                {error || "未知错误"}
+              </p>
             </div>
           </div>
         </div>
@@ -119,8 +141,18 @@ export default function FileImport() {
       <div className="space-y-4">
         <div className="bg-[#ff9500]/5 dark:bg-[#3a2c1c] rounded-xl p-4 border border-[#ff9500]/40">
           <div className="flex items-center gap-3">
-            <svg className="w-5 h-5 text-[#ff9500] flex-shrink-0" fill="none" viewBox="0 0 24 24">
-              <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+            <svg
+              className="w-5 h-5 text-[#ff9500] flex-shrink-0"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+              />
             </svg>
             <p className="text-sm font-medium text-[#ff9500]">转录已取消</p>
           </div>

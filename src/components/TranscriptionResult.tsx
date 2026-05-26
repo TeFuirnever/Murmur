@@ -58,13 +58,19 @@ export default function TranscriptionResult({
   const [modes, setModes] = React.useState<AIMode[]>([]);
   const [currentMode, setCurrentMode] = React.useState("optimize");
   const [isDiarizing, setIsDiarizing] = React.useState(false);
-  const [diarizedSegments, setDiarizedSegments] = React.useState<Segment[] | null>(null);
+  const [diarizedSegments, setDiarizedSegments] = React.useState<
+    Segment[] | null
+  >(null);
   const [diarizeError, setDiarizeError] = React.useState<string | null>(null);
 
-  const displaySegments: Segment[] = (diarizedSegments || segments) as Segment[];
+  const displaySegments: Segment[] = (diarizedSegments ||
+    segments) as Segment[];
   const speakerColors = [
-    "text-[#ff6b6b]", "text-[#4ecdc4]", "text-[#45b7d1]",
-    "text-[#96ceb4]", "text-[#feca57]",
+    "text-[#ff6b6b]",
+    "text-[#4ecdc4]",
+    "text-[#45b7d1]",
+    "text-[#96ceb4]",
+    "text-[#feca57]",
   ];
 
   const handleDiarize = async () => {
@@ -87,9 +93,12 @@ export default function TranscriptionResult({
 
   React.useEffect(() => {
     if (window.electronAPI?.getAIModes) {
-      window.electronAPI.getAIModes().then((fetched: AIMode[]) => {
-        if (fetched?.length) setModes(fetched);
-      }).catch(() => {});
+      window.electronAPI
+        .getAIModes()
+        .then((fetched: AIMode[]) => {
+          if (fetched?.length) setModes(fetched);
+        })
+        .catch(() => {});
     }
   }, []);
 
@@ -169,9 +178,24 @@ export default function TranscriptionResult({
                 className="p-1 hover:bg-[#d1e8f8] dark:hover:bg-[#0a2540]/70 rounded-md transition-colors"
                 title="复制文本"
               >
-                <svg className="w-4 h-4 text-[#0071e3] dark:text-[#2997ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <rect x="9" y="9" width="13" height="13" rx="2" strokeWidth="2" />
-                  <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" strokeWidth="2" />
+                <svg
+                  className="w-4 h-4 text-[#0071e3] dark:text-[#2997ff]"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <rect
+                    x="9"
+                    y="9"
+                    width="13"
+                    height="13"
+                    rx="2"
+                    strokeWidth="2"
+                  />
+                  <path
+                    d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"
+                    strokeWidth="2"
+                  />
                 </svg>
               </button>
             )}
@@ -193,16 +217,33 @@ export default function TranscriptionResult({
       {displayText && !hasAIResult && !showOptimizing && (
         <div className="bg-[#f5f5f7] dark:bg-[#2c2c2e] rounded-lg p-4 max-h-48 overflow-y-auto custom-scrollbar">
           <div className="flex items-center justify-between">
-            <h4 className="text-xs font-medium text-[#86868b] mb-2">转录文本</h4>
+            <h4 className="text-xs font-medium text-[#86868b] mb-2">
+              转录文本
+            </h4>
             {onCopy && (
               <button
                 onClick={() => onCopy(displayText)}
                 className="p-1 hover:bg-[#e8e8ed] dark:hover:bg-[#3a3a3c] rounded-md transition-colors"
                 title="复制文本"
               >
-                <svg className="w-4 h-4 text-[#0071e3] dark:text-[#2997ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <rect x="9" y="9" width="13" height="13" rx="2" strokeWidth="2" />
-                  <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" strokeWidth="2" />
+                <svg
+                  className="w-4 h-4 text-[#0071e3] dark:text-[#2997ff]"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <rect
+                    x="9"
+                    y="9"
+                    width="13"
+                    height="13"
+                    rx="2"
+                    strokeWidth="2"
+                  />
+                  <path
+                    d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"
+                    strokeWidth="2"
+                  />
                 </svg>
               </button>
             )}
@@ -261,9 +302,7 @@ export default function TranscriptionResult({
           <span>正在识别说话人...</span>
         </div>
       )}
-      {diarizeError && (
-        <p className="text-xs text-[#ff3b30]">{diarizeError}</p>
-      )}
+      {diarizeError && <p className="text-xs text-[#ff3b30]">{diarizeError}</p>}
 
       {/* Segment timeline */}
       {hasSegments && (
@@ -281,27 +320,31 @@ export default function TranscriptionResult({
             <div className="space-y-1.5 max-h-64 overflow-y-auto custom-scrollbar">
               {displaySegments.map((segment, index) => {
                 const spk = segment.speaker;
-                const colorIdx = spk ? (spk.charCodeAt(spk.length - 1) || 0) % speakerColors.length : -1;
+                const colorIdx = spk
+                  ? (spk.charCodeAt(spk.length - 1) || 0) % speakerColors.length
+                  : -1;
                 return (
-                <div
-                  key={index}
-                  className="flex gap-3 p-2 rounded-lg text-sm transition-colors hover:bg-[#f5f5f7] dark:hover:bg-[#383838]/50"
-                >
-                  <span className="text-xs text-[#86868b] font-mono whitespace-nowrap pt-0.5 flex-shrink-0">
-                    {formatTimestamp(segment.start_ms)} -{" "}
-                    {formatTimestamp(segment.end_ms)}
-                  </span>
-                  <div className="flex flex-col gap-0.5 min-w-0">
-                    {spk && (
-                      <span className={`text-[10px] font-semibold ${colorIdx >= 0 ? speakerColors[colorIdx] : "text-[#86868b]"}`}>
-                        {spk}
-                      </span>
-                    )}
-                    <span className="text-content text-[#1d1d1f]/80 dark:text-[#f5f5f7]/60">
-                      {segment.text}
+                  <div
+                    key={index}
+                    className="flex gap-3 p-2 rounded-lg text-sm transition-colors hover:bg-[#f5f5f7] dark:hover:bg-[#383838]/50"
+                  >
+                    <span className="text-xs text-[#86868b] font-mono whitespace-nowrap pt-0.5 flex-shrink-0">
+                      {formatTimestamp(segment.start_ms)} -{" "}
+                      {formatTimestamp(segment.end_ms)}
                     </span>
+                    <div className="flex flex-col gap-0.5 min-w-0">
+                      {spk && (
+                        <span
+                          className={`text-[10px] font-semibold ${colorIdx >= 0 ? speakerColors[colorIdx] : "text-[#86868b]"}`}
+                        >
+                          {spk}
+                        </span>
+                      )}
+                      <span className="text-content text-[#1d1d1f]/80 dark:text-[#f5f5f7]/60">
+                        {segment.text}
+                      </span>
+                    </div>
                   </div>
-                </div>
                 );
               })}
             </div>

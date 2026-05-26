@@ -20,7 +20,13 @@ function formatFileSize(bytes: number): string {
 
 function WaveformIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
       <path strokeLinecap="round" d="M12 3v18M8 7v10M4 10v4M16 7v10M20 10v4" />
     </svg>
   );
@@ -101,23 +107,29 @@ export default function FileDropZone({
       }`}
     >
       <div className="flex flex-col items-center gap-3">
-        <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 ${
-          isDragging
-            ? "bg-[#e8f4fd] dark:bg-[#0a2540]"
-            : "bg-[#f5f5f7] dark:bg-[#2c2c2e] group-hover:bg-[#e8f4fd] dark:group-hover:bg-[#0a2540] group-hover:-translate-y-0.5"
-        }`}>
-          <WaveformIcon className={`w-6 h-6 transition-colors ${
+        <div
+          className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 ${
             isDragging
-              ? "text-[#0071e3]"
-              : "text-[#86868b] group-hover:text-[#0071e3]"
-          }`} />
+              ? "bg-[#e8f4fd] dark:bg-[#0a2540]"
+              : "bg-[#f5f5f7] dark:bg-[#2c2c2e] group-hover:bg-[#e8f4fd] dark:group-hover:bg-[#0a2540] group-hover:-translate-y-0.5"
+          }`}
+        >
+          <WaveformIcon
+            className={`w-6 h-6 transition-colors ${
+              isDragging
+                ? "text-[#0071e3]"
+                : "text-[#86868b] group-hover:text-[#0071e3]"
+            }`}
+          />
         </div>
         <div className="text-center">
-          <p className={`text-sm font-medium ${
-            isDragging
-              ? "text-[#0071e3]"
-              : "text-[#1d1d1f]/80 dark:text-[#f5f5f7]/80"
-          }`}>
+          <p
+            className={`text-sm font-medium ${
+              isDragging
+                ? "text-[#0071e3]"
+                : "text-[#1d1d1f]/80 dark:text-[#f5f5f7]/80"
+            }`}
+          >
             {isDragging ? "松开以导入音频文件" : "点击选择音频文件或拖拽到此处"}
           </p>
           <p className="text-xs text-[#86868b] mt-1">

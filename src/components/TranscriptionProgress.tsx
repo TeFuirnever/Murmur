@@ -24,8 +24,12 @@ const PHASE_LABELS: Record<string, string> = {
   punc: "标点恢复中",
 };
 
-function estimateRemaining(progressPct?: number, elapsedMs?: number): string | null {
-  if (!progressPct || progressPct < 5 || !elapsedMs || elapsedMs < 2000) return null;
+function estimateRemaining(
+  progressPct?: number,
+  elapsedMs?: number,
+): string | null {
+  if (!progressPct || progressPct < 5 || !elapsedMs || elapsedMs < 2000)
+    return null;
   const totalEstimated = elapsedMs / (progressPct / 100);
   const remaining = totalEstimated - elapsedMs;
   if (remaining < 5000) return "即将完成";
@@ -45,10 +49,9 @@ export default function TranscriptionProgress({
 }: TranscriptionProgressProps) {
   const isDone = phase === "done";
 
-  const phaseLabel =
-    PHASE_LABELS[phase || ""] || message || "正在处理...";
+  const phaseLabel = PHASE_LABELS[phase || ""] || message || "正在处理...";
 
-  const pct = isDone ? 100 : progressPct ?? -1;
+  const pct = isDone ? 100 : (progressPct ?? -1);
 
   const [elapsedStart] = React.useState(() => Date.now());
   const [eta, setEta] = React.useState<string | null>(null);
@@ -74,12 +77,33 @@ export default function TranscriptionProgress({
       {/* spinner + 阶段文字 */}
       <div className="flex items-center justify-center gap-2.5 mb-5">
         {isDone ? (
-          <svg className="w-5 h-5 text-[#30d158]" fill="none" viewBox="0 0 24 24">
-            <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          <svg
+            className="w-5 h-5 text-[#30d158]"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M5 13l4 4L19 7"
+            />
           </svg>
         ) : (
-          <svg className="w-4 h-4 text-[#0071e3] animate-spin" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <svg
+            className="w-4 h-4 text-[#0071e3] animate-spin"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+            />
             <path
               className="opacity-75"
               fill="currentColor"
@@ -87,7 +111,9 @@ export default function TranscriptionProgress({
             />
           </svg>
         )}
-        <span className={`text-sm font-medium ${isDone ? "text-[#30d158]" : "text-[#1d1d1f]/80 dark:text-[#f5f5f7]/80"}`}>
+        <span
+          className={`text-sm font-medium ${isDone ? "text-[#30d158]" : "text-[#1d1d1f]/80 dark:text-[#f5f5f7]/80"}`}
+        >
           {isDone ? "转录完成" : phaseLabel}
         </span>
       </div>
@@ -113,10 +139,13 @@ export default function TranscriptionProgress({
           </div>
         </div>
       ) : (
-        phase === "asr" && (totalMs ?? 0) > 0 && (
+        phase === "asr" &&
+        (totalMs ?? 0) > 0 && (
           <div className="mb-4">
             <div className="flex justify-between">
-              <span className="text-xs text-[#86868b]">音频时长 {formatMs(totalMs)}</span>
+              <span className="text-xs text-[#86868b]">
+                音频时长 {formatMs(totalMs)}
+              </span>
             </div>
             <div className="w-full h-1.5 bg-[#e8e8ed] dark:bg-[#383838] rounded-full mt-2 overflow-hidden">
               <div className="h-full bg-[#0071e3] rounded-full animate-indeterminate" />

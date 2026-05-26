@@ -321,4 +321,9 @@ function buildPrompt(mode, text, { customTemplates = [] } = {}) {
   return modes[mode] || modes.optimize;
 }
 
-module.exports = { buildPrompt, parseTemplateFile, loadCustomTemplates, DEFAULT_PIPELINE: ["optimize"] };
+module.exports = {
+  buildPrompt,
+  parseTemplateFile,
+  loadCustomTemplates,
+  DEFAULT_PIPELINE: ["optimize"],
+};

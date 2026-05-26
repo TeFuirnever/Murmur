@@ -187,7 +187,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // 文件转录相关
   importAudioFile: () => ipcRenderer.invoke(C.TRANSCRIPTION.IMPORT_FILE),
-  validateAudioFile: (filePath) => ipcRenderer.invoke(C.TRANSCRIPTION.VALIDATE_FILE, filePath),
+  validateAudioFile: (filePath) =>
+    ipcRenderer.invoke(C.TRANSCRIPTION.VALIDATE_FILE, filePath),
   transcribeFile: (audioPath, options) =>
     ipcRenderer.invoke(C.TRANSCRIPTION.TRANSCRIBE_FILE, audioPath, options),
   cancelFileTranscription: () => ipcRenderer.invoke(C.TRANSCRIPTION.CANCEL),

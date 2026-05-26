@@ -5,16 +5,48 @@ const { getProviderPresets } = require("../providerPresets");
 const { detectLocalModels } = require("../detectLocalModels");
 
 const BUILT_IN_MODES = [
-  { name: "optimize", label: "智能润色", description: "优化文本流畅度和表达，适合日常录音" },
-  { name: "optimize_long", label: "长文本整理", description: "结构化整理长文本，保留完整信息" },
+  {
+    name: "optimize",
+    label: "智能润色",
+    description: "优化文本流畅度和表达，适合日常录音",
+  },
+  {
+    name: "optimize_long",
+    label: "长文本整理",
+    description: "结构化整理长文本，保留完整信息",
+  },
   { name: "format", label: "格式化", description: "整理文本排版和段落结构" },
   { name: "correct", label: "校对纠错", description: "修正语法错误和拼写问题" },
-  { name: "summarize", label: "摘要总结", description: "提取文本核心要点生成摘要" },
-  { name: "enhance", label: "内容优化", description: "增强文本内容的深度和表现力" },
-  { name: "xiaohongshu", label: "小红书风格", description: "转换为小红书笔记风格，emoji丰富、亲切分享、互动感强" },
-  { name: "zhihu", label: "知乎风格", description: "转换为知乎深度回答风格，结构化论述、专业权威" },
-  { name: "douyin", label: "抖音风格", description: "转换为抖音口播文案风格，短句节奏、勾子开头、口语化" },
-  { name: "de-ai", label: "去AI化", description: "消除AI写作痕迹，让文本自然有人味，保留原意" },
+  {
+    name: "summarize",
+    label: "摘要总结",
+    description: "提取文本核心要点生成摘要",
+  },
+  {
+    name: "enhance",
+    label: "内容优化",
+    description: "增强文本内容的深度和表现力",
+  },
+  {
+    name: "xiaohongshu",
+    label: "小红书风格",
+    description: "转换为小红书笔记风格，emoji丰富、亲切分享、互动感强",
+  },
+  {
+    name: "zhihu",
+    label: "知乎风格",
+    description: "转换为知乎深度回答风格，结构化论述、专业权威",
+  },
+  {
+    name: "douyin",
+    label: "抖音风格",
+    description: "转换为抖音口播文案风格，短句节奏、勾子开头、口语化",
+  },
+  {
+    name: "de-ai",
+    label: "去AI化",
+    description: "消除AI写作痕迹，让文本自然有人味，保留原意",
+  },
 ];
 
 const TEMPLATE_CACHE_TTL_MS = 30_000;
@@ -37,7 +69,14 @@ function getAIModes(templatesDir) {
   const custom = getCachedTemplates(templatesDir);
   const customNames = new Set(custom.map((t) => t.name));
   const builtIn = BUILT_IN_MODES.filter((m) => !customNames.has(m.name));
-  return [...builtIn, ...custom.map((t) => ({ name: t.name, label: t.label, description: t.description || "" }))];
+  return [
+    ...builtIn,
+    ...custom.map((t) => ({
+      name: t.name,
+      label: t.label,
+      description: t.description || "",
+    })),
+  ];
 }
 
 function isLocalhost(host) {
