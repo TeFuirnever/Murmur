@@ -159,3 +159,4 @@ python
 .omc/
 src/.omc/
 dist-main/
+.claude/skills/
