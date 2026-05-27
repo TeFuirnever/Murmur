@@ -103,15 +103,13 @@ describe("Phase 1: CI/CD configuration", () => {
     });
 
     it("should have CSC_IDENTITY_AUTO_DISCOVERY=false for macOS", () => {
-      expect(content).toContain(
-        "CSC_IDENTITY_AUTO_DISCOVERY=false pnpm electron-builder --mac",
-      );
+      expect(content).toContain("pnpm electron-builder --mac --publish never");
+      expect(content).toContain("CSC_IDENTITY_AUTO_DISCOVERY: false");
     });
 
     it("should have CSC_IDENTITY_AUTO_DISCOVERY=false for Windows", () => {
-      expect(content).toContain(
-        "CSC_IDENTITY_AUTO_DISCOVERY=false pnpm electron-builder --win",
-      );
+      expect(content).toContain("pnpm electron-builder --win --publish never");
+      expect(content).toContain("CSC_IDENTITY_AUTO_DISCOVERY: false");
     });
 
     it("should have pnpm cache in all jobs", () => {
