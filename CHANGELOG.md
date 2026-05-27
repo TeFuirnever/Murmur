@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-05-27
+
 ### Added
 
 - i18n internationalization: i18next integration with zh-CN/en translations and language selector in settings
@@ -31,12 +33,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Local CI gate script (`scripts/ci-check.js`) with `--fix`, `--json`, `--quiet`, `--e2e` modes
 - Dependabot configuration for npm and GitHub Actions
 - Node version pinning via `.nvmrc`
-- 548 unit tests with 94%+ coverage (statements/branches/functions/lines)
+- Pre-commit hooks via husky + lint-staged (eslint --fix, prettier --write)
+- GitHub Actions Node 24 readiness (`FORCE_JAVASCRIPT_ACTIONS_TO_NODE24`)
+- CI config validation tests (12 tests for husky, lint-staged, dependabot, workflow config)
+- 593 unit tests with high coverage
 
 ### Changed
 
 - Audio format conversion: replaced system ffmpeg dependency with Python librosa/soundfile (zero new deps)
 - AI prompt engineering overhaul: system/user role separation + XML `<transcript>` tags
+- AI optimization redesign: platform styles, humanizer, speaker diarization
 - SSRF protection for AI base URLs: https-only + RFC1918 loopback blocking in handler layer
 - CSP `connect-src` relaxed to `https:` (SSRF guard now enforced in `aiHandlers.js`, not CSP)
 - Log sanitization: AI requests log `inputLength`/`outputLength` instead of full text content
@@ -44,6 +50,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FunASR decomposition: monolithic `funasrManager.js` → thin facade + 4 sub-modules
 - IPC architecture: monolithic `ipcHandlers.js` → 9 domain-scoped handler modules
 - App.tsx refactored: extracted 5 inline components for maintainability
+- Postinstall: `electron-rebuild` → `electron-builder install-app-deps` for CI compatibility
+- TypeScript added as explicit devDependency (was missing from package.json)
+- Windows CI build: `npx electron-rebuild` → `pnpm rebuild better-sqlite3`
 
 ### Fixed
 
@@ -58,73 +67,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Contract mismatch: `saveTranscription` preload signature aligned with handler
 - Settings save button no longer blocks users with AI optimization disabled
 - Clipboard null safety: `clipboard.readText()` returns null when empty
+- Native module version mismatch on Node upgrade (`lastInsertRowid` path fix)
+- Recording save path: use `lastInsertRowid` instead of `id`
+- File transcription result: unified `lastInsertRowid` usage
+- Post-transcription experience: unified recording & file-import flows
+- Prettier formatting: 12 files reformatted to pass CI format check
+- TypeScript 6.0 `baseUrl` deprecation: added `ignoreDeprecations: "6.0"` to tsconfig
+- Missing CSS module type declarations: added `src/vite-env.d.ts` with Vite client types
 
 ### Removed
 
 - Dead `useTextProcessing.js` hook (handleTranscription was never called)
 - System ffmpeg dependency for audio conversion (replaced by Python librosa)
+- `.claude/skills/` files from git index (local-only, already in `.gitignore`)
 
 ### Security
 
 - SSRF validation on AI base URL (block internal networks: localhost, 127.x, 10.x, 172.16-31.x, 192.168.x, 169.254.x)
 - Settings import whitelist validation and SQL parameter escaping
 - License compliance check blocking GPL/AGPL dependencies
-
-## [1.0.0] - 2026-05-21
-
-### Added
-
-- Voice recording with global hotkey (`Cmd+Shift+Space`)
-- Real-time speech recognition using FunASR Paraformer-large
-- AI text optimization (compatible with OpenAI API)
-- Audio file transcription (wav/mp3/m4a/flac)
-- Transcription history with search and pagination
-- Export to TXT/SRT/VTT/MD/DOCX formats
-- Settings management with import/export
-- System tray integration
-- Content Security Policy (CSP) headers
-- API key masking in settings API
-- URL protocol validation for external links
-- Window controls (minimize/maximize/close)
-- Resizable main window with size persistence
-- FunASR health monitor with auto-restart (30s ping/pong)
-- Graceful shutdown with Python process cleanup and 5s timeout
-- Embedded Python environment support for production builds
-- GitHub Actions CI (lint + test + coverage gate) for macOS DMG + Windows EXE
-- Auto-update version detection via GitHub Releases API
-- alwaysOnTop toggle setting with live window update
-- Apple Design System UI across all pages
-
-### Changed
-
-- IPC architecture: monolithic `ipcHandlers.js` → 9 domain-scoped handler modules under `src/helpers/ipc/`
-- IPC contracts: all channel names extracted to `ipc-contracts.js` constants, zero hardcoded strings
-- FunASR decomposition: monolithic `funasrManager.js` (1600+ lines) → thin facade + 4 sub-modules (`funasrServer.js`, `modelManager.js`, `pythonEnvironment.js`, `audioFileHelpers.js`)
-- Message routing: new `serverMessageRouter.js` with per-request timeout, progress streaming, and crash recovery (`_rejectAll`)
-- Window creation: singleton lock prevents duplicate windows
-- Preload: all APIs reference contract constants from `ipc-contracts.js`
-
-### Security
-
-- `sandbox: true` on all 4 BrowserWindow instances
 - API key encryption at rest using `electron.safeStorage`
 - Plaintext-to-encrypted migration for existing API keys
 - Path validation on `show-item-in-folder` (restricted to userData)
 - HTTPS-only validation on `open-external`
 - CSP `connect-src` for AI providers (modelscope, openai, bigmodel)
-
-### Fixed
-
-- Conditional React hooks in App.jsx (rules-of-hooks)
-- Unused variables/imports across all files
-- Native module version conflicts for better-sqlite3
-- All empty catch blocks now log errors
-- FunASR request timeout prevents UI hang on Python crash (60s default)
-- Hardcoded event channel strings eliminated from handlers
-
-### Tests
-
-- Vitest test suite expanded from 27 to 320 tests
-- IPC contract validation tests
-- Handler unit tests for window, model, settings, AI domains
-- ESLint with 0 warnings, 0 errors
+- `sandbox: true` on all BrowserWindow instances
