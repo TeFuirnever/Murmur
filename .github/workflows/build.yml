@@ -6,6 +6,9 @@ on:
       - "v*"
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   test:
     runs-on: macos-latest
@@ -111,7 +114,7 @@ jobs:
         run: pnpm install --ignore-scripts
 
       - name: Rebuild native modules
-        run: npx electron-rebuild
+        run: pnpm rebuild better-sqlite3
 
       - name: Prepare embedded Python
         run: pnpm run prepare:python:embedded
