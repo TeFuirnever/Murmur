@@ -30,6 +30,9 @@ jobs:
       - name: Rebuild native modules for system Node
         run: pnpm rebuild better-sqlite3
 
+      - name: Build preload bundle
+        run: pnpm run build:preload
+
       - name: Lint
         run: pnpm lint
 
