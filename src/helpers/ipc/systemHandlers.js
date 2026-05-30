@@ -1,20 +1,8 @@
 const { app, shell, BrowserWindow } = require("electron");
-const path = require("path");
 const C = require("../ipc-contracts");
 
 function register(ipcMain, managers) {
   const { logger, funasrManager, clipboardManager } = managers;
-
-  ipcMain.handle(C.SYSTEM.SHOW_ITEM, (event, fullPath) => {
-    if (!fullPath || typeof fullPath !== "string") return;
-    const userDataPath = app.getPath("userData");
-    const resolved = path.resolve(fullPath);
-    if (!resolved.startsWith(userDataPath)) {
-      logger.warn("阻止访问用户数据目录外的路径:", fullPath);
-      return;
-    }
-    shell.showItemInFolder(resolved);
-  });
 
   ipcMain.handle(C.SYSTEM.OPEN_EXTERNAL, (event, url) => {
     if (!url || typeof url !== "string" || !url.startsWith("https:")) {
@@ -92,10 +80,6 @@ function register(ipcMain, managers) {
     return app.getVersion();
   });
 
-  ipcMain.handle(C.SYSTEM.GET_APP_PATH, (event, name) => {
-    return app.getPath(name);
-  });
-
   ipcMain.handle(C.SYSTEM.UPDATES, async () => {
     // Update checking moved to updateManager.js
     return { hasUpdate: false, error: "请使用新的更新检查接口" };
@@ -104,56 +88,6 @@ function register(ipcMain, managers) {
   ipcMain.handle(C.SYSTEM.LOG, (event, level, message, data) => {
     logger[level](`[渲染进程] ${message}`, data || "");
     return true;
-  });
-
-  ipcMain.handle(C.SYSTEM.GET_APP_LOGS, (event, lines = 100) => {
-    try {
-      if (logger && logger.getRecentLogs) {
-        return { success: true, logs: logger.getRecentLogs(lines) };
-      }
-      return { success: false, error: "日志管理器不可用" };
-    } catch (error) {
-      logger.error("获取应用日志失败:", error);
-      return { success: false, error: error.message };
-    }
-  });
-
-  ipcMain.handle(C.SYSTEM.GET_LOG_PATH, () => {
-    try {
-      if (logger && logger.getLogFilePath) {
-        return {
-          success: true,
-          appLogPath: logger.getLogFilePath(),
-          funasrLogPath: logger.getFunASRLogFilePath(),
-        };
-      }
-      return { success: false, error: "日志管理器不可用" };
-    } catch (error) {
-      logger.error("获取日志文件路径失败:", error);
-      return { success: false, error: error.message };
-    }
-  });
-
-  ipcMain.handle(C.SYSTEM.OPEN_LOG, (event, logType = "app") => {
-    try {
-      if (logger) {
-        const logPath =
-          logType === "funasr"
-            ? logger.getFunASRLogFilePath()
-            : logger.getLogFilePath();
-
-        const userDataPath = app.getPath("userData");
-        if (!path.resolve(logPath).startsWith(userDataPath)) {
-          return { success: false, error: "路径不在允许范围内" };
-        }
-        shell.showItemInFolder(logPath);
-        return { success: true };
-      }
-      return { success: false, error: "日志管理器不可用" };
-    } catch (error) {
-      logger.error("打开日志文件失败:", error);
-      return { success: false, error: error.message };
-    }
   });
 
   ipcMain.handle(C.SYSTEM.DEBUG_INFO, () => {

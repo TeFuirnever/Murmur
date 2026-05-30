@@ -3,8 +3,6 @@ const C = require("../../src/helpers/ipc-contracts");
 
 describe("ipc-contracts", () => {
   it("exports all domain objects", () => {
-    expect(C.ENVIRONMENT).toBeDefined();
-    expect(C.PYTHON).toBeDefined();
     expect(C.FUNASR).toBeDefined();
     expect(C.MODELS).toBeDefined();
     expect(C.TRANSCRIPTION).toBeDefined();

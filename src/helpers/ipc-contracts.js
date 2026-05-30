@@ -7,22 +7,10 @@
  * @type {IpcContracts}
  */
 module.exports = {
-  ENVIRONMENT: {
-    GET_CONFIG: "get-config",
-    VALIDATE: "validate-environment",
-  },
-  PYTHON: {
-    CHECK: "check-python",
-    INSTALL: "install-python",
-    TEST_ENV: "test-python-environment",
-  },
   FUNASR: {
-    CHECK: "check-funasr",
     INSTALL: "install-funasr",
     STATUS: "check-funasr-status",
-    SERVER_STATUS: "funasr-status",
     RESTART: "restart-funasr-server",
-    GET_LOGS: "get-funasr-logs",
   },
   MODELS: {
     CHECK: "check-model-files",
@@ -100,8 +88,6 @@ module.exports = {
     COPY: "copy-text",
     READ: "read-clipboard",
     WRITE: "write-clipboard",
-    INSERT: "insert-text-directly",
-    MACOS_A11Y: "enable-macos-accessibility",
   },
   UPDATE: {
     CHECK: "check-update",
@@ -119,11 +105,6 @@ module.exports = {
     VERSION: "get-app-version",
     UPDATES: "check-for-updates",
     LOG: "log",
-    GET_APP_LOGS: "get-app-logs",
-    GET_APP_PATH: "get-app-path",
-    GET_LOG_PATH: "get-log-file-path",
-    OPEN_LOG: "open-log-file",
-    SHOW_ITEM: "show-item-in-folder",
     OPEN_EXTERNAL: "open-external",
   },
   EVENTS: {
@@ -137,7 +118,6 @@ module.exports = {
     SETTINGS_UPDATE: "settings-update",
     MODEL_DOWNLOAD_PROGRESS: "model-download-progress",
     FILE_TRANSCRIPTION_PROGRESS: "file-transcription-progress",
-    PYTHON_INSTALL_PROGRESS: "python-install-progress",
     FUNASR_INSTALL_PROGRESS: "funasr-install-progress",
     UPDATE_DOWNLOAD_PROGRESS: "update-download-progress",
     UPDATE_DOWNLOAD_COMPLETE: "update-download-complete",

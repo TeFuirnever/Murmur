@@ -25,28 +25,8 @@ function flatten(obj, prefix = "") {
   return out;
 }
 
-// Channels that are known-orphan and intentionally retained while we
-// decide on cleanup. Each entry should have a docs/follow-ups.md TODO.
+// AUDIO_EXTENSIONS array entries are not IPC channels.
 const KNOWN_ORPHANS = new Set([
-  // Environment
-  "ENVIRONMENT.GET_CONFIG",
-  "ENVIRONMENT.VALIDATE",
-  // Python
-  "PYTHON.CHECK",
-  "PYTHON.INSTALL",
-  "PYTHON.TEST_ENV",
-  // FunASR
-  "FUNASR.CHECK",
-  "FUNASR.SERVER_STATUS",
-  "FUNASR.GET_LOGS",
-  // Transcription
-  "TRANSCRIPTION.GET",
-  "TRANSCRIPTION.SEARCH",
-  "TRANSCRIPTION.STATS",
-  // Clipboard
-  "CLIPBOARD.INSERT",
-  "CLIPBOARD.MACOS_A11Y",
-  // Shared constants (not IPC channels)
   "AUDIO_EXTENSIONS.0",
   "AUDIO_EXTENSIONS.1",
   "AUDIO_EXTENSIONS.2",
@@ -54,14 +34,6 @@ const KNOWN_ORPHANS = new Set([
   "AUDIO_EXTENSIONS.4",
   "AUDIO_EXTENSIONS.5",
   "AUDIO_EXTENSIONS.6",
-  // System
-  "SYSTEM.SHOW_ITEM",
-  "SYSTEM.GET_APP_PATH",
-  "SYSTEM.GET_APP_LOGS",
-  "SYSTEM.GET_LOG_PATH",
-  "SYSTEM.OPEN_LOG",
-  // Window
-  "WINDOW.CLOSE_APP",
 ]);
 
 describe("ipc-contracts orphans", () => {

@@ -215,8 +215,6 @@ export interface ElectronAPI {
   // Misc
   openExternal: (url: string) => Promise<void>;
   log: (level: string, message: string, data?: unknown) => Promise<void>;
-  getAppPath: (name: string) => Promise<string>;
-  showItemInFolder: (path: string) => Promise<void>;
   reloadWindow: () => Promise<void>;
   openDevTools: () => Promise<void>;
 
@@ -252,23 +250,7 @@ export interface ElectronAPI {
   hideSettingsWindow: () => Promise<void>;
 
   // Python environment
-  checkPython: () => Promise<import("./types/ipc").PythonCheckResult>;
-  installPython: () => Promise<import("./types/ipc").PythonInstallResult>;
-  testPythonEnvironment: () => Promise<
-    import("./types/ipc").PythonInstallResult
-  >;
-  checkFunASR: () => Promise<import("./types/ipc").FunASRInstallResult>;
   installFunASR: () => Promise<import("./types/ipc").FunASRInstallResult>;
-  getFunASRLogs: () => Promise<string[]>;
-
-  // Environment
-  getConfig: () => Promise<import("./types/ipc").EnvironmentConfig>;
-  validateEnvironment: () => Promise<{
-    python: boolean;
-    funasr: boolean;
-    ffmpeg: boolean;
-    models: boolean;
-  }>;
 }
 
 export interface AppConstants {

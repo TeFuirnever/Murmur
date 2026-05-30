@@ -16,28 +16,6 @@ function register(ipcMain, managers) {
     return await clipboardManager.pasteText(text);
   });
 
-  ipcMain.handle(C.CLIPBOARD.INSERT, async (event, text) => {
-    try {
-      return await clipboardManager.insertTextDirectly(text);
-    } catch (error) {
-      logger.error("直接插入文本失败:", error);
-      return { success: false, error: error.message };
-    }
-  });
-
-  ipcMain.handle(C.CLIPBOARD.MACOS_A11Y, async () => {
-    try {
-      if (process.platform === "darwin") {
-        const result = await clipboardManager.enableMacOSAccessibility();
-        return { success: result };
-      }
-      return { success: true, message: "非 macOS 平台，无需设置" };
-    } catch (error) {
-      logger.error("启用 macOS accessibility 失败:", error);
-      return { success: false, error: error.message };
-    }
-  });
-
   ipcMain.handle(C.CLIPBOARD.READ, async () => {
     try {
       const text = await clipboardManager.readClipboard();

@@ -12,31 +12,13 @@ commit `e856cd0`: 提取为 `ModelStatusProvider` React Context 单例，App.jsx
 
 commit `db464d0`: 从 systemHandlers 移至 environmentHandlers。
 
-## P2-D: 19 个孤儿 ipcMain.handle（v3 删了 3 个，本轮移了 1 个 GET_LOGS，剩 19 个）
+## ~~P2-D: 19 个孤儿 ipcMain.handle~~ ✅ 已清理
 
-下列 channel 在主进程注册但 preload 未暴露、renderer 无人调用。需逐个判断"删 vs 暴露"：
+15 个真正孤儿的 handler 注册和 contract 常量已删除（ENVIRONMENT 2、PYTHON 3、FUNASR 3、CLIPBOARD 2、SYSTEM 5）。
+4 个误判（TRANSCRIPTION.GET/SEARCH/STATS、WINDOW.CLOSE_APP）已从白名单移除，它们在 preload 中正常暴露。
+同时清理了死代码 EVENT.PYTHON_INSTALL_PROGRESS 和 systemHandlers.js 中未使用的 `path` 导入。
 
-- `C.ENVIRONMENT.GET_CONFIG`
-- `C.ENVIRONMENT.VALIDATE`
-- `C.PYTHON.CHECK`
-- `C.PYTHON.INSTALL`
-- `C.PYTHON.TEST_ENV`
-- `C.FUNASR.CHECK`
-- `C.FUNASR.SERVER_STATUS`
-- `C.FUNASR.GET_LOGS`
-- `C.TRANSCRIPTION.GET`
-- `C.TRANSCRIPTION.SEARCH`
-- `C.TRANSCRIPTION.STATS`
-- `C.CLIPBOARD.INSERT`
-- `C.CLIPBOARD.MACOS_A11Y`
-- `C.SYSTEM.SHOW_ITEM`
-- `C.SYSTEM.GET_APP_PATH`
-- `C.SYSTEM.GET_APP_LOGS`
-- `C.SYSTEM.GET_LOG_PATH`
-- `C.SYSTEM.OPEN_LOG`
-- `C.WINDOW.CLOSE_APP`
-
-测试守门：`tests/unit/ipc-contracts-orphans.test.js` 的 `KNOWN_ORPHANS` 白名单保护以上常量，每删一个需同步白名单。
+测试守门：`tests/unit/ipc-contracts-orphans.test.js` 的 `KNOWN_ORPHANS` 白名单现在只剩 AUDIO_EXTENSIONS 数组索引（非 IPC channel）。
 
 ## CSP 增加 dashscope（v2 备注）
 
