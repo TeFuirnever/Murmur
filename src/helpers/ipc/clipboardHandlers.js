@@ -13,7 +13,12 @@ function register(ipcMain, managers) {
   });
 
   ipcMain.handle(C.CLIPBOARD.PASTE, async (event, text) => {
-    return await clipboardManager.pasteText(text);
+    try {
+      return await clipboardManager.pasteText(text);
+    } catch (error) {
+      logger.error("粘贴文本失败:", error);
+      return { success: false, error: error.message };
+    }
   });
 
   ipcMain.handle(C.CLIPBOARD.READ, async () => {

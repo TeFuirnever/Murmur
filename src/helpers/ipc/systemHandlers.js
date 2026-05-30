@@ -80,11 +80,6 @@ function register(ipcMain, managers) {
     return app.getVersion();
   });
 
-  ipcMain.handle(C.SYSTEM.UPDATES, async () => {
-    // Update checking moved to updateManager.js
-    return { hasUpdate: false, error: "请使用新的更新检查接口" };
-  });
-
   ipcMain.handle(C.SYSTEM.LOG, (event, level, message, data) => {
     logger[level](`[渲染进程] ${message}`, data || "");
     return true;

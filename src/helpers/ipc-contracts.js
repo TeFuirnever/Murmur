@@ -103,7 +103,6 @@ module.exports = {
     TEST_A11Y: "test-accessibility-permission",
     OPEN_PERMS: "open-system-permissions",
     VERSION: "get-app-version",
-    UPDATES: "check-for-updates",
     LOG: "log",
     OPEN_EXTERNAL: "open-external",
   },

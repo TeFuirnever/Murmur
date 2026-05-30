@@ -5,6 +5,25 @@ const { dialog } = require("electron");
 const C = require("../ipc-contracts");
 const exportFormatters = require("../exportFormatters");
 
+function validateAudioPath(filePath) {
+  const allowedExts = C.AUDIO_EXTENSIONS;
+  const ext = path.extname(filePath).toLowerCase();
+  if (!allowedExts.includes(ext)) {
+    return { valid: false, error: "不支持的音频格式: " + ext };
+  }
+  const resolved = path.resolve(filePath);
+  const homedir = os.homedir();
+  const tmpdir = os.tmpdir();
+  if (
+    !resolved.startsWith(homedir) &&
+    !resolved.startsWith(tmpdir) &&
+    !resolved.startsWith("/Volumes/")
+  ) {
+    return { valid: false, error: "路径不在允许范围内" };
+  }
+  return { valid: true, ext, resolved };
+}
+
 function register(ipcMain, managers) {
   const { funasrManager, databaseManager, logger, processTextWithAI } =
     managers;
@@ -44,20 +63,9 @@ function register(ipcMain, managers) {
   });
 
   ipcMain.handle(C.TRANSCRIPTION.VALIDATE_FILE, async (_event, filePath) => {
-    const allowedExts = C.AUDIO_EXTENSIONS;
-    const ext = path.extname(filePath).toLowerCase();
-    if (!allowedExts.includes(ext)) {
-      return { success: false, error: "不支持的音频格式: " + ext };
-    }
-    const resolved = path.resolve(filePath);
-    const homedir = os.homedir();
-    const tmpdir = os.tmpdir();
-    if (
-      !resolved.startsWith(homedir) &&
-      !resolved.startsWith(tmpdir) &&
-      !resolved.startsWith("/Volumes/")
-    ) {
-      return { success: false, error: "路径不在允许范围内" };
+    const validation = validateAudioPath(filePath);
+    if (!validation.valid) {
+      return { success: false, error: validation.error };
     }
     try {
       const stat = fs.statSync(filePath);
@@ -70,7 +78,7 @@ function register(ipcMain, managers) {
         filePath,
         fileName: path.basename(filePath),
         fileSize: stat.size,
-        extension: ext,
+        extension: validation.ext,
       };
     } catch {
       return { success: false, error: "文件不存在或无法访问" };
@@ -80,20 +88,9 @@ function register(ipcMain, managers) {
   ipcMain.handle(
     C.TRANSCRIPTION.TRANSCRIBE_FILE,
     async (event, audioPath, options = {}) => {
-      const allowedExts = C.AUDIO_EXTENSIONS;
-      const ext = path.extname(audioPath).toLowerCase();
-      if (!allowedExts.includes(ext)) {
-        return { success: false, error: "不支持的音频格式: " + ext };
-      }
-      const resolved = path.resolve(audioPath);
-      const homedir = os.homedir();
-      const tmpdir = os.tmpdir();
-      if (
-        !resolved.startsWith(homedir) &&
-        !resolved.startsWith(tmpdir) &&
-        !resolved.startsWith("/Volumes/")
-      ) {
-        return { success: false, error: "路径不在允许范围内" };
+      const validation = validateAudioPath(audioPath);
+      if (!validation.valid) {
+        return { success: false, error: validation.error };
       }
       const result = await funasrManager.transcribeFile(audioPath, {
         ...options,
