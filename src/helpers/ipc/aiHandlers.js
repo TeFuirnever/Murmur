@@ -159,10 +159,16 @@ async function processTextWithAI(
       };
     }
 
-    const customTemplates = options.templatesDir
-      ? getCachedTemplates(options.templatesDir)
-      : [];
-    const { system, user } = buildPrompt(mode, text, { customTemplates });
+    let system, user;
+    if (options.systemPrompt && options.userPrompt) {
+      system = options.systemPrompt;
+      user = options.userPrompt;
+    } else {
+      const customTemplates = options.templatesDir
+        ? getCachedTemplates(options.templatesDir)
+        : [];
+      ({ system, user } = buildPrompt(mode, text, { customTemplates }));
+    }
 
     const requestData = {
       model: model,
@@ -187,11 +193,28 @@ async function processTextWithAI(
       headers.Authorization = `Bearer ${apiKey}`;
     }
 
-    const response = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(requestData),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60_000);
+
+    let response;
+    try {
+      response = await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(requestData),
+        signal: controller.signal,
+      });
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      if (fetchError.name === "AbortError") {
+        throw Object.assign(
+          new Error("AI请求超时（60秒），请尝试缩短文本或检查网络"),
+          { code: "TIMEOUT" },
+        );
+      }
+      throw fetchError;
+    }
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -243,7 +266,9 @@ async function processTextWithAI(
     logger.error("AI文本处理失败:", error);
 
     let errorMessage = "文本处理失败";
-    if (error.code === "ECONNABORTED") {
+    if (error.code === "TIMEOUT" || error.name === "AbortError") {
+      errorMessage = error.message || "请求超时，请检查网络连接";
+    } else if (error.code === "ECONNABORTED") {
       errorMessage = "请求超时，请检查网络连接";
     } else if (error.code === "ENOTFOUND") {
       errorMessage = "无法连接到AI服务器，请检查网络";
@@ -320,11 +345,27 @@ async function checkAIStatus(testConfig, databaseManager, logger) {
       headers.Authorization = `Bearer ${apiKey}`;
     }
 
-    const response = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(requestData),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15_000);
+
+    let response;
+    try {
+      response = await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(requestData),
+        signal: controller.signal,
+      });
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      if (fetchError.name === "AbortError") {
+        throw Object.assign(new Error("请求超时，请检查网络连接"), {
+          code: "TIMEOUT",
+        });
+      }
+      throw fetchError;
+    }
+    clearTimeout(timeoutId);
 
     logger.info("AI API响应状态:", response.status);
 
@@ -373,7 +414,8 @@ async function checkAIStatus(testConfig, databaseManager, logger) {
     logger.error("AI配置测试失败:", error);
 
     let errorMessage = "连接失败";
-    if (error.message.includes("401")) errorMessage = "API密钥无效";
+    if (error.code === "TIMEOUT") errorMessage = error.message;
+    else if (error.message.includes("401")) errorMessage = "API密钥无效";
     else if (error.message.includes("403")) errorMessage = "API密钥权限不足";
     else if (error.message.includes("429")) errorMessage = "API调用频率超限";
     else if (error.message.includes("ENOTFOUND"))

@@ -7,7 +7,6 @@ const {
   formatMD,
   formatDOCX,
   getFormatInfo,
-  getAIReviewPrompt,
   smartMergeSrt,
 } = require("../../src/helpers/exportFormatters");
 
@@ -203,30 +202,33 @@ describe("exportFormatters - extended coverage", () => {
     });
   });
 
-  describe("getAIReviewPrompt", () => {
-    it("returns dianping template", () => {
-      const t = getAIReviewPrompt("dianping");
-      expect(t.systemPrompt).toContain("大众点评");
+  describe("buildPrompt review modes", () => {
+    const { buildPrompt } = require("../../src/helpers/aiPrompts");
+
+    it("returns dianping prompt", () => {
+      const p = buildPrompt("dianping", "test");
+      expect(p.system).toContain("大众点评");
+      expect(p.user).toContain("test");
     });
 
-    it("returns xiaohongshu template", () => {
-      const t = getAIReviewPrompt("xiaohongshu");
-      expect(t.systemPrompt).toContain("小红书");
+    it("returns xiaohongshu prompt", () => {
+      const p = buildPrompt("xiaohongshu", "test");
+      expect(p.system).toContain("小红书");
     });
 
-    it("returns professional template", () => {
-      const t = getAIReviewPrompt("professional");
-      expect(t.systemPrompt).toContain("专业");
+    it("returns professional prompt", () => {
+      const p = buildPrompt("professional", "test");
+      expect(p.system).toContain("专业");
     });
 
-    it("returns raw_with_notes template", () => {
-      const t = getAIReviewPrompt("raw_with_notes");
-      expect(t.systemPrompt).toContain("关键要点");
+    it("returns raw_with_notes prompt", () => {
+      const p = buildPrompt("raw_with_notes", "test");
+      expect(p.system).toContain("关键要点");
     });
 
-    it("defaults to professional for unknown template", () => {
-      const t = getAIReviewPrompt("unknown");
-      expect(t.systemPrompt).toContain("专业");
+    it("defaults to optimize for unknown mode", () => {
+      const p = buildPrompt("unknown", "test");
+      expect(p.system).toContain("润色");
     });
   });
 });

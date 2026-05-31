@@ -284,60 +284,6 @@ async function formatDOCX(transcription) {
   return await Packer.toBuffer(doc);
 }
 
-function getAIReviewPrompt(template, text) {
-  const templates = {
-    dianping: {
-      systemPrompt: `你是一个专业的大众点评评价撰写专家。根据用户提供的语音转录内容，生成一篇适合发布在大众点评平台的专业评价。
-
-要求：
-1. 包含总体评分（1-5星）
-2. 菜品/服务点评（至少3个具体点）
-3. 环境与服务评价
-4. 推荐语和消费建议
-5. 语言自然真实，符合大众点评用户风格
-6. 不要生硬地提到这是从语音转录而来`,
-      userPrompt: `请根据以下语音转录内容，撰写一篇大众点评风格的专业评价：\n\n${text}`,
-    },
-    xiaohongshu: {
-      systemPrompt: `你是一个小红书种草笔记撰写专家。根据用户提供的语音转录内容，生成一篇适合发布在小红书平台的种草笔记。
-
-要求：
-1. 吸引人的标题（含emoji）
-2. 正文分点描述，自然流畅
-3. 添加相关标签（#标签）
-4. 适当的emoji装饰
-5. 语气亲切活泼
-6. 不要生硬地提到这是从语音转录而来`,
-      userPrompt: `请根据以下语音转录内容，撰写一篇小红书风格的种草笔记：\n\n${text}`,
-    },
-    professional: {
-      systemPrompt: `你是一个专业评价文稿撰写专家。根据用户提供的语音转录内容，生成一篇结构清晰的专业评价。
-
-要求：
-1. 摘要概述
-2. 详细评价（分维度）
-3. 优点与不足分析
-4. 改进建议
-5. 总结与推荐
-6. 语言专业客观`,
-      userPrompt: `请根据以下语音转录内容，撰写一篇专业评价文稿：\n\n${text}`,
-    },
-    raw_with_notes: {
-      systemPrompt: `你是一个内容分析专家。根据用户提供的语音转录原文，提取关键要点并提供专业建议。
-
-要求：
-1. 保持原文完整性（原文作为附录）
-2. 提取3-5个关键要点
-3. 分析内容中提到的问题和机会
-4. 提供2-3条改进建议
-5. 总结核心观点`,
-      userPrompt: `请根据以下语音转录原文，提取关键要点并提供专业建议：\n\n${text}`,
-    },
-  };
-
-  return templates[template] || templates.professional;
-}
-
 const FORMAT_MAP = {
   txt: { formatter: formatTXT, ext: ".txt", mime: "text/plain" },
   srt: { formatter: formatSRT, ext: ".srt", mime: "text/plain" },
@@ -360,7 +306,6 @@ module.exports = {
   formatVTT,
   formatMD,
   formatDOCX,
-  getAIReviewPrompt,
   getFormatInfo,
   smartMergeSrt,
 };

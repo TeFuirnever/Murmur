@@ -4,6 +4,7 @@ const fs = require("fs");
 const { dialog } = require("electron");
 const C = require("../ipc-contracts");
 const exportFormatters = require("../exportFormatters");
+const { buildPrompt } = require("../aiPrompts");
 
 function validateAudioPath(filePath) {
   const allowedExts = C.AUDIO_EXTENSIONS;
@@ -214,15 +215,16 @@ function register(ipcMain, managers) {
         return { success: false, error: "转录记录不存在" };
       }
 
-      const prompts = exportFormatters.getAIReviewPrompt(
-        template,
+      const { system, user } = buildPrompt(
+        template || "professional",
         row.text || "",
       );
       const result = await processTextWithAI(
-        prompts.userPrompt,
-        "optimize",
+        row.text || "",
+        template || "professional",
         databaseManager,
         logger,
+        { systemPrompt: system, userPrompt: user },
       );
 
       if (!result.success) {
