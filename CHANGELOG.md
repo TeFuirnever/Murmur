@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-05-31
+
+### Fixed
+
+- AI_REVIEW handler hardcoded "optimize" mode, overriding platform-specific system prompts (xiaohongshu, dianping) — now uses correct prompt per template
+- `processTextWithAI` and `checkAIStatus` had no request timeout — added AbortController with 60s and 15s limits respectively, with friendly Chinese error messages
+- Removed dead `SYSTEM.UPDATES` IPC handler and added error handling for clipboard PASTE
+- Removed 15 orphan IPC handlers and stale type declarations
+
+### Changed
+
+- Unified prompt definitions: moved `dianping`, `professional`, `raw_with_notes` prompts from `exportFormatters.js` into `aiPrompts.js`, eliminating duplicate prompt systems
+- `getAIReviewPrompt` removed from `exportFormatters.js`; `AI_REVIEW` handler now uses `buildPrompt` directly
+
+### Added
+
+- ADR 012: known limitations & technical debt document (`docs/adr/012-known-limitations-tradeoffs.md`)
+
 ## [1.0.0] - 2026-05-27
 
 ### Added
