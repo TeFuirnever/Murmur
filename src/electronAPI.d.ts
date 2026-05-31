@@ -73,7 +73,11 @@ export interface ElectronAPI {
   ) => () => void;
 
   // AI text processing
-  processText: (text: string, mode: string) => Promise<AIProcessResult>;
+  processText: (
+    text: string,
+    mode: string,
+    timeout?: number,
+  ) => Promise<AIProcessResult>;
   checkAIStatus: (testConfig?: {
     ai_api_key?: string;
     ai_base_url?: string;

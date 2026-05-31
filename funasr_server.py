@@ -442,6 +442,7 @@ class FunASRServer:
             options = {}
 
         request_id = options.get("request_id", "")
+        hotword = options.get("hotword", "")
         self.cancel_event.clear()
         import time
         _t0 = time.time()
@@ -460,7 +461,8 @@ class FunASRServer:
             # 使用 librosa 将非 WAV 转为 16kHz 单声道 WAV
             # 注意：格式列表需与 _convert_to_wav() 保持同步
             ext = os.path.splitext(audio_path)[1].lower()
-            if ext not in ('.wav', '.flac') and os.path.getsize(audio_path) > 5 * 1024 * 1024:
+            needs_convert = ext not in ('.wav', '.flac')
+            if needs_convert:
                 logger.info(f"convert phase START request_id={request_id} ext={ext}")
                 self.response_queue.put({
                     "request_id": request_id,
@@ -499,12 +501,10 @@ class FunASRServer:
                     vad_segments = vad_result[0].get("value", [])
             logger.info(f"VAD phase END request_id={request_id} elapsed={time.time()-_t_vad:.2f}s segments={len(vad_segments)}")
 
-            # ASR 阶段 — 单次全文件推理 + RTF 估算进度
+            # ASR 阶段 — VAD 分段推理（回退：全文件单次推理）
             _t_asr = time.time()
             total_ms = int(duration * 1000) if duration else 0
-            rtf_estimate = 0.08
-            estimated_time_s = max(total_ms * rtf_estimate / 1000, 2)
-            logger.info(f"ASR phase START request_id={request_id} total_ms={total_ms} estimated_s={estimated_time_s:.1f}")
+            rtf_estimate = 0.08 if self.device == "cuda" else 0.5
 
             self.response_queue.put({
                 "request_id": request_id,
@@ -518,87 +518,231 @@ class FunASRServer:
             if self.cancel_event.is_set():
                 return {"success": False, "error": "转录已取消", "request_id": request_id}
 
-            # 后台线程定时报告 RTF 估算进度
-            timer_stop = threading.Event()
+            # --- Helper: 从 ASR 时间戳构建 segments ---
+            def _build_segments_from_timestamps(asr_text, asr_timestamps, time_offset_ms=0):
+                """将 ASR 返回的字级时间戳切分为 segments"""
+                segs = []
+                if not asr_timestamps or not asr_text:
+                    return segs
+                chars = list(asr_text.replace(" ", ""))
+                seg_text = ""
+                seg_start = asr_timestamps[0][0] + time_offset_ms
+                seg_end = asr_timestamps[0][1] + time_offset_ms
+                char_idx = 0
 
-            def asr_progress_timer():
-                start = time.time()
-                while not timer_stop.is_set() and not self.cancel_event.is_set():
-                    elapsed = time.time() - start
-                    pct = min(10 + elapsed / estimated_time_s * 85, 95)
-                    self.response_queue.put({
-                        "request_id": request_id,
-                        "type": "progress",
-                        "phase": "asr",
-                        "message": f"语音识别中... {int(pct)}%",
-                        "total_ms": total_ms,
-                        "progress_pct": round(pct, 1),
-                    })
-                    if elapsed >= estimated_time_s:
-                        break
-                    timer_stop.wait(0.5)
-
-            timer_thread = threading.Thread(target=asr_progress_timer, daemon=True)
-            timer_thread.start()
-
-            try:
-                asr_result = self.asr_model.generate(
-                    input=wav_path,
-                    batch_size_s=60
-                )
-            finally:
-                timer_stop.set()
-                timer_thread.join(timeout=1)
-            if asr_result and len(asr_result) > 0:
-                raw_text = asr_result[0].get("text", "")
-
-                # 使用 ASR 返回的时间戳构建 segments
-                timestamps = asr_result[0].get("timestamp")
-                if timestamps and raw_text:
-                    # timestamps 是 [[start_ms, end_ms], ...]，对应每个字/词
-                    chars = list(raw_text.replace(" ", ""))
-                    seg_text = ""
-                    seg_start = timestamps[0][0] if timestamps else 0
-                    seg_end = timestamps[0][1] if timestamps else 0
-                    char_idx = 0
-
-                    for ts in timestamps:
-                        seg_end = ts[1]
-                        if char_idx < len(chars):
-                            seg_text += chars[char_idx]
-                            char_idx += 1
-                        # 每当遇到句末标点或累积超过一定长度，切分一个 segment
-                        if seg_text and (seg_text[-1] in "。！？；\n" or len(seg_text) >= 20):
-                            raw_segments.append({
-                                "start_ms": seg_start,
-                                "end_ms": seg_end,
-                                "text": seg_text
-                            })
-                            seg_text = ""
-                            seg_start = ts[1] if char_idx < len(timestamps) else seg_end
-                    if seg_text:
-                        raw_segments.append({
+                for ts in asr_timestamps:
+                    seg_end = ts[1] + time_offset_ms
+                    if char_idx < len(chars):
+                        seg_text += chars[char_idx]
+                        char_idx += 1
+                    if seg_text and (seg_text[-1] in "。！？；\n" or len(seg_text) >= 20):
+                        segs.append({
                             "start_ms": seg_start,
                             "end_ms": seg_end,
                             "text": seg_text
                         })
-                elif vad_segments:
-                    # ASR 未返回时间戳，用 VAD 段落作为分段，文本为完整转录
-                    total_vad_ms = sum(e - s for s, e in vad_segments)
-                    per_ms_text = len(raw_text) / total_vad_ms if total_vad_ms > 0 else 0
-                    offset = 0
-                    for start_ms, end_ms in vad_segments:
-                        seg_len = max(1, int((end_ms - start_ms) * per_ms_text))
-                        seg_text = raw_text[offset:offset + seg_len]
-                        if seg_text:
-                            raw_segments.append({
-                                "start_ms": start_ms,
-                                "end_ms": end_ms,
-                                "text": seg_text
-                            })
-                        offset += seg_len
+                        seg_text = ""
+                        seg_start = ts[1] + time_offset_ms if char_idx < len(asr_timestamps) else seg_end
+                if seg_text:
+                    segs.append({
+                        "start_ms": seg_start,
+                        "end_ms": seg_end,
+                        "text": seg_text
+                    })
+                return segs
 
-            logger.info(f"ASR phase END request_id={request_id} elapsed={time.time()-_t_asr:.2f}s text_len={len(raw_text)}")
+            # --- VAD 分段推理 ---
+            if vad_segments:
+                logger.info(f"ASR phase START (VAD-segmented) request_id={request_id} vad_segments={len(vad_segments)}")
+
+                # 合并相邻/重叠 VAD 段（间隔 < 300ms）为连续语音区域
+                MERGE_GAP_MS = 300
+                MAX_REGION_MS = 300_000  # 300s 上限
+                BUFFER_MS = 200  # 每侧缓冲
+                SR = 16000  # 采样率
+
+                regions = []
+                cur_start = vad_segments[0][0]
+                cur_end = vad_segments[0][1]
+                for vs, ve in vad_segments[1:]:
+                    if vs - cur_end < MERGE_GAP_MS:
+                        cur_end = max(cur_end, ve)
+                    else:
+                        regions.append([cur_start, cur_end])
+                        cur_start = vs
+                        cur_end = ve
+                regions.append([cur_start, cur_end])
+
+                # 在 VAD 边界处拆分超长区域
+                split_regions = []
+                for rs, re_ in regions:
+                    if re_ - rs <= MAX_REGION_MS:
+                        split_regions.append([rs, re_])
+                    else:
+                        # 从原始 vad_segments 中找到属于该区域的子段
+                        sub_segs = []
+                        for vs, ve in vad_segments:
+                            if vs >= rs and ve <= re_:
+                                sub_segs.append([vs, ve])
+                        # 累加合并直到超过上限
+                        chunk_start = sub_segs[0][0]
+                        chunk_end = sub_segs[0][1]
+                        for ss, se in sub_segs[1:]:
+                            if se - chunk_start > MAX_REGION_MS:
+                                split_regions.append([chunk_start, chunk_end])
+                                chunk_start = ss
+                                chunk_end = se
+                            else:
+                                chunk_end = se
+                        split_regions.append([chunk_start, chunk_end])
+                regions = split_regions
+
+                total_chunks = len(regions)
+                chunk_temp_files = []
+
+                try:
+                    import soundfile as sf
+
+                    # 获取 WAV 信息用于帧级读取
+                    wav_info = sf.info(wav_path)
+                    wav_sr = wav_info.samplerate
+                    wav_frames = wav_info.frames
+
+                    for chunk_idx, (region_start, region_end) in enumerate(regions):
+                        if self.cancel_event.is_set():
+                            logger.info(f"ASR phase CANCELLED request_id={request_id} chunk={chunk_idx}/{total_chunks}")
+                            break
+
+                        # 添加缓冲，但不超出音频边界
+                        buf_start_ms = max(0, region_start - BUFFER_MS)
+                        buf_end_ms = min(total_ms, region_end + BUFFER_MS)
+
+                        # 帧级读取
+                        start_frame = int(buf_start_ms / 1000.0 * wav_sr)
+                        end_frame = int(buf_end_ms / 1000.0 * wav_sr)
+                        start_frame = max(0, start_frame)
+                        end_frame = min(wav_frames, end_frame)
+
+                        # 读取该区域音频
+                        audio_chunk, _ = sf.read(wav_path, start=start_frame, stop=end_frame)
+
+                        # 写入临时 WAV
+                        chunk_tmp = tempfile.NamedTemporaryFile(
+                            suffix='.wav', delete=False,
+                            prefix='murmur_chunk_', dir=tempfile.gettempdir()
+                        )
+                        sf.write(chunk_tmp.name, audio_chunk, wav_sr)
+                        chunk_tmp.close()
+                        chunk_temp_files.append(chunk_tmp.name)
+
+                        # ASR 推理
+                        asr_result = self.asr_model.generate(
+                            input=chunk_tmp.name,
+                            batch_size_s=60,
+                            hotword=hotword,
+                        )
+
+                        if asr_result and len(asr_result) > 0:
+                            chunk_text = asr_result[0].get("text", "")
+                            if chunk_text:
+                                raw_text += chunk_text
+
+                            timestamps = asr_result[0].get("timestamp")
+                            if timestamps and chunk_text:
+                                # 时间戳偏移：chunk 内偏移 + 缓冲区域起始
+                                offset_ms = buf_start_ms
+                                chunk_segs = _build_segments_from_timestamps(
+                                    chunk_text, timestamps, time_offset_ms=offset_ms
+                                )
+                                raw_segments.extend(chunk_segs)
+                            elif chunk_text:
+                                # 无时间戳，用区域范围
+                                raw_segments.append({
+                                    "start_ms": region_start,
+                                    "end_ms": region_end,
+                                    "text": chunk_text
+                                })
+
+                        # 报告进度
+                        pct = 10 + (chunk_idx + 1) / total_chunks * 85
+                        self.response_queue.put({
+                            "request_id": request_id,
+                            "type": "progress",
+                            "phase": "asr",
+                            "message": f"语音识别中... {int(pct)}%",
+                            "total_ms": total_ms,
+                            "progress_pct": round(min(pct, 95), 1),
+                        })
+                        logger.debug(f"ASR chunk {chunk_idx+1}/{total_chunks} done "
+                                     f"region=[{region_start},{region_end}] text_len={len(asr_result[0].get('text','')) if asr_result else 0}")
+                finally:
+                    for f in chunk_temp_files:
+                        try:
+                            os.unlink(f)
+                        except Exception:
+                            pass
+
+                logger.info(f"ASR phase END (VAD-segmented) request_id={request_id} "
+                            f"elapsed={time.time()-_t_asr:.2f}s chunks={total_chunks} text_len={len(raw_text)}")
+
+            # --- 回退：全文件单次推理 ---
+            else:
+                logger.info(f"ASR phase START (fallback full-file) request_id={request_id} total_ms={total_ms}")
+                estimated_time_s = max(total_ms * rtf_estimate / 1000, 2)
+
+                # 后台线程定时报告 RTF 估算进度
+                timer_stop = threading.Event()
+
+                def asr_progress_timer():
+                    start = time.time()
+                    while not timer_stop.is_set() and not self.cancel_event.is_set():
+                        elapsed = time.time() - start
+                        pct = min(10 + elapsed / estimated_time_s * 85, 95)
+                        self.response_queue.put({
+                            "request_id": request_id,
+                            "type": "progress",
+                            "phase": "asr",
+                            "message": f"语音识别中... {int(pct)}%",
+                            "total_ms": total_ms,
+                            "progress_pct": round(pct, 1),
+                        })
+                        timer_stop.wait(0.5)
+
+                timer_thread = threading.Thread(target=asr_progress_timer, daemon=True)
+                timer_thread.start()
+
+                try:
+                    asr_result = self.asr_model.generate(
+                        input=wav_path,
+                        batch_size_s=60,
+                        hotword=hotword,
+                    )
+                finally:
+                    timer_stop.set()
+                    timer_thread.join(timeout=1)
+
+                if asr_result and len(asr_result) > 0:
+                    raw_text = asr_result[0].get("text", "")
+                    timestamps = asr_result[0].get("timestamp")
+                    if timestamps and raw_text:
+                        raw_segments = _build_segments_from_timestamps(raw_text, timestamps)
+                    elif vad_segments:
+                        total_vad_ms = sum(e - s for s, e in vad_segments)
+                        per_ms_text = len(raw_text) / total_vad_ms if total_vad_ms > 0 else 0
+                        offset = 0
+                        for start_ms, end_ms in vad_segments:
+                            seg_len = max(1, int((end_ms - start_ms) * per_ms_text))
+                            seg_text = raw_text[offset:offset + seg_len]
+                            if seg_text:
+                                raw_segments.append({
+                                    "start_ms": start_ms,
+                                    "end_ms": end_ms,
+                                    "text": seg_text
+                                })
+                            offset += seg_len
+
+                logger.info(f"ASR phase END (fallback) request_id={request_id} "
+                            f"elapsed={time.time()-_t_asr:.2f}s text_len={len(raw_text)}")
 
             # 标点恢复
             _t_punc = time.time()

@@ -72,6 +72,8 @@ class ServerMessageRouter {
         reject,
         timer,
         createdAt: Date.now(),
+        lastProgressAt: Date.now(),
+        originalTimeout: timeout,
         onProgress,
       });
 
@@ -132,12 +134,17 @@ class ServerMessageRouter {
         entry.onProgress(msg);
       }
       clearTimeout(entry.timer);
+      const nextTimeout = Math.max(
+        entry.originalTimeout || MAX_ENTRY_AGE,
+        5 * 60 * 1000,
+      );
       this.pending.set(requestId, {
         ...entry,
+        lastProgressAt: Date.now(),
         timer: setTimeout(() => {
           this.pending.delete(requestId);
           entry.reject(new Error("服务器响应超时"));
-        }, MAX_ENTRY_AGE),
+        }, nextTimeout),
       });
       return;
     }
@@ -158,7 +165,9 @@ class ServerMessageRouter {
   _purgeExpired() {
     const now = Date.now();
     for (const [id, entry] of this.pending) {
-      if (now - entry.createdAt > MAX_ENTRY_AGE) {
+      const absoluteAge = now - entry.createdAt;
+      const progressAge = now - (entry.lastProgressAt || entry.createdAt);
+      if (absoluteAge > 60 * 60 * 1000 || progressAge > 5 * 60 * 1000) {
         clearTimeout(entry.timer);
         entry.reject(new Error("请求超时（条目过期）"));
         this.pending.delete(id);

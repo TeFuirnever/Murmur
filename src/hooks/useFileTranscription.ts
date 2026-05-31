@@ -194,7 +194,7 @@ export function useFileTranscription() {
                 new Promise((_, reject) =>
                   setTimeout(
                     () => reject(new Error("AI优化超时，已使用原文")),
-                    30000,
+                    120000,
                   ),
                 ),
               ])) as { success?: boolean; text?: string };

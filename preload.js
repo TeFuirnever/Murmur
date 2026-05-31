@@ -39,7 +39,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   downloadModels: () => ipcRenderer.invoke(C.MODELS.DOWNLOAD),
 
   // AI文本处理
-  processText: (text, mode) => ipcRenderer.invoke(C.AI.PROCESS, text, mode),
+  processText: (text, mode, timeout) =>
+    ipcRenderer.invoke(C.AI.PROCESS, text, mode, timeout),
   checkAIStatus: (testConfig) =>
     ipcRenderer.invoke(C.AI.CHECK_STATUS, testConfig),
   getAIModes: () => ipcRenderer.invoke(C.AI.GET_MODES),

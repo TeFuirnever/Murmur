@@ -193,8 +193,9 @@ async function processTextWithAI(
       headers.Authorization = `Bearer ${apiKey}`;
     }
 
+    const timeoutMs = options.timeout || (isLocal ? 180_000 : 150_000);
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60_000);
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     let response;
     try {
@@ -208,7 +209,9 @@ async function processTextWithAI(
       clearTimeout(timeoutId);
       if (fetchError.name === "AbortError") {
         throw Object.assign(
-          new Error("AI请求超时（60秒），请尝试缩短文本或检查网络"),
+          new Error(
+            `AI请求超时（${Math.round(timeoutMs / 1000)}秒），请尝试缩短文本或检查网络`,
+          ),
           { code: "TIMEOUT" },
         );
       }
@@ -443,11 +446,15 @@ function register(ipcMain, managers) {
       return path.join(app.getPath("userData"), "templates");
     })();
 
-  ipcMain.handle(C.AI.PROCESS, async (event, text, mode = "optimize") => {
-    return await processTextWithAI(text, mode, databaseManager, logger, {
-      templatesDir,
-    });
-  });
+  ipcMain.handle(
+    C.AI.PROCESS,
+    async (event, text, mode = "optimize", timeout) => {
+      return await processTextWithAI(text, mode, databaseManager, logger, {
+        templatesDir,
+        timeout,
+      });
+    },
+  );
 
   ipcMain.handle(C.AI.CHECK_STATUS, async (event, testConfig = null) => {
     return await checkAIStatus(testConfig, databaseManager, logger);

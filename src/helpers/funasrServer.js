@@ -353,8 +353,8 @@ class FunASRServer {
         "transcribe_file",
         { audio_path: audioPath, options },
         {
-          timeout: 600000,
-          timeoutError: "文件转录超时（10分钟）",
+          timeout: 300000,
+          timeoutError: "文件转录超时（5分钟）",
           onProgress: options.onProgress || null,
         },
       );

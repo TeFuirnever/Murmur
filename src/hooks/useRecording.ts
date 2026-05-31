@@ -249,7 +249,7 @@ export const useRecording = ({
                     new Promise((_, reject) =>
                       setTimeout(
                         () => reject(new Error("AI优化超时，已使用原文")),
-                        30000,
+                        60000,
                       ),
                     ),
                   ])) as import("../types/ipc").AIProcessResult;
