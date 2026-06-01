@@ -1103,7 +1103,7 @@ const SettingsPage = () => {
   );
 };
 
-// 导出组件供App.jsx使用
+// 导出组件供App.tsx使用
 export { SettingsPage };
 
 // 如果是直接访问settings.html，则渲染应用
