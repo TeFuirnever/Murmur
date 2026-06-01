@@ -123,3 +123,4 @@ python
 .codex/
 dist-main/
 .claude/
+.gstack/

@@ -25,17 +25,28 @@ function register(ipcMain, managers) {
     return true;
   });
 
+  // [20260602_Fix_MaximizeToggle] Fix maximize-toggle on Windows transparent windows.
+  // Root cause: win.isMaximized() always returns false for transparent windows on
+  // Windows, so the restore path was never taken and maximize() was called again.
+  // Fix: track maximize state via _preMaximizeBounds (null = normal, non-null = maximized).
+  // Save bounds before maximize, restore with setBounds() on toggle, and notify
+  // the renderer directly since the unmaximize event may not fire.
   ipcMain.handle(C.WINDOW.MAXIMIZE, () => {
     if (windowManager.mainWindow) {
       const win = windowManager.mainWindow;
-      if (win.isMaximized()) {
-        win.unmaximize();
+      const saved = windowManager._preMaximizeBounds;
+      if (saved) {
+        windowManager._preMaximizeBounds = null;
+        win.setBounds(saved);
+        win.webContents.send(C.EVENTS.WINDOW_MAXIMIZE_CHANGE, false);
       } else {
+        windowManager._preMaximizeBounds = win.getBounds();
         win.maximize();
       }
     }
     return true;
   });
+  // [20260602_Fix_MaximizeToggle] END
 
   ipcMain.handle(C.WINDOW.IS_MAX, () => {
     if (windowManager.mainWindow) {

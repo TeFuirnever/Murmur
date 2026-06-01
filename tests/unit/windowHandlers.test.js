@@ -29,6 +29,8 @@ describe("windowHandlers", () => {
       isMaximized: vi.fn(() => false),
       setAlwaysOnTop: vi.fn(),
       isDestroyed: vi.fn(() => false),
+      getBounds: vi.fn(() => ({ x: 100, y: 100, width: 520, height: 640 })),
+      setBounds: vi.fn(),
     };
 
     const historyWindow = {
@@ -82,14 +84,45 @@ describe("windowHandlers", () => {
     expect(result).toBe(true);
   });
 
+  // [20260602_Fix_MaximizeToggle] Use _preMaximizeBounds instead of isMaximized()
   it("maximize-window toggles maximize state", () => {
-    managers.windowManager.mainWindow.isMaximized.mockReturnValue(false);
+    const win = managers.windowManager.mainWindow;
+    win.webContents = { send: vi.fn() };
     ipcMain._handlers["maximize-window"]();
-    expect(managers.windowManager.mainWindow.maximize).toHaveBeenCalled();
+    expect(win.maximize).toHaveBeenCalled();
 
-    managers.windowManager.mainWindow.isMaximized.mockReturnValue(true);
     ipcMain._handlers["maximize-window"]();
-    expect(managers.windowManager.mainWindow.unmaximize).toHaveBeenCalled();
+    expect(win.setBounds).toHaveBeenCalled();
+    expect(win.webContents.send).toHaveBeenCalledWith(
+      "window-maximize-change",
+      false,
+    );
+  });
+
+  // [20260602_Fix_MaximizeToggle] Regression: save/restore bounds across multiple toggle cycles
+  it("maximize-window saves bounds before maximize and restores on second click", () => {
+    const win = managers.windowManager.mainWindow;
+    const originalBounds = { x: 100, y: 200, width: 520, height: 640 };
+    win.getBounds.mockReturnValue(originalBounds);
+    win.webContents = { send: vi.fn() };
+
+    // First click: not maximized → save bounds, then maximize
+    ipcMain._handlers["maximize-window"]();
+    expect(win.maximize).toHaveBeenCalled();
+    expect(win.getBounds).toHaveBeenCalled();
+
+    // Second click: has saved bounds → restore via setBounds
+    ipcMain._handlers["maximize-window"]();
+    expect(win.setBounds).toHaveBeenCalledWith(originalBounds);
+    expect(win.webContents.send).toHaveBeenCalledWith(
+      "window-maximize-change",
+      false,
+    );
+
+    // Third click: no saved bounds → maximize again
+    win.maximize.mockClear();
+    ipcMain._handlers["maximize-window"]();
+    expect(win.maximize).toHaveBeenCalled();
   });
 
   it("is-window-maximized returns maximize state", () => {
