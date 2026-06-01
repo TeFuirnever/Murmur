@@ -54,10 +54,10 @@ main.js                  # Electron 主进程入口
 preload.js               # 渲染进程 ↔ 主进程桥接
 funasr_server.py         # FunASR Python 服务（stdin/stdout IPC）
 src/
-  App.jsx                # 主界面
-  settings.jsx           # 设置页面
-  history.jsx            # 历史记录页面
-  main.jsx               # React 入口
+  App.tsx                 # 主界面
+  settings.tsx            # 设置页面
+  history.tsx             # 历史记录页面
+  main.tsx                # React 入口
   components/            # UI 组件
   hooks/                 # React Hooks（useRecording, useHotkey 等）
   helpers/               # 主进程模块（Node.js）
