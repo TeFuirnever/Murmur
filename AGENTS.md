@@ -129,3 +129,36 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 ### Commit Format
 
 - Prefer conventional prefixes: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`, `perf:`, `ci:`.
+
+## Change Annotation Rules
+
+Rules for how code changes are structured, documented, and annotated in the codebase.
+
+- **Comments must be written in English.** All comments, annotations, and descriptions use English.
+
+- **Do not modify original code unless the change requires it.** No reformatting, renaming, or comment changes on code unrelated to the current task.
+
+- **Isolate new code blocks with tag comments.** Every insertion of new code must be wrapped with a tag header and footer:
+
+  ```js
+  // [Tag_Name] Description of what this change does and why
+  ... new code ...
+  // [Tag_Name] END
+  ```
+
+- **Each independent change must have its own tag.** Format: `YYYYMMDD_Type_Summary` (e.g., `20260602_Fix_MaximizeToggle`). Each tag corresponds to one logically distinct change.
+
+- **Each tag must include a description.** The tag comment must explain the root cause, purpose, or fix rationale so that future readers can understand the change without checking git history.
+
+- **Add inline comments for substantial new code.** When adding more than a few lines, include comments at key positions explaining intent and context — especially for platform-specific workarounds or non-obvious logic.
+
+- **New files must have a file header comment with tag and purpose.** Example:
+
+  ```js
+  // [20260602_Fix_MaximizeToggle] This file extracts shared validation
+  // logic previously duplicated across multiple handlers.
+  ```
+
+- **No magic numbers.** All hard-coded values (numbers, strings, thresholds) must be extracted into named constants placed at an appropriate scope.
+
+- **Variable naming must follow consistent conventions and convey meaning.** Use the project's established casing (camelCase / PascalCase / UPPER_SNAKE_CASE). Names must express clear intent. No meaningless abbreviations, single-letter variables (loop counters excepted), or arbitrary naming.
