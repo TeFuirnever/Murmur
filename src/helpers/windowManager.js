@@ -10,6 +10,10 @@ class WindowManager {
     this._creatingMainWindow = false;
     this._alwaysOnTop = true;
     this._cspSetup = false;
+    // [20260602_Fix_MaximizeToggle] Bounds snapshot before maximize
+    // On Windows, transparent windows always report isMaximized() === false,
+    // so we use this property as the maximize-state flag instead.
+    this._preMaximizeBounds = null;
   }
 
   setDefaultAlwaysOnTop(enabled) {
