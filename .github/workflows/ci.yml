@@ -49,7 +49,6 @@ jobs:
       - name: Dependency review
         if: github.event_name == 'pull_request'
         uses: actions/dependency-review-action@v5
-        continue-on-error: true
 
       - name: Test with coverage
         run: pnpm test -- --coverage
