@@ -398,7 +398,7 @@ Murmur 有一些其他项目不具备的特质，应该坚持并发扬：
 | 1   | ASR 引擎无抽象接口（策略模式缺失） | Critical | 阻塞多引擎支持和 whisper.cpp 接入                           |
 | 2   | 非流式架构（录音→保存→批量推理）   | Critical | UX 天花板，竞品（whisper.cpp）都有流式                      |
 | 3   | downloadModels 硬编码 `python3`    | P0       | 嵌入式 Python 环境下模型下载失败                            |
-| 4   | 前端 App.jsx 900+ 行巨型组件       | P1       | 维护困难，5 个内联子组件应拆分                              |
+| 4   | 前端 App.tsx 900+ 行巨型组件       | P1       | 维护困难，5 个内联子组件应拆分                              |
 | 5   | IPC handler 横向依赖               | P1       | transcriptionHandlers 直接 require aiHandlers，违反分层原则 |
 
 ### FunASR 集成深度评估
@@ -538,7 +538,7 @@ funasr_server.py (825行) → funasrServer.js (310行) → serverMessageRouter.j
 | `clipboard.readText()` 返回 `null` 导致 `.substring()` 崩溃 | `clipboard.js:91`                         | `strictNullChecks`           |
 | `database.getSetting` 返回类型不可预测                      | `database.js:276`                         | 泛型 `getSetting<T>(key): T` |
 | preload → handler 类型不对齐                                | `preload.js` → `transcriptionHandlers.js` | 共享类型定义                 |
-| `useRecording` 中 `event` 不是 `MediaRecorderErrorEvent`    | `useRecording.js:124`                     | 正确的事件类型               |
+| `useRecording` 中 `event` 不是 `MediaRecorderErrorEvent`    | `useRecording.ts:124`                     | 正确的事件类型               |
 
 **4 阶段迁移策略（与功能开发并行）：**
 
@@ -569,7 +569,7 @@ funasr_server.py (825行) → funasrServer.js (310行) → serverMessageRouter.j
 
 - `.jsx` → `.tsx` 逐文件迁移
 - 先 hooks（`useRecording.tsx` 等），再 components，最后 page 组件
-- `App.jsx`（900+ 行）迁移时顺便拆分子组件
+- `App.tsx`（900+ 行）迁移时顺便拆分子组件
 
 **Phase 4 — 收紧 strict 模式（1 周）：**
 
@@ -785,33 +785,33 @@ Apache License 2.0
 
 ### 已完成
 
-| 编号   | 任务                                   | 完成日期   | 关键产出                                                                                  |
-| ------ | -------------------------------------- | ---------- | ----------------------------------------------------------------------------------------- |
-| T0-1   | 修复 `downloadModels` 硬编码 `python3` | 2026-05-23 | `modelManager.js` 接受 pythonCmd 参数                                                     |
-| T0-2   | 修复 Python 版本检测（需 3.8+）        | 2026-05-23 | `isPythonVersionSupported` + `!!()` 修复                                                  |
-| T0-3   | 重构 SSRF 防护支持本地模型             | 2026-05-23 | `validateAIBaseUrl` + `isLocalhost()` + `isPrivateNetwork()` + ADR 001                    |
-| T1-1a  | 本地模型后端支持                       | 2026-05-23 | `processTextWithAI`/`checkAIStatus` 自动检测 localhost                                    |
-| T1-1b  | AI Provider Presets 注册表             | 2026-05-23 | 8 个预置 provider + `getAIProviderPresets` IPC                                            |
-| T1-1c  | 本地模型自动检测                       | 2026-05-23 | 探测 Ollama/LM Studio + `detectLocalModels` IPC                                           |
-| T1-1d  | 设置页 Provider 预设                   | 2026-05-23 | SiliconFlow/Groq/Ollama/LM Studio 预设按钮 + 本地模型跳过 API key                         |
-| T1-2   | 自定义 Prompt 模板系统                 | 2026-05-23 | `parseTemplateFile` + `loadCustomTemplates` + `getAIModes` IPC + ADR 002                  |
-| T1-3   | 快速体验模式                           | 2026-05-23 | per-model 下载进度 + 可选 punc model + minimum_ready 状态 + ADR 011                       |
-| T1-4   | ASR 引擎抽象接口                       | 2026-05-23 | `validateASREngine` + `createASREngineRegistry` + FunASRManager 验证 + ADR 003            |
-| T1-5   | AI temperature/max_tokens 配置         | 2026-05-23 | 设置页 UI + fileConfig 支持                                                                |
-| B4     | 文件配置 ~/.murmur.json                | 2026-05-23 | `loadFileConfig` + `saveFileConfig` + DB fallback 链 + ADR 004                            |
-| TS-0   | TypeScript Phase 0                     | 2026-05-23 | `typecheck` script + `@types/node` + CI step                                              |
-| TS-1   | TypeScript Phase 1                     | 2026-05-23 | `src/types/ipc.ts` + 精确 `electronAPI.d.ts`                                              |
-| TS-2   | TypeScript Phase 2                     | 2026-05-23 | JSDoc 类型注解 (aiPrompts, fileConfig, asrEngine)                                         |
-| TS-3   | TypeScript Phase 3 — 前端 TS 迁移      | 2026-05-24 | 所有 hooks/components/pages 迁移到 TS/TSX                                                 |
-| TS-4   | TypeScript Phase 4 — strict mode       | 2026-05-24 | `strictNullChecks` + `noImplicitAny` + `noUncheckedIndexedAccess` 全量开启                 |
-| Audio  | 音频格式转换去除 ffmpeg 依赖           | 2026-05-24 | librosa/soundfile 替代 ffmpeg，零新依赖，build.yml 移除 ffmpeg 前置条件                     |
-| MPS    | MPS 设备兼容性修复                     | 2026-05-24 | `_detect_device()` 跳过 Apple MPS（FunASR float64 不兼容），回退 CPU                       |
-| Risk   | 运行时风险全面排查与修复               | 2026-05-24 | 热键注册失败 toast + FunASR 初始化状态修复 + 音频时长日志 + 历史记录错误 toast              |
-| i18n   | 国际化 i18next 集成                    | 2026-05-24 | zh-CN/en 翻译 + 设置页语言选择器                                                           |
-| A11y   | 无障碍访问                             | 2026-05-24 | ARIA labels + 键盘导航 + focus-visible 样式 + decorative aria-hidden                       |
-| Update | 半自动更新                             | 2026-05-24 | SHA256 校验 + 下载进度 UI + 系统通知                                                       |
-| E2E    | Playwright E2E 测试                    | 2026-05-24 | launch/settings/IPC 集成测试 + CI E2E step                                                |
-| Bug    | clipboard.readText() null safety       | 2026-05-23 | `\|\| ""` fallback                                                                         |
+| 编号   | 任务                                   | 完成日期   | 关键产出                                                                       |
+| ------ | -------------------------------------- | ---------- | ------------------------------------------------------------------------------ |
+| T0-1   | 修复 `downloadModels` 硬编码 `python3` | 2026-05-23 | `modelManager.js` 接受 pythonCmd 参数                                          |
+| T0-2   | 修复 Python 版本检测（需 3.8+）        | 2026-05-23 | `isPythonVersionSupported` + `!!()` 修复                                       |
+| T0-3   | 重构 SSRF 防护支持本地模型             | 2026-05-23 | `validateAIBaseUrl` + `isLocalhost()` + `isPrivateNetwork()` + ADR 001         |
+| T1-1a  | 本地模型后端支持                       | 2026-05-23 | `processTextWithAI`/`checkAIStatus` 自动检测 localhost                         |
+| T1-1b  | AI Provider Presets 注册表             | 2026-05-23 | 8 个预置 provider + `getAIProviderPresets` IPC                                 |
+| T1-1c  | 本地模型自动检测                       | 2026-05-23 | 探测 Ollama/LM Studio + `detectLocalModels` IPC                                |
+| T1-1d  | 设置页 Provider 预设                   | 2026-05-23 | SiliconFlow/Groq/Ollama/LM Studio 预设按钮 + 本地模型跳过 API key              |
+| T1-2   | 自定义 Prompt 模板系统                 | 2026-05-23 | `parseTemplateFile` + `loadCustomTemplates` + `getAIModes` IPC + ADR 002       |
+| T1-3   | 快速体验模式                           | 2026-05-23 | per-model 下载进度 + 可选 punc model + minimum_ready 状态 + ADR 011            |
+| T1-4   | ASR 引擎抽象接口                       | 2026-05-23 | `validateASREngine` + `createASREngineRegistry` + FunASRManager 验证 + ADR 003 |
+| T1-5   | AI temperature/max_tokens 配置         | 2026-05-23 | 设置页 UI + fileConfig 支持                                                    |
+| B4     | 文件配置 ~/.murmur.json                | 2026-05-23 | `loadFileConfig` + `saveFileConfig` + DB fallback 链 + ADR 004                 |
+| TS-0   | TypeScript Phase 0                     | 2026-05-23 | `typecheck` script + `@types/node` + CI step                                   |
+| TS-1   | TypeScript Phase 1                     | 2026-05-23 | `src/types/ipc.ts` + 精确 `electronAPI.d.ts`                                   |
+| TS-2   | TypeScript Phase 2                     | 2026-05-23 | JSDoc 类型注解 (aiPrompts, fileConfig, asrEngine)                              |
+| TS-3   | TypeScript Phase 3 — 前端 TS 迁移      | 2026-05-24 | 所有 hooks/components/pages 迁移到 TS/TSX                                      |
+| TS-4   | TypeScript Phase 4 — strict mode       | 2026-05-24 | `strictNullChecks` + `noImplicitAny` + `noUncheckedIndexedAccess` 全量开启     |
+| Audio  | 音频格式转换去除 ffmpeg 依赖           | 2026-05-24 | librosa/soundfile 替代 ffmpeg，零新依赖，build.yml 移除 ffmpeg 前置条件        |
+| MPS    | MPS 设备兼容性修复                     | 2026-05-24 | `_detect_device()` 跳过 Apple MPS（FunASR float64 不兼容），回退 CPU           |
+| Risk   | 运行时风险全面排查与修复               | 2026-05-24 | 热键注册失败 toast + FunASR 初始化状态修复 + 音频时长日志 + 历史记录错误 toast |
+| i18n   | 国际化 i18next 集成                    | 2026-05-24 | zh-CN/en 翻译 + 设置页语言选择器                                               |
+| A11y   | 无障碍访问                             | 2026-05-24 | ARIA labels + 键盘导航 + focus-visible 样式 + decorative aria-hidden           |
+| Update | 半自动更新                             | 2026-05-24 | SHA256 校验 + 下载进度 UI + 系统通知                                           |
+| E2E    | Playwright E2E 测试                    | 2026-05-24 | launch/settings/IPC 集成测试 + CI E2E step                                     |
+| Bug    | clipboard.readText() null safety       | 2026-05-23 | `\|\| ""` fallback                                                             |
 
 ### 待执行
 
@@ -825,11 +825,11 @@ Apache License 2.0
 
 ### DEFER v1.1（对抗评审推迟项）
 
-| 编号 | 任务                    | 原因                                 |
-| ---- | ----------------------- | ------------------------------------ |
-| —    | Linux Wayland 粘贴支持  | 当前无 Linux 构建，理论风险          |
-| —    | Win/Linux 粘贴超时      | 理论风险，无实际 bug 报告            |
-| —    | AI 设置加载失败 UI      | 装饰功能，手动输入仍可用             |
+| 编号 | 任务                   | 原因                        |
+| ---- | ---------------------- | --------------------------- |
+| —    | Linux Wayland 粘贴支持 | 当前无 Linux 构建，理论风险 |
+| —    | Win/Linux 粘贴超时     | 理论风险，无实际 bug 报告   |
+| —    | AI 设置加载失败 UI     | 装饰功能，手动输入仍可用    |
 
 ### 指标
 
