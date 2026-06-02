@@ -82,7 +82,7 @@
     "esbuild": "^0.24.0",
     "eslint": "^9.25.0",
     "eslint-plugin-react": "^7.37.5",
-    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.4.19",
     "globals": "^16.0.0",
     "happy-dom": "^20.9.0",
