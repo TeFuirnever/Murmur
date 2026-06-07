@@ -1,0 +1,42 @@
+---
+interface Props {
+  t: Record<string, string>;
+}
+const { t } = Astro.props;
+
+const providers = [
+  { key: 'provider_openai', local: false },
+  { key: 'provider_deepseek', local: false },
+  { key: 'provider_qwen', local: false },
+  { key: 'provider_glm', local: false },
+  { key: 'provider_groq', local: false },
+  { key: 'provider_moonshot', local: false },
+  { key: 'provider_siliconflow', local: false },
+  { key: 'provider_minimax', local: false },
+  { key: 'provider_ollama', local: true },
+  { key: 'provider_lmstudio', local: true },
+];
+---
+
+<section id="models" class="py-28 sm:py-36 px-6 bg-bg-elevated">
+  <div class="max-w-[720px] mx-auto">
+    <p class="reveal-up text-xs font-medium tracking-[0.2em] uppercase text-text-tertiary text-center mb-4">
+      {t.section_providers}
+    </p>
+    <h2 class="reveal-up delay-1 text-3xl sm:text-5xl font-bold font-display text-center tracking-tight mb-4">
+      {t.models_title}
+    </h2>
+    <p class="reveal-up delay-2 text-text-secondary text-center mb-14">{t.models_subtitle}</p>
+
+    <div class="reveal-up delay-3 flex flex-wrap justify-center gap-2.5">
+      {providers.map((p, i) => (
+        <div class={`reveal-scale delay-${Math.min(i + 3, 8)} glass card-lift rounded-full px-5 py-2.5 flex items-center gap-2.5`}>
+          <span class="text-sm font-medium font-display">{t[p.key]}</span>
+          <span class={`pill text-[10px] ${p.local ? 'bg-success/10 text-success' : 'bg-accent/10 text-accent'}`}>
+            {p.local ? 'Local' : 'Cloud'}
+          </span>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>

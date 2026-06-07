@@ -1,0 +1,67 @@
+---
+interface Props {
+  t: Record<string, string>;
+}
+const { t } = Astro.props;
+
+const rows = [
+  { key: 'comp_accuracy', murmur: '⭐⭐⭐⭐⭐', others: ['⭐⭐⭐', '⭐⭐⭐⭐⭐', '⭐⭐⭐'] },
+  { key: 'comp_local', murmur: true, others: [true, false, true] },
+  { key: 'comp_ai', murmur: true, others: [false, false, false] },
+  { key: 'comp_opensource', murmur: true, others: [true, false, true] },
+  { key: 'comp_models', murmur: true, others: [false, false, false] },
+  { key: 'comp_prompts', murmur: true, others: [false, false, false] },
+];
+
+const headers = [t.comparison_macos, t.comparison_iflytek, t.comparison_whisper];
+---
+
+<section class="py-28 sm:py-36 px-6">
+  <div class="max-w-[720px] mx-auto">
+    <p class="reveal-up text-xs font-medium tracking-[0.2em] uppercase text-text-tertiary text-center mb-4">
+      {t.section_comparison}
+    </p>
+    <h2 class="reveal-up delay-1 text-3xl sm:text-5xl font-bold font-display text-center tracking-tight mb-16">
+      {t.comparison_title}
+    </h2>
+
+    <div class="reveal-up delay-2 overflow-x-auto -mx-6 px-6">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-border">
+            <th class="text-left pb-4 pr-4 text-text-tertiary font-medium text-xs tracking-wide uppercase"></th>
+            <th class="pb-4 px-3 text-center">
+              <span class="pill bg-accent/10 text-accent font-semibold">{t.comparison_murmur}</span>
+            </th>
+            {headers.map((h) => (
+              <th class="pb-4 px-3 text-center text-text-tertiary font-medium text-xs whitespace-nowrap">{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, ri) => (
+            <tr class="border-b border-border/50">
+              <td class="py-4 pr-4 font-medium text-text-secondary whitespace-nowrap">{t[row.key]}</td>
+              <td class="py-4 px-3 text-center font-semibold">
+                {row.murmur === true
+                  ? <span class="text-success text-base">✓</span>
+                  : <span>{row.murmur}</span>
+                }
+              </td>
+              {row.others.map((v) => (
+                <td class="py-4 px-3 text-center text-text-tertiary">
+                  {v === true
+                    ? <span class="text-success text-base">✓</span>
+                    : v === false
+                      ? <span class="text-text-tertiary text-base">—</span>
+                      : <span>{v}</span>
+                  }
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>

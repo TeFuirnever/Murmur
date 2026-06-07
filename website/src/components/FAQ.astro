@@ -1,0 +1,38 @@
+---
+interface Props {
+  t: Record<string, string>;
+}
+const { t } = Astro.props;
+
+const faqItems = [
+  { q: t.faq_q1, a: t.faq_a1 },
+  { q: t.faq_q2, a: t.faq_a2 },
+  { q: t.faq_q3, a: t.faq_a3 },
+  { q: t.faq_q4, a: t.faq_a4 },
+  { q: t.faq_q5, a: t.faq_a5 },
+  { q: t.faq_q6, a: t.faq_a6 },
+];
+---
+
+<section id="faq" class="py-28 sm:py-36 px-6">
+  <div class="max-w-[640px] mx-auto">
+    <p class="reveal-up text-xs font-medium tracking-[0.2em] uppercase text-text-tertiary text-center mb-4">
+      {t.section_faq}
+    </p>
+    <h2 class="reveal-up delay-1 text-3xl sm:text-5xl font-bold font-display text-center tracking-tight mb-14">
+      {t.faq_title}
+    </h2>
+
+    <div class="flex flex-col gap-0">
+      {faqItems.map((item, i) => (
+        <details class={`reveal-up delay-${Math.min(i + 2, 6)} border-b border-border group`}>
+          <summary class="flex items-center justify-between py-5 gap-4">
+            <span class="text-[15px] font-medium font-display tracking-tight">{item.q}</span>
+            <span class="faq-icon text-text-tertiary text-xl flex-shrink-0 leading-none">+</span>
+          </summary>
+          <p class="faq-answer text-sm text-text-secondary leading-relaxed pb-5">{item.a}</p>
+        </details>
+      ))}
+    </div>
+  </div>
+</section>

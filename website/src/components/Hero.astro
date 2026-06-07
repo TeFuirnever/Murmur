@@ -1,0 +1,58 @@
+---
+interface Props {
+  t: Record<string, string>;
+}
+const { t } = Astro.props;
+---
+
+<section class="hero-bg min-h-screen flex items-center justify-center pt-12 pb-32 px-6 relative">
+  <!-- Floating orbs -->
+  <div class="orb" style="width:400px;height:400px;top:10%;left:10%;background:rgba(99,101,241,0.12);animation-delay:-5s;"></div>
+  <div class="orb" style="width:300px;height:300px;top:30%;right:15%;background:rgba(168,85,247,0.08);animation-delay:-12s;"></div>
+  <div class="orb" style="width:200px;height:200px;bottom:20%;left:40%;background:rgba(236,72,153,0.06);animation-delay:-8s;"></div>
+
+  <div class="max-w-[720px] mx-auto text-center relative z-10">
+    <!-- Overline -->
+    <p class="reveal-up text-xs font-medium tracking-[0.2em] uppercase text-text-tertiary mb-6">
+      {t.hero_overline}
+    </p>
+
+    <!-- Hero title -->
+    <h1 class="reveal-up delay-1 text-5xl sm:text-6xl lg:text-7xl font-bold font-display leading-[1.05] tracking-tight mb-6">
+      <span class="gradient-text">{t.hero_tagline_primary}</span>
+      <br />
+      <span class="gradient-text-subtle">{t.hero_tagline_secondary}</span>
+    </h1>
+
+    <!-- Subtitle -->
+    <p class="reveal-up delay-2 text-lg sm:text-xl text-text-secondary max-w-xl mx-auto mb-12 leading-relaxed font-light">
+      {t.hero_subtitle}
+    </p>
+
+    <!-- CTA -->
+    <div class="reveal-up delay-3 flex flex-col sm:flex-row items-center justify-center gap-4 mb-10">
+      <a href="https://github.com/TeFuirnever/Murmur/releases/latest" class="btn-primary">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        {t.hero_download}
+      </a>
+      <a href="https://github.com/TeFuirnever/Murmur" target="_blank" rel="noopener noreferrer" class="btn-secondary">
+        {t.hero_github} →
+      </a>
+    </div>
+
+    <!-- Install snippets -->
+    <div class="reveal-up delay-4 flex flex-col sm:flex-row items-center justify-center gap-3">
+      <code class="pill bg-surface text-text-tertiary font-mono text-xs">
+        $ {t.hero_brew}
+      </code>
+      <code class="pill bg-surface text-text-tertiary font-mono text-xs">
+        $ {t.hero_winget}
+      </code>
+    </div>
+  </div>
+
+  <!-- Scroll indicator -->
+  <div class="absolute bottom-10 left-1/2 -translate-x-1/2 reveal-up delay-5">
+    <div class="w-[1px] h-12 bg-gradient-to-b from-transparent to-text-tertiary/40"></div>
+  </div>
+</section>

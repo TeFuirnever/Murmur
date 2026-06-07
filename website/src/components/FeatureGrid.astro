@@ -1,0 +1,89 @@
+---
+interface Props {
+  t: Record<string, string>;
+}
+const { t } = Astro.props;
+
+const iconPaths: Record<string, string> = {
+  mic: 'M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3zM19 10v2a7 7 0 01-14 0v-2',
+  sparkles: 'M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8l-6.2 4.5 2.4-7.4L2 9.4h7.6z',
+  keyboard: 'M4 8h16M4 12h16M4 16h16M8 4v0M12 4v0M16 4v0',
+  shield: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
+  brain: 'M12 2a8 8 0 00-8 8c0 3.4 2.1 6.3 5 7.5V20h6v-2.5c2.9-1.2 5-4.1 5-7.5a8 8 0 00-8-8z',
+  'file-audio': 'M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6',
+  history: 'M3 12a9 9 0 102.25-6M3 3v5h5M12 7v5l4 2',
+  globe: 'M12 2a10 10 0 100 20 10 10 0 000-20zM2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z',
+};
+
+const whyCards = [
+  { icon: 'shield', title: t.why_local_title, desc: t.why_local_desc },
+  { icon: 'sparkles', title: t.why_chinese_title, desc: t.why_chinese_desc },
+  { icon: 'brain', title: t.why_ai_title, desc: t.why_ai_desc },
+  { icon: 'keyboard', title: t.why_hotkey_title, desc: t.why_hotkey_desc },
+];
+
+const features = [
+  { icon: 'mic', title: t.feat_recording_title, desc: t.feat_recording_desc },
+  { icon: 'sparkles', title: t.feat_ai_title, desc: t.feat_ai_desc },
+  { icon: 'keyboard', title: t.feat_hotkey_title, desc: t.feat_hotkey_desc },
+  { icon: 'shield', title: t.feat_privacy_title, desc: t.feat_privacy_desc },
+  { icon: 'brain', title: t.feat_models_title, desc: t.feat_models_desc },
+  { icon: 'file-audio', title: t.feat_files_title, desc: t.feat_files_desc },
+  { icon: 'history', title: t.feat_history_title, desc: t.feat_history_desc },
+  { icon: 'globe', title: t.feat_i18n_title, desc: t.feat_i18n_desc },
+];
+---
+
+<!-- Why Murmur -->
+<section class="py-28 sm:py-36 px-6">
+  <div class="max-w-[980px] mx-auto">
+    <p class="reveal-up text-xs font-medium tracking-[0.2em] uppercase text-text-tertiary text-center mb-4">
+      {t.section_why}
+    </p>
+    <h2 class="reveal-up delay-1 text-3xl sm:text-5xl font-bold font-display text-center tracking-tight mb-20">
+      {t.why_title}
+    </h2>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+      {whyCards.map((card, i) => (
+        <div class={`reveal-up delay-${i + 2} glass card-lift rounded-2xl p-7`}>
+          <div class="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center mb-5">
+            <svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+              <path d={iconPaths[card.icon]} />
+            </svg>
+          </div>
+          <h3 class="text-lg font-semibold font-display tracking-tight mb-2">{card.title}</h3>
+          <p class="text-sm text-text-secondary leading-relaxed">{card.desc}</p>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>
+
+<div class="section-divider max-w-[980px] mx-auto"></div>
+
+<!-- Core Features -->
+<section id="features" class="py-28 sm:py-36 px-6">
+  <div class="max-w-[980px] mx-auto">
+    <p class="reveal-up text-xs font-medium tracking-[0.2em] uppercase text-text-tertiary text-center mb-4">
+      {t.section_features}
+    </p>
+    <h2 class="reveal-up delay-1 text-3xl sm:text-5xl font-bold font-display text-center tracking-tight mb-20">
+      {t.features_title}
+    </h2>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {features.map((feat, i) => (
+        <div class={`reveal-up delay-${i + 2} glass card-lift rounded-2xl p-6`}>
+          <div class="w-9 h-9 rounded-lg bg-accent/10 flex items-center justify-center mb-4">
+            <svg class="w-4.5 h-4.5 text-accent" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+              <path d={iconPaths[feat.icon]} />
+            </svg>
+          </div>
+          <h3 class="text-[15px] font-semibold font-display tracking-tight mb-1.5">{feat.title}</h3>
+          <p class="text-[13px] text-text-secondary leading-relaxed">{feat.desc}</p>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>

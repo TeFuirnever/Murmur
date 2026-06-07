@@ -1,0 +1,39 @@
+---
+interface Props {
+  t: Record<string, string>;
+}
+const { t } = Astro.props;
+
+const steps = [
+  { num: '01', title: t.how_step1_title, desc: t.how_step1_desc, icon: 'M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3' },
+  { num: '02', title: t.how_step2_title, desc: t.how_step2_desc, icon: 'M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3zM19 10v2a7 7 0 01-14 0v-2' },
+  { num: '03', title: t.how_step3_title, desc: t.how_step3_desc, icon: 'M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8l-6.2 4.5 2.4-7.4L2 9.4h7.6z' },
+];
+---
+
+<section class="py-28 sm:py-36 px-6 bg-bg-elevated">
+  <div class="max-w-[720px] mx-auto">
+    <p class="reveal-up text-xs font-medium tracking-[0.2em] uppercase text-text-tertiary text-center mb-4">
+      {t.section_getting_started}
+    </p>
+    <h2 class="reveal-up delay-1 text-3xl sm:text-5xl font-bold font-display text-center tracking-tight mb-20">
+      {t.how_title}
+    </h2>
+
+    <div class="flex flex-col gap-16">
+      {steps.map((step, i) => (
+        <div class={`reveal-up delay-${i + 2} flex items-start gap-8`}>
+          <!-- Number -->
+          <div class="flex-shrink-0 w-16 text-right">
+            <span class="text-4xl font-bold font-display gradient-text opacity-80">{step.num}</span>
+          </div>
+          <!-- Content -->
+          <div class="flex-1 pt-1">
+            <h3 class="text-xl font-semibold font-display tracking-tight mb-2">{step.title}</h3>
+            <p class="text-text-secondary leading-relaxed">{step.desc}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>
