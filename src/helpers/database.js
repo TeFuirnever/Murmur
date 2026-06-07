@@ -65,7 +65,16 @@ class DatabaseManager {
       }
     }
 
-    this.db = new Database(this.dbPath);
+    try {
+      this.db = new Database(this.dbPath);
+    } catch (error) {
+      if (error.message?.includes("NODE_MODULE_VERSION")) {
+        throw new Error(
+          `SQLite 原生模块版本不匹配。请运行 'npx electron-rebuild' 后重试。\n原始错误: ${error.message}`,
+        );
+      }
+      throw error;
+    }
     this.db.pragma("journal_mode = WAL");
     this.db.pragma("busy_timeout = 5000");
 

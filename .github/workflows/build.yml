@@ -68,6 +68,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Rebuild native modules for Electron
+        run: npx electron-builder install-app-deps
+
       - name: Prepare embedded Python
         run: pnpm run prepare:python:embedded
 
@@ -115,10 +118,10 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pnpm install --ignore-scripts
+        run: pnpm install
 
-      - name: Rebuild native modules
-        run: pnpm rebuild better-sqlite3
+      - name: Rebuild native modules for Electron
+        run: npx electron-builder install-app-deps
 
       - name: Prepare embedded Python
         run: pnpm run prepare:python:embedded
