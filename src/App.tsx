@@ -646,6 +646,7 @@ export default function App() {
                   }}
                   onMouseLeave={() => setIsHovered(false)}
                   aria-label={isRecording ? "停止录音" : "开始录音"}
+                  data-testid="mic-button"
                   tabIndex={0}
                   className={`${micProps.className} non-draggable shadow-lg`}
                   disabled={micProps.disabled}
