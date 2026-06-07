@@ -84,6 +84,7 @@ function setupProductionPath() {
     process.env.NODE_ENV !== "development"
   ) {
     // Windows平台的Python路径设置
+    const localAppData = process.env.LOCALAPPDATA || "";
     const commonPaths = [
       "C:\\Python311\\Scripts",
       "C:\\Python311",
@@ -91,18 +92,12 @@ function setupProductionPath() {
       "C:\\Python310",
       "C:\\Python39\\Scripts",
       "C:\\Python39",
-      "C:\\Users\\" +
-        require("os").userInfo().username +
-        "\\AppData\\Local\\Programs\\Python\\Python311\\Scripts",
-      "C:\\Users\\" +
-        require("os").userInfo().username +
-        "\\AppData\\Local\\Programs\\Python\\Python311",
-      "C:\\Users\\" +
-        require("os").userInfo().username +
-        "\\AppData\\Local\\Programs\\Python\\Python310\\Scripts",
-      "C:\\Users\\" +
-        require("os").userInfo().username +
-        "\\AppData\\Local\\Programs\\Python\\Python310",
+      ...(localAppData
+        ? ["Python311", "Python310"].flatMap((ver) => [
+            path.join(localAppData, "Programs", "Python", ver, "Scripts"),
+            path.join(localAppData, "Programs", "Python", ver),
+          ])
+        : []),
     ];
 
     const currentPath = process.env.PATH || "";

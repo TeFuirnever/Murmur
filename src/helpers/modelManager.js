@@ -258,6 +258,7 @@ class ModelManager {
         [scriptPath, "--output", cachePath],
         {
           stdio: ["pipe", "pipe", "pipe"],
+          windowsHide: true,
         },
       );
 

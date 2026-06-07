@@ -565,7 +565,7 @@ describe("TRANSCRIBE_FILE /Volumes/ path validation regression", () => {
     expect(result.error).toBeUndefined();
   });
 
-  it("still rejects paths outside homedir, tmpdir, and /Volumes/", async () => {
+  it("allows Windows drive paths like E:\\", async () => {
     const { register } = require("../../src/helpers/ipc/transcriptionHandlers");
     const ipcMain = createIpcMain();
     const managers = {
@@ -581,7 +581,35 @@ describe("TRANSCRIBE_FILE /Volumes/ path validation regression", () => {
     const createEvent = () => ({ sender: { send: vi.fn() } });
     const result = await ipcMain._handlers[C.TRANSCRIPTION.TRANSCRIBE_FILE](
       createEvent(),
-      "/opt/secret/file.wav",
+      "E:\\Video\\Murmur\\audio\\test.wav",
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+  });
+
+  it("still rejects paths outside homedir, tmpdir, and /Volumes/", async () => {
+    const { register } = require("../../src/helpers/ipc/transcriptionHandlers");
+    const ipcMain = createIpcMain();
+    const managers = {
+      funasrManager: {
+        transcribeFile: vi.fn(async () => ({ success: true, text: "x" })),
+      },
+      databaseManager: { saveTranscription: vi.fn() },
+      logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
+      processTextWithAI: vi.fn(),
+    };
+    register(ipcMain, managers);
+
+    const createEvent = () => ({ sender: { send: vi.fn() } });
+    const badPath =
+      process.platform === "win32"
+        ? "\\\\unc-server\\share\\file.wav"
+        : "/opt/secret/file.wav";
+
+    const result = await ipcMain._handlers[C.TRANSCRIPTION.TRANSCRIBE_FILE](
+      createEvent(),
+      badPath,
     );
 
     expect(result.success).toBe(false);

@@ -177,16 +177,25 @@ class ClipboardManager {
 
   async pasteWindows(originalClipboard) {
     return new Promise((resolve, reject) => {
-      const pasteProcess = spawn("powershell", [
-        "-Command",
-        'Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait("^v")',
-      ]);
+      const pasteProcess = spawn(
+        "powershell",
+        [
+          "-Command",
+          'Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait("^v")',
+        ],
+        { windowsHide: true },
+      );
+
+      let hasTimedOut = false;
 
       pasteProcess.on("close", (code) => {
+        if (hasTimedOut) return;
+        clearTimeout(timeoutId);
+
         if (code === 0) {
-          // 文本粘贴成功
           setTimeout(() => {
             clipboard.writeText(originalClipboard);
+            this.safeLog("🔄 原始剪贴板内容已恢复");
           }, 100);
           resolve();
         } else {
@@ -197,10 +206,26 @@ class ClipboardManager {
       });
 
       pasteProcess.on("error", (error) => {
+        if (hasTimedOut) return;
+        clearTimeout(timeoutId);
         reject(
           new Error(`Windows 粘贴失败: ${error.message}。文本已复制到剪贴板。`),
         );
       });
+
+      const timeoutId = setTimeout(() => {
+        hasTimedOut = true;
+        try {
+          pasteProcess.kill();
+        } catch (_e) {
+          /* already dead */
+        }
+        reject(
+          new Error(
+            "Windows 粘贴操作超时。文本已复制到剪贴板 - 请手动使用 Ctrl+V 粘贴。",
+          ),
+        );
+      }, 3000);
     });
   }
 

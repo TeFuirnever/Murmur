@@ -48,9 +48,16 @@ function register(ipcMain, managers) {
   });
   // [20260602_Fix_MaximizeToggle] END
 
+  // [Windows Compat] On Windows transparent windows, isMaximized() always
+  // returns false. Use _preMaximizeBounds as the authoritative flag (set by
+  // the MAXIMIZE handler above). Fall back to isMaximized() for OS-initiated
+  // maximize on other platforms.
   ipcMain.handle(C.WINDOW.IS_MAX, () => {
     if (windowManager.mainWindow) {
-      return windowManager.mainWindow.isMaximized();
+      return (
+        !!windowManager._preMaximizeBounds ||
+        windowManager.mainWindow.isMaximized()
+      );
     }
     return false;
   });

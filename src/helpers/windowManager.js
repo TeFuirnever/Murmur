@@ -96,6 +96,9 @@ class WindowManager {
       });
 
       this.mainWindow.on("unmaximize", () => {
+        // [Windows Compat] Clear stale bounds on OS-initiated unmaximize so
+        // IS_MAX does not return a false positive on macOS.
+        this._preMaximizeBounds = null;
         this.mainWindow.webContents.send(
           C.EVENTS.WINDOW_MAXIMIZE_CHANGE,
           false,

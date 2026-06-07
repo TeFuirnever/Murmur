@@ -18,7 +18,8 @@ function validateAudioPath(filePath) {
   if (
     !resolved.startsWith(homedir) &&
     !resolved.startsWith(tmpdir) &&
-    !resolved.startsWith("/Volumes/")
+    !resolved.startsWith("/Volumes/") &&
+    !/^[A-Za-z]:\\/.test(resolved)
   ) {
     return { valid: false, error: "路径不在允许范围内" };
   }

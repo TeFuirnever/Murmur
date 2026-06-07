@@ -1,4 +1,4 @@
-const { spawn } = require("child_process");
+const { spawn, spawnSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const ServerMessageRouter = require("./serverMessageRouter");
@@ -242,7 +242,18 @@ class FunASRServer {
     await new Promise((resolve) => {
       const timeout = setTimeout(() => {
         try {
-          proc.kill("SIGKILL");
+          // On Windows, use taskkill to kill the entire process tree.
+          // proc.kill() only kills the direct child, leaving orphan Python
+          // subprocesses. taskkill /T kills the tree; /F forces termination.
+          if (process.platform === "win32" && proc.pid) {
+            // spawnSync blocks until taskkill completes, ensuring the entire
+            // Python process tree is dead before we resolve and exit.
+            spawnSync("taskkill", ["/T", "/F", "/PID", String(proc.pid)], {
+              windowsHide: true,
+            });
+          } else {
+            proc.kill("SIGKILL");
+          }
         } catch (_e) {
           /* already dead */
         }

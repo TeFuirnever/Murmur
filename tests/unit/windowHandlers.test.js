@@ -125,11 +125,52 @@ describe("windowHandlers", () => {
     expect(win.maximize).toHaveBeenCalled();
   });
 
-  it("is-window-maximized returns maximize state", () => {
+  it("is-window-maximized returns maximize state via isMaximized()", () => {
     managers.windowManager.mainWindow.isMaximized.mockReturnValue(true);
     expect(ipcMain._handlers["is-window-maximized"]()).toBe(true);
 
     managers.windowManager.mainWindow.isMaximized.mockReturnValue(false);
+    expect(ipcMain._handlers["is-window-maximized"]()).toBe(false);
+  });
+
+  // [Windows Compat] IS_MAX must reflect _preMaximizeBounds state, because
+  // win.isMaximized() always returns false for transparent windows on Windows.
+  // If this test fails, the IS_MAX handler still calls isMaximized() directly.
+  it("is-window-maximized returns true when _preMaximizeBounds is set (Windows transparent compat)", () => {
+    const win = managers.windowManager.mainWindow;
+    win.webContents = { send: vi.fn() };
+    // Simulate Windows transparent window: isMaximized() always returns false
+    win.isMaximized.mockReturnValue(false);
+
+    // First click: maximize via handler (sets _preMaximizeBounds)
+    ipcMain._handlers["maximize-window"]();
+
+    // IS_MAX should return true despite isMaximized() being false
+    expect(ipcMain._handlers["is-window-maximized"]()).toBe(true);
+
+    // Second click: restore (clears _preMaximizeBounds)
+    ipcMain._handlers["maximize-window"]();
+
+    // IS_MAX should now return false
+    expect(ipcMain._handlers["is-window-maximized"]()).toBe(false);
+  });
+
+  // [macOS Compat] Regression: OS-initiated unmaximize must clear _preMaximizeBounds
+  // so IS_MAX does not return a stale true on macOS.
+  it("is-window-maximized returns false after OS-initiated unmaximize clears _preMaximizeBounds", () => {
+    const win = managers.windowManager.mainWindow;
+    win.webContents = { send: vi.fn() };
+    win.isMaximized.mockReturnValue(false);
+
+    // Maximize via button (sets _preMaximizeBounds)
+    ipcMain._handlers["maximize-window"]();
+    expect(ipcMain._handlers["is-window-maximized"]()).toBe(true);
+
+    // Simulate OS-initiated unmaximize (e.g. user drags window away on macOS)
+    // windowManager's unmaximize handler clears _preMaximizeBounds
+    managers.windowManager._preMaximizeBounds = null;
+
+    // IS_MAX should now return false (falls back to isMaximized() = false)
     expect(ipcMain._handlers["is-window-maximized"]()).toBe(false);
   });
 
