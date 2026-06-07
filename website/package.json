@@ -1,0 +1,26 @@
+{
+  "name": "murmur-website",
+  "type": "module",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:all": "npm run build && vitest run && playwright test"
+  },
+  "dependencies": {
+    "@astrojs/sitemap": "^3.3.0",
+    "@tailwindcss/vite": "^4.1.0",
+    "astro": "^5.7.0",
+    "tailwindcss": "^4.1.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "playwright-core": "^1.60.0",
+    "typescript": "^6.0.0",
+    "vitest": "^4.1.8"
+  }
+}

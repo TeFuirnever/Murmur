@@ -1,0 +1,27 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Header from '../../components/Header.astro';
+import Hero from '../../components/Hero.astro';
+import FeatureGrid from '../../components/FeatureGrid.astro';
+import HowItWorks from '../../components/HowItWorks.astro';
+import ComparisonTable from '../../components/ComparisonTable.astro';
+import AIModels from '../../components/AIModels.astro';
+import FAQ from '../../components/FAQ.astro';
+import DownloadCTA from '../../components/DownloadCTA.astro';
+import Footer from '../../components/Footer.astro';
+import t from '../../i18n/zh.json';
+---
+
+<Layout title={t.site_title} description={t.site_description} lang="zh">
+  <Header lang="zh" t={t} />
+  <main>
+    <Hero t={t} />
+    <FeatureGrid t={t} />
+    <HowItWorks t={t} />
+    <ComparisonTable t={t} />
+    <AIModels t={t} />
+    <FAQ t={t} />
+    <DownloadCTA t={t} />
+  </main>
+  <Footer t={t} />
+</Layout>
