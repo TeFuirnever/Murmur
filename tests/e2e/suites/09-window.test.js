@@ -25,16 +25,19 @@ test.describe("Suite 9: Window Management", () => {
     // Minimize via IPC
     await window.evaluate(() => window.electronAPI.minimizeWindow());
 
-    // Give the window a moment to minimize
-    await window.waitForTimeout(500);
-
-    // Check if window is minimized via Electron API
-    const isMinimized = await electronApp.evaluate(() => {
-      const { BrowserWindow } = require("electron");
-      const win = BrowserWindow.getAllWindows()[0];
-      return win ? win.isMinimized() : false;
-    });
-    expect(isMinimized).toBe(true);
+    // Poll for minimized state instead of waitForTimeout
+    await expect
+      .poll(
+        async () => {
+          return await electronApp.evaluate(() => {
+            const { BrowserWindow } = require("electron");
+            const win = BrowserWindow.getAllWindows()[0];
+            return win ? win.isMinimized() : false;
+          });
+        },
+        { timeout: 3000 },
+      )
+      .toBe(true);
 
     // Restore for subsequent tests
     await electronApp.evaluate(() => {
@@ -42,7 +45,18 @@ test.describe("Suite 9: Window Management", () => {
       const win = BrowserWindow.getAllWindows()[0];
       if (win) win.restore();
     });
-    await window.waitForTimeout(300);
+    await expect
+      .poll(
+        async () => {
+          return await electronApp.evaluate(() => {
+            const { BrowserWindow } = require("electron");
+            const win = BrowserWindow.getAllWindows()[0];
+            return win ? win.isMinimized() : false;
+          });
+        },
+        { timeout: 3000 },
+      )
+      .toBe(false);
   });
 
   test("9.2 — Maximize and restore toggle", async () => {
@@ -53,44 +67,64 @@ test.describe("Suite 9: Window Management", () => {
 
     // Toggle maximize
     await window.evaluate(() => window.electronAPI.maximizeWindow());
-    await window.waitForTimeout(500);
 
-    const afterMaximize = await window.evaluate(() =>
-      window.electronAPI.isWindowMaximized(),
-    );
-    expect(afterMaximize).toBe(!initiallyMaximized);
+    await expect
+      .poll(
+        async () => {
+          return await window.evaluate(() =>
+            window.electronAPI.isWindowMaximized(),
+          );
+        },
+        { timeout: 3000 },
+      )
+      .toBe(!initiallyMaximized);
 
     // Toggle back
     await window.evaluate(() => window.electronAPI.maximizeWindow());
-    await window.waitForTimeout(500);
 
-    const afterRestore = await window.evaluate(() =>
-      window.electronAPI.isWindowMaximized(),
-    );
-    expect(afterRestore).toBe(initiallyMaximized);
+    await expect
+      .poll(
+        async () => {
+          return await window.evaluate(() =>
+            window.electronAPI.isWindowMaximized(),
+          );
+        },
+        { timeout: 3000 },
+      )
+      .toBe(initiallyMaximized);
   });
 
   test("9.3 — Always-on-top toggle", async () => {
     // Set always on top
     await window.evaluate(() => window.electronAPI.setAlwaysOnTop(true));
-    await window.waitForTimeout(300);
 
-    const isOnTop = await electronApp.evaluate(() => {
-      const { BrowserWindow } = require("electron");
-      const win = BrowserWindow.getAllWindows()[0];
-      return win ? win.isAlwaysOnTop() : false;
-    });
-    expect(isOnTop).toBe(true);
+    await expect
+      .poll(
+        async () => {
+          return await electronApp.evaluate(() => {
+            const { BrowserWindow } = require("electron");
+            const win = BrowserWindow.getAllWindows()[0];
+            return win ? win.isAlwaysOnTop() : false;
+          });
+        },
+        { timeout: 3000 },
+      )
+      .toBe(true);
 
     // Turn off
     await window.evaluate(() => window.electronAPI.setAlwaysOnTop(false));
-    await window.waitForTimeout(300);
 
-    const isOffTop = await electronApp.evaluate(() => {
-      const { BrowserWindow } = require("electron");
-      const win = BrowserWindow.getAllWindows()[0];
-      return win ? win.isAlwaysOnTop() : false;
-    });
-    expect(isOffTop).toBe(false);
+    await expect
+      .poll(
+        async () => {
+          return await electronApp.evaluate(() => {
+            const { BrowserWindow } = require("electron");
+            const win = BrowserWindow.getAllWindows()[0];
+            return win ? win.isAlwaysOnTop() : false;
+          });
+        },
+        { timeout: 3000 },
+      )
+      .toBe(false);
   });
 });

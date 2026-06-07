@@ -8,6 +8,7 @@ import {
   launchElectronApp,
   closeElectronApp,
 } from "../helpers/electron-launch.js";
+import { mockIpcHandler } from "../helpers/ipc-mock.js";
 
 test.describe("Suite 5: File Import & Transcription", () => {
   let electronApp;
@@ -33,15 +34,11 @@ test.describe("Suite 5: File Import & Transcription", () => {
 
   test("5.2 — Validate supported audio file via IPC", async () => {
     // Mock file validation to return valid
-    await electronApp.evaluate(() => {
-      const { ipcMain } = require("electron");
-      ipcMain.removeHandler("validate-audio-file");
-      ipcMain.handle("validate-audio-file", (_e, _filePath) => ({
-        success: true,
-        fileName: "test.wav",
-        fileSize: 1024,
-        extension: ".wav",
-      }));
+    await mockIpcHandler(electronApp, "validate-audio-file", {
+      success: true,
+      fileName: "test.wav",
+      fileSize: 1024,
+      extension: ".wav",
     });
 
     const result = await window.evaluate(() =>
@@ -53,13 +50,9 @@ test.describe("Suite 5: File Import & Transcription", () => {
 
   test("5.3 — Reject unsupported file type via IPC", async () => {
     // Mock file validation to reject
-    await electronApp.evaluate(() => {
-      const { ipcMain } = require("electron");
-      ipcMain.removeHandler("validate-audio-file");
-      ipcMain.handle("validate-audio-file", () => ({
-        success: false,
-        error: "不支持的文件格式: .exe",
-      }));
+    await mockIpcHandler(electronApp, "validate-audio-file", {
+      success: false,
+      error: "不支持的文件格式: .exe",
     });
 
     const result = await window.evaluate(() =>

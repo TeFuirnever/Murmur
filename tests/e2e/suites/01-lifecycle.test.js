@@ -15,7 +15,7 @@ test.describe("Suite 1: Application Lifecycle", () => {
   let electronApp;
   let window;
 
-  test.beforeAll(async (_page) => {
+  test.beforeAll(async () => {
     ({ app: electronApp, window } = await launchElectronApp());
   });
 
@@ -79,22 +79,13 @@ test.describe("Suite 1: Application Lifecycle", () => {
   });
 
   test("1.5 — Settings page route renders correctly", async () => {
-    const settingsApp = await launchElectronApp({
-      page: "settings",
-      env: {},
-    });
+    const { app: settingsApp, window: settingsWindow } =
+      await launchElectronApp();
 
     try {
-      const settingsWindow = settingsApp.app
-        ? await settingsApp.app.firstWindow()
-        : settingsApp.window;
-
-      // Wait for lazy-loaded settings page
       await settingsWindow.waitForLoadState("domcontentloaded");
 
-      // Settings page should have form elements
       const hasSettingsContent = await settingsWindow.evaluate(() => {
-        // Look for settings-related content (theme, AI config, etc.)
         const body = document.body.innerText;
         return (
           body.includes("主题") ||
@@ -105,7 +96,7 @@ test.describe("Suite 1: Application Lifecycle", () => {
       });
       expect(hasSettingsContent).toBe(true);
     } finally {
-      await closeElectronApp(settingsApp.app || settingsApp);
+      await closeElectronApp(settingsApp);
     }
   });
 });

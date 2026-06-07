@@ -9,6 +9,7 @@ import {
   launchElectronApp,
   closeElectronApp,
 } from "../helpers/electron-launch.js";
+import { mockIpcHandler } from "../helpers/ipc-mock.js";
 
 test.describe("Suite 3: Real-time Recording Flow", () => {
   let electronApp;
@@ -18,14 +19,10 @@ test.describe("Suite 3: Real-time Recording Flow", () => {
     ({ app: electronApp, window } = await launchElectronApp());
 
     // Mock model to ready state so recording is enabled
-    await electronApp.evaluate(() => {
-      const { ipcMain } = require("electron");
-      ipcMain.removeHandler("check-model-files");
-      ipcMain.handle("check-model-files", () => ({
-        stage: "ready",
-        isReady: true,
-        downloadProgress: 100,
-      }));
+    await mockIpcHandler(electronApp, "check-model-files", {
+      stage: "ready",
+      isReady: true,
+      downloadProgress: 100,
     });
 
     await window.reload();
@@ -62,18 +59,13 @@ test.describe("Suite 3: Real-time Recording Flow", () => {
   });
 
   test("3.3 — Transcription result via IPC mock", async () => {
-    // Mock transcription IPC to return a known result
-    await electronApp.evaluate(() => {
-      const { ipcMain } = require("electron");
-      ipcMain.removeHandler("transcribe-audio");
-      ipcMain.handle("transcribe-audio", () => ({
-        success: true,
-        text: "这是一段E2E测试文本",
-        raw_text: "这是一段E2E测试文本",
-        confidence: 0.95,
-        duration: 3.5,
-        language: "zh-CN",
-      }));
+    await mockIpcHandler(electronApp, "transcribe-audio", {
+      success: true,
+      text: "这是一段E2E测试文本",
+      raw_text: "这是一段E2E测试文本",
+      confidence: 0.95,
+      duration: 3.5,
+      language: "zh-CN",
     });
 
     const result = await window.evaluate(() =>
@@ -84,16 +76,11 @@ test.describe("Suite 3: Real-time Recording Flow", () => {
   });
 
   test("3.4 — AI optimization via IPC mock", async () => {
-    // Mock AI processing
-    await electronApp.evaluate(() => {
-      const { ipcMain } = require("electron");
-      ipcMain.removeHandler("process-text");
-      ipcMain.handle("process-text", () => ({
-        success: true,
-        text: "这是优化后的E2E测试文本",
-        enhanced_by_ai: true,
-        mode: "optimize",
-      }));
+    await mockIpcHandler(electronApp, "process-text", {
+      success: true,
+      text: "这是优化后的E2E测试文本",
+      enhanced_by_ai: true,
+      mode: "optimize",
     });
 
     const result = await window.evaluate(() =>
@@ -104,14 +91,9 @@ test.describe("Suite 3: Real-time Recording Flow", () => {
   });
 
   test("3.5 — AI failure returns error via IPC", async () => {
-    // Mock AI processing failure
-    await electronApp.evaluate(() => {
-      const { ipcMain } = require("electron");
-      ipcMain.removeHandler("process-text");
-      ipcMain.handle("process-text", () => ({
-        success: false,
-        error: "AI 服务连接失败",
-      }));
+    await mockIpcHandler(electronApp, "process-text", {
+      success: false,
+      error: "AI 服务连接失败",
     });
 
     const result = await window.evaluate(() =>
@@ -121,25 +103,16 @@ test.describe("Suite 3: Real-time Recording Flow", () => {
     expect(result.error).toBeTruthy();
   });
 
-  test("3.6 — Recording blocked when model not ready", async () => {
-    // Mock model to not-ready state
-    await electronApp.evaluate(() => {
-      const { ipcMain } = require("electron");
-      ipcMain.removeHandler("check-model-files");
-      ipcMain.handle("check-model-files", () => ({
-        stage: "loading",
-        isReady: false,
-      }));
-    });
-
-    // Create a new window to pick up the mock
+  test("3.6 — Recording blocked when model not ready (default state)", async () => {
+    // Launch a fresh app — by default, models are not downloaded,
+    // so mic button should be disabled without any mocks.
     const freshApp = await launchElectronApp();
     try {
       const micButton = freshApp.window.locator('[data-testid="mic-button"]');
       const isDisabled = await micButton.getAttribute("disabled");
       expect(isDisabled).not.toBeNull();
     } finally {
-      await closeElectronApp(freshApp.app || freshApp);
+      await closeElectronApp(freshApp.app);
     }
   });
 });

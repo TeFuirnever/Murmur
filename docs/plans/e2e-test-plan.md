@@ -187,7 +187,7 @@ afterEach(async () => {
 export default defineConfig({
   testDir: './suites',
   timeout: 45000,           // 45s per test (Electron startup takes time)
-  retries: 1,               // Retry once on failure (catches flaky IPC timing)
+  retries: 0,               // Start with 0 — increase to 1 only after suite stabilizes
   workers: 1,               // Sequential execution (Electron can't parallelize)
   use: {
     trace: 'on-first-retry',

@@ -9,6 +9,7 @@ import {
   launchElectronApp,
   closeElectronApp,
 } from "../helpers/electron-launch.js";
+import { mockIpcHandler } from "../helpers/ipc-mock.js";
 
 test.describe("Suite 2: Model Download & Loading", () => {
   let electronApp;
@@ -35,14 +36,10 @@ test.describe("Suite 2: Model Download & Loading", () => {
     ({ app: electronApp, window } = await launchElectronApp());
 
     // Mock model status to ready
-    await electronApp.evaluate(() => {
-      const { ipcMain } = require("electron");
-      ipcMain.removeHandler("check-model-files");
-      ipcMain.handle("check-model-files", () => ({
-        stage: "ready",
-        isReady: true,
-        downloadProgress: 100,
-      }));
+    await mockIpcHandler(electronApp, "check-model-files", {
+      stage: "ready",
+      isReady: true,
+      downloadProgress: 100,
     });
 
     // Reload to trigger re-check
@@ -62,13 +59,9 @@ test.describe("Suite 2: Model Download & Loading", () => {
     ({ app: electronApp, window } = await launchElectronApp());
 
     // Mock download to fail
-    await electronApp.evaluate(() => {
-      const { ipcMain } = require("electron");
-      ipcMain.removeHandler("download-models");
-      ipcMain.handle("download-models", () => ({
-        success: false,
-        error: "下载失败：网络连接超时",
-      }));
+    await mockIpcHandler(electronApp, "download-models", {
+      success: false,
+      error: "下载失败：网络连接超时",
     });
 
     // Trigger download attempt

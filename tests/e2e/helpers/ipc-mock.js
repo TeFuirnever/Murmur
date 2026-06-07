@@ -1,55 +1,59 @@
 /**
  * IPC handler mocking for Electron E2E tests.
  *
- * Uses ipcMain.removeHandler() to unregister existing handlers,
- * then re-registers with mock responses. This solves the
- * "cannot register a second handler" limitation (C-3 fix).
+ * Wraps electronApp.evaluate() to remove then re-register IPC handlers.
+ * All responses must be JSON-serializable (plain objects, not functions).
+ *
+ * Solves the "cannot register a second handler" limitation (Electron 20+).
  */
-const { ipcMain } = require("electron");
 
 /**
- * Override an IPC handler with a mock response.
- * Must be called inside electronApp.evaluate().
+ * Override an IPC handler with a static mock response.
  *
+ * @param {import('playwright-core').ElectronApplication} app
  * @param {string} channel - IPC channel name
- * @param {Function|any} handlerOrValue - Handler function or static value to return
+ * @param {object} response - JSON-serializable response object
  *
  * @example
- * // In electronApp.evaluate():
- * await app.evaluate(async () => {
- *   const { mockIpcHandler } = require('./helpers/ipc-mock');
- *   mockIpcHandler('transcribe-audio', () => ({ success: true, text: '测试文本' }));
- * });
+ * await mockIpcHandler(app, 'transcribe-audio', { success: true, text: '测试' });
  */
-function mockIpcHandler(channel, handlerOrValue) {
-  // Remove existing handler first (Electron 20+)
-  ipcMain.removeHandler(channel);
-
-  const handler =
-    typeof handlerOrValue === "function"
-      ? handlerOrValue
-      : () => handlerOrValue;
-
-  ipcMain.handle(channel, handler);
+async function mockIpcHandler(app, channel, response) {
+  return app.evaluate(
+    ({ channel, response }) => {
+      const { ipcMain } = require("electron");
+      ipcMain.removeHandler(channel);
+      ipcMain.handle(channel, () => response);
+    },
+    { channel, response },
+  );
 }
 
 /**
  * Override multiple IPC handlers at once.
- * @param {Record<string, Function|any>} mocks - Channel → handler/value map
+ *
+ * @param {import('playwright-core').ElectronApplication} app
+ * @param {Record<string, object>} mocks - Channel → response map
  */
-function mockIpcHandlers(mocks) {
-  for (const [channel, handlerOrValue] of Object.entries(mocks)) {
-    mockIpcHandler(channel, handlerOrValue);
+async function mockIpcHandlers(app, mocks) {
+  for (const [channel, response] of Object.entries(mocks)) {
+    await mockIpcHandler(app, channel, response);
   }
 }
 
 /**
- * Restore an IPC handler to its original implementation.
- * Removes the mock, so the channel returns "no handler" errors.
+ * Remove a mocked IPC handler (channel returns "no handler" errors).
+ *
+ * @param {import('playwright-core').ElectronApplication} app
  * @param {string} channel
  */
-function restoreIpcHandler(channel) {
-  ipcMain.removeHandler(channel);
+async function restoreIpcHandler(app, channel) {
+  return app.evaluate(
+    ({ channel }) => {
+      const { ipcMain } = require("electron");
+      ipcMain.removeHandler(channel);
+    },
+    { channel },
+  );
 }
 
 module.exports = { mockIpcHandler, mockIpcHandlers, restoreIpcHandler };

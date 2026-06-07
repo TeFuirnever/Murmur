@@ -9,15 +9,17 @@
 const { _electron: electron } = require("playwright-core");
 const path = require("path");
 
+// Resolve from project root to avoid fragile __dirname depth assumptions
+const PROJECT_ROOT = path.resolve(__dirname, "../../../..");
+
 /**
  * Launch the Murmur Electron app for testing.
  * @param {object} [options] - Launch options
- * @param {string} [options.page] - URL page param (?page=settings, ?page=history)
  * @param {Record<string, string>} [options.env] - Additional env vars
  * @returns {Promise<{app: import('playwright-core').ElectronApplication, window: import('playwright-core').Page}>}
  */
-async function launchElectronApp({ page: _page, env = {} } = {}) {
-  const mainJs = path.resolve(__dirname, "../../../../main.js");
+async function launchElectronApp({ env = {} } = {}) {
+  const mainJs = path.join(PROJECT_ROOT, "main.js");
 
   const app = await electron.launch({
     args: [mainJs],

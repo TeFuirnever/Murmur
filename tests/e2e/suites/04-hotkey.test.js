@@ -8,6 +8,7 @@ import {
   launchElectronApp,
   closeElectronApp,
 } from "../helpers/electron-launch.js";
+import { mockIpcHandler } from "../helpers/ipc-mock.js";
 
 test.describe("Suite 4: Hotkey Management", () => {
   let electronApp;
@@ -35,14 +36,10 @@ test.describe("Suite 4: Hotkey Management", () => {
   });
 
   test("4.2 — Hotkey IPC event triggers recording toggle", async () => {
-    // First mock model as ready
-    await electronApp.evaluate(() => {
-      const { ipcMain } = require("electron");
-      ipcMain.removeHandler("check-model-files");
-      ipcMain.handle("check-model-files", () => ({
-        stage: "ready",
-        isReady: true,
-      }));
+    // Mock model as ready
+    await mockIpcHandler(electronApp, "check-model-files", {
+      stage: "ready",
+      isReady: true,
     });
 
     // Reload to pick up mock
@@ -61,12 +58,15 @@ test.describe("Suite 4: Hotkey Management", () => {
       }
     });
 
-    // Wait briefly for state change
-    await window.waitForTimeout(500);
-
-    // After hotkey trigger, recording should start
-    const ariaLabel = await micButton.getAttribute("aria-label");
-    expect(ariaLabel).toBe("停止录音");
+    // Poll for state change instead of waitForTimeout
+    await expect
+      .poll(
+        async () => {
+          return await micButton.getAttribute("aria-label");
+        },
+        { timeout: 3000 },
+      )
+      .toBe("停止录音");
 
     // Trigger again to stop
     await electronApp.evaluate(() => {
@@ -76,10 +76,15 @@ test.describe("Suite 4: Hotkey Management", () => {
         win.webContents.send("hotkey-triggered");
       }
     });
-    await window.waitForTimeout(500);
 
-    const ariaLabelAfter = await micButton.getAttribute("aria-label");
-    expect(ariaLabelAfter).toBe("开始录音");
+    await expect
+      .poll(
+        async () => {
+          return await micButton.getAttribute("aria-label");
+        },
+        { timeout: 3000 },
+      )
+      .toBe("开始录音");
   });
 
   test("4.3 — Hotkey registration via IPC", async () => {

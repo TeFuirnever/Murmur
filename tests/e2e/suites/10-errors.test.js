@@ -13,6 +13,7 @@ import {
   launchElectronApp,
   closeElectronApp,
 } from "../helpers/electron-launch.js";
+import { mockIpcHandler } from "../helpers/ipc-mock.js";
 
 test.describe("Suite 10: Error Resilience", () => {
   let electronApp;
@@ -28,13 +29,9 @@ test.describe("Suite 10: Error Resilience", () => {
 
   test("10.1 — AI service error returns graceful failure", async () => {
     // Mock AI processing to simulate network error
-    await electronApp.evaluate(() => {
-      const { ipcMain } = require("electron");
-      ipcMain.removeHandler("process-text");
-      ipcMain.handle("process-text", () => ({
-        success: false,
-        error: "网络连接失败：无法连接到 AI 服务",
-      }));
+    await mockIpcHandler(electronApp, "process-text", {
+      success: false,
+      error: "网络连接失败：无法连接到 AI 服务",
     });
 
     const result = await window.evaluate(() =>

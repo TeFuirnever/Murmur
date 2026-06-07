@@ -15,6 +15,9 @@ import path from "path";
 
 const requireCJS = createRequire(import.meta.url);
 const C = requireCJS("../../src/helpers/ipc-contracts");
+const { validateAudioPath } = requireCJS(
+  "../../src/helpers/audioPathValidator",
+);
 
 // ─── modelManager: model files missing ───────────────────────────
 
@@ -93,29 +96,9 @@ describe("modelManager — model files missing", () => {
   });
 });
 
-// ─── IPC path validation (mirrors transcriptionHandlers.js logic) ─
+// ─── IPC path validation (tests real implementation) ─────────────
 
 describe("IPC transcriptionHandlers — validateAudioPath", () => {
-  function validateAudioPath(filePath) {
-    const allowedExts = C.AUDIO_EXTENSIONS;
-    const ext = path.extname(filePath).toLowerCase();
-    if (!allowedExts.includes(ext)) {
-      return { valid: false, error: "不支持的音频格式: " + ext };
-    }
-    const resolved = path.resolve(filePath);
-    const homedir = os.homedir();
-    const tmpdir = os.tmpdir();
-    if (
-      !resolved.startsWith(homedir) &&
-      !resolved.startsWith(tmpdir) &&
-      !resolved.startsWith("/Volumes/") &&
-      !/^[A-Za-z]:\\/.test(resolved)
-    ) {
-      return { valid: false, error: "路径不在允许范围内" };
-    }
-    return { valid: true, ext, resolved };
-  }
-
   it("accepts Windows drive letter path with Chinese characters", () => {
     const result = validateAudioPath("E:\\Video\\新录音 3.m4a");
     expect(result.valid).toBe(true);
