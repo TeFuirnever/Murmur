@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- E2E test infrastructure: Playwright Electron with IPC-level mocking, 11 test suites (35 tests) covering FTUE, lifecycle, recording, hotkeys, file import, clipboard, settings, history, window management, and error resilience
+- Model download guard unit tests (13 cases) covering missing models, Windows Chinese path validation, and audio format guards
+- `MURMUR_DB_PATH` env var for in-memory test isolation (`database.js`)
+- `data-testid` attributes on mic button, file drop zone, and transcription result for E2E selectors
+- `PYTHONUTF8=1` in Python subprocess environment to prevent encoding corruption on Windows Chinese locales
+
+### Changed
+
+- Extracted `validateAudioPath()` from `transcriptionHandlers.js` into `src/helpers/audioPathValidator.js` for testability
+- Rewrote `tests/e2e/helpers/ipc-mock.js` to properly wrap `electronApp.evaluate()` with serializable responses
+- Replaced all `waitForTimeout()` with `expect.poll()` in E2E suites for deterministic assertions
+- Moved legacy E2E tests to `tests/e2e/legacy/`
+
+### Fixed
+
+- Chinese file path encoding corruption: file paths with CJK characters (e.g. `新录音.m4a`) were garbled when passed to Python subprocess on Windows (GBK/CP936 locale) — now forced UTF-8 via `PYTHONUTF8=1`
+- Misleading test 3.6: mock was applied to wrong app instance — now correctly tests default no-models state
+- Fragile `__dirname` 4-level traversal in `electron-launch.js` replaced with `PROJECT_ROOT` constant
+
 ## [1.0.1] - 2026-05-31
 
 ### Fixed
