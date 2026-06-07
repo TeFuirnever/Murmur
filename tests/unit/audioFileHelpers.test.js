@@ -162,5 +162,35 @@ describe("audioFileHelpers", () => {
         convertAudioFile({ info: vi.fn(), warn: vi.fn() }, "/some/file.aac"),
       ).rejects.toThrow("apt install");
     });
+
+    it("enters spawn flow and rejects on non-zero exit", async () => {
+      // Use node executable as fake ffmpeg — it exits with error for ffmpeg args
+      _setFFmpegDetector(() => process.execPath);
+      const logger = { info: vi.fn(), warn: vi.fn() };
+      await expect(convertAudioFile(logger, "/some/file.mp3")).rejects.toThrow(
+        "ffmpeg 转换失败",
+      );
+    });
+  });
+
+  describe("_defaultDetectFFmpeg", () => {
+    it("uses default detector when no custom detector is set", () => {
+      _setFFmpegDetector(null);
+      _resetFFmpegCache();
+      const result = getFFmpegPath();
+      // null when ffmpeg not on PATH, string path when installed
+      expect(result === null || typeof result === "string").toBe(true);
+    });
+  });
+
+  describe("createTempAudioFile .buffer fallback", () => {
+    it("creates file from plain object with .buffer property", async () => {
+      const ab = new ArrayBuffer(4);
+      new Uint8Array(ab).set([1, 2, 3, 4]);
+      const result = await createTempAudioFile(mockLogger, { buffer: ab });
+      createdFiles.push(result);
+      const content = await fs.promises.readFile(result);
+      expect(new Uint8Array(content)).toEqual(new Uint8Array([1, 2, 3, 4]));
+    });
   });
 });

@@ -142,5 +142,23 @@ describe("detectLocalModels", () => {
         globalThis.fetch = originalFetch;
       }
     });
+
+    it("handles LM Studio with empty models list", async () => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn(async (url) => {
+        if (url.includes("1234")) {
+          return { ok: true, json: async () => ({}) };
+        }
+        throw new Error("ECONNREFUSED");
+      });
+      try {
+        const result = await detectLocalModels();
+        const lmstudio = result.find((r) => r.name === "lmstudio");
+        expect(lmstudio).toBeDefined();
+        expect(lmstudio.models).toEqual([]);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
   });
 });
