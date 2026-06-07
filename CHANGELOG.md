@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-06-07
+
 ### Added
 
 - E2E test infrastructure: Playwright Electron with IPC-level mocking, 11 test suites (35 tests) covering FTUE, lifecycle, recording, hotkeys, file import, clipboard, settings, history, window management, and error resilience

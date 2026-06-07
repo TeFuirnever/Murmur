@@ -1,6 +1,6 @@
 {
   "name": "murmur",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Murmur - 基于FunASR和可配置AI模型的中文优化语音转文字应用",
   "main": "main.js",
   "private": true,
