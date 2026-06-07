@@ -167,6 +167,8 @@ jobs:
         run: |
           cat Murmur-macOS/checksums-sha256.txt Murmur-Windows/checksums-sha256.txt > checksums-sha256.txt
           cat checksums-sha256.txt
+          # Remove per-platform checksums to avoid filename collision during upload
+          rm -f Murmur-macOS/checksums-sha256.txt Murmur-Windows/checksums-sha256.txt
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
