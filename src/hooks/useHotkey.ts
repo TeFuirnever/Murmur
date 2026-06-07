@@ -94,7 +94,9 @@ export const useHotkey = () => {
     return hotkeyString
       .replace(
         "CommandOrControl",
-        (navigator.userAgentData?.platform?.startsWith("mac") ??
+        ((
+          navigator as Navigator & { userAgentData?: { platform?: string } }
+        ).userAgentData?.platform?.startsWith("mac") ??
           /mac/i.test(navigator.userAgent))
           ? "⌘"
           : "Ctrl",
