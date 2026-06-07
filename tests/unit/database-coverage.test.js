@@ -11,8 +11,10 @@ describe("DatabaseManager - extended coverage", () => {
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "murmur-test-"));
+    process.env.MURMUR_DB_PATH = ":memory:";
     db = new DatabaseManager();
     db.initialize(tmpDir);
+    delete process.env.MURMUR_DB_PATH;
   });
 
   afterEach(() => {
