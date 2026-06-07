@@ -316,6 +316,20 @@ class FunASRServer {
     const MAX_FILE_SIZE = 500 * 1024 * 1024;
     const ALLOWED_EXT = C.AUDIO_EXTENSIONS;
 
+    // [DEBUG-tr] Diagnostic log for file transcription
+    console.log("[DEBUG-tr] transcribeFile called:", {
+      audioPath,
+      audioPathType: typeof audioPath,
+      audioPathBytes: Buffer.from(audioPath || "")
+        .toString("hex")
+        .slice(0, 60),
+      ext: audioPath ? path.extname(audioPath).toLowerCase() : "N/A",
+      serverReady: this.serverReady,
+      serverProcessAlive: this.serverProcess
+        ? !this.serverProcess.killed
+        : false,
+    });
+
     if (!audioPath || typeof audioPath !== "string") {
       return { success: false, error: "无效的文件路径", code: "INVALID_PATH" };
     }
@@ -332,7 +346,9 @@ class FunASRServer {
     let stats;
     try {
       stats = fs.statSync(audioPath);
-    } catch {
+    } catch (statErr) {
+      // [DEBUG-tr] Log exact stat failure
+      console.log("[DEBUG-tr] fs.statSync failed:", statErr.message);
       return {
         success: false,
         error: "文件不存在或无法访问",
@@ -360,7 +376,17 @@ class FunASRServer {
     }
 
     try {
-      return await this.messageRouter.sendCommand(
+      // [DEBUG-tr] Log the exact command sent to Python
+      console.log(
+        "[DEBUG-tr] Sending to Python:",
+        JSON.stringify({
+          action: "transcribe_file",
+          audio_path: audioPath,
+          fileSize: stats.size,
+        }),
+      );
+
+      const result = await this.messageRouter.sendCommand(
         "transcribe_file",
         { audio_path: audioPath, options },
         {
@@ -369,7 +395,22 @@ class FunASRServer {
           onProgress: options.onProgress || null,
         },
       );
+
+      // [DEBUG-tr] Log the result from Python
+      console.log(
+        "[DEBUG-tr] Python result:",
+        JSON.stringify({
+          success: result.success,
+          error: result.error || undefined,
+          textLen: result.text ? result.text.length : 0,
+          duration: result.duration,
+        }),
+      );
+
+      return result;
     } catch (err) {
+      // [DEBUG-tr] Log the exact error
+      console.log("[DEBUG-tr] sendCommand threw:", err.message);
       return {
         success: false,
         error: err.message,

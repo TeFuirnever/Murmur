@@ -124,6 +124,21 @@ class ServerMessageRouter {
       return;
     }
 
+    // [DEBUG-tr] Log non-progress responses from Python
+    if (msg.type !== "progress") {
+      console.log(
+        "[DEBUG-tr] Python response:",
+        JSON.stringify({
+          request_id: requestId,
+          type: msg.type,
+          success: msg.success,
+          error: msg.error || undefined,
+          phase: msg.phase,
+          textLen: msg.text ? msg.text.length : 0,
+        }),
+      );
+    }
+
     const entry = this.pending.get(requestId);
     if (!entry) {
       return;
