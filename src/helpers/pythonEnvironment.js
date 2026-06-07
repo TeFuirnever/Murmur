@@ -67,6 +67,12 @@ class PythonEnvironment {
 
     const env = { ...process.env };
 
+    // Force UTF-8 for stdin/stdout — critical on Windows where the default
+    // is GBK/CP936 on Chinese locales. Without this, Chinese file paths
+    // sent via JSON over stdin are decoded as GBK instead of UTF-8,
+    // producing mojibake (e.g. "新录音" → "閲戝瓟锟絓…").
+    env.PYTHONUTF8 = "1";
+
     if (isUsingEmbedded) {
       const pythonDir = path.dirname(
         path.dirname(this.getEmbeddedPythonPath()),
