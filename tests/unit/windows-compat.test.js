@@ -5,7 +5,7 @@
  * Windows compat audit (2026-06-07). Each test section maps to a numbered
  * finding from the diagnostic report.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import fs from "fs";
 import path from "path";
 
