@@ -43,7 +43,8 @@
     "ci:fix": "node scripts/ci-check.js --fix",
     "preview": "cd src && vite preview",
     "clean": "node cleanup.js && rm -rf python",
-    "prepare": "husky"
+    "prepare": "husky",
+    "audit:harness": "node scripts/harness-audit.js"
   },
   "keywords": [
     "speech-to-text",

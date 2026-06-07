@@ -52,10 +52,6 @@ function readAbs(absPath) {
   return fs.readFileSync(absPath, "utf-8");
 }
 
-function hasLine(content, pattern) {
-  return content.split("\n").some((l) => pattern.test(l));
-}
-
 // ---------------------------------------------------------------------------
 // Category checks — each returns { score: 0-10, checks: [{name, pass, detail}] }
 // ---------------------------------------------------------------------------
