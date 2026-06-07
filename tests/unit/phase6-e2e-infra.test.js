@@ -26,22 +26,28 @@ describe("Phase 6: E2E testing infrastructure", () => {
       expect(fs.existsSync(e2eDir)).toBe(true);
     });
 
-    it("should have launch test file", () => {
-      const files = fs.readdirSync(path.join(rootDir, "tests/e2e"));
-      const hasLaunch = files.some((f) => f.includes("launch"));
-      expect(hasLaunch).toBe(true);
+    it("should have e2e suite directory", () => {
+      const suitesDir = path.join(rootDir, "tests/e2e/suites");
+      expect(fs.existsSync(suitesDir)).toBe(true);
     });
 
-    it("should have settings test file", () => {
-      const files = fs.readdirSync(path.join(rootDir, "tests/e2e"));
+    it("should have lifecycle test suite", () => {
+      const files = fs.readdirSync(path.join(rootDir, "tests/e2e/suites"));
+      const hasLifecycle = files.some((f) => f.includes("lifecycle"));
+      expect(hasLifecycle).toBe(true);
+    });
+
+    it("should have settings test suite", () => {
+      const files = fs.readdirSync(path.join(rootDir, "tests/e2e/suites"));
       const hasSettings = files.some((f) => f.includes("settings"));
       expect(hasSettings).toBe(true);
     });
 
-    it("should have IPC test file", () => {
-      const files = fs.readdirSync(path.join(rootDir, "tests/e2e"));
-      const hasIPC = files.some((f) => f.includes("ipc"));
-      expect(hasIPC).toBe(true);
+    it("should have IPC-level test suites", () => {
+      const files = fs.readdirSync(path.join(rootDir, "tests/e2e/suites"));
+      const hasRecording = files.some((f) => f.includes("recording"));
+      const hasErrors = files.some((f) => f.includes("error"));
+      expect(hasRecording || hasErrors).toBe(true);
     });
   });
 
@@ -65,15 +71,15 @@ describe("Phase 6: E2E testing infrastructure", () => {
     });
   });
 
-  describe("Launch test content", () => {
+  describe("Lifecycle test content", () => {
     let content;
 
     beforeAll(() => {
-      const e2eDir = path.join(rootDir, "tests/e2e");
-      const files = fs.readdirSync(e2eDir);
-      const launchFile = files.find((f) => f.includes("launch"));
-      if (launchFile) {
-        content = fs.readFileSync(path.join(e2eDir, launchFile), "utf8");
+      const suitesDir = path.join(rootDir, "tests/e2e/suites");
+      const files = fs.readdirSync(suitesDir);
+      const lifecycleFile = files.find((f) => f.includes("lifecycle"));
+      if (lifecycleFile) {
+        content = fs.readFileSync(path.join(suitesDir, lifecycleFile), "utf8");
       }
     });
 
@@ -81,8 +87,8 @@ describe("Phase 6: E2E testing infrastructure", () => {
       expect(content).toBeDefined();
     });
 
-    it("should use electron.launch", () => {
-      expect(content).toMatch(/electron.*launch|_electron.*launch/);
+    it("should use launchElectronApp helper", () => {
+      expect(content).toMatch(/launchElectronApp/);
     });
 
     it("should verify window is visible", () => {

@@ -96,6 +96,7 @@ export default function FileDropZone({
 
   return (
     <div
+      data-testid="file-drop-zone"
       onClick={onSelectFile}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}

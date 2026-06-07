@@ -51,6 +51,48 @@ describe("Tier 0 fixes", () => {
     });
   });
 
+  describe("T0-4: PYTHONUTF8=1 in buildPythonEnvironment", () => {
+    let PythonEnvironment;
+
+    beforeEach(() => {
+      const pyPath = requireCJS.resolve(
+        "../../src/helpers/pythonEnvironment.js",
+      );
+      delete requireCJS.cache[pyPath];
+      PythonEnvironment = requireCJS("../../src/helpers/pythonEnvironment.js");
+    });
+
+    it("sets PYTHONUTF8=1 to prevent GBK/CP936 encoding corruption on Windows", () => {
+      const env = new PythonEnvironment({
+        info: () => {},
+        warn: () => {},
+        error: () => {},
+      });
+      // Stub embedded python check to avoid filesystem dependency
+      env.getEmbeddedPythonPath = () => "/nonexistent";
+      const result = env.buildPythonEnvironment();
+      expect(result.PYTHONUTF8).toBe("1");
+    });
+
+    it("PYTHONUTF8 is set even when embedded Python is used", () => {
+      const env = new PythonEnvironment({
+        info: () => {},
+        warn: () => {},
+        error: () => {},
+      });
+      // Simulate embedded python present (won't actually exist, but force the branch)
+      const origExistsSync = require("fs").existsSync;
+      require("fs").existsSync = () => true;
+      try {
+        env.getEmbeddedPythonPath = () => "/fake/embedded/python/bin/python3";
+        const result = env.buildPythonEnvironment();
+        expect(result.PYTHONUTF8).toBe("1");
+      } finally {
+        require("fs").existsSync = origExistsSync;
+      }
+    });
+  });
+
   describe("T0-3: SSRF validation allows localhost for local models", () => {
     let validateAIBaseUrl;
 

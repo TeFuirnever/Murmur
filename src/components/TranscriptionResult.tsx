@@ -144,7 +144,7 @@ export default function TranscriptionResult({
   const showOptimizing = isOptimizing || isOptimizingInternal;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-testid="transcription-result">
       {/* Duration header */}
       {(duration ?? 0) > 0 && (
         <div className="flex items-center gap-2 text-sm text-[#86868b]">

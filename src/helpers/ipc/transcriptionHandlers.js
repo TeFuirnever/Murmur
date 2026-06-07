@@ -1,30 +1,10 @@
 const path = require("path");
-const os = require("os");
 const fs = require("fs");
 const { dialog } = require("electron");
 const C = require("../ipc-contracts");
 const exportFormatters = require("../exportFormatters");
 const { buildPrompt } = require("../aiPrompts");
-
-function validateAudioPath(filePath) {
-  const allowedExts = C.AUDIO_EXTENSIONS;
-  const ext = path.extname(filePath).toLowerCase();
-  if (!allowedExts.includes(ext)) {
-    return { valid: false, error: "不支持的音频格式: " + ext };
-  }
-  const resolved = path.resolve(filePath);
-  const homedir = os.homedir();
-  const tmpdir = os.tmpdir();
-  if (
-    !resolved.startsWith(homedir) &&
-    !resolved.startsWith(tmpdir) &&
-    !resolved.startsWith("/Volumes/") &&
-    !/^[A-Za-z]:\\/.test(resolved)
-  ) {
-    return { valid: false, error: "路径不在允许范围内" };
-  }
-  return { valid: true, ext, resolved };
-}
+const { validateAudioPath } = require("../audioPathValidator");
 
 function register(ipcMain, managers) {
   const { funasrManager, databaseManager, logger, processTextWithAI } =

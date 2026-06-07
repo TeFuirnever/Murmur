@@ -4,7 +4,7 @@
 
 原始 SHOW_ITEM / OPEN_LOG channel 已在重构中移除。当前路径遍历防护覆盖：
 
-- `src/helpers/ipc/transcriptionHandlers.js` — `validateAudioPath()` 使用 `path.resolve()` + `startsWith()` 双重校验，限制在 homedir/tmpdir/Volumes 内
+- `src/helpers/audioPathValidator.js` — `validateAudioPath()` 使用 `path.resolve()` + `startsWith()` 双重校验，限制在 homedir/tmpdir/Volumes 内（从 `transcriptionHandlers.js` 提取）
 - `src/helpers/updateManager.js` — 安装路径同样校验，限制在 app temp 目录内
 
 ## ~~P2-B: useModelStatus 双订阅~~ ✅ 已修复

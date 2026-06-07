@@ -52,12 +52,17 @@ class DatabaseManager {
   }
 
   initialize(dataDirectory) {
-    this.dbPath = path.join(dataDirectory, "transcriptions.db");
+    // Allow test isolation via env var (e.g. MURMUR_DB_PATH=:memory: or /tmp/test.db)
+    this.dbPath =
+      process.env.MURMUR_DB_PATH ||
+      path.join(dataDirectory, "transcriptions.db");
 
-    // 确保数据目录存在
-    const dir = path.dirname(this.dbPath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+    // In-memory databases don't need directories
+    if (this.dbPath !== ":memory:") {
+      const dir = path.dirname(this.dbPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
     }
 
     this.db = new Database(this.dbPath);
