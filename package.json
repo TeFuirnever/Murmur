@@ -111,6 +111,7 @@
     "@radix-ui/react-tabs": "^1.1.12",
     "axios": "^1.6.0",
     "better-sqlite3": "11.10.0",
+    "bindings": "^1.5.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "docx": "^9.6.1",
