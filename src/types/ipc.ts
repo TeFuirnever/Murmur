@@ -47,12 +47,19 @@ export interface AIMode {
   description: string;
 }
 
+// [20260712_Fix_ProviderPresetType] Added registration field to the canonical
+// type so there is a single source of truth. useSettings.ts ProviderPreset
+// now extends this interface instead of redefining the shape.
 export interface AIProviderPreset {
   name: string;
   label: string;
   base_url: string;
   models: string[];
   requires_api_key: boolean;
+  registration?: {
+    url: string;
+    recommended?: boolean;
+  };
 }
 
 export interface LocalModelDetection {

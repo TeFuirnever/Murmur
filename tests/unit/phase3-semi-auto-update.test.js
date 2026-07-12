@@ -150,7 +150,14 @@ describe("Phase 3: Semi-auto update", () => {
     });
 
     it("should have changelog/release notes display", () => {
-      expect(settingsContent).toMatch(/releaseNotes|changelog/);
+      const allSettingsContent = [
+        settingsContent,
+        fs.readFileSync(
+          path.join(rootDir, "src/settings/sections/AboutSection.tsx"),
+          "utf8",
+        ),
+      ].join("\n");
+      expect(allSettingsContent).toMatch(/releaseNotes|changelog/);
     });
   });
 

@@ -138,7 +138,14 @@ describe("Phase 4: Internationalization i18n", () => {
     });
 
     it("should have language change handler", () => {
-      expect(settingsContent).toMatch(
+      const allSettingsContent = [
+        settingsContent,
+        fs.readFileSync(
+          path.join(rootDir, "src/settings/sections/GeneralSection.tsx"),
+          "utf8",
+        ),
+      ].join("\n");
+      expect(allSettingsContent).toMatch(
         /changeLanguage|i18n\.changeLanguage|setLanguage/,
       );
     });

@@ -57,7 +57,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Semi-auto update with SHA256 verification, progress UI, and system notification
 - TypeScript strict mode: `strictNullChecks`, `noImplicitAny`, `noUncheckedIndexedAccess` across entire frontend
 - Full TypeScript migration: all hooks, components, and pages migrated to TS/TSX
-- AI provider presets: 8 providers (OpenAI, DeepSeek, Qwen, GLM, SiliconFlow, Groq, Ollama, LM Studio) with auto-fill
+- AI provider presets: 11 providers (OpenAI, DeepSeek, Qwen, GLM, SiliconFlow, Groq, Moonshot, MiniMax, OpenRouter, Ollama, LM Studio) with auto-fill and registration links
+- Quick Start guide: one-click registration links for providers with free tiers (DeepSeek, SiliconFlow recommended)
 - Local model auto-detection: probes Ollama (11434) and LM Studio (1234) with 2s timeout
 - Custom AI prompt templates with user-defined system/user prompts
 - Quick experience mode: per-model download progress, optional punc model for faster startup

@@ -103,6 +103,78 @@ describe("providerPresets", () => {
     });
   });
 
+  describe("registration fields", () => {
+    it("presets with registration have valid URLs", () => {
+      const presets = getProviderPresets();
+      for (const p of presets) {
+        if (p.registration) {
+          expect(typeof p.registration.url).toBe("string");
+          expect(p.registration.url).toMatch(/^https:\/\//);
+          // [20260712_Fix_RegistrationGuideI18n] guide field removed from
+          // presets — text now lives in i18n locale files.
+          expect(p.registration).not.toHaveProperty("guide");
+        }
+      }
+    });
+
+    it("at most 2 presets are recommended", () => {
+      const presets = getProviderPresets();
+      const recommended = presets.filter(
+        (p) => p.registration?.recommended === true,
+      );
+      expect(recommended.length).toBeLessThanOrEqual(2);
+    });
+
+    it("recommended presets have registration info", () => {
+      const presets = getProviderPresets();
+      const recommended = presets.filter(
+        (p) => p.registration?.recommended === true,
+      );
+      for (const p of recommended) {
+        expect(p.registration.url).toBeTruthy();
+      }
+    });
+
+    it("deepseek is recommended with registration", () => {
+      const deepseek = getProviderByName("deepseek");
+      expect(deepseek.registration).toBeDefined();
+      expect(deepseek.registration.recommended).toBe(true);
+      expect(deepseek.registration.url).toContain("deepseek.com");
+      expect(deepseek.registration).not.toHaveProperty("guide");
+    });
+
+    it("siliconflow is recommended with registration", () => {
+      const siliconflow = getProviderByName("siliconflow");
+      expect(siliconflow.registration).toBeDefined();
+      expect(siliconflow.registration.recommended).toBe(true);
+      expect(siliconflow.registration.url).toContain("siliconflow.cn");
+      expect(siliconflow.registration).not.toHaveProperty("guide");
+    });
+
+    it("groq has registration without recommended flag", () => {
+      const groq = getProviderByName("groq");
+      expect(groq.registration).toBeDefined();
+      expect(groq.registration.recommended).toBeUndefined();
+    });
+
+    it("openrouter has registration with free models", () => {
+      const openrouter = getProviderByName("openrouter");
+      expect(openrouter).toBeDefined();
+      expect(openrouter.registration).toBeDefined();
+      expect(openrouter.registration.url).toContain("openrouter.ai");
+      expect(openrouter.models.length).toBeGreaterThan(0);
+      expect(openrouter.models.some((m) => m.includes("free"))).toBe(true);
+    });
+
+    it("local providers do not have registration", () => {
+      const presets = getProviderPresets();
+      const local = presets.filter((p) => !p.requires_api_key);
+      for (const p of local) {
+        expect(p.registration).toBeUndefined();
+      }
+    });
+  });
+
   describe("getProviderByName", () => {
     it("returns matching provider", () => {
       const deepseek = getProviderByName("deepseek");
