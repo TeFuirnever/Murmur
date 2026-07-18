@@ -144,11 +144,13 @@ Domain context: see `docs/agents/domain.md`.
 
 - Mode: local-stdio
 - Engine: pglite
+- Embedding model: ollama:bge-m3 (1024d, local Ollama at localhost:11434)
 - Config file: ~/.gbrain/config.json (mode 0600)
-- Setup date: 2026-05-21
+- Setup date: 2026-05-21 (embedding reconfigured 2026-06-15)
 - MCP registered: yes (user scope)
 - Artifacts sync: off
 - Current repo policy: read-write
+- Note: ollama recipe patched at ~/gbrain/src/core/ai/recipes/ollama.ts (added bge-m3 + dims_options); re-apply after gbrain upgrade
 
 ## GBrain Search Guidance (configured by /sync-gbrain)
 
