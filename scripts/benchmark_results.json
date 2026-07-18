@@ -1,0 +1,37 @@
+{
+  "timestamp": "2026-06-07 09:49:13",
+  "audio_duration_s": 158.65466666666666,
+  "device": "cpu",
+  "results": [
+    {
+      "model": "Paraformer-large (当前)",
+      "model_id": "damo/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+      "status": "success",
+      "load_time_s": 2.75,
+      "load_memory_mb": 71.0,
+      "avg_inference_ms": 3176.4,
+      "avg_inference_memory_mb": 18.9,
+      "rtfx": 49.9,
+      "rounds": 3,
+      "text_sample": "贝果断鸡我之前吃这个菜菜那个甜甜他识别到前面了这蛋挞也啥来要这就是吃口口再吃吃榴心的确实确实是流心效果不错这有点太甜对第一口很不错第二口就糊一个了只能吃一口这适合做成一个super mini的super mini的塞子这样这个塞子太大了是吧他好像十五个这挺正常的蛋挞有四个这蛋挞也不需要甜度也是挺四个了这还能再吃一口我不能了那我都吃了你都吃了吧我开心果觉得还可以看这个就是真的我觉得越觉得贝果就像馒头"
+    },
+    {
+      "model": "SenseVoice-Small",
+      "model_id": "iic/SenseVoiceSmall",
+      "status": "success",
+      "load_time_s": 27.79,
+      "load_memory_mb": 32.1,
+      "avg_inference_ms": 3616.0,
+      "avg_inference_memory_mb": 0.4,
+      "rtfx": 43.9,
+      "rounds": 3,
+      "text_sample": "实是开心像馒式馒头他这个开心果冰开心果酱里面有咸咸道口乌乌梅酱感兴趣乌怎哪。😊"
+    },
+    {
+      "model": "Fun-ASR-Nano",
+      "model_id": "FunAudioLLM/Fun-ASR-Nano-2512",
+      "status": "load_failed",
+      "error": "cannot access local variable 'AutoTokenizer' where it is not associated with a value"
+    }
+  ]
+}
