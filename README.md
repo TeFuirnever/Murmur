@@ -82,10 +82,11 @@ winget install TeFuirnever.Murmur
 | Groq                 | api.groq.com           |      ✅      |
 | Moonshot             | api.moonshot.cn        |      ✅      |
 | MiniMax              | api.minimaxi.com       |      ✅      |
+| OpenRouter           | openrouter.ai/api/v1   |      ✅      |
 | **Ollama (本地)**    | localhost:11434        |      ❌      |
 | **LM Studio (本地)** | localhost:1234         |      ❌      |
 
-只需选择提供商，Murmur 自动填入地址和模型。
+只需选择提供商，Murmur 自动填入地址和模型。设置页内置「快速开始」引导，帮助获取免费 API Key。
 
 ---
 
@@ -216,7 +217,7 @@ Or download from [Releases](https://github.com/TeFuirnever/Murmur/releases).
 2. Press `Cmd+Shift+Space` and start speaking
 3. Text appears at your cursor
 
-**AI Polish** (optional): Settings → choose provider (DeepSeek, Qwen, Ollama, etc.) → enter API key or use local model
+**AI Polish** (optional): Settings → choose provider (DeepSeek, Qwen, Ollama, etc.) → enter API key or use local model. Built-in Quick Start guide helps you get a free API key.
 
 ## Build from Source
 

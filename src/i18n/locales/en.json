@@ -30,24 +30,50 @@
     "reset": "Reset",
     "close": "Close",
     "about": "About Murmur",
+    "ai_temperature": "Creativity (Temperature)",
+    "ai_max_tokens": "Max Output Length",
     "sections": {
+      "general": "General",
       "ai": "AI Configuration",
       "recognition": "Speech Recognition",
       "appearance": "Appearance",
       "permissions": "Permissions",
-      "language": "Language"
+      "language": "Language",
+      "about": "About Murmur"
+    },
+    "sidebar": {
+      "general": "General",
+      "permissions": "Permissions",
+      "ai": "AI Config",
+      "about": "About"
+    },
+    "general": {
+      "alwaysOnTopDesc": "Keep the app window on top"
+    },
+    "quickStart": {
+      "title": "Quick Start",
+      "recommended": "Recommended",
+      "hasKeyHint": "💡 Already have an API Key? Configure it below",
+      "getKey": "Get Key",
+      "pasteKey": "Have a Key? Paste"
     },
     "ai": {
+      "description": "AI is used to polish and optimize recognized text — it's optional. Speech recognition itself uses the local FunASR model and doesn't need configuration here. When the API Key is invalid or empty, the raw transcription text is used directly.",
+      "enableOptimization": "Enable AI text optimization",
       "apiKey": "API Key",
       "apiKeyPlaceholder": "Enter your AI API Key",
       "baseUrl": "API Endpoint",
+      "baseUrlDesc": "AI service API endpoint, supports OpenAI-compatible APIs",
       "model": "AI Model",
+      "modelDesc": "Select the AI model for text optimization",
       "modelPlaceholder": "Enter custom model name, e.g.: qwen3-30b-a3b-instruct-2507",
+      "predefinedModel": "Predefined Model",
       "customModel": "Custom Model",
-      "enableOptimization": "Enable AI text optimization",
+      "qwenRecommended": "Qwen3-30B (Recommended)",
       "testConfig": "Test Configuration",
       "testing": "Testing...",
       "testSuccess": "AI configuration test passed",
+      "status": "Status",
       "testSuccessToast": "AI configuration test passed!",
       "testFailed": "AI configuration test failed",
       "testFailedToast": "Test failed",
@@ -55,22 +81,29 @@
       "missingKey": "Please enter your API key first",
       "emptyKey": "API key cannot be empty",
       "incomplete": "Configuration incomplete",
+      "maskedKeyWarning": "The displayed value is a masked saved key — please clear and re-enter",
+      "maskedKeyAction": "Please clear the API key field and paste your key again",
+      "reenterKey": "Please re-enter your API key",
+      "reenterKeyTitle": "API key needs to be re-entered",
+      "presetApplied": "Applied {{label}} preset",
+      "testSuccessDesc": "Model: {{model}} - Connection OK",
+      "unknownModel": "Unknown",
+      "response": "AI Response",
+      "tokenUsage": "Token Usage",
+      "providerLabel": "Provider",
+      "precise": "Precise",
+      "creative": "Creative",
       "ai_temperature": "Creativity (Temperature)",
-      "ai_max_tokens": "Max Output Length",
-      "providers": {
-        "tongyi": "Alibaba Tongyi",
-        "zhipu": "Zhipu GLM",
-        "siliconflow": "SiliconFlow",
-        "groq": "Groq",
-        "ollama": "Ollama (Local)",
-        "lmstudio": "LM Studio (Local)"
-      }
+      "ai_max_tokens": "Max Output Length"
     },
     "recognition": {
       "autoPaste": "Action after speech recognition",
+      "autoPasteDesc": "Text handling after speech recognition completes",
       "pasteOption": "Auto-paste to active app",
       "clipboardOption": "Copy to clipboard only",
+      "noneOption": "No automatic action",
       "closeBehavior": "Close button behavior",
+      "closeBehaviorDesc": "Behavior when clicking the window close button",
       "hideBehavior": "Hide to menu bar",
       "quitBehavior": "Quit application",
       "alwaysOnTop": "Keep window always on top"
@@ -82,6 +115,7 @@
       "dark": "Dark"
     },
     "permissions": {
+      "description": "Test and manage app permissions to ensure microphone and accessibility work correctly.",
       "microphone": "Microphone Permission",
       "microphoneDesc": "Required for voice recording",
       "testMicrophone": "Test Microphone",
@@ -92,6 +126,32 @@
       "denied": "Not Granted",
       "testSuccess": "Permission test passed",
       "testFailed": "Permission test failed"
+    },
+    "providers": {
+      "openai": {
+        "guide": "Sign up to get an API Key, pay-as-you-go"
+      },
+      "deepseek": {
+        "guide": "Free credits on sign-up, great for Chinese text"
+      },
+      "qwen": {
+        "guide": "Alibaba Cloud account, free credits for new users"
+      },
+      "glm": {
+        "guide": "Free credits on sign-up"
+      },
+      "siliconflow": {
+        "guide": "Free credits on sign-up, stable access in China"
+      },
+      "groq": {
+        "guide": "Free tier, ultra-fast inference, supports GitHub login"
+      },
+      "moonshot": {
+        "guide": "Sign up to get an API Key"
+      },
+      "openrouter": {
+        "guide": "Aggregates multiple models, some free, supports GitHub login"
+      }
     },
     "language": {
       "label": "Language",
@@ -109,7 +169,9 @@
       "downloaded": "{{version}} download complete (SHA256 verified)",
       "install": "Install & Restart",
       "checkFailed": "Failed to check for updates",
-      "downloadSize": "{{size}} MB"
+      "downloadSize": "{{size}} MB",
+      "newVersionFound": "New version available",
+      "newVersionDesc": "v{{version}} has been released"
     }
   },
   "history": {
