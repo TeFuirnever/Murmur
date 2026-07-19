@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Murmur Competitor Comparison</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: #FAF8F3;
+    padding: 48px 56px;
+    width: 1280px;
+    height: 720px;
+  }
+  .container {
+    background: #FFFFFF;
+    border-radius: 24px;
+    padding: 40px 48px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  .header {
+    text-align: center;
+    margin-bottom: 28px;
+  }
+  .title {
+    font-size: 32px;
+    font-weight: 700;
+    color: #1D1D1F;
+    letter-spacing: -0.5px;
+  }
+  .subtitle {
+    font-size: 15px;
+    color: #86868B;
+    margin-top: 6px;
+  }
+  table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    flex: 1;
+  }
+  th, td {
+    padding: 16px 12px;
+    text-align: center;
+    font-size: 15px;
+    border-bottom: 1px solid #F0F0F2;
+  }
+  th {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1D1D1F;
+    padding-bottom: 18px;
+    padding-top: 8px;
+  }
+  th:first-child, td:first-child {
+    text-align: left;
+    font-weight: 600;
+    color: #1D1D1F;
+    padding-left: 16px;
+    font-size: 14px;
+  }
+  /* Murmur column highlight */
+  th.murmur-col {
+    background: #0071e3;
+    color: #FFFFFF;
+    border-radius: 12px 12px 0 0;
+    font-size: 17px;
+  }
+  td.murmur-col {
+    background: rgba(0, 113, 227, 0.04);
+    font-weight: 600;
+    color: #0071e3;
+  }
+  .stars {
+    color: #FFB800;
+    font-size: 16px;
+    letter-spacing: 1px;
+  }
+  .stars-dim {
+    color: #FFB800;
+    opacity: 0.35;
+    font-size: 16px;
+    letter-spacing: 1px;
+  }
+  .check { color: #34C759; font-size: 22px; font-weight: 700; }
+  .cross { color: #FF3B30; opacity: 0.5; font-size: 22px; font-weight: 700; }
+  .dim-text { color: #86868B; font-size: 13px; }
+  .footer {
+    text-align: center;
+    margin-top: 20px;
+    font-size: 13px;
+    color: #86868B;
+  }
+  .footer a { color: #0071e3; text-decoration: none; }
+  .tool-name { font-size: 18px; }
+  .tool-sub { font-size: 12px; color: #86868B; font-weight: 400; display: block; margin-top: 2px; }
+  th:not(.murmur-col) .tool-sub { color: #AEAEB2; }
+  th.murmur-col .tool-sub { color: rgba(255,255,255,0.8); }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="title">🎤 语音输入工具对比</div>
+    <div class="subtitle">Voice Input Tool Comparison · 4 款主流方案 · 6 个核心维度</div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th></th>
+        <th class="murmur-col">Murmur<span class="tool-sub">开源 · 本地 · AI</span></th>
+        <th>macOS 听写<span class="tool-sub">系统内置</span></th>
+        <th>讯飞语记<span class="tool-sub">云端付费</span></th>
+        <th>Whisper<span class="tool-sub">开源 · 本地</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>中文精度<br><span class="dim-text">Chinese Accuracy</span></td>
+        <td class="murmur-col"><span class="stars">★★★★★</span></td>
+        <td><span class="stars">★★★</span><span class="stars-dim">★★</span></td>
+        <td><span class="stars">★★★★★</span></td>
+        <td><span class="stars">★★★</span><span class="stars-dim">★★</span></td>
+      </tr>
+      <tr>
+        <td>完全本地<br><span class="dim-text">Fully Local</span></td>
+        <td class="murmur-col"><span class="check">✓</span></td>
+        <td><span class="check">✓</span></td>
+        <td><span class="cross">✕</span></td>
+        <td><span class="check">✓</span></td>
+      </tr>
+      <tr>
+        <td>AI 后处理<br><span class="dim-text">AI Refinement</span></td>
+        <td class="murmur-col"><span class="check">✓</span></td>
+        <td><span class="cross">✕</span></td>
+        <td><span class="cross">✕</span></td>
+        <td><span class="cross">✕</span></td>
+      </tr>
+      <tr>
+        <td>开源免费<br><span class="dim-text">Open Source</span></td>
+        <td class="murmur-col"><span class="check">✓</span></td>
+        <td><span class="check">✓</span></td>
+        <td><span class="cross">✕</span></td>
+        <td><span class="check">✓</span></td>
+      </tr>
+      <tr>
+        <td>11+ AI 模型<br><span class="dim-text">Model Variety</span></td>
+        <td class="murmur-col"><span class="check">✓</span></td>
+        <td><span class="cross">✕</span></td>
+        <td><span class="cross">✕</span></td>
+        <td><span class="cross">✕</span></td>
+      </tr>
+      <tr>
+        <td>自定义 Prompt<br><span class="dim-text">Custom Prompts</span></td>
+        <td class="murmur-col"><span class="check">✓</span></td>
+        <td><span class="cross">✕</span></td>
+        <td><span class="cross">✕</span></td>
+        <td><span class="cross">✕</span></td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="footer">
+    Murmur — 开源 · 本地 · AI 语音输入 ｜ <a href="#">github.com/TeFuirnever/Murmur</a>
+  </div>
+</div>
+</body>
+</html>
