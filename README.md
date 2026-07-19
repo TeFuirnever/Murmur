@@ -8,16 +8,17 @@
 
 说话就能打字，音频秒转文字。基于 FunASR，数据不出你的电脑。
 
-[English](#english) · [中文](#中文)
-
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)](#安装)
-[![Tests](https://img.shields.io/badge/tests-613%2B%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-652%20passing-brightgreen)](tests/)
 [![Coverage](https://img.shields.io/badge/coverage-95%25-brightgreen)](tests/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![Stars](https://img.shields.io/github/stars/TeFuirnever/Murmur?style=social)](https://github.com/TeFuirnever/Murmur)
 
-<!-- TODO: 添加产品演示 GIF -->
-<!-- <img src="assets/demo.gif" width="800" /> -->
+[English](#english) · [中文](#中文)
+
+<!-- TODO: 录制产品演示 GIF 后替换 —— 说话 → 文字出现 → AI 润色 → 自动粘贴 -->
+<!-- <img src="assets/demo.gif" width="800" alt="Murmur Demo" /> -->
 
 </div>
 
@@ -27,26 +28,28 @@
 
 ## 为什么选择 Murmur？
 
+**Murmur 是为中文优化的本地语音输入工具。** 按下快捷键，说话，文字就出现在光标处——全部在你的电脑上完成，无需联网，无需上传。
+
 |               |   Murmur   | macOS 原生听写 |  讯飞语记  | Whisper Desktop |
 | ------------- | :--------: | :------------: | :--------: | :-------------: |
 | 中文精度      | ⭐⭐⭐⭐⭐ |     ⭐⭐⭐     | ⭐⭐⭐⭐⭐ |     ⭐⭐⭐      |
 | 完全本地      |     ✅     |       ✅       |     ❌     |       ✅        |
 | AI 后处理     |     ✅     |       ❌       |     ❌     |       ❌        |
 | 开源免费      |     ✅     |       ✅       |     ❌     |       ✅        |
-| 10+ AI 模型   |     ✅     |       ❌       |     ❌     |       ❌        |
+| 11+ AI 模型   |     ✅     |       ❌       |     ❌     |       ❌        |
 | 自定义 Prompt |     ✅     |       ❌       |     ❌     |       ❌        |
 
-## 特性
+## ✨ 特性
 
 | 🎤 高精度中文识别       | 🤖 AI 智能润色       | ⌨️ 全局热键       | 🔒 完全本地 |
 | ----------------------- | -------------------- | ----------------- | ----------- |
 | FunASR Paraformer-large | 去除口头禅、修正错话 | `Cmd+Shift+Space` | 零数据上传  |
 
-| 🌐 10+ AI 模型                        | 📁 音频文件转录  | 💾 转录历史          | 🌍 双语支持  |
+| 🌐 11+ AI 模型                        | 📁 音频文件转录  | 💾 转录历史          | 🌍 双语支持  |
 | ------------------------------------- | ---------------- | -------------------- | ------------ |
 | OpenAI/DeepSeek/通义/智谱/本地 Ollama | wav/mp3/m4a/flac | SQLite + 搜索 + 导出 | 中文/English |
 
-## 安装
+## 🚀 安装
 
 ```bash
 # macOS (Homebrew)
@@ -58,35 +61,38 @@ winget install TeFuirnever.Murmur
 
 或从 [Releases](https://github.com/TeFuirnever/Murmur/releases) 下载安装包。
 
-> **首次安装**：macOS 如遇"无法验证开发者"，右键点击应用 → 选择"打开"
+> **首次安装提示**
 >
-> Windows 如遇 SmartScreen 拦截，点击"更多信息" → "仍要运行"
+> - **macOS**：如遇"无法验证开发者"，右键点击应用 → 选择"打开"
+> - **Windows**：如遇 SmartScreen 拦截，点击"更多信息" → "仍要运行"
 
-## 30 秒上手
+## ⚡ 30 秒上手
 
-1. 启动 Murmur，等待模型下载完成（首次约 1GB）
-2. 按下 `Cmd+Shift+Space` 开始说话
+1. 启动 Murmur，等待模型下载完成（首次约 1GB，后续秒开）
+2. 按下 `Cmd+Shift+Space`（macOS）或 `Ctrl+Shift+Space`（Windows）开始说话
 3. 文字自动出现在光标处
 
-**使用 AI 润色**（可选）：打开设置 → 选择 AI 模型提供商（DeepSeek、通义千问、Ollama 等） → 填入 API Key 或使用本地模型
+**使用 AI 润色**（可选）：打开设置 → 选择 AI 模型提供商 → 填入 API Key 或使用本地模型。设置页内置「快速开始」引导，DeepSeek / 硅基流动注册即送免费额度。
 
-## 支持的 AI 模型
+## 🤖 支持的 AI 模型
 
-| 提供商               | Base URL               | 需要 API Key |
-| -------------------- | ---------------------- | :----------: |
-| OpenAI               | api.openai.com/v1      |      ✅      |
-| DeepSeek             | api.deepseek.com/v1    |      ✅      |
-| 通义千问             | dashscope.aliyuncs.com |      ✅      |
-| 智谱 GLM             | open.bigmodel.cn       |      ✅      |
-| 硅基流动             | api.siliconflow.cn     |      ✅      |
-| Groq                 | api.groq.com           |      ✅      |
-| Moonshot             | api.moonshot.cn        |      ✅      |
-| MiniMax              | api.minimaxi.com       |      ✅      |
-| OpenRouter           | openrouter.ai/api/v1   |      ✅      |
-| **Ollama (本地)**    | localhost:11434        |      ❌      |
-| **LM Studio (本地)** | localhost:1234         |      ❌      |
+| 提供商               | Base URL               | 需要 API Key | 免费额度 |
+| -------------------- | ---------------------- | :----------: | :------: |
+| OpenAI               | api.openai.com/v1      |      ✅      |    —     |
+| **DeepSeek** ⭐      | api.deepseek.com/v1    |      ✅      |  注册送  |
+| 通义千问             | dashscope.aliyuncs.com |      ✅      |  新用户  |
+| 智谱 GLM             | open.bigmodel.cn       |      ✅      |  注册送  |
+| **硅基流动** ⭐      | api.siliconflow.cn     |      ✅      |  注册送  |
+| Groq                 | api.groq.com           |      ✅      |  免费层  |
+| Moonshot             | api.moonshot.cn        |      ✅      |    —     |
+| MiniMax              | api.minimaxi.com       |      ✅      |    —     |
+| OpenRouter           | openrouter.ai/api/v1   |      ✅      | 部分免费 |
+| **Ollama (本地)**    | localhost:11434        |      ❌      |   免费   |
+| **LM Studio (本地)** | localhost:1234         |      ❌      |   免费   |
 
-只需选择提供商，Murmur 自动填入地址和模型。设置页内置「快速开始」引导，帮助获取免费 API Key。
+> ⭐ 标记的提供商推荐新手使用——注册即送免费额度，国内访问稳定。
+
+只需选择提供商，Murmur 自动填入地址和模型。
 
 ---
 
@@ -96,7 +102,6 @@ winget install TeFuirnever.Murmur
 
 - **Node.js** 18+ 和 [pnpm](https://pnpm.io)
 - **Python** 3.8+（用于 FunASR）
-- **ffmpeg**（macOS: `brew install ffmpeg`）
 
 ### 快速开始
 
@@ -106,7 +111,7 @@ cd Murmur
 pnpm install
 
 # Python 环境（二选一）
-# 方案 A: uv（推荐）
+# 方案 A: uv（推荐，自动管理虚拟环境）
 curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync && uv run python download_models.py
 
@@ -121,48 +126,63 @@ pnpm dev
 
 ```bash
 pnpm dev          # 启动开发模式
-pnpm test         # 运行测试（521 tests）
-pnpm lint         # 代码检查
+pnpm test         # 运行测试（652 tests）
+pnpm lint         # 代码检查（0 warnings）
 pnpm typecheck    # TypeScript 类型检查
 pnpm ci:check     # 本地运行所有 CI 门禁
 ```
 
 ---
 
-## 技术栈
+## 🛠 技术栈
 
 | 层级     | 技术                                                  |
 | -------- | ----------------------------------------------------- |
 | 桌面框架 | Electron 36                                           |
 | 前端     | React 19, Tailwind CSS 4, Vite                        |
 | 语音识别 | FunASR (Paraformer-large + FSMN-VAD + CT-Transformer) |
-| AI 优化  | 10+ OpenAI 兼容模型 + 自定义 Prompt 模板              |
+| AI 优化  | 11+ OpenAI 兼容模型 + 自定义 Prompt 模板              |
 | 数据存储 | SQLite (better-sqlite3, safeStorage 加密)             |
 
-## 路线图
+## 📋 路线图
 
-- [x] 本地 FunASR 语音识别
-- [x] AI 文本智能优化（10+ 模型）
+**已完成：**
+
+- [x] 本地 FunASR 语音识别（Paraformer-large）
+- [x] AI 文本智能优化（11+ 模型，含本地 Ollama/LM Studio）
 - [x] 自定义 AI Prompt 模板
-- [x] 本地模型支持（Ollama / LM Studio）
-- [x] 音频文件导入转录
-- [x] 转录历史搜索和导出
-- [x] 全局热键
+- [x] 音频文件导入转录（wav/mp3/m4a/flac）
+- [x] 转录历史搜索（FTS5 全文搜索）和导出（TXT/SRT/Markdown/DOCX）
+- [x] 全局热键 `Cmd+Shift+Space`
 - [x] 多语言支持（中文/English）
-- [x] 自动更新检测
+- [x] 半自动更新（SHA256 校验）
 - [x] 无障碍（ARIA + 键盘导航）
 - [x] GPU 自动检测（CUDA > MPS > CPU）
-- [x] TypeScript 严格模式
-- [x] 文件配置支持（~/.murmur.json）
-- [ ] 实时流式转录（200ms 延迟）
-- [ ] CLI 模式
-- [ ] ASR 多引擎支持（whisper.cpp）
+- [x] TypeScript 严格模式（652 测试，95% 覆盖率）
+- [x] 文件配置支持（`~/.murmur.json`）
+- [x] AI Provider 快速开始引导（免费 API Key 获取）
 
-详见 [Projects](https://github.com/TeFuirnever/Murmur/projects) 查看完整规划。
+**进行中 / 规划：**
 
-## 参与贡献
+- [ ] 实时流式转录（目标 200ms 延迟）
+- [ ] CLI 模式（`murmur transcribe --file`）
+- [ ] ASR 多引擎支持（whisper.cpp / SenseVoice）
+- [ ] 长音频分片转录（解决 10 分钟超时）
+- [ ] AI 流式响应
+
+详见 [docs/strategic-plan-gap-analysis.md](docs/strategic-plan-gap-analysis.md) 查看完整规划。
+
+## 🤝 参与贡献
 
 PRs welcome! 见 [CONTRIBUTING.md](CONTRIBUTING.md) 了解开发环境搭建、代码规范和提交流程。
+
+## 📊 项目状态
+
+<div align="center">
+
+[![Star History Chart](https://api.star-history.com/svg?repos=TeFuirnever/Murmur&type=Date)](https://star-history.com/#TeFuirnever/Murmur&Date)
+
+</div>
 
 ## 致谢
 
@@ -178,7 +198,17 @@ PRs welcome! 见 [CONTRIBUTING.md](CONTRIBUTING.md) 了解开发环境搭建、�
 
 <a id="english"></a>
 
+<div align="center">
+
+**Open Source · Local · AI Voice Input**
+
+Speak to type, convert audio to text in seconds. Powered by FunASR, all on your device.
+
+</div>
+
 ## Why Murmur?
+
+**Murmur is a local-first voice input tool optimized for Chinese.** Press the hotkey, speak, and text appears at your cursor — all processed locally, no internet required.
 
 |                    |   Murmur   | macOS Dictation |  iFlytek   | Whisper Desktop |
 | ------------------ | :--------: | :-------------: | :--------: | :-------------: |
@@ -186,7 +216,7 @@ PRs welcome! 见 [CONTRIBUTING.md](CONTRIBUTING.md) 了解开发环境搭建、�
 | Fully Local        |     ✅     |       ✅        |     ❌     |       ✅        |
 | AI Post-processing |     ✅     |       ❌        |     ❌     |       ❌        |
 | Open Source        |     ✅     |       ✅        |     ❌     |       ✅        |
-| 10+ AI Models      |     ✅     |       ❌        |     ❌     |       ❌        |
+| 11+ AI Models      |     ✅     |       ❌        |     ❌     |       ❌        |
 | Custom Prompts     |     ✅     |       ❌        |     ❌     |       ❌        |
 
 ## Features
@@ -195,7 +225,7 @@ PRs welcome! 见 [CONTRIBUTING.md](CONTRIBUTING.md) 了解开发环境搭建、�
 | ----------------------- | --------------------------------- | ----------------- | ---------------- |
 | FunASR Paraformer-large | Remove filler words, fix mistakes | `Cmd+Shift+Space` | Zero data upload |
 
-| 🌐 10+ AI Models                | 📁 File Transcription | 💾 History               | 🌍 i18n         |
+| 🌐 11+ AI Models                | 📁 File Transcription | 💾 History               | 🌍 i18n         |
 | ------------------------------- | --------------------- | ------------------------ | --------------- |
 | OpenAI/DeepSeek/Qwen/GLM/Ollama | wav/mp3/m4a/flac      | SQLite + search + export | zh-CN / English |
 
@@ -242,24 +272,34 @@ pnpm dev
 | Desktop  | Electron 36                                            |
 | Frontend | React 19, Tailwind CSS 4, Vite                         |
 | Speech   | FunASR (Paraformer-large + FSMN-VAD + CT-Transformer)  |
-| AI       | 10+ OpenAI-compatible models + custom prompt templates |
+| AI       | 11+ OpenAI-compatible models + custom prompt templates |
 | Storage  | SQLite (better-sqlite3, safeStorage encryption)        |
 
 ## Roadmap
 
-- [x] Local FunASR speech recognition
-- [x] AI text optimization (10+ models)
+**Done:**
+
+- [x] Local FunASR speech recognition (Paraformer-large)
+- [x] AI text optimization (11+ models, incl. local Ollama/LM Studio)
 - [x] Custom AI prompt templates
-- [x] Local model support (Ollama / LM Studio)
-- [x] Audio file transcription
-- [x] History search and export
+- [x] Audio file transcription (wav/mp3/m4a/flac)
+- [x] History search (FTS5 full-text) and export (TXT/SRT/Markdown/DOCX)
 - [x] Global hotkey
 - [x] Multi-language (Chinese/English)
-- [x] Auto-update detection
+- [x] Semi-auto update (SHA256 verified)
 - [x] Accessibility (ARIA + keyboard nav)
-- [ ] Real-time streaming transcription
-- [ ] CLI mode
-- [ ] Multi-engine ASR (whisper.cpp)
+- [x] GPU auto-detection (CUDA > MPS > CPU)
+- [x] TypeScript strict mode (652 tests, 95% coverage)
+- [x] File config support (`~/.murmur.json`)
+- [x] AI Provider quick-start guide (free API key)
+
+**In Progress / Planned:**
+
+- [ ] Real-time streaming transcription (target 200ms latency)
+- [ ] CLI mode (`murmur transcribe --file`)
+- [ ] Multi-engine ASR (whisper.cpp / SenseVoice)
+- [ ] Long audio chunked transcription
+- [ ] AI streaming response
 
 ## Contributing
 
