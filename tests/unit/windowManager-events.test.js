@@ -30,6 +30,10 @@ describe("windowManager — real module execution with mocked electron", () => {
 
     const electronStub = {
       BrowserWindow: MockBrowserWindow,
+      // [20260724_TS_BigBang_DirnameFix] windowManager now uses app.getAppPath()
+      // for preload/renderer paths. Provide a stub so tests don't crash.
+      app: { getAppPath: vi.fn(() => "/fake/app/path") },
+      // [20260724_TS_BigBang_DirnameFix] END
       session: {
         defaultSession: {
           webRequest: { onHeadersReceived: vi.fn() },

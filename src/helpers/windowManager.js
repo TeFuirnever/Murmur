@@ -1,4 +1,9 @@
-const { BrowserWindow, session } = require("electron");
+// [20260724_TS_BigBang_DirnameFix] Add app import for getAppPath()-based
+// path resolution. After esbuild bundling, __dirname becomes dist-main/,
+// so __dirname-relative paths break. app.getAppPath() returns the project
+// root in dev and the asar app dir in prod — correct for both.
+const { BrowserWindow, session, app } = require("electron");
+// [20260724_TS_BigBang_DirnameFix] END
 const path = require("path");
 const C = require("./ipc-contracts");
 
@@ -67,13 +72,10 @@ class WindowManager {
           nodeIntegration: false,
           contextIsolation: true,
           sandbox: true,
-          preload: path.join(
-            __dirname,
-            "..",
-            "..",
-            "dist-preload",
-            "preload.js",
-          ),
+          // [20260724_TS_BigBang_DirnameFix] Use app.getAppPath() instead of
+          // __dirname so the path survives esbuild bundling.
+          preload: path.join(app.getAppPath(), "dist-preload", "preload.js"),
+          // [20260724_TS_BigBang_DirnameFix] END
         },
       });
 
@@ -83,7 +85,10 @@ class WindowManager {
         await this.mainWindow.loadURL("http://localhost:5173");
       } else {
         await this.mainWindow.loadFile(
-          path.join(__dirname, "..", "dist", "index.html"),
+          // [20260724_TS_BigBang_DirnameFix] Renderer HTML lives at
+          // src/dist/ in both dev and packaged layouts.
+          path.join(app.getAppPath(), "src", "dist", "index.html"),
+          // [20260724_TS_BigBang_DirnameFix] END
         );
       }
 
@@ -127,7 +132,9 @@ class WindowManager {
         nodeIntegration: false,
         contextIsolation: true,
         sandbox: true,
-        preload: path.join(__dirname, "..", "..", "dist-preload", "preload.js"),
+        // [20260724_TS_BigBang_DirnameFix] app.getAppPath()-based preload path
+        preload: path.join(app.getAppPath(), "dist-preload", "preload.js"),
+        // [20260724_TS_BigBang_DirnameFix] END
       },
     });
 
@@ -137,7 +144,9 @@ class WindowManager {
       await this.historyWindow.loadURL("http://localhost:5173/history.html");
     } else {
       await this.historyWindow.loadFile(
-        path.join(__dirname, "..", "dist", "history.html"),
+        // [20260724_TS_BigBang_DirnameFix] Renderer HTML at src/dist/
+        path.join(app.getAppPath(), "src", "dist", "history.html"),
+        // [20260724_TS_BigBang_DirnameFix] END
       );
     }
 
@@ -164,7 +173,9 @@ class WindowManager {
         nodeIntegration: false,
         contextIsolation: true,
         sandbox: true,
-        preload: path.join(__dirname, "..", "..", "dist-preload", "preload.js"),
+        // [20260724_TS_BigBang_DirnameFix] app.getAppPath()-based preload path
+        preload: path.join(app.getAppPath(), "dist-preload", "preload.js"),
+        // [20260724_TS_BigBang_DirnameFix] END
       },
     });
 
@@ -174,7 +185,9 @@ class WindowManager {
       await this.settingsWindow.loadURL("http://localhost:5173?page=settings");
     } else {
       await this.settingsWindow.loadFile(
-        path.join(__dirname, "..", "dist", "settings.html"),
+        // [20260724_TS_BigBang_DirnameFix] Renderer HTML at src/dist/
+        path.join(app.getAppPath(), "src", "dist", "settings.html"),
+        // [20260724_TS_BigBang_DirnameFix] END
       );
     }
 

@@ -161,7 +161,12 @@ async function main() {
   ]);
   stage1.forEach(printResult);
 
-  // Stage 2: build preload then test
+  // [20260724_TS_BigBang_BuildPipeline] Add build:main to ci-check so the
+  // main bundle is validated locally, matching CI workflows.
+  // Stage 2: build main + preload then test
+  const stage2main = run("pnpm run build:main", "build:main");
+  printResult(stage2main);
+  // [20260724_TS_BigBang_BuildPipeline] END
   const stage2a = run("pnpm run build:preload", "build:preload");
   printResult(stage2a);
   const stage2b = run("pnpm test -- --coverage", "test + coverage");
@@ -171,7 +176,7 @@ async function main() {
   const stage3 = run("pnpm run build:renderer", "build:renderer");
   printResult(stage3);
 
-  const results = [...stage1, stage2a, stage2b, stage3];
+  const results = [...stage1, stage2main, stage2a, stage2b, stage3];
 
   // Security audit (non-blocking)
   const audit = run("pnpm audit --audit-level moderate", "security audit");

@@ -72,7 +72,16 @@ class ModelManager {
 
     const candidates = [];
     if (process.env.NODE_ENV === "development") {
-      candidates.push(path.join(__dirname, "..", "..", "models"));
+      // [20260724_TS_BigBang_DirnameFix] app.getAppPath()-based model path
+      let devRoot;
+      try {
+        const { app } = require("electron");
+        devRoot = app.getAppPath();
+      } catch {
+        devRoot = process.cwd();
+      }
+      candidates.push(path.join(devRoot, "models"));
+      // [20260724_TS_BigBang_DirnameFix] END
     }
     candidates.push(userDataModels);
     candidates.push(modelScopeCache);
@@ -95,7 +104,16 @@ class ModelManager {
       }
     }
 
-    const found = this.findDamoRoot(path.join(__dirname, "..", ".."));
+    // [20260724_TS_BigBang_DirnameFix] app.getAppPath()-based damo root search
+    let searchRoot;
+    try {
+      const { app } = require("electron");
+      searchRoot = app.getAppPath();
+    } catch {
+      searchRoot = process.cwd();
+    }
+    const found = this.findDamoRoot(searchRoot);
+    // [20260724_TS_BigBang_DirnameFix] END
     if (found) return found;
 
     fs.mkdirSync(userDataModels, { recursive: true });
@@ -224,7 +242,10 @@ class ModelManager {
 
   getDownloadScriptPath() {
     if (process.env.NODE_ENV === "development") {
-      return path.join(__dirname, "..", "..", "download_models.py");
+      // [20260724_TS_BigBang_DirnameFix] app.getAppPath()-based script path
+      const { app } = require("electron");
+      return path.join(app.getAppPath(), "download_models.py");
+      // [20260724_TS_BigBang_DirnameFix] END
     }
     return path.join(
       process.resourcesPath,

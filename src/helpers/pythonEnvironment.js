@@ -16,7 +16,12 @@ class PythonEnvironment {
 
   getFunASRServerPath() {
     if (process.env.NODE_ENV === "development") {
-      return path.join(__dirname, "..", "..", "funasr_server.py");
+      // [20260724_TS_BigBang_DirnameFix] Use app.getAppPath() instead of
+      // __dirname so the path survives esbuild bundling. Lazy require
+      // avoids loading electron in unit tests that don't need it.
+      const { app } = require("electron");
+      return path.join(app.getAppPath(), "funasr_server.py");
+      // [20260724_TS_BigBang_DirnameFix] END
     }
     return path.join(
       process.resourcesPath,
@@ -27,7 +32,10 @@ class PythonEnvironment {
 
   getEmbeddedPythonPath() {
     if (process.env.NODE_ENV === "development") {
-      return path.join(__dirname, "..", "..", "python", "bin", "python3.11");
+      // [20260724_TS_BigBang_DirnameFix] app.getAppPath()-based path
+      const { app } = require("electron");
+      return path.join(app.getAppPath(), "python", "bin", "python3.11");
+      // [20260724_TS_BigBang_DirnameFix] END
     }
     return path.join(
       process.resourcesPath,
@@ -135,7 +143,19 @@ class PythonEnvironment {
   }
 
   async findPythonExecutableWithFallback() {
-    const projectRoot = path.join(__dirname, "..", "..");
+    // [20260724_TS_BigBang_DirnameFix] Derive project root without __dirname.
+    // In Electron (dev/prod), app.getAppPath() is authoritative. In tests
+    // (vitest, no electron), fall back to process.cwd() which is the
+    // project root. This method only searches for .venv / system python,
+    // so a wrong root just means an extra non-existent path checked.
+    let projectRoot;
+    try {
+      const { app } = require("electron");
+      projectRoot = app.getAppPath();
+    } catch {
+      projectRoot = process.cwd();
+    }
+    // [20260724_TS_BigBang_DirnameFix] END
     const possiblePaths = [
       path.join(projectRoot, ".venv", "bin", "python3.11"),
       path.join(projectRoot, ".venv", "bin", "python3"),

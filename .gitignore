@@ -125,3 +125,4 @@ dist-main/
 .claude/
 .gstack/
 .codegraph/
+.zcode/

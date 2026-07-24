@@ -61,7 +61,9 @@ class TrayManager {
     const isDev = process.env.NODE_ENV === "development";
 
     if (isDev) {
-      return path.join(__dirname, "..", "..", "assets", "icon.png");
+      // [20260724_TS_BigBang_DirnameFix] app.getAppPath()-based icon path
+      return path.join(app.getAppPath(), "assets", "icon.png");
+      // [20260724_TS_BigBang_DirnameFix] END
     } else {
       // 生产环境路径
       return path.join(process.resourcesPath, "assets", "icon.png");
