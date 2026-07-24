@@ -1,5 +1,126 @@
-// [20260724_TS_Migration_IpcContracts] Re-export from .ts source of truth.
-// This .js shim allows existing require() callers to work during the gradual
-// backend TS migration (ADR-010). Once all consumers are .ts, this file
-// can be deleted.
-module.exports = require("./ipc-contracts.ts").default;
+// [20260724_TS_Migration_IpcContracts] Source of truth is now .ts.
+// This .js file is kept for require() compatibility during the gradual
+// backend TS migration (ADR-010). The .ts version provides full type safety.
+// NOTE: We inline the implementation here (not re-export from .ts) because
+// plain Node.js (production, preload bundle) cannot require .ts files.
+// The .ts file is the typed source for typecheck and vitest (which transpiles).
+const ipcContracts = {
+  FUNASR: {
+    INSTALL: "install-funasr",
+    STATUS: "check-funasr-status",
+    RESTART: "restart-funasr-server",
+  },
+  MODELS: {
+    CHECK: "check-model-files",
+    DOWNLOAD: "download-models",
+    PROGRESS: "get-download-progress",
+    DOWNLOAD_MODEL: "download-model",
+    AVAILABLE: "get-available-models",
+    CURRENT: "get-current-model",
+    SWITCH: "switch-model",
+  },
+  TRANSCRIPTION: {
+    AUDIO: "transcribe-audio",
+    IMPORT_FILE: "import-audio-file",
+    VALIDATE_FILE: "validate-audio-file",
+    TRANSCRIBE_FILE: "transcribe-file",
+    CANCEL: "cancel-file-transcription",
+    SAVE: "save-transcription",
+    GET: "get-transcription",
+    GET_ALL: "get-transcriptions",
+    DELETE: "delete-transcription",
+    SEARCH: "search-transcriptions",
+    STATS: "get-transcription-stats",
+    CLEAR: "clear-all-transcriptions",
+    EXPORT: "export-transcription",
+    EXPORT_ALL: "export-transcriptions",
+    AI_REVIEW: "ai-review-transcription",
+    DIARIZE: "diarize-transcription",
+  },
+  AI: {
+    PROCESS: "process-text",
+    CHECK_STATUS: "check-ai-status",
+    GET_MODES: "get-ai-modes",
+    GET_PROVIDER_PRESETS: "get-ai-provider-presets",
+    DETECT_LOCAL_MODELS: "detect-local-models",
+  },
+  SETTINGS: {
+    GET: "get-setting",
+    SET: "set-setting",
+    GET_ALL: "get-all-settings",
+    GET_LEGACY: "get-settings",
+    SAVE: "save-setting",
+    RESET: "reset-settings",
+    IMPORT: "import-settings",
+    EXPORT: "export-settings",
+  },
+  WINDOW: {
+    HIDE: "hide-window",
+    SHOW: "show-window",
+    MINIMIZE: "minimize-window",
+    MAXIMIZE: "maximize-window",
+    IS_MAX: "is-window-maximized",
+    CLOSE: "close-window",
+    SET_TOP: "set-always-on-top",
+    CLOSE_APP: "close-app",
+    RELOAD: "reload-window",
+    OPEN_DEV_TOOLS: "open-dev-tools",
+    OPEN_HISTORY: "open-history-window",
+    CLOSE_HISTORY: "close-history-window",
+    HIDE_HISTORY: "hide-history-window",
+    OPEN_SETTINGS: "open-settings-window",
+    CLOSE_SETTINGS: "close-settings-window",
+    HIDE_SETTINGS: "hide-settings-window",
+  },
+  HOTKEY: {
+    REGISTER: "register-hotkey",
+    UNREGISTER: "unregister-hotkey",
+    GET_CURRENT: "get-current-hotkey",
+    REGISTER_F2: "register-f2-hotkey",
+    UNREGISTER_F2: "unregister-f2-hotkey",
+    SET_STATE: "set-recording-state",
+    GET_STATE: "get-recording-state",
+  },
+  CLIPBOARD: {
+    PASTE: "paste-text",
+    COPY: "copy-text",
+    READ: "read-clipboard",
+    WRITE: "write-clipboard",
+  },
+  UPDATE: {
+    CHECK: "check-update",
+    DOWNLOAD: "download-update",
+    CANCEL: "cancel-update-download",
+    INSTALL: "install-update",
+  },
+  SYSTEM: {
+    INFO: "get-system-info",
+    DEBUG_INFO: "get-system-debug-info",
+    PERMISSIONS: "check-permissions",
+    REQUEST_PERMS: "request-permissions",
+    TEST_A11Y: "test-accessibility-permission",
+    OPEN_PERMS: "open-system-permissions",
+    VERSION: "get-app-version",
+    LOG: "log",
+    OPEN_EXTERNAL: "open-external",
+  },
+  EVENTS: {
+    TOGGLE_DICTATION: "toggle-dictation",
+    HOTKEY_TRIGGERED: "hotkey-triggered",
+    F2_DOUBLE_CLICK: "f2-double-click",
+    WINDOW_MAXIMIZE_CHANGE: "window-maximize-change",
+    TRANSCRIPTION_UPDATE: "transcription-update",
+    PROCESSING_UPDATE: "processing-update",
+    ERROR: "error",
+    SETTINGS_UPDATE: "settings-update",
+    MODEL_DOWNLOAD_PROGRESS: "model-download-progress",
+    FILE_TRANSCRIPTION_PROGRESS: "file-transcription-progress",
+    FUNASR_INSTALL_PROGRESS: "funasr-install-progress",
+    UPDATE_DOWNLOAD_PROGRESS: "update-download-progress",
+    UPDATE_DOWNLOAD_COMPLETE: "update-download-complete",
+    UPDATE_DOWNLOAD_ERROR: "update-download-error",
+  },
+  AUDIO_EXTENSIONS: [".wav", ".mp3", ".m4a", ".flac", ".ogg", ".wma", ".aac"],
+};
+
+module.exports = ipcContracts;
