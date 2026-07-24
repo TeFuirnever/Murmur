@@ -1,9 +1,9 @@
-// [20260724_TS_Migration_IpcContracts] Source of truth is now .ts.
-// This .js file is kept for require() compatibility during the gradual
-// backend TS migration (ADR-010). The .ts version provides full type safety.
-// NOTE: We inline the implementation here (not re-export from .ts) because
-// plain Node.js (production, preload bundle) cannot require .ts files.
-// The .ts file is the typed source for typecheck and vitest (which transpiles).
+// [20260724_TS_Migration_IpcContracts] Migrated from .js to .ts as part
+// of backend TypeScript migration (ADR-010). Pure constants module.
+/**
+ * Central registry of all IPC channel names used between main and renderer.
+ * This object is shared between preload.js, main.js, and all IPC handlers.
+ */
 const ipcContracts = {
   FUNASR: {
     INSTALL: "install-funasr",
@@ -121,6 +121,6 @@ const ipcContracts = {
     UPDATE_DOWNLOAD_ERROR: "update-download-error",
   },
   AUDIO_EXTENSIONS: [".wav", ".mp3", ".m4a", ".flac", ".ogg", ".wma", ".aac"],
-};
+} as const;
 
-module.exports = ipcContracts;
+export default ipcContracts;

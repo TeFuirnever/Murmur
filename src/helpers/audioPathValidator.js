@@ -1,14 +1,10 @@
+// [20260724_TS_Migration_AudioPathValidator] Source of truth is now .ts.
+// This .js file is kept for require() compatibility during the gradual
+// backend TS migration (ADR-010). The .ts version provides full type safety.
 const path = require("path");
 const os = require("os");
 const C = require("./ipc-contracts");
 
-/**
- * Validate that an audio file path has a supported extension
- * and is within an allowed directory.
- *
- * @param {string} filePath - Absolute or relative path to the audio file
- * @returns {{ valid: true, ext: string, resolved: string } | { valid: false, error: string }}
- */
 function validateAudioPath(filePath) {
   const allowedExts = C.AUDIO_EXTENSIONS;
   const ext = path.extname(filePath).toLowerCase();

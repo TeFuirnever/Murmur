@@ -1,20 +1,15 @@
+// [20260724_TS_Migration_Process] Source of truth is now .ts.
+// This .js file is kept for require() compatibility during the gradual
+// backend TS migration (ADR-010). The .ts version provides full type safety.
 const { spawn } = require("child_process");
 
-// 超时配置
 const TIMEOUTS = {
-  QUICK_CHECK: 5000, // 5秒 - 快速检查
-  PIP_UPGRADE: 60000, // 1分钟 - pip升级
-  INSTALL: 300000, // 5分钟 - 安装包
-  DOWNLOAD: 600000, // 10分钟 - 下载
+  QUICK_CHECK: 5_000,
+  PIP_UPGRADE: 60_000,
+  INSTALL: 300_000,
+  DOWNLOAD: 600_000,
 };
 
-/**
- * 运行命令并返回结果
- * @param {string} command - 要执行的命令
- * @param {string[]} args - 命令参数
- * @param {object} options - 选项
- * @returns {Promise<{output: string, code: number}>}
- */
 function runCommand(command, args = [], options = {}) {
   const { timeout = TIMEOUTS.QUICK_CHECK, cwd, env } = options;
 
@@ -30,7 +25,6 @@ function runCommand(command, args = [], options = {}) {
     let stderr = "";
     let isResolved = false;
 
-    // 设置超时
     const timeoutId = setTimeout(() => {
       if (!isResolved) {
         isResolved = true;
@@ -76,7 +70,4 @@ function runCommand(command, args = [], options = {}) {
   });
 }
 
-module.exports = {
-  runCommand,
-  TIMEOUTS,
-};
+module.exports = { runCommand, TIMEOUTS };
