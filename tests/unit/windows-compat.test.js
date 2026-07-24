@@ -11,10 +11,26 @@ import path from "path";
 
 const srcRoot = path.join(__dirname, "../../src/helpers");
 
+// [20260724_TS_BigBang_TestFix] Read .ts if it exists (post-migration),
+// otherwise fall back to .js (pre-migration). This keeps static-analysis
+// tests working across the migration boundary.
+function readHelperSource(name) {
+  const tsPath = path.join(srcRoot, `${name}.ts`);
+  if (fs.existsSync(tsPath)) return fs.readFileSync(tsPath, "utf-8");
+  return fs.readFileSync(path.join(srcRoot, `${name}.js`), "utf-8");
+}
+function readEntrySource(name) {
+  const root = path.join(__dirname, "../..");
+  const tsPath = path.join(root, `${name}.ts`);
+  if (fs.existsSync(tsPath)) return fs.readFileSync(tsPath, "utf-8");
+  return fs.readFileSync(path.join(root, `${name}.js`), "utf-8");
+}
+// [20260724_TS_BigBang_TestFix] END
+
 // ─── Finding #3: pasteWindows must have timeout + windowsHide ───────
 describe("clipboard.js — pasteWindows Windows compat", () => {
   it("pasteWindows spawn includes windowsHide:true", () => {
-    const source = fs.readFileSync(path.join(srcRoot, "clipboard.js"), "utf-8");
+    const source = readHelperSource("clipboard");
     // Extract the pasteWindows method body
     const pasteSection = source.substring(
       source.indexOf("async pasteWindows("),
@@ -24,7 +40,7 @@ describe("clipboard.js — pasteWindows Windows compat", () => {
   });
 
   it("pasteWindows has a timeout guard (3s)", () => {
-    const source = fs.readFileSync(path.join(srcRoot, "clipboard.js"), "utf-8");
+    const source = readHelperSource("clipboard");
     const pasteSection = source.substring(
       source.indexOf("async pasteWindows("),
       source.indexOf("async pasteLinux("),
@@ -40,10 +56,7 @@ describe("clipboard.js — pasteWindows Windows compat", () => {
 // ─── Finding #5: funasrServer gracefulShutdown on Windows ───────────
 describe("funasrServer.js — gracefulShutdown Windows compat", () => {
   it("gracefulShutdown uses taskkill on Windows for process tree kill", () => {
-    const source = fs.readFileSync(
-      path.join(srcRoot, "funasrServer.js"),
-      "utf-8",
-    );
+    const source = readHelperSource("funasrServer");
     // Extract gracefulShutdown method
     const shutdownSection = source.substring(
       source.indexOf("async gracefulShutdown()"),
@@ -62,10 +75,7 @@ describe("funasrServer.js — gracefulShutdown Windows compat", () => {
   // Risk: spawn is async, resolve() fires before taskkill completes.
   // Must use spawnSync (blocking) to ensure process tree is fully killed.
   it("gracefulShutdown uses spawnSync (blocking) for taskkill, not async spawn", () => {
-    const source = fs.readFileSync(
-      path.join(srcRoot, "funasrServer.js"),
-      "utf-8",
-    );
+    const source = readHelperSource("funasrServer");
     const shutdownSection = source.substring(
       source.indexOf("async gracefulShutdown()"),
       source.indexOf("resetState()"),
@@ -83,10 +93,7 @@ describe("funasrServer.js — gracefulShutdown Windows compat", () => {
 // ─── Finding #6: modelManager download spawn missing windowsHide ────
 describe("modelManager.js — download spawn windowsHide", () => {
   it("download spawn includes windowsHide:true", () => {
-    const source = fs.readFileSync(
-      path.join(srcRoot, "modelManager.js"),
-      "utf-8",
-    );
+    const source = readHelperSource("modelManager");
 
     // Find the spawn call in the download function context
     const downloadSection = source.substring(
@@ -101,10 +108,7 @@ describe("modelManager.js — download spawn windowsHide", () => {
 // ─── Finding #7: main.js setupProductionPath uses LOCALAPPDATA ──────
 describe("main.js — setupProductionPath uses LOCALAPPDATA on Windows", () => {
   it("does not hardcode username in Windows Python paths", () => {
-    const source = fs.readFileSync(
-      path.join(__dirname, "../../main.js"),
-      "utf-8",
-    );
+    const source = readEntrySource("main");
 
     const setupSection = source.substring(
       source.indexOf("function setupProductionPath"),

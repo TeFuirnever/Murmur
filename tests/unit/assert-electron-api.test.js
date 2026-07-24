@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { assertElectronAPI } from "../../src/bootstrap/assertElectronAPI.js";
+// [20260724_TS_BigBang_TestFix] Remove explicit .js extension so import
+// resolves to .ts after migration (vitest resolve.extensions handles it).
+import { assertElectronAPI } from "../../src/bootstrap/assertElectronAPI";
+// [20260724_TS_BigBang_TestFix] END
 
 describe("assertElectronAPI", () => {
   let originalAPI;

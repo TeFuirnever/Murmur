@@ -1,16 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createRequire } from "module";
 
-const requireCJS = createRequire(import.meta.url);
-
+// [20260724_TS_BigBang_TestFix] Replace createRequire with vite-intercepted
+// require + vi.resetModules() for .ts compatibility.
 describe("funasrManager preInitializeModels race", () => {
   let FunASRManager;
 
   beforeEach(() => {
-    const wmPath = requireCJS.resolve("../../src/helpers/funasrManager.js");
-    delete requireCJS.cache[wmPath];
-    FunASRManager = requireCJS("../../src/helpers/funasrManager.js");
+    vi.resetModules();
+    FunASRManager = require("../../src/helpers/funasrManager");
   });
+  // [20260724_TS_BigBang_TestFix] END
 
   it("concurrent calls only start the server once", async () => {
     const m = new FunASRManager({

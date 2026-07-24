@@ -1,21 +1,22 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { createRequire } from "module";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
 
-const requireCJS = createRequire(import.meta.url);
-
+// [20260724_TS_BigBang_TestFix] Replace createRequire with vite-intercepted
+// require + vi.resetModules() for .ts compatibility. Module-level cache
+// variables (globalModelCheckCache) are reset by re-importing the module,
+// which vi.resetModules() + fresh require achieves.
 describe("modelManager.checkModelFiles contract", () => {
   let ModelManager;
   let tmpDir;
 
   beforeEach(() => {
-    const mmPath = requireCJS.resolve("../../src/helpers/modelManager.js");
-    delete requireCJS.cache[mmPath];
-    ModelManager = requireCJS("../../src/helpers/modelManager.js");
+    vi.resetModules();
+    ModelManager = require("../../src/helpers/modelManager");
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "mm-test-"));
   });
+  // [20260724_TS_BigBang_TestFix] END
 
   afterEach(() => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -27,6 +28,7 @@ describe("modelManager.checkModelFiles contract", () => {
       warn: () => {},
       error: () => {},
     });
+    m.clearCache();
     m.getModelCachePath = () => path.join(tmpDir, "does-not-exist");
     const r = await m.checkModelFiles();
     expect(r.success).toBe(true);
@@ -39,6 +41,7 @@ describe("modelManager.checkModelFiles contract", () => {
       warn: () => {},
       error: () => {},
     });
+    m.clearCache();
     m.getModelCachePath = () => tmpDir;
     const r = await m.checkModelFiles();
     expect(r.success).toBe(true);
@@ -52,6 +55,7 @@ describe("modelManager.checkModelFiles contract", () => {
       warn: () => {},
       error: () => {},
     });
+    m.clearCache();
     for (const config of Object.values(m.modelConfigs)) {
       const modelDir = path.join(tmpDir, config.cache_path);
       fs.mkdirSync(modelDir, { recursive: true });

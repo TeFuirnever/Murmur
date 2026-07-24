@@ -7,7 +7,7 @@ test.describe("IPC bridge communication", () => {
 
   test.beforeAll(async () => {
     electronApp = await _electron.launch({
-      args: [path.resolve(__dirname, "../../main.js")],
+      args: [path.resolve(__dirname, "../../dist-main/main.js")],
       env: { ...process.env, NODE_ENV: "test" },
     });
     window = await electronApp.firstWindow();

@@ -17,19 +17,22 @@ export default defineConfig({
         "src/bootstrap/**/*.{js,ts}",
       ],
       exclude: [
-        // Electron-dependent (require runtime IPC/BrowserWindow/app)
-        "src/helpers/clipboard.js",
-        "src/helpers/environment.js",
-        "src/helpers/tray.js",
-        "src/helpers/hotkeyManager.js",
-        "src/helpers/pythonEnvironment.js",
-        "src/helpers/pythonInstaller.js",
-        "src/helpers/funasrManager.js",
-        "src/helpers/funasrServer.js",
-        "src/helpers/modelManager.js",
-        "src/helpers/updateManager.js",
-        "src/helpers/windowManager.js",
-        "src/helpers/logManager.js",
+        // [20260724_TS_BigBang_TestFix] Changed .js → .ts to match migrated
+        // file names. These are Electron-dependent (require runtime
+        // IPC/BrowserWindow/app) and cannot be unit-tested.
+        "src/helpers/clipboard.ts",
+        "src/helpers/environment.ts",
+        "src/helpers/tray.ts",
+        "src/helpers/hotkeyManager.ts",
+        "src/helpers/pythonEnvironment.ts",
+        "src/helpers/pythonInstaller.ts",
+        "src/helpers/funasrManager.ts",
+        "src/helpers/funasrServer.ts",
+        "src/helpers/modelManager.ts",
+        "src/helpers/updateManager.ts",
+        "src/helpers/windowManager.ts",
+        "src/helpers/logManager.ts",
+        // [20260724_TS_BigBang_TestFix] END
         // IPC handlers (integration-level, require Electron IPC bridge)
         "src/helpers/ipc/**",
       ],

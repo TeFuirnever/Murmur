@@ -110,8 +110,10 @@ function findHardcodedChinese(source) {
   return issues;
 }
 
+// [20260724_TS_BigBang_TestFix] Remove .js extension for .ts resolution
 // ESM import of providerPresets for the guide-key test
-import { getProviderPresets } from "../../src/helpers/providerPresets.js";
+import { getProviderPresets } from "../../src/helpers/providerPresets";
+// [20260724_TS_BigBang_TestFix] END
 
 describe("Settings refactor regression tests", () => {
   let allSources;
@@ -199,10 +201,15 @@ describe("Settings refactor regression tests", () => {
   // out of providerPresets.js into locale files
   describe("MEDIUM: registration.guide i18n", () => {
     it("providerPresets.js does not contain guide text in registration", () => {
-      const presetsSrc = fs.readFileSync(
-        path.join(rootDir, "src/helpers/providerPresets.js"),
-        "utf8",
-      );
+      // [20260724_TS_BigBang_TestFix] Read .ts if exists, else .js
+      const tsPath = path.join(rootDir, "src/helpers/providerPresets.ts");
+      const presetsSrc = fs.existsSync(tsPath)
+        ? fs.readFileSync(tsPath, "utf8")
+        : fs.readFileSync(
+            path.join(rootDir, "src/helpers/providerPresets.js"),
+            "utf8",
+          );
+      // [20260724_TS_BigBang_TestFix] END
       expect(presetsSrc).not.toMatch(/guide:\s*"/);
     });
 

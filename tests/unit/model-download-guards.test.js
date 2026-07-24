@@ -7,17 +7,17 @@
  * - IPC path validation edge cases (Windows + Chinese paths)
  * - m4a conversion path validation
  */
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { createRequire } from "module";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
 
-const requireCJS = createRequire(import.meta.url);
-const C = requireCJS("../../src/helpers/ipc-contracts");
-const { validateAudioPath } = requireCJS(
-  "../../src/helpers/audioPathValidator",
-);
+// [20260724_TS_BigBang_TestFix] Replace createRequire with vite-intercepted
+// require so .ts files resolve after migration. vi.resetModules() replaces
+// delete-require.cache for module isolation.
+const C = require("../../src/helpers/ipc-contracts");
+const { validateAudioPath } = require("../../src/helpers/audioPathValidator");
+// [20260724_TS_BigBang_TestFix] END
 
 // ─── modelManager: model files missing ───────────────────────────
 
@@ -26,9 +26,8 @@ describe("modelManager — model files missing", () => {
   let tmpDir;
 
   beforeEach(() => {
-    const mmPath = requireCJS.resolve("../../src/helpers/modelManager.js");
-    delete requireCJS.cache[mmPath];
-    ModelManager = requireCJS("../../src/helpers/modelManager.js");
+    vi.resetModules();
+    ModelManager = require("../../src/helpers/modelManager");
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "mm-guard-"));
   });
 
@@ -42,6 +41,7 @@ describe("modelManager — model files missing", () => {
       warn: () => {},
       error: () => {},
     });
+    m.clearCache();
     m.getModelCachePath = () => path.join(tmpDir, "nonexistent");
     const result = await m.checkModelFiles();
     expect(result.success).toBe(true);
@@ -57,6 +57,7 @@ describe("modelManager — model files missing", () => {
       error: () => {},
     });
     // tmpDir exists but is empty — no model.pt files
+    m.clearCache();
     m.getModelCachePath = () => tmpDir;
     const result = await m.checkModelFiles();
     expect(result.success).toBe(true);
@@ -71,6 +72,7 @@ describe("modelManager — model files missing", () => {
       error: () => {},
     });
     // Create all required model directories with model.pt
+    m.clearCache();
     for (const config of Object.values(m.modelConfigs)) {
       const modelDir = path.join(tmpDir, config.cache_path);
       fs.mkdirSync(modelDir, { recursive: true });
@@ -89,6 +91,7 @@ describe("modelManager — model files missing", () => {
       warn: () => {},
       error: () => {},
     });
+    m.clearCache();
     m.getModelCachePath = () => path.join(tmpDir, "nonexistent");
     const result = await m.checkModelFiles();
     // When cache dir is missing entirely, returns ["all"]

@@ -1,22 +1,20 @@
+// [20260724_TS_BigBang_TestFix] Replace all createRequire usages with
+// vite-intercepted require + vi.resetModules(). createRequire uses Node's
+// native resolver which cannot load .ts files. The tests only needed module
+// isolation (delete-cache), which vi.resetModules() provides equivalently.
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createRequire } from "module";
-
-const requireCJS = createRequire(import.meta.url);
 
 describe("Tier 0 fixes", () => {
   beforeEach(() => {
     vi.resetModules();
   });
+  // [20260724_TS_BigBang_TestFix] END
 
   describe("T0-2: Python version detection requires 3.8+", () => {
     let PythonEnvironment;
 
     beforeEach(() => {
-      const pyPath = requireCJS.resolve(
-        "../../src/helpers/pythonEnvironment.js",
-      );
-      delete requireCJS.cache[pyPath];
-      PythonEnvironment = requireCJS("../../src/helpers/pythonEnvironment.js");
+      PythonEnvironment = require("../../src/helpers/pythonEnvironment");
     });
 
     it("rejects Python 3.6", () => {
@@ -55,11 +53,7 @@ describe("Tier 0 fixes", () => {
     let PythonEnvironment;
 
     beforeEach(() => {
-      const pyPath = requireCJS.resolve(
-        "../../src/helpers/pythonEnvironment.js",
-      );
-      delete requireCJS.cache[pyPath];
-      PythonEnvironment = requireCJS("../../src/helpers/pythonEnvironment.js");
+      PythonEnvironment = require("../../src/helpers/pythonEnvironment");
     });
 
     it("sets PYTHONUTF8=1 to prevent GBK/CP936 encoding corruption on Windows", () => {
@@ -97,9 +91,7 @@ describe("Tier 0 fixes", () => {
     let validateAIBaseUrl;
 
     beforeEach(() => {
-      const aiPath = requireCJS.resolve("../../src/helpers/ipc/aiHandlers.js");
-      delete requireCJS.cache[aiPath];
-      const aiHandlers = requireCJS("../../src/helpers/ipc/aiHandlers.js");
+      const aiHandlers = require("../../src/helpers/ipc/aiHandlers");
       validateAIBaseUrl = aiHandlers.validateAIBaseUrl;
     });
 
@@ -162,9 +154,7 @@ describe("Tier 0 fixes", () => {
     let processTextWithAI;
 
     beforeEach(() => {
-      const aiPath = requireCJS.resolve("../../src/helpers/ipc/aiHandlers.js");
-      delete requireCJS.cache[aiPath];
-      const aiHandlers = requireCJS("../../src/helpers/ipc/aiHandlers.js");
+      const aiHandlers = require("../../src/helpers/ipc/aiHandlers");
       processTextWithAI = aiHandlers.processTextWithAI;
     });
 
@@ -214,9 +204,7 @@ describe("Tier 0 fixes", () => {
     let checkAIStatus;
 
     beforeEach(() => {
-      const aiPath = requireCJS.resolve("../../src/helpers/ipc/aiHandlers.js");
-      delete requireCJS.cache[aiPath];
-      const aiHandlers = requireCJS("../../src/helpers/ipc/aiHandlers.js");
+      const aiHandlers = require("../../src/helpers/ipc/aiHandlers");
       checkAIStatus = aiHandlers.checkAIStatus;
     });
 

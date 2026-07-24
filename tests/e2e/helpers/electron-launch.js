@@ -19,7 +19,12 @@ const PROJECT_ROOT = path.resolve(__dirname, "../../../..");
  * @returns {Promise<{app: import('playwright-core').ElectronApplication, window: import('playwright-core').Page}>}
  */
 async function launchElectronApp({ env = {} } = {}) {
-  const mainJs = path.join(PROJECT_ROOT, "main.js");
+  // [20260724_TS_BigBang_TestFix] Launch the bundled app, not source main.js.
+  // Electron's main process cannot require .ts, and after migration there
+  // is no source main.js. The globalSetup in playwright.config.js builds
+  // dist-main/main.js before tests run.
+  const mainJs = path.join(PROJECT_ROOT, "dist-main", "main.js");
+  // [20260724_TS_BigBang_TestFix] END
 
   const app = await electron.launch({
     args: [mainJs],
