@@ -10,7 +10,7 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)](#安装)
-[![Tests](https://img.shields.io/badge/tests-652%20passing-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-672%20passing-brightgreen)](tests/)
 [![Coverage](https://img.shields.io/badge/coverage-95%25-brightgreen)](tests/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![Stars](https://img.shields.io/github/stars/TeFuirnever/Murmur?style=social)](https://github.com/TeFuirnever/Murmur)
@@ -126,7 +126,7 @@ pnpm dev
 
 ```bash
 pnpm dev          # 启动开发模式
-pnpm test         # 运行测试（652 tests）
+pnpm test         # 运行测试（672 tests）
 pnpm lint         # 代码检查（0 warnings）
 pnpm typecheck    # TypeScript 类型检查
 pnpm ci:check     # 本地运行所有 CI 门禁
@@ -158,7 +158,7 @@ pnpm ci:check     # 本地运行所有 CI 门禁
 - [x] 半自动更新（SHA256 校验）
 - [x] 无障碍（ARIA + 键盘导航）
 - [x] GPU 自动检测（CUDA > MPS > CPU）
-- [x] TypeScript 严格模式（652 测试，95% 覆盖率）
+- [x] TypeScript 严格模式（672 测试，95% 覆盖率）
 - [x] 文件配置支持（`~/.murmur.json`）
 - [x] AI Provider 快速开始引导（免费 API Key 获取）
 
@@ -289,7 +289,7 @@ pnpm dev
 - [x] Semi-auto update (SHA256 verified)
 - [x] Accessibility (ARIA + keyboard nav)
 - [x] GPU auto-detection (CUDA > MPS > CPU)
-- [x] TypeScript strict mode (652 tests, 95% coverage)
+- [x] TypeScript strict mode (672 tests, 95% coverage)
 - [x] File config support (`~/.murmur.json`)
 - [x] AI Provider quick-start guide (free API key)
 

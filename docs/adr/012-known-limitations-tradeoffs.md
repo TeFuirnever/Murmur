@@ -2,7 +2,7 @@
 
 **Status**: Accepted — deferred to post-v1
 
-**Updated**: 2026-05-31 — Issue 3 已修复，Issue 4 prompt 统一 + mode bug 已修复，prompt 质量仍待提升
+**Updated**: 2026-07-24 — Issue 1 已修复（动态超时），Issue 4c 已修复（few-shot 示例），Issue 3 已修复，Issue 4 prompt 统一 + mode bug 已修复
 
 ## Context
 
@@ -10,7 +10,9 @@ v1 release 已知若干体验层面的技术债务。这些问题不阻塞发布
 
 ---
 
-## 1. 长音视频文件转录超时
+## 1. ~~长音视频文件转录超时~~ ✅ 已修复（2026-07-24）
+
+`funasrServer.js` 的硬编码 5 分钟超时已替换为 `calculateTranscriptionTimeout()`，根据文件大小动态计算超时（5-60 分钟）。详见 PR #75。
 
 **现象**: 导入长音频/视频文件（通常 >30 分钟）时，转录过程可能触发 10 分钟超时 (`funasrServer.js:356`)，导致失败。
 
@@ -83,7 +85,7 @@ v1 release 已知若干体验层面的技术债务。这些问题不阻塞发布
 
 **仍需改进**:
 
-- 为每个平台风格添加 2-3 个高质量 few-shot 示例
+- ~~为每个平台风格添加 2-3 个高质量 few-shot 示例~~ ✅ 已完成（2026-07-24, PR #74）
 - 支持用户自定义 prompt 模板（已有 `loadCustomTemplates` 基础设施，但 AI_REVIEW 未接入）
 - 支持流式响应（`stream: true`），前端逐步展示生成结果
 
@@ -91,11 +93,11 @@ v1 release 已知若干体验层面的技术债务。这些问题不阻塞发布
 
 ## Summary
 
-| #   | Issue              | Severity   | Effort     | Status                           |
-| --- | ------------------ | ---------- | ---------- | -------------------------------- |
-| 1   | 长音视频转录超时   | Medium     | Medium     | Open — 需要 Python 端分片改造    |
-| 2   | 高噪声 ASR 准确率  | Medium     | High       | Open — 模型能力 + 降噪管线       |
-| 3   | AI 请求无超时控制  | ~~High~~   | ~~Low~~    | ✅ 已修复                        |
-| 4a  | AI_REVIEW mode bug | ~~Medium~~ | ~~Low~~    | ✅ 已修复                        |
-| 4b  | Prompt 重复/分裂   | ~~Medium~~ | ~~Medium~~ | ✅ 已统一                        |
-| 4c  | Prompt 质量待优化  | Medium     | Medium     | Open — few-shot + 用户自定义模板 |
+| #   | Issue              | Severity   | Effort     | Status                             |
+| --- | ------------------ | ---------- | ---------- | ---------------------------------- |
+| 1   | 长音视频转录超时   | ~~Medium~~ | ~~Medium~~ | ✅ 已修复 — 动态超时 (PR #75)      |
+| 2   | 高噪声 ASR 准确率  | Medium     | High       | Open — 模型能力 + 降噪管线         |
+| 3   | AI 请求无超时控制  | ~~High~~   | ~~Low~~    | ✅ 已修复                          |
+| 4a  | AI_REVIEW mode bug | ~~Medium~~ | ~~Low~~    | ✅ 已修复                          |
+| 4b  | Prompt 重复/分裂   | ~~Medium~~ | ~~Medium~~ | ✅ 已统一                          |
+| 4c  | Prompt 质量待优化  | ~~Medium~~ | ~~Medium~~ | ✅ 已修复 — few-shot 示例 (PR #74) |

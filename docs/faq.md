@@ -26,15 +26,15 @@
 
 AI 文本优化是**可选功能**。不配置 API Key 也可以正常使用语音识别。
 
-### 如何安装 ffmpeg？
+### 需要安装 ffmpeg 吗？
 
-Murmur 使用 ffmpeg 处理音频格式转换（mp3、m4a 等非 WAV 格式需要 ffmpeg）。
+**通常不需要。** Murmur 从 v1.0.0 起使用 Python librosa/soundfile 处理音频格式转换，不再依赖系统 ffmpeg。音频格式转换（mp3、m4a 等）在 Python 端完成。
+
+ffmpeg 仅作为可选回退方案：当 Python librosa 不可用时，Murmur 会尝试使用系统 ffmpeg。如需安装：
 
 - **macOS**: `brew install ffmpeg`
 - **Windows**: 从 [ffmpeg.org](https://ffmpeg.org/download.html) 下载，或使用 `winget install ffmpeg`
 - **Linux**: `sudo apt install ffmpeg` 或 `sudo dnf install ffmpeg`
-
-如果只使用 WAV 格式录音，无需安装 ffmpeg。
 
 ### 麦克风权限如何配置？
 
