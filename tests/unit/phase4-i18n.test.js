@@ -29,7 +29,8 @@ describe("Phase 4: Internationalization i18n", () => {
     let i18nConfig;
 
     beforeAll(() => {
-      const configPath = path.join(rootDir, "src/i18n/index.js");
+      // [20260724_TS_BigBang_TestFix] Read .ts source (post-migration).
+      const configPath = path.join(rootDir, "src/i18n/index.ts");
       if (fs.existsSync(configPath)) {
         i18nConfig = fs.readFileSync(configPath, "utf8");
       }

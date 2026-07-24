@@ -82,10 +82,16 @@ describe("funasrServer.js — gracefulShutdown Windows compat", () => {
     );
     // Should use spawnSync, not spawn, for the kill command
     expect(shutdownSection).toContain("spawnSync");
-    // Import at module level should include spawnSync
+    // Import at module level should include spawnSync.
+    // [20260724_TS_BigBang_TestFix] Accept ESM `import ... from "child_process"`
+    // (post-migration) in addition to the legacy `require("child_process")`.
     const importLine = source
       .split("\n")
-      .find((l) => l.includes('require("child_process")'));
+      .find(
+        (l) =>
+          l.includes('require("child_process")') ||
+          l.includes('from "child_process"'),
+      );
     expect(importLine).toContain("spawnSync");
   });
 });

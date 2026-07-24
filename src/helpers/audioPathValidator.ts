@@ -1,8 +1,12 @@
-// [20260724_TS_Migration_AudioPathValidator] Migrated from .js to .ts as part
+// [20260724_TS_BigBang_AudioPathValidator] Migrated from .js to .ts as part
 // of backend TypeScript migration (ADR-010). Pure validation function.
+// [20260724_TS_BigBang_IpcContractsImport] ipc-contracts now uses named
+// exports, so use a namespace import (`import * as C`) to preserve `C.AI`
+// access semantics for both esbuild CJS output and vitest.
 import path from "path";
 import os from "os";
-import C from "./ipc-contracts.js";
+import * as C from "./ipc-contracts";
+// [20260724_TS_BigBang_IpcContractsImport] END
 
 /** Successful validation result. */
 interface AudioPathValid {

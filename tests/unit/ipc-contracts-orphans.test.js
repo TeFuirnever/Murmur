@@ -8,7 +8,10 @@ function walk(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) out.push(...walk(full));
-    else if (entry.isFile() && full.endsWith(".js")) out.push(full);
+    // [20260724_TS_BigBang_TestFix] Include .ts (post-migration) alongside
+    // .js so the orphan scan covers the migrated TypeScript source.
+    else if (entry.isFile() && (full.endsWith(".js") || full.endsWith(".ts")))
+      out.push(full);
   }
   return out;
 }
@@ -40,8 +43,9 @@ describe("ipc-contracts orphans", () => {
   it("every channel is referenced by either a handler or preload, or whitelisted", () => {
     // Collect all source text from handlers + preload
     const helperFiles = walk(path.join(process.cwd(), "src", "helpers"));
-    const preloadFile = path.join(process.cwd(), "preload.js");
-    const mainFile = path.join(process.cwd(), "main.js");
+    // [20260724_TS_BigBang_TestFix] Read .ts entry points (post-migration).
+    const preloadFile = path.join(process.cwd(), "preload.ts");
+    const mainFile = path.join(process.cwd(), "main.ts");
     const allFiles = [...helperFiles, preloadFile, mainFile];
     const haystack = allFiles.map((f) => fs.readFileSync(f, "utf8")).join("\n");
 

@@ -1,0 +1,420 @@
+// [20260724_TS_BigBang_TranscriptionHandlers] Migrated from .js to .ts (ADR-010).
+import path from "path";
+import fs from "fs";
+import { dialog } from "electron";
+import * as C from "../ipc-contracts";
+import * as exportFormatters from "../exportFormatters";
+import type { TranscriptionForExport } from "../exportFormatters";
+import { buildPrompt } from "../aiPrompts";
+import { validateAudioPath } from "../audioPathValidator";
+
+interface Logger {
+  info?(message: string, ...args: unknown[]): void;
+  warn?(message: string, ...args: unknown[]): void;
+  error?(message: string, ...args: unknown[]): void;
+}
+
+interface TranscriptionRow {
+  text?: string;
+  segments?: string;
+  source_file_path?: string;
+  audio_path?: string;
+  [key: string]: unknown;
+}
+
+interface DatabaseManager {
+  saveTranscription(data: Record<string, unknown>): {
+    lastInsertRowid?: number | bigint;
+    changes?: number;
+  };
+  getTranscriptionById(id: number): TranscriptionRow | null;
+  getTranscriptions(limit: number, offset: number): TranscriptionRow[];
+  deleteTranscription(id: number): unknown;
+  searchTranscriptions(query: string, limit: number): unknown;
+  getTranscriptionStats(): unknown;
+  clearAllTranscriptions(): unknown;
+}
+
+interface FunasrManager {
+  transcribeAudio(
+    audioData: unknown,
+    options: unknown,
+  ): Promise<{ success: boolean; text?: string }>;
+  transcribeFile(
+    audioPath: string,
+    options: Record<string, unknown>,
+  ): Promise<{
+    success: boolean;
+    text?: string;
+    raw_text?: string;
+    segments?: unknown[];
+    duration?: number;
+    id?: number | bigint;
+  }>;
+  cancelTranscription(): Promise<unknown>;
+  diarizeAudio(audioPath: string, segments: unknown[]): Promise<unknown>;
+}
+
+type ProcessTextWithAI = (
+  text: string,
+  mode: string,
+  databaseManager: DatabaseManager,
+  logger: Logger,
+  options: Record<string, unknown>,
+) => Promise<{ success: boolean; text?: string; error?: string }>;
+
+interface Managers {
+  funasrManager: FunasrManager;
+  databaseManager: DatabaseManager;
+  logger: Logger;
+  processTextWithAI?: ProcessTextWithAI;
+}
+
+export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
+  const { funasrManager, databaseManager, logger, processTextWithAI } =
+    managers;
+
+  ipcMain.handle(
+    C.TRANSCRIPTION.AUDIO,
+    async (_event, audioData: unknown, options: unknown) => {
+      return await funasrManager.transcribeAudio(audioData, options);
+    },
+  );
+
+  ipcMain.handle(C.TRANSCRIPTION.IMPORT_FILE, async () => {
+    try {
+      const result = await dialog.showOpenDialog({
+        title: "选择音频文件",
+        filters: [
+          {
+            name: "音频文件",
+            extensions: ["wav", "mp3", "m4a", "flac", "ogg", "wma", "aac"],
+          },
+          { name: "所有文件", extensions: ["*"] },
+        ],
+        properties: ["openFile"],
+      });
+      if (result.canceled || result.filePaths.length === 0) {
+        return { success: false, canceled: true };
+      }
+      const filePath = result.filePaths[0];
+      if (!filePath) {
+        return { success: false, error: "未选择文件" };
+      }
+      const stat = fs.statSync(filePath);
+      return {
+        success: true,
+        filePath,
+        fileName: path.basename(filePath),
+        fileSize: stat.size,
+        extension: path.extname(filePath).toLowerCase(),
+      };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
+  });
+
+  ipcMain.handle(
+    C.TRANSCRIPTION.VALIDATE_FILE,
+    async (_event, filePath: string) => {
+      const validation = validateAudioPath(filePath);
+      if (!validation.valid) {
+        return { success: false, error: validation.error };
+      }
+      try {
+        const stat = fs.statSync(filePath);
+        const MAX_FILE_SIZE = 500 * 1024 * 1024;
+        if (stat.size > MAX_FILE_SIZE) {
+          return { success: false, error: "文件超过500MB限制" };
+        }
+        return {
+          success: true,
+          filePath,
+          fileName: path.basename(filePath),
+          fileSize: stat.size,
+          extension: validation.ext,
+        };
+      } catch {
+        return { success: false, error: "文件不存在或无法访问" };
+      }
+    },
+  );
+
+  ipcMain.handle(
+    C.TRANSCRIPTION.TRANSCRIBE_FILE,
+    async (event, audioPath: string, options: Record<string, unknown> = {}) => {
+      const validation = validateAudioPath(audioPath);
+      if (!validation.valid) {
+        return { success: false, error: validation.error };
+      }
+      const result = await funasrManager.transcribeFile(audioPath, {
+        ...options,
+        onProgress: (progress: unknown) => {
+          event.sender.send(C.EVENTS.FILE_TRANSCRIPTION_PROGRESS, progress);
+        },
+      });
+
+      if (result.success && result.text) {
+        try {
+          const dbResult = databaseManager.saveTranscription({
+            text: result.text,
+            processed_text: result.raw_text || result.text,
+            source_type: "file",
+            source_file_path: audioPath,
+            segments: result.segments ? JSON.stringify(result.segments) : null,
+            duration: result.duration || null,
+          });
+          if (dbResult && dbResult.lastInsertRowid) {
+            result.id = Number(dbResult.lastInsertRowid);
+          }
+        } catch (dbErr) {
+          logger.error?.("保存转录结果到数据库失败:", dbErr);
+        }
+      }
+
+      return result;
+    },
+  );
+
+  ipcMain.handle(C.TRANSCRIPTION.CANCEL, async () => {
+    return await funasrManager.cancelTranscription();
+  });
+
+  ipcMain.handle(C.TRANSCRIPTION.DIARIZE, async (_event, id: number) => {
+    try {
+      const row = databaseManager.getTranscriptionById(id);
+      if (!row) return { success: false, error: "转录记录不存在" };
+
+      let segments: unknown[] = [];
+      if (row.segments) {
+        try {
+          segments = JSON.parse(row.segments);
+        } catch {}
+      }
+      if (!segments.length) return { success: false, error: "无分段数据" };
+
+      const audioPath = row.source_file_path || row.audio_path;
+      if (!audioPath) return { success: false, error: "音频文件不存在" };
+
+      const result = await funasrManager.diarizeAudio(
+        audioPath,
+        segments as unknown[],
+      );
+      return result;
+    } catch (err) {
+      logger.error?.("说话人分离失败:", err);
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle(
+    C.TRANSCRIPTION.EXPORT,
+    async (
+      _event,
+      id: number,
+      format: string,
+      _options: Record<string, unknown> = {},
+    ) => {
+      try {
+        const row = databaseManager.getTranscriptionById(id);
+        if (!row) {
+          return { success: false, error: "转录记录不存在" };
+        }
+
+        let segments: unknown[] = [];
+        if (row.segments) {
+          try {
+            segments = JSON.parse(row.segments);
+          } catch (e) {
+            logger.warn?.(
+              "Segments JSON parse failed for id",
+              id,
+              (e as Error).message,
+            );
+          }
+        }
+        const transcription = {
+          ...row,
+          parsedSegments: segments,
+        } as unknown as TranscriptionForExport;
+
+        const fmt = exportFormatters.getFormatInfo(format);
+        if (!fmt) {
+          return { success: false, error: `不支持的格式: ${format}` };
+        }
+
+        const content = await fmt.formatter(transcription);
+        const isBuffer = Buffer.isBuffer(content);
+
+        const defaultName = `转录_${new Date().toISOString().slice(0, 10)}${fmt.ext}`;
+        const saveResult = await dialog.showSaveDialog({
+          title: "导出转录文件",
+          defaultPath: defaultName,
+          filters: [
+            {
+              name: fmt.ext.replace(".", "").toUpperCase(),
+              extensions: [fmt.ext.replace(".", "")],
+            },
+          ],
+        });
+
+        if (saveResult.canceled) {
+          return { success: false, canceled: true };
+        }
+
+        if (isBuffer) {
+          await fs.promises.writeFile(saveResult.filePath!, content as Buffer);
+        } else {
+          await fs.promises.writeFile(
+            saveResult.filePath!,
+            content as string,
+            "utf-8",
+          );
+        }
+
+        return { success: true, path: saveResult.filePath };
+      } catch (error) {
+        logger.error?.("导出转录失败:", error);
+        return { success: false, error: (error as Error).message };
+      }
+    },
+  );
+
+  ipcMain.handle(
+    C.TRANSCRIPTION.AI_REVIEW,
+    async (_event, id: number, template: string) => {
+      try {
+        const row = databaseManager.getTranscriptionById(id);
+        if (!row) {
+          return { success: false, error: "转录记录不存在" };
+        }
+
+        const { system, user } = buildPrompt(
+          template || "professional",
+          row.text || "",
+        );
+        const result = await processTextWithAI!(
+          row.text || "",
+          template || "professional",
+          databaseManager,
+          logger,
+          { systemPrompt: system, userPrompt: user },
+        );
+
+        if (!result.success) {
+          return result;
+        }
+
+        return { success: true, reviewText: result.text };
+      } catch (error) {
+        logger.error?.("AI创作稿生成失败:", error);
+        return { success: false, error: (error as Error).message };
+      }
+    },
+  );
+
+  ipcMain.handle(
+    C.TRANSCRIPTION.SAVE,
+    (_event, data: Record<string, unknown>) => {
+      try {
+        const result = databaseManager.saveTranscription(data);
+        return {
+          success: true,
+          lastInsertRowid: result.lastInsertRowid,
+          changes: result.changes,
+        };
+      } catch (error) {
+        logger.error?.("保存转录失败:", error);
+        return { success: false, error: (error as Error).message };
+      }
+    },
+  );
+
+  ipcMain.handle(
+    C.TRANSCRIPTION.GET_ALL,
+    (_event, limit: number, offset: number) => {
+      return databaseManager.getTranscriptions(limit, offset);
+    },
+  );
+
+  ipcMain.handle(C.TRANSCRIPTION.GET, (_event, id: number) => {
+    return databaseManager.getTranscriptionById(id);
+  });
+
+  ipcMain.handle(C.TRANSCRIPTION.DELETE, (_event, id: number) => {
+    return databaseManager.deleteTranscription(id);
+  });
+
+  ipcMain.handle(
+    C.TRANSCRIPTION.SEARCH,
+    (_event, query: string, limit: number) => {
+      return databaseManager.searchTranscriptions(query, limit);
+    },
+  );
+
+  ipcMain.handle(C.TRANSCRIPTION.STATS, () => {
+    return databaseManager.getTranscriptionStats();
+  });
+
+  ipcMain.handle(C.TRANSCRIPTION.CLEAR, () => {
+    return databaseManager.clearAllTranscriptions();
+  });
+
+  ipcMain.handle(C.TRANSCRIPTION.EXPORT_ALL, async (_event, format: string) => {
+    try {
+      const transcriptions = databaseManager.getTranscriptions(10000, 0);
+      if (!transcriptions || transcriptions.length === 0) {
+        return { success: false, error: "没有转录记录可导出" };
+      }
+
+      const formatInfo = exportFormatters.getFormatInfo(format || "txt");
+      if (!formatInfo) {
+        return { success: false, error: `不支持的格式: ${format}` };
+      }
+      const filters = [
+        { name: formatInfo.label || format, extensions: [formatInfo.ext] },
+      ];
+
+      const result = await dialog.showSaveDialog({
+        title: "导出转录记录",
+        defaultPath: `transcriptions.${formatInfo.ext}`,
+        filters,
+      });
+
+      if (result.canceled || !result.filePath) {
+        return { success: false, canceled: true };
+      }
+
+      let content: Buffer | string;
+      if (format === "docx") {
+        // [20260724_TS_BigBang_TranscriptionHandlers] Pre-existing behavior:
+        // the .js passed the whole transcriptions array to formatDOCX
+        // (which expects a single record). Preserve runtime behavior via
+        // a cast; the doc comes out with empty text/segments as before.
+        content = await exportFormatters.formatDOCX(
+          transcriptions as unknown as TranscriptionForExport,
+        );
+        fs.writeFileSync(result.filePath, content as Buffer);
+      } else {
+        const formatter =
+          format === "srt"
+            ? exportFormatters.formatSRT
+            : format === "vtt"
+              ? exportFormatters.formatVTT
+              : format === "md"
+                ? exportFormatters.formatMD
+                : exportFormatters.formatTXT;
+        content = (transcriptions as unknown[])
+          .map((t) => formatter(t as unknown as TranscriptionForExport))
+          .join("\n\n");
+        fs.writeFileSync(result.filePath, content as string, "utf-8");
+      }
+
+      return { success: true, path: result.filePath };
+    } catch (error) {
+      logger.error?.("导出转录失败:", error);
+      return { success: false, error: (error as Error).message };
+    }
+  });
+}
+// [20260724_TS_BigBang_TranscriptionHandlers] END

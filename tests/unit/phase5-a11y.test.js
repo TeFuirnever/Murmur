@@ -88,7 +88,8 @@ describe("Phase 5: Accessibility a11y", () => {
     let mainContent;
 
     beforeAll(() => {
-      mainContent = readFile("main.js");
+      // [20260724_TS_BigBang_TestFix] Read .ts entry (post-migration).
+      mainContent = readFile("main.ts");
     });
 
     it("should not have setAccessibilitySupportEnabled in active code", () => {

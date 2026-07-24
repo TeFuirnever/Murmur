@@ -47,7 +47,8 @@ describe("Phase 3: Semi-auto update", () => {
     let updateManagerContent;
 
     beforeAll(() => {
-      updateManagerPath = path.join(rootDir, "src/helpers/updateManager.js");
+      // [20260724_TS_BigBang_TestFix] Read .ts source (post-migration).
+      updateManagerPath = path.join(rootDir, "src/helpers/updateManager.ts");
       if (fs.existsSync(updateManagerPath)) {
         updateManagerContent = fs.readFileSync(updateManagerPath, "utf8");
       }
@@ -59,8 +60,11 @@ describe("Phase 3: Semi-auto update", () => {
     });
 
     it("should export register function", () => {
+      // [20260724_TS_BigBang_TestFix] Accept ESM named export
+      // (`export function register` / `export { register }`) in addition to
+      // the legacy CJS `module.exports = { register }`.
       expect(updateManagerContent).toMatch(
-        /module\.exports\s*=\s*\{[^}]*register/,
+        /export\s+(?:function\s+register|{\s*[^}]*\bregister\b)/,
       );
     });
 
@@ -115,8 +119,9 @@ describe("Phase 3: Semi-auto update", () => {
     let preloadContent;
 
     beforeAll(() => {
+      // [20260724_TS_BigBang_TestFix] Read .ts entry (post-migration).
       preloadContent = fs.readFileSync(
-        path.join(rootDir, "preload.js"),
+        path.join(rootDir, "preload.ts"),
         "utf8",
       );
     });

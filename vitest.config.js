@@ -8,6 +8,12 @@ export default defineConfig({
     include: ["tests/**/*.test.{js,ts,jsx,tsx}"],
     exclude: ["tests/e2e/**", "node_modules/**"],
     globals: true,
+    // [20260724_TS_BigBang_Resolver] Setup file that monkey-patches Node's
+    // native require resolver so bare require("../../src/...") in .js test
+    // files resolves .ts after the .js twins are deleted. See
+    // tests/_tsresolve.setup.js for full rationale.
+    setupFiles: ["./tests/_tsresolve.setup.js"],
+    // [20260724_TS_BigBang_Resolver] END
     coverage: {
       provider: "v8",
       reporter: ["text", "text-summary"],
