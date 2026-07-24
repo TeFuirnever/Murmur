@@ -107,19 +107,19 @@ describe("Phase 2: Type safety gradual enhancement", () => {
     });
   });
 
-  describe("ipc-contracts.js type annotations", () => {
+  describe("ipc-contracts type annotations", () => {
     let contracts;
 
     beforeAll(() => {
+      // [20260724_TS_Migration_IpcContracts] Now reads from .ts source of truth
       contracts = fs.readFileSync(
-        path.join(rootDir, "src/helpers/ipc-contracts.js"),
+        path.join(rootDir, "src/helpers/ipc-contracts.ts"),
         "utf8",
       );
     });
 
-    it("should have @type or @typedef JSDoc annotations", () => {
-      // Should have at least one JSDoc type annotation
-      expect(contracts).toMatch(/@(type|typedef|const)/);
+    it("should use TypeScript 'as const' for type safety", () => {
+      expect(contracts).toMatch(/as\s+const/);
     });
 
     it("should NOT use const enum (incompatible with esbuild)", () => {

@@ -10,8 +10,9 @@ describe("Phase 3: Semi-auto update", () => {
     let contracts;
 
     beforeAll(() => {
+      // [20260724_TS_Migration_IpcContracts] Now reads from .ts source of truth
       contracts = fs.readFileSync(
-        path.join(rootDir, "src/helpers/ipc-contracts.js"),
+        path.join(rootDir, "src/helpers/ipc-contracts.ts"),
         "utf8",
       );
     });
