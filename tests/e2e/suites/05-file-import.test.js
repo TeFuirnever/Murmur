@@ -3,7 +3,7 @@
  *
  * Tests switching to file-import mode, file validation via IPC mock.
  */
-import { test, expect } from "playwright-core";
+import { test, expect } from "@playwright/test";
 import {
   launchElectronApp,
   closeElectronApp,

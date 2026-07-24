@@ -4,7 +4,7 @@
  * Tests the complete recording pipeline: start → stop → transcribe → AI optimize.
  * Uses IPC mocks for transcription and AI processing.
  */
-import { test, expect } from "playwright-core";
+import { test, expect } from "@playwright/test";
 import {
   launchElectronApp,
   closeElectronApp,

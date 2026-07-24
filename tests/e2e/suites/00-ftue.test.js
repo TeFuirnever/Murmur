@@ -4,7 +4,7 @@
  * Added based on Product Owner review (C-6): the most critical
  * conversion funnel had zero coverage.
  */
-import { test, expect } from "playwright-core";
+import { test, expect } from "@playwright/test";
 import {
   launchElectronApp,
   closeElectronApp,

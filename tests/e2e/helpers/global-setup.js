@@ -4,9 +4,12 @@
 import { execSync } from "child_process";
 
 export default async function globalSetup() {
-  console.log("[e2e global-setup] Building main + preload bundles...");
+  console.log(
+    "[e2e global-setup] Building main + preload + renderer bundles...",
+  );
   execSync("npm run build:main", { stdio: "inherit" });
   execSync("npm run build:preload", { stdio: "inherit" });
+  execSync("npm run build:renderer", { stdio: "inherit" });
   console.log("[e2e global-setup] Bundles ready.");
 }
 // [20260724_TS_BigBang_TestFix] END

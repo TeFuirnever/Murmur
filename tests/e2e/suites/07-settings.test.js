@@ -4,7 +4,7 @@
  * Tests settings CRUD, theme persistence, AI provider presets.
  * Uses resetSettings in afterEach for isolation.
  */
-import { test, expect } from "playwright-core";
+import { test, expect } from "@playwright/test";
 import {
   launchElectronApp,
   closeElectronApp,

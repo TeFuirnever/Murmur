@@ -1,4 +1,4 @@
-import { defineConfig } from "playwright-core";
+import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests/e2e/suites",

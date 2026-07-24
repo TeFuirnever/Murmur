@@ -33,7 +33,7 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
-    "test:e2e": "playwright-core test --config playwright.config.js",
+    "test:e2e": "playwright test --config playwright.config.js",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write \"*.{js,json,md,yml}\" \"src/**/*.{js,jsx,ts,tsx,css}\" \"tests/**/*.{js,ts}\" \"scripts/**/*.js\"",
@@ -66,6 +66,7 @@
   "devDependencies": {
     "@electron/notarize": "^3.0.1",
     "@eslint/js": "^9.25.0",
+    "@playwright/test": "1.60.0",
     "@tailwindcss/postcss": "^4.1.13",
     "@tailwindcss/vite": "^4.1.10",
     "@testing-library/jest-dom": "^6.9.1",

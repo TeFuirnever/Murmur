@@ -126,3 +126,5 @@ dist-main/
 .gstack/
 .codegraph/
 .zcode/
+playwright-report/
+test-results/

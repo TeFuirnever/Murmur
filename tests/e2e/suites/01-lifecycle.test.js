@@ -5,7 +5,7 @@
  * page routes, and handles close behaviors. These are the most
  * fundamental tests — if these fail, nothing else matters.
  */
-import { test, expect } from "playwright-core";
+import { test, expect } from "@playwright/test";
 import {
   launchElectronApp,
   closeElectronApp,
@@ -26,7 +26,10 @@ test.describe("Suite 1: Application Lifecycle", () => {
   test("1.1 — Launch and show main window", async () => {
     expect(window).toBeDefined();
 
-    const isVisible = await window.isVisible();
+    // [20260724_E2E_PlaywrightApiFix] Playwright 1.60 requires a selector
+    // argument for page.isVisible(). Use "body" to check the page rendered.
+    const isVisible = await window.isVisible("body");
+    // [20260724_E2E_PlaywrightApiFix] END
     expect(isVisible).toBe(true);
 
     const title = await window.title();

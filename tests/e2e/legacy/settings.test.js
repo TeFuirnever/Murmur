@@ -1,4 +1,4 @@
-import { test, expect, _electron } from "playwright-core";
+import { test, expect, _electron } from "@playwright/test";
 import path from "path";
 
 test.describe("Settings flow", () => {
@@ -7,7 +7,7 @@ test.describe("Settings flow", () => {
 
   test.beforeAll(async () => {
     electronApp = await _electron.launch({
-      args: [path.resolve(__dirname, "../../dist-main/main.js")],
+      args: [path.resolve(__dirname, "../../..")],
       env: { ...process.env, NODE_ENV: "test" },
     });
     window = await electronApp.firstWindow();
