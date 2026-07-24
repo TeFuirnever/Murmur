@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Backend TypeScript migration (ADR-010): 15 `.ts` files with typed implementations covering core helpers (providerPresets, ipc-contracts, logManager, database, environment, serverMessageRouter, aiPrompts, etc.)
+- AI prompt few-shot examples for platform modes (xiaohongshu, zhihu, douyin, dianping) — ADR-012 Issue #4c resolved
+- Promotion content: community post templates (即刻/V2EX/少数派) and video scripts (B站/抖音)
+- Promotion infographics: competitor comparison matrix and bento-grid features overview (HTML+Playwright)
+- Windows `bindings` runtime dependency fix (credit: @Deeeemooo, PR #50)
+- ASR benchmark scripts comparing Paraformer-large vs SenseVoice vs Fun-ASR-Nano
+
+### Changed
+
+- Settings page refactored: 1195-line monolith split into 7 focused modules with full i18n coverage (154 keys, zero hardcoded Chinese)
+- Dynamic transcription timeout based on file size (replaces hardcoded 5-minute limit) — ADR-012 Issue #1 resolved
+- OpenRouter provider preset added with free-tier models
+- esbuild `--resolve-extensions=.js,.ts` to handle dual .ts/.js backend files during bundling
+- Provider registration guide text moved from providerPresets.js to i18n locale files
+- `ProviderPreset` type unified: `type ProviderPreset = AIProviderPreset` (single source of truth in types/ipc.ts)
+
+### Fixed
+
+- CRITICAL: `auto_paste` option value mismatch (`'clipboard'` → `'clipboard_only'`) causing wrong paste behavior
+- Restored lost functionality: `cancelUpdateDownload` button, `testResult.usage` display, live `setAlwaysOnTop` side-effect, `localStorage` language persistence
+- Removed 21 dead TS re-export stubs that provided zero type safety (code review finding)
+
 ## [1.0.2] - 2026-06-07
 
 ### Added

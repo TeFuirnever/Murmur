@@ -119,7 +119,7 @@ Instructions for AI agents working. All content in English.
 
 - Project overview & tech stack → `README.md`
 - Architecture & data flow → `CONTRIBUTING.md` (架构概览 section)
-- IPC contracts → `src/helpers/ipc-contracts.js`
+- IPC contracts → `src/helpers/ipc-contracts.js` (typed source: `ipc-contracts.ts`)
 - AI prompt templates → `src/helpers/aiPrompts.js`
 - Security measures → `SECURITY.md`
 - CI gate check → `scripts/ci-check.js` and `/ci-gate` skill
