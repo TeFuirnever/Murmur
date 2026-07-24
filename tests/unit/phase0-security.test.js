@@ -115,7 +115,6 @@ describe("Phase 0: LogManager uses sync I/O for crash safety", () => {
 describe("Phase 0: Ghost dependencies removed from package.json", () => {
   const ghostDeps = [
     "asynckit",
-    "bindings",
     "combined-stream",
     "delayed-stream",
     "es-errors",
@@ -132,3 +131,12 @@ describe("Phase 0: Ghost dependencies removed from package.json", () => {
     expect(pkg.dependencies).not.toHaveProperty(dep);
   });
 });
+
+// [20260612_Fix_BindingsPackaging] Ensure native sqlite runtime helper is packaged.
+describe("Phase 0: Native sqlite runtime dependencies", () => {
+  it("should keep bindings as a direct production dependency", () => {
+    const pkg = require("../../package.json");
+    expect(pkg.dependencies).toHaveProperty("bindings");
+  });
+});
+// [20260612_Fix_BindingsPackaging] END
