@@ -216,6 +216,15 @@ async function startApp(): Promise<void> {
   logger.info("应用启动完成");
 }
 
+// [20260724_Fix_E2E_Headless] Disable GPU hardware acceleration in test
+// mode. CI macOS runners lack GPU support, causing firstWindow() timeout
+// when Electron tries to initialize the compositor. This is the standard
+// fix recommended by Playwright and Electron docs for headless CI.
+if (process.env.NODE_ENV === "test") {
+  app.disableHardwareAcceleration();
+}
+// [20260724_Fix_E2E_Headless] END
+
 // App event handlers
 app.whenReady().then(() => {
   if (safeStorage && safeStorage.isEncryptionAvailable()) {
