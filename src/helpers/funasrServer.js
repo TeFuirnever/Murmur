@@ -5,6 +5,29 @@ const ServerMessageRouter = require("./serverMessageRouter");
 const { createTempAudioFile, cleanupTempFile } = require("./audioFileHelpers");
 const C = require("./ipc-contracts");
 
+// [20260724_Fix_DynamicTranscriptionTimeout] Dynamic timeout based on file
+// size. Previously hardcoded to 300000ms (5 min), which failed for long
+// meeting recordings (>30 min audio). Now scales proportionally with file
+// size as a proxy for audio duration.
+// Heuristic: ~1MB ≈ ~1 min of 16kHz mono speech audio (lossless).
+const MIN_TIMEOUT_MS = 300_000; // 5 min — minimum for any file
+const MAX_TIMEOUT_MS = 3_600_000; // 60 min — hard cap
+const TIMEOUT_PER_MB_MS = 6_000; // 6s per MB of audio (RTFx ~10x on CPU)
+
+/**
+ * Calculate a dynamic transcription timeout based on file size.
+ * @param {number} fileSizeBytes - File size in bytes
+ * @returns {{ ms: number, label: string }} Timeout in ms + human-readable label
+ */
+function calculateTranscriptionTimeout(fileSizeBytes) {
+  const sizeMB = Math.max(0, fileSizeBytes) / (1024 * 1024);
+  const calculatedMs = MIN_TIMEOUT_MS + sizeMB * TIMEOUT_PER_MB_MS;
+  const ms = Math.min(Math.max(calculatedMs, MIN_TIMEOUT_MS), MAX_TIMEOUT_MS);
+  const minutes = Math.round(ms / 60_000);
+  const label = `文件转录超时（${minutes}分钟）`;
+  return { ms, label };
+}
+
 class FunASRServer {
   constructor(logger = null) {
     this.logger = logger || console;
@@ -360,12 +383,17 @@ class FunASRServer {
     }
 
     try {
+      // [20260724_Fix_DynamicTranscriptionTimeout] Use dynamic timeout based
+      // on file size instead of hardcoded 5-minute limit. This prevents
+      // long meeting recordings (>30 min) from timing out.
+      const { ms: dynamicTimeout, label: timeoutLabel } =
+        calculateTranscriptionTimeout(stats.size);
       return await this.messageRouter.sendCommand(
         "transcribe_file",
         { audio_path: audioPath, options },
         {
-          timeout: 300000,
-          timeoutError: "文件转录超时（5分钟）",
+          timeout: dynamicTimeout,
+          timeoutError: timeoutLabel,
           onProgress: options.onProgress || null,
         },
       );
@@ -406,3 +434,4 @@ class FunASRServer {
 }
 
 module.exports = FunASRServer;
+module.exports.calculateTranscriptionTimeout = calculateTranscriptionTimeout;
