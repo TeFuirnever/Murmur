@@ -1,3 +1,9 @@
+// [20260725_CodeReview_Tier3_Template] Migrated from .js to .ts as a
+// template for the remaining 52 .js tests. Pattern: declare explicit types
+// for `let` bindings assigned in beforeAll — strict tsc requires this
+// because the assignment happens in a callback whose type doesn't flow
+// back to the declaration site. Each `let x: <type>;` corresponds to a
+// former `let x;` that produced TS7034/TS7005 (implicit any).
 import { describe, it, expect, beforeAll } from "vitest";
 import fs from "fs";
 import path from "path";
@@ -6,7 +12,13 @@ const rootDir = path.resolve(__dirname, "../../");
 
 describe("Phase 4: Internationalization i18n", () => {
   describe("i18n dependencies", () => {
-    let pkg;
+    // [20260725_CodeReview_Tier3_Template] Package shape: dependencies +
+    // devDependencies are string maps. Use the package's own shape via
+    // tsconfig's `resolveJsonModule` (read at runtime, not imported).
+    let pkg: {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
 
     beforeAll(() => {
       pkg = JSON.parse(
@@ -26,7 +38,7 @@ describe("Phase 4: Internationalization i18n", () => {
   });
 
   describe("i18n configuration", () => {
-    let i18nConfig;
+    let i18nConfig: string;
 
     beforeAll(() => {
       // [20260724_TS_BigBang_TestFix] Read .ts source (post-migration).
@@ -111,7 +123,7 @@ describe("Phase 4: Internationalization i18n", () => {
   });
 
   describe("Main entry point i18n integration", () => {
-    let mainContent;
+    let mainContent: string;
 
     beforeAll(() => {
       mainContent = fs.readFileSync(path.join(rootDir, "src/main.tsx"), "utf8");
@@ -123,7 +135,7 @@ describe("Phase 4: Internationalization i18n", () => {
   });
 
   describe("Settings page language selector", () => {
-    let settingsContent;
+    let settingsContent: string;
 
     beforeAll(() => {
       settingsContent = fs.readFileSync(
@@ -153,7 +165,7 @@ describe("Phase 4: Internationalization i18n", () => {
   });
 
   describe("Settings page uses translation keys", () => {
-    let settingsContent;
+    let settingsContent: string;
 
     beforeAll(() => {
       settingsContent = fs.readFileSync(
@@ -168,7 +180,7 @@ describe("Phase 4: Internationalization i18n", () => {
   });
 
   describe("electronAPI.d.ts language types", () => {
-    let typeFile;
+    let typeFile: string;
 
     beforeAll(() => {
       typeFile = fs.readFileSync(
