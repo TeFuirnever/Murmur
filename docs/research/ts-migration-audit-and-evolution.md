@@ -235,6 +235,51 @@ incremental cleanup — not a rewrite.**
 
 ## 5. The remaining debt — a prioritised backlog
 
+> **Status Update (2026-07-25, end of session)** — below the original backlog,
+> a "What actually happened" subsection records the outcome of each item. The
+> original tables are preserved as historical record of the plan.
+
+### 5.0 What actually happened (2026-07-25)
+
+This document's backlog drove a multi-wave autopilot session. Results:
+
+| Item                                             | Plan effort | Actual outcome                                                                                                                                                                                                                                                                         | Status      |
+| ------------------------------------------------ | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| **1.1** Delete `jsconfig.json`                   | 5 min       | Done (`git rm`, tracked file)                                                                                                                                                                                                                                                          | ✅          |
+| **1.2** Fix `eslint.config.mjs:47-48`            | 5 min       | Done (main.js/preload.js → .ts)                                                                                                                                                                                                                                                        | ✅          |
+| **1.3** Update `CLAUDE.md` 9 refs                | 30 min      | Done (zero residual stale .js refs)                                                                                                                                                                                                                                                    | ✅          |
+| **1.4** Update `CHANGELOG.md`                    | 30 min      | Done (big-bang entry added)                                                                                                                                                                                                                                                            | ✅          |
+| **1.5** Sweep docs stale `.js` refs              | 1 hr        | Partial at first (3 files), then completed in a follow-up wave (added migration-note headers to `docs/adr/004`, `docs/adr/005`, `docs/follow-ups.md`, `docs/strategic-plan-gap-analysis.md`)                                                                                           | ✅          |
+| **2.1** `tsconfig.test.json` includes `tests/**` | 1 day       | Done. Scope-limited: 7 test files excluded (pre-existing strict-mode debt — mock-typing noise + `asManagers<T>` seam). Documented in the file.                                                                                                                                         | ✅ (scoped) |
+| **2.2** Wire typecheck:tests into CI             | 0.5 day     | Done (`scripts/ci-check.js` stage 1, blocking; `pnpm typecheck:tests` script added)                                                                                                                                                                                                    | ✅          |
+| **2.3** Tighten preload signatures               | 1 day       | Done plus more than planned: `export const preloadApi: ElectronAPI` drift detector + 14 drift sites fixed + d.ts `any`→`unknown` + renderer `useModelStatus.tsx` narrowing casts. Architecture review surfaced d.ts internal errors (`skipLibCheck:true` hid them) — those also fixed. | ✅          |
+| **2.4** Document `ManagersBag` seam in ADR       | 0.5 day     | Done as `docs/adr/013-managers-bag-cast-seam.md` with explicit "unidirectional detector limitation" note                                                                                                                                                                               | ✅          |
+| **3.1** Migrate 75 `.js` test files              | 1-2 weeks   | **2/54 migrated** (smoke, determineProcessingMode). Batch-2 attempt (11 more ESM tests) reverted: strict tsc surfaces implicit-any in every one. Real complexity confirmed: Tier 3 is **per-file strict-typing work**, not batch rename. Pattern documented for follow-up PRs.         | ⚠️ Partial  |
+| **3.2** Delete `_tsresolve.setup.js`             | 0.5 day     | Blocked on 3.1 completion. The shim is still load-bearing for the 41 `.js` tests that use `require()`.                                                                                                                                                                                 | ⛔ Blocked  |
+| **3.3** Re-enable `no-require-imports: error`    | 1 week      | Not started. Depends on 3.1.                                                                                                                                                                                                                                                           | ⛔ Blocked  |
+| **4.1** Migrate root configs `.js`→`.ts`         | 0.5 day     | Not started                                                                                                                                                                                                                                                                            | ⏸ Deferred  |
+| **4.2** Adopt `@electron-toolkit/typed-ipc`      | 1 week      | Not started. Current `.d.ts` quality is high; ROI low.                                                                                                                                                                                                                                 | ⏸ Deferred  |
+| **4.3** Extract `tests/e2e/` to TS               | 2-3 days    | Not started                                                                                                                                                                                                                                                                            | ⏸ Deferred  |
+
+**Additional work done that the backlog didn't list** (architect follow-ups):
+
+- **Type extracts**: `ProcessingUpdateData`, `FileTranscriptionProgressData`, `OperationResult` added to `src/types/ipc.ts` — replaces 16+ inline duplications across `preload.ts`, `electronAPI.d.ts`, `funasrServer.ts`, `useModelStatus.tsx`
+- **`makeListener<T>` helper**: extracted in `preload.ts` — 10 single-payload `on*` listeners refactored (DRY win); 2 heterogeneous listeners stay inline
+- **`backend-type-safety.test.js` scope fix**: extended from `.ts`-only (excluding `.d.ts`) to project-wide (`.ts` + `.tsx` + `.d.ts` + `src/hooks`/`components`/`settings`). Allowlist expanded from 2 to 6 entries. Closed the "allowlist theater" gap (code-review finding).
+- **`tests/unit/preload-listener-lifecycle.test.js`**: 2 → 12 characterization tests covering each listener subscribe/unsubscribe/cross-channel isolation
+- **`tests/unit/rejection-assertions-awaited.test.ts` (NEW)**: per-occurrence scanner for unawaited `.rejects.` assertions, handles multi-line patterns via paren-depth tracking
+- **`tests/unit/test-typecheck-coverage.test.ts` (NEW)**: TDD regression test proving `tsconfig.test.json` covers `tests/**`
+
+**Lessons that changed the plan**:
+
+1. **Gradual test migration is not viable for strict-mode codebases.** The plan estimated 1-2 weeks for 3.1; reality showed each `.js` test needs per-file strict-typing work (implicit any, `noUncheckedIndexedAccess` array access, mock typing). Batch rename surfaces 5-15 errors per file. Tier 3 is genuinely week-scale.
+
+2. **`skipLibCheck: true` creates a one-sided drift detector.** Tier 2.3's preload annotation catches preload→d.ts drift but not d.ts internal errors. The `backend-type-safety.test.js` extension to `.d.ts` files closes half this gap; the third-party `noDeprecation` conflict (`@types/node` vs `electron.d.ts`) prevents fully flipping `skipLibCheck: false`.
+
+3. **TDD SKILL's "refactoring is not part of the loop" is a real constraint.** Wave 3 (Tier 2.3 finalize type extracts) was initially skipped as refactor-not-TDD. User override + characterization tests made it viable, but the discipline matters: refactor without behavior-locking tests is dangerous in typed code.
+
+### 5.1 Original backlog (preserved as plan-of-record)
+
 Ordered by ROI (highest value/effort ratio first).
 
 ### Tier 1 — Quick wins (hours, low risk)
@@ -274,22 +319,35 @@ Ordered by ROI (highest value/effort ratio first).
 
 ## 6. The decision tree — what to do next
 
+> **Updated 2026-07-25**: Tier 1+2 are complete. The "ready to merge" branch
+> is now unconditional. Tier 3 is the next real decision; the per-file
+> strict-typing reality (learned from batch-2 rollback) is reflected.
+
 ```
 Is the backend migration ready to merge?
-├── YES — it is genuinely complete (Section 2.2). Merge after Tier 1 docs cleanup.
+├── YES — Tier 1 (docs/config) and Tier 2 (type-safety gates) are complete.
+│   The `feat/ts-bigbang` branch can merge. Remaining debt (Tier 3) does not
+│   block merge — it is test-internal and the shim works.
 │
-Should we migrate the 75 .js test files (Tier 3.1)?
-├── Evaluate against these criteria:
-│   ├── Is the _tsresolve.setup.js causing real failures?  → if YES, migrate
-│   ├── Are you upgrading Node major versions soon?         → if YES, migrate (shim risk)
-│   ├── Is the team adding many new tests?                  → if YES, migrate (write TS-native)
-│   └── Do you have a 1-2 week sprint with no fires?        → if YES, migrate
-│   └── Otherwise: defer. The shim works.
+Should we migrate the 54 .js test files (Tier 3.1)?
+├── REALITY CHECK (learned from batch-2 rollback):
+│   ├── Each .js test needs per-file strict-typing work (implicit any,
+│   │   noUncheckedIndexedAccess on array access, mock typing).
+│   ├── Batch rename surfaces 5-15 errors per file → not viable as one PR.
+│   └── Realistic path: per-file PRs, each adds type annotations + renames.
+│   ├── Is _tsresolve.setup.js causing real failures?       → if YES, prioritize
+│   ├── Upgrading Node major version soon?                  → if YES, prioritize (shim risk)
+│   ├── Adding many new tests?                              → write TS-native going forward; let old .js age out
+│   └── Otherwise: defer. The shim works; 770 tests pass.
 │
 Should we adopt @electron-toolkit/typed-ipc (Tier 4.2)?
 ├── Evaluate against:
 │   ├── Is the IPC surface growing fast?                    → if YES, adopt (less manual sync)
-│   ├── Is electronAPI.d.ts drifting from preload.ts?       → if YES, adopt (single source)
+│   ├── Is electronAPI.d.ts drifting from preload.ts?       → DRIFT DETECTOR NOW EXISTS
+│   │                                                         (preloadApi: ElectronAPI annotation
+│   │                                                          + backend-type-safety.test.js scan)
+│   │                                                         so drift is caught. Adopt only if the
+│   │                                                         manual sync burden grows.
 │   └── Otherwise: keep the hand-rolled pattern. It works.
 ```
 
