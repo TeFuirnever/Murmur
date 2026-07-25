@@ -135,7 +135,11 @@ async function launchElectronApp({ env = {} } = {}) {
   const fs = require("fs");
   const mainBundle = path.join(appRoot, "dist-main/main.js");
   const preloadBundle = path.join(appRoot, "dist-preload/preload.js");
-  const rendererHtml = path.join(appRoot, "dist/index.html");
+  // [20260725_E2E_CiStartupProbe] Correct path: build:renderer script is
+  // `cd src && vite build`, and vite.config.js sets outDir: "dist", so
+  // the renderer HTML ends up at src/dist/, not <root>/dist/. Previous
+  // diagnostic reported false negative (existed=false when file was fine).
+  const rendererHtml = path.join(appRoot, "src/dist/index.html");
   console.log(`${DIAG_PREFIX} bundle check:`);
   console.log(
     `${DIAG_PREFIX}   dist-main/main.js exists=${fs.existsSync(mainBundle)}`,
@@ -144,9 +148,9 @@ async function launchElectronApp({ env = {} } = {}) {
     `${DIAG_PREFIX}   dist-preload/preload.js exists=${fs.existsSync(preloadBundle)}`,
   );
   console.log(
-    `${DIAG_PREFIX}   dist/index.html exists=${fs.existsSync(rendererHtml)}`,
+    `${DIAG_PREFIX}   src/dist/index.html exists=${fs.existsSync(rendererHtml)}`,
   );
-  // [20260725_E2E_LaunchDiagnosis] END
+  // [20260725_E2E_CiStartupProbe] END
 
   console.log(
     `${DIAG_PREFIX} calling electron.launch() at ${new Date().toISOString()}`,
@@ -154,7 +158,17 @@ async function launchElectronApp({ env = {} } = {}) {
   const launchStart = Date.now();
 
   const app = await electron.launch({
-    args: [appRoot],
+    // [20260725_E2E_CiStartupProbe] Pass --require ci-probe.js as the
+    // FIRST arg so it executes before dist-main/main.js. If [probe]
+    // lines appear in CI logs but [main:canary] don't, the problem
+    // is in main.ts module-load (e.g. an import side-effect that
+    // hangs on CI macOS).
+    args: [
+      "--require",
+      path.join(PROJECT_ROOT, "tests/e2e/helpers/ci-probe.js"),
+      appRoot,
+    ],
+    // [20260725_E2E_CiStartupProbe] END
     env: {
       ...process.env,
       NODE_ENV: "test",
