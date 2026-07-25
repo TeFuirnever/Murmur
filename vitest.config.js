@@ -27,13 +27,15 @@ export default defineConfig({
         // file names. These are Electron-dependent (require runtime
         // IPC/BrowserWindow/app) and cannot be unit-tested.
         "src/helpers/clipboard.ts",
-        "src/helpers/environment.ts",
+        // [20260725_Fix_WrongExclusion] 4 files removed from exclude — they
+        // have zero electron module dependency:
+        // - environment.ts: only reads process.versions.electron (no import)
+        // - funasrServer.ts: no electron reference at all
+        // - funasrManager.ts: no electron reference at all
+        // - pythonInstaller.ts: no electron reference at all
         "src/helpers/tray.ts",
         "src/helpers/hotkeyManager.ts",
         "src/helpers/pythonEnvironment.ts",
-        "src/helpers/pythonInstaller.ts",
-        "src/helpers/funasrManager.ts",
-        "src/helpers/funasrServer.ts",
         "src/helpers/modelManager.ts",
         "src/helpers/updateManager.ts",
         "src/helpers/windowManager.ts",

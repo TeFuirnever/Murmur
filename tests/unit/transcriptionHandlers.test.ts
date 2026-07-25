@@ -232,6 +232,18 @@ describe("transcriptionHandlers", () => {
       const result = await handler({}, 999, "optimize");
       expect(result.success).toBe(false);
     });
+
+    it("returns clear error when processTextWithAI is not available", async () => {
+      // [20260725_Fix_NonNullAssertion] RED: when processTextWithAI is missing,
+      // should return clear error, not TypeError caught as generic message
+      mockManagers.processTextWithAI = undefined;
+      const C = await setup();
+      const handler = registeredHandlers.get(C.TRANSCRIPTION.AI_REVIEW)!;
+
+      const result = await handler({}, 42, "optimize");
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("不可用");
+    });
   });
 
   describe("TRANSCRIPTION.GET handler", () => {

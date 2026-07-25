@@ -72,16 +72,27 @@ class DatabaseManager {
     this._fileConfigCache = loadFileConfig(configPath);
   }
 
+  // [20260725_Fix_EncryptionFailure] Catch encryptString exceptions and fall
+  // back to plaintext. When OS keyring is locked or unavailable, encryptString
+  // throws — without this catch, setSetting propagates the error and the
+  // setting value is lost entirely. Falling back to plaintext ensures the
+  // value persists and can be retrieved (just not encrypted).
   private _encryptValue(value: Primitive): string {
     if (!this.safeStorage || !this.safeStorage.isEncryptionAvailable()) {
       return JSON.stringify(value);
     }
     if (typeof value === "string") {
-      const encrypted = this.safeStorage.encryptString(value);
-      return JSON.stringify({ _enc: encrypted.toString("base64") });
+      try {
+        const encrypted = this.safeStorage.encryptString(value);
+        return JSON.stringify({ _enc: encrypted.toString("base64") });
+      } catch {
+        // Encryption failed (e.g. keyring locked) — store as plaintext
+        return JSON.stringify(value);
+      }
     }
     return JSON.stringify(value);
   }
+  // [20260725_Fix_EncryptionFailure] END
 
   private _decryptValue(raw: string | null): unknown {
     if (raw == null) return raw;

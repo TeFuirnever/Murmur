@@ -293,7 +293,13 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
           template || "professional",
           row.text || "",
         );
-        const result = await processTextWithAI!(
+        // [20260725_Fix_NonNullAssertion] Guard against missing processTextWithAI
+        // instead of using non-null assertion (!). Returns a clear error message
+        // rather than letting TypeError propagate as a generic caught error.
+        if (!processTextWithAI) {
+          return { success: false, error: "AI 处理功能不可用" };
+        }
+        const result = await processTextWithAI(
           row.text || "",
           template || "professional",
           databaseManager,
