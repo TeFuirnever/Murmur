@@ -534,25 +534,80 @@ or non-blocking) can carry signal.
 `.github/workflows/ci.yml` MUST stay `continue-on-error: true` until the
 systemic Electron launch issue is resolved. This is no longer "validate
 the suite" (the suite is sound — the failure is at `app.firstWindow()`
-before any test code runs) — it is "fix the launch path." Candidate
-root causes to investigate (ordered by likelihood):
+before any test code runs) — it is "fix the launch path."
 
-- macOS runner lacks GPU/ compositor access — `main.ts:222-225` gates
-  `app.disableHardwareAcceleration()` on `NODE_ENV === "test"`, but
-  `electron-launch.js:36` sets `NODE_ENV: "test"` in `env`, so this
-  SHOULD be active. Verify the gating condition survives esbuild
-  bundling.
-- Code-signing/notarization gate on macOS Sequoia (runner is
-  `macos-latest` which is now 15.x) blocks unsigned Electron binaries
-  from spawning windows.
-- `app.getAppPath()` returns the wrong directory in CI —
-  `electron-launch.js:31` passes `args: [appRoot]`, but if `appRoot`
-  resolves differently under `/Users/runner/work/...` vs local
-  `/Users/<dev>/...`, the renderer HTML path breaks.
+##### 2026-07-25 update 2 — diagnosis PR #92 root-cause evidence
 
-**Action:** the boot health suite is correct and ready. The next work
-item for Stage 0 is **diagnosing the Electron launch failure on CI
-macOS**, not iterating on the suite.
+PR #92 added instrumentation to `electron-launch.js` (env dump, bundle
+existence check, `app.on('console'/'window'/'close')`,
+`app.process().stdout/stderr/exit/error`, `ELECTRON_ENABLE_LOGGING=1`).
+CI macOS run produced this evidence:
+
+```
+[e2e-launch]   RUNNER_OS=macOS
+[e2e-launch] PROJECT_ROOT=/Users/runner/work/Murmur/Murmur
+[e2e-launch] platform=darwin arch=arm64 node=v24.18.0
+[e2e-launch] bundle check:
+[e2e-launch]   dist-main/main.js exists=true
+[e2e-launch]   dist-preload/preload.js exists=true
+[e2e-launch]   dist/index.html exists=false       ← false alarm, see below
+[e2e-launch] calling electron.launch()...
+[e2e-launch] electron.launch() returned after 3686ms (pid=10278)
+[e2e-launch] awaiting firstWindow()...
+[e2e-launch] [main:launch] stderr: Debugger ending on ws://127.0.0.1:...
+[e2e-launch] [main:launch] stderr: For help, see: https://nodejs.org/en/docs/inspector
+[e2e-launch] [main:launch] exit code=0 signal=null
+[e2e-launch] [main:launch] close event (app terminated)
+```
+
+**Findings:**
+
+1. **Bundles are present.** The `dist/index.html exists=false` line was
+   a false alarm in the diagnostic — Vite's `outDir: "dist"` combined
+   with `cd src && vite build` produces `src/dist/index.html`, not
+   `<root>/dist/index.html`. The renderer build is fine; `windowManager
+.ts:104` correctly loads from `src/dist/`.
+
+2. **Electron process starts successfully** (3.7s to launch, pid
+   assigned). It is NOT a code-signing or GPU init failure.
+
+3. **No `app.on('window')` event ever fires** — i.e. `BrowserWindow`
+   is never created. The 30s timeout is real: the process runs but
+   `createMainWindow()` is never reached.
+
+4. **No "应用启动开始" log line** appears in CI output even though
+   `main.ts:159` logs it as the first line of `startApp()`. This means
+   `startApp()` never executes — `app.whenReady()` either never
+   resolves or the `.then()` callback throws before reaching the
+   logger.
+
+5. **Process exits with code=0 after ~30s**, accompanied by Playwright's
+   `Debugger ending on ws://127.0.0.1:...` stderr message. This is the
+   signature of [Playwright issue
+   #9351](https://github.com/microsoft/playwright/issues/9351): when
+   the Electron main process never opens a window, Playwright's
+   firstWindow timeout tears down the process via inspector
+   disconnect, producing a clean exit.
+
+**Most likely root cause (for the fix PR):**
+
+Top-level `import` statements at `main.ts:36-43` trigger module-load
+side effects in one of the helpers BEFORE `app.whenReady()` fires.
+Several helpers (`tray`, `hotkey`, `clipboard`) touch Electron APIs
+(`Tray`, `globalShortcut`, `clipboard`) at module scope. Calling these
+before `app.whenReady()` either throws (silently swallowed by the
+`uncaughtException` handler at line 23 which only logs) or leaves the
+app in a half-initialized state where `whenReady` never resolves.
+
+The `disableHardwareAcceleration()` call at `main.ts:223` IS gated on
+`NODE_ENV === "test"` and IS placed before `whenReady`, but per
+Electron docs `disableHardwareAcceleration` is one of the few APIs
+explicitly allowed before ready — so that is not the culprit.
+
+**Action for the fix PR:** bisect the top-level imports by wrapping
+each in a try/catch with logging, OR move all `import` statements
+inside the `whenReady().then()` callback. The diagnostic
+instrumentation added in PR #92 must stay in place to verify the fix.
 
 ### Stage 1 — Gate 3 becomes blocking (week 3)
 
