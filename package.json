@@ -34,6 +34,7 @@
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "test:e2e": "playwright test --config playwright.config.js",
+    "test:e2e:boot": "playwright test --config playwright.config.js tests/e2e/suites/00-boot-health.test.js",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit",
     "typecheck:tests": "tsc --noEmit -p tsconfig.test.json",

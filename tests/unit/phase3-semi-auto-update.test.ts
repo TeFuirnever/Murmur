@@ -1,3 +1,8 @@
+// [20260725_Tier3_Phase3Migrate] Migrated from .js to .ts as part of
+// Tier 3 batch 1. Pattern: declare explicit string types for `let`
+// bindings assigned in beforeAll (TS7034). All bindings here read
+// fs.readFileSync results, so the structural type is `string`.
+// Template reference: phase4-i18n.test.ts (commit d52f2e0).
 import { describe, it, expect, beforeAll } from "vitest";
 import fs from "fs";
 import path from "path";
@@ -7,7 +12,7 @@ const rootDir = path.resolve(__dirname, "../../");
 
 describe("Phase 3: Semi-auto update", () => {
   describe("IPC contracts for update", () => {
-    let contracts;
+    let contracts: string;
 
     beforeAll(() => {
       // [20260724_TS_Migration_IpcContracts] Now reads from .ts source of truth
@@ -43,8 +48,8 @@ describe("Phase 3: Semi-auto update", () => {
   });
 
   describe("updateManager module", () => {
-    let updateManagerPath;
-    let updateManagerContent;
+    let updateManagerPath: string;
+    let updateManagerContent: string;
 
     beforeAll(() => {
       // [20260724_TS_BigBang_TestFix] Read .ts source (post-migration).
@@ -109,14 +114,17 @@ describe("Phase 3: Semi-auto update", () => {
           return { hash, filename };
         });
       expect(lines).toHaveLength(2);
-      expect(lines[0].hash).toBe("abc123");
-      expect(lines[0].filename).toBe("Murmur-1.0.0.dmg");
-      expect(lines[1].filename).toBe("Murmur-Setup-1.0.0.exe");
+      // [20260725_Tier3_Phase3Migrate] toHaveLength(2) doesn't narrow the
+      // element type; non-null assertion matches the suite's convention
+      // (see database-error-paths.test.ts lines 78/99/111/113).
+      expect(lines[0]!.hash).toBe("abc123");
+      expect(lines[0]!.filename).toBe("Murmur-1.0.0.dmg");
+      expect(lines[1]!.filename).toBe("Murmur-Setup-1.0.0.exe");
     });
   });
 
   describe("preload.js update API", () => {
-    let preloadContent;
+    let preloadContent: string;
 
     beforeAll(() => {
       // [20260724_TS_BigBang_TestFix] Read .ts entry (post-migration).
@@ -140,7 +148,7 @@ describe("Phase 3: Semi-auto update", () => {
   });
 
   describe("Settings UI update enhancements", () => {
-    let settingsContent;
+    let settingsContent: string;
 
     beforeAll(() => {
       settingsContent = fs.readFileSync(
@@ -168,7 +176,7 @@ describe("Phase 3: Semi-auto update", () => {
   });
 
   describe("electronAPI.d.ts update types", () => {
-    let typeFile;
+    let typeFile: string;
 
     beforeAll(() => {
       typeFile = fs.readFileSync(
