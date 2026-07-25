@@ -22,7 +22,19 @@
 | [deep-test-design-e2e.md](./deep-test-design-e2e.md)                 | 1366 | 8 个关键用户旅程的完整 Playwright 代码       |
 | [deep-test-design-error-paths.md](./deep-test-design-error-paths.md) | 1576 | 7 个子系统的错误路径测试 + 3 个真实 bug 发现 |
 
-**总计：9 份文档，8109 行**
+### 第三轮策略整合（boot → regression 端到端）
+
+| 文档                                                                                 | 行数 | 内容                                                      |
+| ------------------------------------------------------------------------------------ | ---- | --------------------------------------------------------- |
+| [e2e-functional-verification-strategy.md](./e2e-functional-verification-strategy.md) | ~620 | 5 阶段启动序列 + 4 道验证门 + 功能回归分层 + 阻塞升级路径 |
+
+### 第四轮 TS 迁移审视（JS → TS 端到端）
+
+| 文档                                                                         | 行数 | 内容                                                           |
+| ---------------------------------------------------------------------------- | ---- | -------------------------------------------------------------- |
+| [ts-migration-audit-and-evolution.md](./ts-migration-audit-and-evolution.md) | ~540 | ADR-010 big-bang 审视 + 7 项工程权衡 + 4 级演进路径 + 业界对比 |
+
+**总计：11 份文档，~9300 行**
 
 ## 核心发现
 
