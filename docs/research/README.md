@@ -1,74 +1,63 @@
 # Murmur 测试策略研究索引
 
-> 日期：2026-07-24 | 基于 TS big-bang 迁移后的代码库
+> 第二版 | 日期：2026-07-25 | 基于 Ralph 完成 57 个新测试后的代码库
 
 ## 文档清单
 
-| 文档                                                                       | 行数 | 内容                                                                               |
-| -------------------------------------------------------------------------- | ---- | ---------------------------------------------------------------------------------- |
-| [comprehensive-test-strategy.md](./comprehensive-test-strategy.md)         | 1029 | 完整端到端测试策略：金字塔设计、Unit/Integration/E2E 用例清单、CI 策略、实施优先级 |
-| [murmur-architecture-map.md](./murmur-architecture-map.md)                 | 910  | Murmur 完整架构图：7 个子系统的公共接口、测试 seam、测试挑战、关键路径             |
-| [electron-testing-best-practices.md](./electron-testing-best-practices.md) | 484  | 业界最佳实践：Playwright/Electron 官方文档、VS Code 测试架构、vitest mocking 模式  |
-| [test-coverage-gap-analysis.md](./test-coverage-gap-analysis.md)           | 333  | 逐文件测试覆盖审计：未测模块、未测 IPC 通道、未测错误路径、覆盖率瓶颈              |
+### 第一轮研究（架构 + gap 分析）
 
-## 核心发现汇总
+| 文档                                                                       | 行数 | 内容                                              |
+| -------------------------------------------------------------------------- | ---- | ------------------------------------------------- |
+| [comprehensive-test-strategy.md](./comprehensive-test-strategy.md)         | 1029 | 完整测试金字塔设计、Unit/Integration/E2E 用例清单 |
+| [murmur-architecture-map.md](./murmur-architecture-map.md)                 | 988  | 7 个子系统架构图、测试 seam、关键路径             |
+| [electron-testing-best-practices.md](./electron-testing-best-practices.md) | 530  | Playwright/Electron 官方文档、VS Code 测试架构    |
+| [test-coverage-gap-analysis.md](./test-coverage-gap-analysis.md)           | 352  | 逐文件覆盖审计、未测模块/通道/错误路径            |
 
-### 当前状态
+### 第二轮深度设计（可执行测试用例）
 
-- **674 单元测试** (65 文件, 100% 通过, ~1.9s)
-- **39 E2E 测试** (11 suites, 本地 15/39 通过, CI 0/39 — firstWindow 超时)
-- **覆盖率**: 96.83% stmts, 75.19% branches (低于 88% 阈值)
-- **coverage 排除**: 12 个 manager (~3800 行业务逻辑) + 整个 ipc/ 目录
+| 文档                                                                 | 行数 | 内容                                         |
+| -------------------------------------------------------------------- | ---- | -------------------------------------------- |
+| [deep-test-design-v2.md](./deep-test-design-v2.md)                   | 579  | 覆盖率瓶颈精确分析 + P0 修复测试 + 实施计划  |
+| [deep-test-design-managers.md](./deep-test-design-managers.md)       | 1689 | 12 个 Manager 的 135 个详细测试用例          |
+| [deep-test-design-e2e.md](./deep-test-design-e2e.md)                 | 1366 | 8 个关键用户旅程的完整 Playwright 代码       |
+| [deep-test-design-error-paths.md](./deep-test-design-error-paths.md) | 1576 | 7 个子系统的错误路径测试 + 3 个真实 bug 发现 |
 
-### 最严重的 Gap
+**总计：9 份文档，8109 行**
 
-1. **E2E 在 CI 上完全失败** — 0/39 通过，firstWindow 30s 超时。零用户旅程被验证。
-2. **3 个 IPC handler 文件零测试** — transcriptionHandlers (16 通道), hotkeyHandlers (7), clipboardHandlers (4)
-3. **5 个 Manager 零行为测试** — clipboard, hotkeyManager, tray, pythonEnvironment, pythonInstaller
-4. **preload 桥接无真正测试** — 只有源码文本 regex，不执行 contextBridge
-5. **117 处源码文本断言** — 6 个文件的测试读源码做 toContain，迁移后假绿风险
-6. **updateManager 安全关键逻辑未测** — SHA256 验证、路径逃逸守卫只有源码文本测试
+## 核心发现
 
-### 架构关键发现
+### 🐛 3 个真实 Bug（错误路径 agent 发现）
 
-- **UpdateManager 不用 electron-updater** — 手写 GitHub releases 更新器，含自定义 SHA256 验证
-- **asrEngine 是未使用的抽象** — 定义了可插拔 ASR 引擎接口，但无 FunASR 实现，未接入 main.ts
-- **tests/\_tsresolve.setup.js 是关键基础设施** — 3 部分 monkey-patch 让 .js 测试的 require() 能加载 .ts
-- **Manager 用 lazy require("electron")** — 在 try/catch 内延迟加载，保持可单元测试
+1. **database.ts:80 — 加密失败丢数据**: `_encryptValue` 不 catch `encryptString` 异常。OS keyring 锁定时 `setSetting("ai_api_key", ...)` 抛错且设置丢失，无明文 fallback。
+2. **audioPathValidator.ts:36 — 符号链接逃逸**: `path.resolve` 不解析 symlink。homedir 内指向 `/etc/passwd.wav` 的 symlink 绕过目录限制。建议改用 `fs.realpathSync`。
+3. **transcriptionHandlers.ts:296 — 非空断言崩溃**: `processTextWithAI!` 用 `!` 断言。无 `processTextWithAI` 时 AI_REVIEW 抛 TypeError，被 catch 后返回泛化错误。
 
-### 实施优先级
+### P0 立即可做（零风险）
 
-| 优先级   | 任务                                                      | 预计测试数      |
-| -------- | --------------------------------------------------------- | --------------- |
-| P0       | 修复 E2E CI headless (disableHardwareAcceleration / xvfb) | 0 (修复)        |
-| P0       | 确保 npm start 可启动 (build:main 在 prestart)            | 0 (已修复)      |
-| P1       | transcriptionHandlers 单元测试                            | ~20             |
-| P1       | 5 个无测试 Manager 单元测试                               | ~59             |
-| P1       | IPC 契约测试 (90 通道注册验证)                            | ~90             |
-| P1       | E2E Tier 1 冒烟测试 (CI 可靠)                             | ~5              |
-| P2       | Preload 桥接测试 (89 方法映射)                            | ~89             |
-| P2       | hotkeyHandlers + clipboardHandlers 测试                   | ~15             |
-| P2       | updateManager 行为测试 (SHA256, 路径守卫)                 | ~10             |
-| P2       | 分支覆盖率提升 (database, fileConfig)                     | ~15             |
-| P3       | E2E Tier 2 IPC 测试                                       | ~20             |
-| P3       | E2E Tier 3 完整旅程                                       | ~25             |
-| P3       | 源码文本断言 → 行为测试迁移                               | ~50 (重写)      |
-| P4       | 错误恢复路径测试                                          | ~15             |
-| P4       | 共享测试基础设施 (mock 工厂, DB helper)                   | 0 (基建)        |
-| **总计** |                                                           | **~413 新测试** |
+1. **4 个文件被错误排除覆盖**（零 electron 依赖但被排除）：
+   - `funasrServer.ts`、`pythonInstaller.ts`、`environment.ts`、`funasrManager.ts`
+   - **修复**：从 `vitest.config.ts` coverage.exclude 删除这 4 行
 
-### 业界最佳实践要点
+2. **覆盖率阈值阻塞**（精确到行号）：
+   - `fileConfig.ts` 63% branches → loadFileConfig 错误路径（8 tests）
+   - `database.ts` 67% branches → segments 解析 + 解密（12 tests）
+   - `providerPresets.ts` 33% functions → getProviderByName（2 tests）
+   - `ipcRateLimiter.ts` 50% functions → rateLimitedHandler 执行（3 tests）
 
-- **测试金字塔**: 60% unit / 30% integration / 10% e2e (Playwright 官方建议)
-- **IPC 契约测试**: Murmur 已有 ipc-contracts.ts 作为单一真相源，建议加 preload 桥接单元测试
-- **CI E2E 修复**: `app.disableHardwareAcceleration()` 在 test 模式，或迁移到 Linux + xvfb
-- **VS Code 模式**: 分 test/unit/ + test/integration/electron/ + test/smoke/ + test/automation/
-- **源码文本测试**: 是迁移后的最大假绿风险，应优先转为行为测试
+### 测试用例总量
 
-## 建议的下一步
+| 类别            | 新测试数 | 来源                            |
+| --------------- | -------- | ------------------------------- |
+| P0 覆盖率修复   | 25       | deep-test-design-v2.md          |
+| Manager 纯逻辑  | 135      | deep-test-design-managers.md    |
+| 错误路径 + 安全 | 58       | deep-test-design-error-paths.md |
+| E2E 旅程        | 40       | deep-test-design-e2e.md         |
+| **总计**        | **~258** |                                 |
 
-1. **立即**: 修复 E2E CI（`app.disableHardwareAcceleration()` 或 Linux xvfb）
-2. **第一周**: P1 任务 — 最高风险的未测逻辑（transcriptionHandlers + 5 Manager + IPC 契约）
-3. **第二周**: P2 任务 — 覆盖率阈值达标 + preload 桥接 + 安全关键路径
-4. **第三周**: P3 任务 — E2E 完整旅程 + 源码文本测试迁移
-5. **持续**: P4 — 错误恢复 + 测试基础设施改进
+## 实施路线图
+
+1. **P0（立即）**：移除 4 个错误排除 + 覆盖率瓶颈修复（~25 tests）+ 修 3 个 bug
+2. **P1（第一周）**：Manager 纯逻辑测试（~135 tests）
+3. **P2（第二周）**：E2E Tier 1-2 CI 可靠测试（~25 tests）
+4. **P3（第三周）**：错误路径 + E2E Tier 3（~90 tests）
+5. **P4（持续）**：测试基础设施改进
