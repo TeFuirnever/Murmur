@@ -1,3 +1,9 @@
+// [20260724_TS_BigBang_TestFix] This test uses createRequire + Module.
+// _resolveFilename monkey-patch to inject an electron stub into CJS
+// require("electron"). vi.mock cannot intercept CJS require(), so this
+// approach is necessary while windowManager uses require("electron").
+// After windowManager migrates to .ts with import, this can switch to
+// vi.mock. For now, extensionless paths + app stub in electron mock.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createRequire } from "module";
 
@@ -30,6 +36,10 @@ describe("windowManager — real module execution with mocked electron", () => {
 
     const electronStub = {
       BrowserWindow: MockBrowserWindow,
+      // [20260724_TS_BigBang_DirnameFix] windowManager now uses app.getAppPath()
+      // for preload/renderer paths. Provide a stub so tests don't crash.
+      app: { getAppPath: vi.fn(() => "/fake/app/path") },
+      // [20260724_TS_BigBang_DirnameFix] END
       session: {
         defaultSession: {
           webRequest: { onHeadersReceived: vi.fn() },
@@ -49,9 +59,12 @@ describe("windowManager — real module execution with mocked electron", () => {
       exports: electronStub,
     };
 
-    // Force re-require of windowManager so our stub is picked up
-    const wmPath = requireCJS.resolve("../../src/helpers/windowManager.js");
+    // [20260724_TS_BigBang_TestFix] Extensionless path resolves to .js now,
+    // .ts after migration (Node's CJS resolver tries .js by default; after
+    // migration this test must switch to vi.mock when windowManager is .ts)
+    const wmPath = requireCJS.resolve("../../src/helpers/windowManager");
     delete requireCJS.cache[wmPath];
+    // [20260724_TS_BigBang_TestFix] END
   });
 
   afterEach(() => {
@@ -61,7 +74,7 @@ describe("windowManager — real module execution with mocked electron", () => {
 
   it("maximize/unmaximize listeners fire webContents.send with C.EVENTS.WINDOW_MAXIMIZE_CHANGE — no ReferenceError", async () => {
     const C = requireCJS("../../src/helpers/ipc-contracts");
-    const WindowManager = requireCJS("../../src/helpers/windowManager.js");
+    const WindowManager = requireCJS("../../src/helpers/windowManager");
     const wm = new WindowManager();
     process.env.NODE_ENV = "development";
     await wm.createMainWindow();
@@ -86,7 +99,7 @@ describe("windowManager — real module execution with mocked electron", () => {
   });
 
   it("respects setDefaultAlwaysOnTop(false) in BrowserWindow options", async () => {
-    const WindowManager = requireCJS("../../src/helpers/windowManager.js");
+    const WindowManager = requireCJS("../../src/helpers/windowManager");
     const wm = new WindowManager();
     wm.setDefaultAlwaysOnTop(false);
     process.env.NODE_ENV = "development";
@@ -98,7 +111,7 @@ describe("windowManager — real module execution with mocked electron", () => {
   });
 
   it("defaults to alwaysOnTop: true when setDefaultAlwaysOnTop not called", async () => {
-    const WindowManager = requireCJS("../../src/helpers/windowManager.js");
+    const WindowManager = requireCJS("../../src/helpers/windowManager");
     const wm = new WindowManager();
     process.env.NODE_ENV = "development";
     await wm.createMainWindow();
@@ -109,7 +122,7 @@ describe("windowManager — real module execution with mocked electron", () => {
   });
 
   it("history window respects alwaysOnTop setting", async () => {
-    const WindowManager = requireCJS("../../src/helpers/windowManager.js");
+    const WindowManager = requireCJS("../../src/helpers/windowManager");
     const wm = new WindowManager();
     wm.setDefaultAlwaysOnTop(false);
     process.env.NODE_ENV = "development";
@@ -121,7 +134,7 @@ describe("windowManager — real module execution with mocked electron", () => {
   });
 
   it("settings window respects alwaysOnTop setting", async () => {
-    const WindowManager = requireCJS("../../src/helpers/windowManager.js");
+    const WindowManager = requireCJS("../../src/helpers/windowManager");
     const wm = new WindowManager();
     wm.setDefaultAlwaysOnTop(false);
     process.env.NODE_ENV = "development";
@@ -133,7 +146,7 @@ describe("windowManager — real module execution with mocked electron", () => {
   });
 
   it("showHistoryWindow uses current alwaysOnTop value", async () => {
-    const WindowManager = requireCJS("../../src/helpers/windowManager.js");
+    const WindowManager = requireCJS("../../src/helpers/windowManager");
     const wm = new WindowManager();
     wm.setDefaultAlwaysOnTop(false);
     process.env.NODE_ENV = "development";
@@ -147,7 +160,7 @@ describe("windowManager — real module execution with mocked electron", () => {
   });
 
   it("showSettingsWindow uses current alwaysOnTop value", async () => {
-    const WindowManager = requireCJS("../../src/helpers/windowManager.js");
+    const WindowManager = requireCJS("../../src/helpers/windowManager");
     const wm = new WindowManager();
     wm.setDefaultAlwaysOnTop(false);
     process.env.NODE_ENV = "development";

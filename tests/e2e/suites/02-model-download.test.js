@@ -4,7 +4,7 @@
  * Tests model lifecycle: need_download → downloading → loading → ready.
  * Uses IPC mocks to simulate model states without real downloads.
  */
-import { test, expect } from "playwright-core";
+import { test, expect } from "@playwright/test";
 import {
   launchElectronApp,
   closeElectronApp,

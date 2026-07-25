@@ -3,7 +3,7 @@
  *
  * Tests minimize, maximize/restore, and always-on-top.
  */
-import { test, expect } from "playwright-core";
+import { test, expect } from "@playwright/test";
 import {
   launchElectronApp,
   closeElectronApp,

@@ -182,6 +182,16 @@ describe("providerPresets", () => {
       expect(deepseek.name).toBe("deepseek");
     });
 
+    // [20260725_TDD_ProviderPresets] openai lookup — verifies the find()
+    // happy path returns a fully-defined preset for a known provider name.
+    it("returns defined preset with name 'openai' for getProviderByName('openai')", () => {
+      const openai = getProviderByName("openai");
+      expect(openai).toBeDefined();
+      expect(openai.name).toBe("openai");
+      expect(openai.label).toBe("OpenAI");
+      expect(openai.base_url).toContain("openai.com");
+    });
+
     it("returns undefined for unknown provider", () => {
       expect(getProviderByName("nonexistent")).toBeUndefined();
     });

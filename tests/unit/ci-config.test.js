@@ -118,4 +118,26 @@ describe("CI/CD configuration", () => {
       expect(build).toContain("FORCE_JAVASCRIPT_ACTIONS_TO_NODE24");
     });
   });
+
+  // [20260724_Fix_DevModeTsxLoader] Regression guard: Electron 36 loads .ts
+  // entry files via the ESM loader. --require tsx/cjs only patches CJS
+  // Module._extensions, which the ESM loader ignores, causing
+  // ERR_UNKNOWN_FILE_EXTENSION. --import tsx/esm registers an ESM loader hook.
+  describe("dev mode entry point loading", () => {
+    const pkg = JSON.parse(
+      fs.readFileSync(path.join(root, "package.json"), "utf8"),
+    );
+
+    it("dev:main uses --import tsx/esm (not --require tsx/cjs)", () => {
+      const devMain = pkg.scripts["dev:main"];
+      expect(devMain).toContain("--import tsx/esm");
+      expect(devMain).not.toContain("--require tsx/cjs");
+    });
+
+    it("prestart builds main bundle before electron . (which reads package.json main)", () => {
+      const prestart = pkg.scripts.prestart;
+      expect(prestart).toContain("build:main");
+    });
+  });
+  // [20260724_Fix_DevModeTsxLoader] END
 });

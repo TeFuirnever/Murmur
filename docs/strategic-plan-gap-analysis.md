@@ -1,5 +1,7 @@
 # Murmur GAP 分析：对标业界顶级开源项目
 
+> [20260725_Autopilot_T1.5] 本文档写于 ADR-010 big-bang 之前。文中 `main.js`、`preload.js`、`src/helpers/*.js` 等引用是历史快照（写作时确实是 `.js`）。当前源码已全部迁移到 `.ts`（见 `docs/adr/010-backend-ts-migration-strategy.md`）。下文保留原始文件名作为决策时的快照。
+
 ## Context
 
 不是简单罗列 Murmur 缺什么功能，而是分析 OpenClaw（250K stars）、OpenCode、oh-my-opencode 等**凭什么成为顶级开源项目**，提炼出可学习的模式，再对标 Murmur 的差距。

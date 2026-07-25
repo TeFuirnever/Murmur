@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Backend TypeScript migration (ADR-010): 15 `.ts` files with typed implementations covering core helpers (providerPresets, ipc-contracts, logManager, database, environment, serverMessageRouter, aiPrompts, etc.)
+- [20260725_Autopilot_T1.4] Backend TypeScript migration (ADR-010, big-bang completed 2026-07-24): all 39 backend `.js` files atomically migrated to `.ts`. ESM `import` source, esbuild bundles to `dist-main/main.js` + `dist-preload/preload.js` (CJS for Electron sandbox). `__dirname` → `app.getAppPath()` (13 sites). `tests/_tsresolve.setup.js` monkey-patches Node module system so legacy `.js` tests keep working against `.ts` source.
 - AI prompt few-shot examples for platform modes (xiaohongshu, zhihu, douyin, dianping) — ADR-012 Issue #4c resolved
 - Promotion content: community post templates (即刻/V2EX/少数派) and video scripts (B站/抖音)
 - Promotion infographics: competitor comparison matrix and bento-grid features overview (HTML+Playwright)
@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Settings page refactored: 1195-line monolith split into 7 focused modules with full i18n coverage (154 keys, zero hardcoded Chinese)
 - Dynamic transcription timeout based on file size (replaces hardcoded 5-minute limit) — ADR-012 Issue #1 resolved
 - OpenRouter provider preset added with free-tier models
-- esbuild `--resolve-extensions=.js,.ts` to handle dual .ts/.js backend files during bundling
+- esbuild `--resolve-extensions=.js,.ts` to handle dual .ts/.js backend files during bundling (no longer needed post-big-bang; kept defensively)
 - Provider registration guide text moved from providerPresets.js to i18n locale files
 - `ProviderPreset` type unified: `type ProviderPreset = AIProviderPreset` (single source of truth in types/ipc.ts)
 

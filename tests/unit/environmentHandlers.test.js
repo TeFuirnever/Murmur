@@ -52,8 +52,9 @@ describe("environmentHandlers funasr-install-progress event", () => {
 
   it("source uses constant, not string literal", async () => {
     const fs = await import("fs");
+    // [20260724_TS_BigBang_TestFix] Read .ts source (post-migration).
     const source = fs.readFileSync(
-      new URL("../../src/helpers/ipc/environmentHandlers.js", import.meta.url),
+      new URL("../../src/helpers/ipc/environmentHandlers.ts", import.meta.url),
       "utf8",
     );
     expect(source).toContain("C.EVENTS.FUNASR_INSTALL_PROGRESS");

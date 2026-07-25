@@ -27,6 +27,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Build main bundle
+        run: pnpm run build:main
+
       - name: Build preload bundle
         run: pnpm run build:preload
 
@@ -38,6 +41,13 @@ jobs:
 
       - name: Typecheck
         run: pnpm typecheck
+
+      # [20260725_CodeReview_CiSync] Mirror scripts/ci-check.js stage 1:
+      # typecheck:tests runs tsc against tsconfig.test.json which covers
+      # tests/**. The local gate runs both; CI must too or the test type
+      # safety gate is informational only. See ts-migration-audit-and-evolution.md §5.0 Tier 2.2.
+      - name: Typecheck tests
+        run: pnpm typecheck:tests
 
       - name: Security audit
         run: pnpm audit --audit-level moderate

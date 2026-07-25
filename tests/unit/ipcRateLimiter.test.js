@@ -84,4 +84,65 @@ describe("ipcRateLimiter", () => {
     const result = await limited({}, "extra");
     expect(result.success).toBe(false);
   });
+
+  // [20260725_TDD_IpcRateLimiter] Explicit execution-path coverage for the
+  // returned rateLimitedHandler closure (line 29+ in ipcRateLimiter.ts).
+  // Targets the function-coverage gap that remained at 50%.
+  describe("rateLimitedHandler execution path", () => {
+    it("calls the wrapped handler and returns its result when under limit", async () => {
+      const handler = vi.fn(async (_event, arg) => `result:${arg}`);
+      const limited = createRateLimitedHandler(handler, {
+        maxCalls: 5,
+        windowMs: 1000,
+      });
+
+      // Under limit → handler invoked, return value passes through.
+      const result = await limited({ id: 1 }, "payload");
+      expect(handler).toHaveBeenCalledTimes(1);
+      expect(handler).toHaveBeenCalledWith({ id: 1 }, "payload");
+      expect(result).toBe("result:payload");
+    });
+
+    it('returns { success: false, error: "Rate limit exceeded" } when over limit', async () => {
+      const handler = vi.fn(async () => "ok");
+      const limited = createRateLimitedHandler(handler, {
+        maxCalls: 1,
+        windowMs: 1000,
+      });
+
+      // First call fills the window; second call must be rejected.
+      await limited({}, "first");
+      const blocked = await limited({}, "second");
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      expect(blocked).toEqual({
+        success: false,
+        error: "Rate limit exceeded",
+      });
+    });
+
+    it("clears old timestamps after the window expires and allows calls again", async () => {
+      const handler = vi.fn(async () => "ok");
+      const limited = createRateLimitedHandler(handler, {
+        maxCalls: 2,
+        windowMs: 1000,
+      });
+
+      // Exhaust the limit at t=0.
+      await limited({}, "a");
+      await limited({}, "b");
+      // Now blocked — would return rate-limit error.
+      const blocked = await limited({}, "c");
+      expect(blocked.success).toBe(false);
+
+      // Advance past the window so stale timestamps get shifted out of the
+      // sliding window (the while-loop at line 36-38).
+      vi.advanceTimersByTime(1500);
+
+      // After expiry, fresh calls must succeed again.
+      const result = await limited({}, "d");
+      expect(result).toBe("ok");
+      expect(handler).toHaveBeenCalledTimes(3); // a, b, d (c was blocked)
+    });
+  });
 });

@@ -53,25 +53,12 @@ describe("Phase 2: Type safety gradual enhancement", () => {
     });
   });
 
-  describe("jsconfig.json for main process (JSDoc + checkJs)", () => {
-    let jsconfig;
-
-    beforeAll(() => {
-      const content = fs.readFileSync(
-        path.join(rootDir, "jsconfig.json"),
-        "utf8",
-      );
-      jsconfig = JSON.parse(content);
-    });
-
-    it("should exist", () => {
-      expect(jsconfig).toBeDefined();
-    });
-
-    it("should have checkJs enabled for type checking JS files", () => {
-      expect(jsconfig.compilerOptions.checkJs).toBe(true);
-    });
-  });
+  // [20260725_Autopilot_T1.1] Retired the jsconfig.json describe block.
+  // jsconfig.json was deleted because it referenced dead main.js/preload.js
+  // after the ADR-010 big-bang migration. The whole rationale (checkJs for
+  // untyped .js main process) no longer applies — main is now main.ts and
+  // covered by tsconfig.json strict mode directly.
+  // Original block asserted: jsconfig exists + checkJs === true.
 
   describe("electronAPI.d.ts type declarations", () => {
     let typeFile;

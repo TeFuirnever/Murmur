@@ -3,7 +3,7 @@
  *
  * Tests clipboard read/write and auto-paste behavior modes.
  */
-import { test, expect } from "playwright-core";
+import { test, expect } from "@playwright/test";
 import {
   launchElectronApp,
   closeElectronApp,

@@ -10,7 +10,7 @@
 /**
  * Override an IPC handler with a static mock response.
  *
- * @param {import('playwright-core').ElectronApplication} app
+ * @param {import('@playwright/test').ElectronApplication} app
  * @param {string} channel - IPC channel name
  * @param {object} response - JSON-serializable response object
  *
@@ -31,7 +31,7 @@ async function mockIpcHandler(app, channel, response) {
 /**
  * Override multiple IPC handlers at once.
  *
- * @param {import('playwright-core').ElectronApplication} app
+ * @param {import('@playwright/test').ElectronApplication} app
  * @param {Record<string, object>} mocks - Channel → response map
  */
 async function mockIpcHandlers(app, mocks) {
@@ -43,7 +43,7 @@ async function mockIpcHandlers(app, mocks) {
 /**
  * Remove a mocked IPC handler (channel returns "no handler" errors).
  *
- * @param {import('playwright-core').ElectronApplication} app
+ * @param {import('@playwright/test').ElectronApplication} app
  * @param {string} channel
  */
 async function restoreIpcHandler(app, channel) {

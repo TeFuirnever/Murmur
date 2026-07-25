@@ -1,0 +1,197 @@
+// [20260725_CodeReview_Tier3_Template] Migrated from .js to .ts as a
+// template for the remaining 52 .js tests. Pattern: declare explicit types
+// for `let` bindings assigned in beforeAll — strict tsc requires this
+// because the assignment happens in a callback whose type doesn't flow
+// back to the declaration site. Each `let x: <type>;` corresponds to a
+// former `let x;` that produced TS7034/TS7005 (implicit any).
+import { describe, it, expect, beforeAll } from "vitest";
+import fs from "fs";
+import path from "path";
+
+const rootDir = path.resolve(__dirname, "../../");
+
+describe("Phase 4: Internationalization i18n", () => {
+  describe("i18n dependencies", () => {
+    // [20260725_CodeReview_Tier3_Template] Package shape: dependencies +
+    // devDependencies are string maps. Use the package's own shape via
+    // tsconfig's `resolveJsonModule` (read at runtime, not imported).
+    let pkg: {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+
+    beforeAll(() => {
+      pkg = JSON.parse(
+        fs.readFileSync(path.join(rootDir, "package.json"), "utf8"),
+      );
+    });
+
+    it("should have i18next dependency", () => {
+      const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+      expect(deps).toHaveProperty("i18next");
+    });
+
+    it("should have react-i18next dependency", () => {
+      const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+      expect(deps).toHaveProperty("react-i18next");
+    });
+  });
+
+  describe("i18n configuration", () => {
+    let i18nConfig: string;
+
+    beforeAll(() => {
+      // [20260724_TS_BigBang_TestFix] Read .ts source (post-migration).
+      const configPath = path.join(rootDir, "src/i18n/index.ts");
+      if (fs.existsSync(configPath)) {
+        i18nConfig = fs.readFileSync(configPath, "utf8");
+      }
+    });
+
+    it("should exist", () => {
+      expect(i18nConfig).toBeDefined();
+      expect(i18nConfig.length).toBeGreaterThan(0);
+    });
+
+    it("should import i18next", () => {
+      expect(i18nConfig).toMatch(/i18next/);
+    });
+
+    it("should configure escapeValue: true for security", () => {
+      expect(i18nConfig).toMatch(/escapeValue\s*:\s*true/);
+    });
+
+    it("should support zh-CN and en languages", () => {
+      expect(i18nConfig).toMatch(/zh-CN/);
+      expect(i18nConfig).toMatch(/\ben\b/);
+    });
+  });
+
+  describe("Translation files", () => {
+    it("should have zh-CN.json", () => {
+      const filePath = path.join(rootDir, "src/i18n/locales/zh-CN.json");
+      expect(fs.existsSync(filePath)).toBe(true);
+    });
+
+    it("should have en.json", () => {
+      const filePath = path.join(rootDir, "src/i18n/locales/en.json");
+      expect(fs.existsSync(filePath)).toBe(true);
+    });
+
+    it("zh-CN.json should be valid JSON", () => {
+      const content = fs.readFileSync(
+        path.join(rootDir, "src/i18n/locales/zh-CN.json"),
+        "utf8",
+      );
+      expect(() => JSON.parse(content)).not.toThrow();
+    });
+
+    it("en.json should be valid JSON", () => {
+      const content = fs.readFileSync(
+        path.join(rootDir, "src/i18n/locales/en.json"),
+        "utf8",
+      );
+      expect(() => JSON.parse(content)).not.toThrow();
+    });
+
+    it("translation files should share the same key structure", () => {
+      const zhContent = JSON.parse(
+        fs.readFileSync(
+          path.join(rootDir, "src/i18n/locales/zh-CN.json"),
+          "utf8",
+        ),
+      );
+      const enContent = JSON.parse(
+        fs.readFileSync(path.join(rootDir, "src/i18n/locales/en.json"), "utf8"),
+      );
+      const zhKeys = Object.keys(zhContent).sort();
+      const enKeys = Object.keys(enContent).sort();
+      expect(zhKeys).toEqual(enKeys);
+    });
+
+    it("zh-CN.json should have common UI keys", () => {
+      const content = JSON.parse(
+        fs.readFileSync(
+          path.join(rootDir, "src/i18n/locales/zh-CN.json"),
+          "utf8",
+        ),
+      );
+      // Spot-check key UI strings that must be translated
+      const jsonStr = JSON.stringify(content);
+      expect(jsonStr.length).toBeGreaterThan(100);
+    });
+  });
+
+  describe("Main entry point i18n integration", () => {
+    let mainContent: string;
+
+    beforeAll(() => {
+      mainContent = fs.readFileSync(path.join(rootDir, "src/main.tsx"), "utf8");
+    });
+
+    it("should import i18n configuration", () => {
+      expect(mainContent).toMatch(/i18n/);
+    });
+  });
+
+  describe("Settings page language selector", () => {
+    let settingsContent: string;
+
+    beforeAll(() => {
+      settingsContent = fs.readFileSync(
+        path.join(rootDir, "src/settings.tsx"),
+        "utf8",
+      );
+    });
+
+    it("should have language setting state or i18n usage", () => {
+      const hasUseTranslation = settingsContent.includes("useTranslation");
+      const hasLanguageState = settingsContent.includes("language");
+      expect(hasUseTranslation || hasLanguageState).toBe(true);
+    });
+
+    it("should have language change handler", () => {
+      const allSettingsContent = [
+        settingsContent,
+        fs.readFileSync(
+          path.join(rootDir, "src/settings/sections/GeneralSection.tsx"),
+          "utf8",
+        ),
+      ].join("\n");
+      expect(allSettingsContent).toMatch(
+        /changeLanguage|i18n\.changeLanguage|setLanguage/,
+      );
+    });
+  });
+
+  describe("Settings page uses translation keys", () => {
+    let settingsContent: string;
+
+    beforeAll(() => {
+      settingsContent = fs.readFileSync(
+        path.join(rootDir, "src/settings.tsx"),
+        "utf8",
+      );
+    });
+
+    it("should use useTranslation hook or t function", () => {
+      expect(settingsContent).toMatch(/useTranslation|[^a-z]t\(/);
+    });
+  });
+
+  describe("electronAPI.d.ts language types", () => {
+    let typeFile: string;
+
+    beforeAll(() => {
+      typeFile = fs.readFileSync(
+        path.join(rootDir, "src/electronAPI.d.ts"),
+        "utf8",
+      );
+    });
+
+    it("should remain valid (no syntax errors from Phase 3 changes)", () => {
+      expect(typeFile).toContain("ElectronAPI");
+      expect(typeFile).toContain("downloadUpdate");
+    });
+  });
+});

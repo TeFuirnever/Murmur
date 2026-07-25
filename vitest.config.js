@@ -8,6 +8,12 @@ export default defineConfig({
     include: ["tests/**/*.test.{js,ts,jsx,tsx}"],
     exclude: ["tests/e2e/**", "node_modules/**"],
     globals: true,
+    // [20260724_TS_BigBang_Resolver] Setup file that monkey-patches Node's
+    // native require resolver so bare require("../../src/...") in .js test
+    // files resolves .ts after the .js twins are deleted. See
+    // tests/_tsresolve.setup.js for full rationale.
+    setupFiles: ["./tests/_tsresolve.setup.js"],
+    // [20260724_TS_BigBang_Resolver] END
     coverage: {
       provider: "v8",
       reporter: ["text", "text-summary"],
@@ -17,19 +23,24 @@ export default defineConfig({
         "src/bootstrap/**/*.{js,ts}",
       ],
       exclude: [
-        // Electron-dependent (require runtime IPC/BrowserWindow/app)
-        "src/helpers/clipboard.js",
-        "src/helpers/environment.js",
-        "src/helpers/tray.js",
-        "src/helpers/hotkeyManager.js",
-        "src/helpers/pythonEnvironment.js",
-        "src/helpers/pythonInstaller.js",
-        "src/helpers/funasrManager.js",
-        "src/helpers/funasrServer.js",
-        "src/helpers/modelManager.js",
-        "src/helpers/updateManager.js",
-        "src/helpers/windowManager.js",
-        "src/helpers/logManager.js",
+        // [20260724_TS_BigBang_TestFix] Changed .js → .ts to match migrated
+        // file names. These are Electron-dependent (require runtime
+        // IPC/BrowserWindow/app) and cannot be unit-tested.
+        "src/helpers/clipboard.ts",
+        // [20260725_Fix_WrongExclusion] 4 files removed from exclude — they
+        // have zero electron module dependency:
+        // - environment.ts: only reads process.versions.electron (no import)
+        // - funasrServer.ts: no electron reference at all
+        // - funasrManager.ts: no electron reference at all
+        // - pythonInstaller.ts: no electron reference at all
+        "src/helpers/tray.ts",
+        "src/helpers/hotkeyManager.ts",
+        "src/helpers/pythonEnvironment.ts",
+        "src/helpers/modelManager.ts",
+        "src/helpers/updateManager.ts",
+        "src/helpers/windowManager.ts",
+        "src/helpers/logManager.ts",
+        // [20260724_TS_BigBang_TestFix] END
         // IPC handlers (integration-level, require Electron IPC bridge)
         "src/helpers/ipc/**",
       ],

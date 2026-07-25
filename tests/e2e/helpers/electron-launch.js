@@ -6,23 +6,33 @@
  * - MediaRecorder mock (navigator.mediaDevices.getUserMedia)
  * - Clean state per suite
  */
-const { _electron: electron } = require("playwright-core");
+const { _electron: electron } = require("@playwright/test");
 const path = require("path");
 
-// Resolve from project root to avoid fragile __dirname depth assumptions
-const PROJECT_ROOT = path.resolve(__dirname, "../../../..");
+// [20260724_TS_BigBang_TestFix] Fix PROJECT_ROOT: tests/e2e/helpers is 3
+// levels below project root (helpers → e2e → tests → Murmur). The original
+// "../../../.." (4 levels) resolved to the parent of Murmur, which was
+// masked because e2e never actually ran (playwright-core CLI was broken).
+const PROJECT_ROOT = path.resolve(__dirname, "../../..");
+// [20260724_TS_BigBang_TestFix] END
 
 /**
  * Launch the Murmur Electron app for testing.
  * @param {object} [options] - Launch options
  * @param {Record<string, string>} [options.env] - Additional env vars
- * @returns {Promise<{app: import('playwright-core').ElectronApplication, window: import('playwright-core').Page}>}
+ * @returns {Promise<{app: import('@playwright/test').ElectronApplication, window: import('@playwright/test').Page}>}
  */
 async function launchElectronApp({ env = {} } = {}) {
-  const mainJs = path.join(PROJECT_ROOT, "main.js");
+  // [20260724_TS_BigBang_TestFix] Launch via project root so Electron reads
+  // package.json "main" field (dist-main/main.js). Passing the bundle path
+  // directly as args[] causes app.getAppPath() to return dist-main/ instead
+  // of the project root, breaking renderer/preload path resolution.
+  // Launching with "." makes getAppPath() return the package.json directory.
+  const appRoot = PROJECT_ROOT;
+  // [20260724_TS_BigBang_TestFix] END
 
   const app = await electron.launch({
-    args: [mainJs],
+    args: [appRoot],
     env: {
       ...process.env,
       NODE_ENV: "test",
@@ -60,7 +70,7 @@ async function launchElectronApp({ env = {} } = {}) {
 
 /**
  * Gracefully close the Electron app.
- * @param {import('playwright-core').ElectronApplication} app
+ * @param {import('@playwright/test').ElectronApplication} app
  */
 async function closeElectronApp(app) {
   if (app) {

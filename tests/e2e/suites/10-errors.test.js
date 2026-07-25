@@ -8,7 +8,7 @@
  * Note: FunASR crash/restart test (10.1) is intentionally
  * excluded from E2E and moved to integration tests per QA review (M-1).
  */
-import { test, expect } from "playwright-core";
+import { test, expect } from "@playwright/test";
 import {
   launchElectronApp,
   closeElectronApp,

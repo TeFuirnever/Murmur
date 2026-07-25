@@ -1,12 +1,12 @@
 # ADR 010: Backend TS migration strategy
 
-## Status: Accepted — updated 2026-07-24 with dual-source findings
+## Status: Superseded — big-bang migration completed 2026-07-24
 
 ## Context
 
 Backend Node.js files (`src/helpers/*.js`, `main.js`, `preload.js`) use `require()` for module resolution. TypeScript files (`.ts`) cannot be resolved by Node.js's native `require()`. Previous attempt to rename `.js` → `.ts` broke all `require()` calls.
 
-## Decision
+## Decision (original — superseded)
 
 Prepare infrastructure for gradual backend migration without forcing it now:
 
@@ -15,18 +15,47 @@ Prepare infrastructure for gradual backend migration without forcing it now:
 3. Keep all backend files as `.js` until migration is done file-by-file
 4. Migrate one file per PR, starting with pure functions (no `require` dependencies)
 
-## Current State (2026-07-24)
+## Why gradual migration failed
 
-14 backend helpers now have dual `.ts` + `.js` source files:
+The dual-source approach (.ts type stub + .js runtime) had a fatal flaw:
+`.js` source files' internal `require("./foo")` uses Node's native resolver,
+which cannot resolve `.ts`. This means deleting any `.js` file breaks all
+`.js` files that require it — verified empirically (178 test failures).
 
-- `.ts` = typed source of truth (used by `tsc --noEmit` and vitest, which resolves `.ts` first)
-- `.js` = runtime implementation (used by Electron `require()` in production and by vitest CJS interop)
+The gradual approach was never truly gradual — it was a deferred big-bang.
+Adversarial code review (3 parallel reviewers) found 6 P0 defects in the
+original big-bang plan, all fixed before execution.
 
-**The `.js` files cannot be deleted yet.** Attempted deletion caused 178 test failures because:
+## Decision (final — big-bang, 2026-07-24)
 
-- CJS consumers (`main.js`, `ipc/index.js`, other `.js` helpers) use `require("./module")` expecting `module.exports = X`
-- When vitest resolves to `.ts` (ESM `export default X`), CJS `require()` gets `{ default: X }` instead of `X`
-- This is a systemic ESM/CJS interop issue, not fixable per-file without `@ts-ignore` or `module.exports` shims
+All 39 backend `.js` files migrated to `.ts` in one atomic operation:
+
+1. All `require()` → `import`, all `module.exports` → `export default`/named
+2. esbuild bundles `main.ts` → `dist-main/main.js`, `preload.ts` → `dist-preload/preload.js`
+3. `package.json "main"` → `dist-main/main.js`
+4. electron-builder ships only bundles (no raw `src/helpers/**`)
+5. `build:main` wired into all packaging paths (build/dist/pack/prebuild/CI)
+6. `__dirname` paths replaced with `app.getAppPath()` (13 sites)
+7. Test infrastructure: `tests/_tsresolve.setup.js` monkey-patches Node's
+   module system so `.js` test files' `require()` can load `.ts` (esbuild
+   .ts loader + .ts resolution + \_\_esModule default unwrap)
+
+### Export strategy
+
+| Pattern                             | Solution                                               |
+| ----------------------------------- | ------------------------------------------------------ |
+| `module.exports = Class`            | `export default Class` (consumers use `import X from`) |
+| `module.exports = { fn }`           | named exports `export function fn`                     |
+| Whole-object export (ipc-contracts) | named exports per top-level key                        |
+| Conditional `require("osascript")`  | kept as CJS require inside try/catch                   |
+
+### Verified
+
+- `tsc --noEmit`: 0 errors
+- `eslint`: 0 warnings
+- `vitest`: 672/672 tests pass
+- `build:main` + `build:preload`: bundles produced
+- `electron-builder pack`: asar contains `dist-main/main.js` + `dist-preload/preload.js`, no raw source
 
 ### To fully delete `.js` files (future work)
 

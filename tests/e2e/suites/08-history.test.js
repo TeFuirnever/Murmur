@@ -4,7 +4,7 @@
  * Tests history window, search, and delete operations.
  * Inserts test records via IPC mock, then verifies UI behavior.
  */
-import { test, expect } from "playwright-core";
+import { test, expect } from "@playwright/test";
 import {
   launchElectronApp,
   closeElectronApp,

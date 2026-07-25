@@ -1,4 +1,4 @@
-import { test, expect, _electron } from "playwright-core";
+import { test, expect, _electron } from "@playwright/test";
 import path from "path";
 
 test.describe("Electron app launch", () => {
@@ -7,7 +7,7 @@ test.describe("Electron app launch", () => {
 
   test.beforeAll(async () => {
     electronApp = await _electron.launch({
-      args: [path.resolve(__dirname, "../../main.js")],
+      args: [path.resolve(__dirname, "../../..")],
       env: { ...process.env, NODE_ENV: "test" },
     });
     window = await electronApp.firstWindow();
@@ -21,7 +21,9 @@ test.describe("Electron app launch", () => {
 
   test("should launch and show main window", async () => {
     expect(window).toBeDefined();
-    const isVisible = await window.isVisible();
+    // [20260724_E2E_PlaywrightApiFix] Playwright 1.60 requires selector arg
+    const isVisible = await window.isVisible("body");
+    // [20260724_E2E_PlaywrightApiFix] END
     expect(isVisible).toBe(true);
   });
 

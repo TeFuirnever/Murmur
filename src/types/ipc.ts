@@ -274,3 +274,40 @@ export interface HotkeyRegistrationResult {
   success: boolean;
   error?: string;
 }
+
+// ─── Event payloads (main → renderer push channels) ──
+// [20260725_CodeReview_Tier2.3_Finalize] Extracted from inline duplications
+// in preload.ts (callback param + handler param) and src/electronAPI.d.ts
+// (callback param). Single source of truth for event payload shapes.
+
+/** Payload for the `processing-update` event (model status changes). */
+export interface ProcessingUpdateData {
+  status?: string;
+  progress?: number;
+  type?: string;
+  isLoading?: boolean;
+  isReady?: boolean;
+}
+
+/** Payload for the `file-transcription-progress` event. */
+export interface FileTranscriptionProgressData {
+  progress?: number;
+  status?: string;
+  phase?: string;
+  message?: string;
+  processed_ms?: number;
+  total_ms?: number;
+  progress_pct?: number;
+}
+
+// [20260725_CodeReview_OperationResult] Common shape for handlers that only
+// report success/failure with optional error message — no other payload.
+// Replaces inline `{ success: boolean; error?: string }` duplicated across
+// electronAPI.d.ts (5 sites), useModelStatus.tsx, funasrServer.ts.
+// Richer results (e.g. TranscriptionSaveResult with lastInsertRowid) keep
+// their own interface and are NOT replaced by this.
+export interface OperationResult {
+  success: boolean;
+  error?: string;
+}
+// [20260725_CodeReview_OperationResult] END

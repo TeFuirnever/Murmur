@@ -2,6 +2,8 @@ import type {
   AIProcessResult,
   AICheckStatusResult,
   AIMode,
+  AIProviderPreset,
+  LocalModelDetection,
   TranscriptionRecord,
   TranscriptionSaveResult,
   FileTranscriptionResult,
@@ -10,6 +12,7 @@ import type {
   AIReviewResult,
   TranscriptionStats,
   FunASRStatusResult,
+  FunASRInstallResult,
   ModelCheckResult,
   DownloadProgress,
   ModelInfo,
@@ -22,6 +25,9 @@ import type {
   UpdateErrorData,
   PermissionResult,
   HotkeyRegistrationResult,
+  ProcessingUpdateData,
+  FileTranscriptionProgressData,
+  OperationResult,
 } from "./types/ipc";
 
 export interface ElectronAPI {
@@ -47,7 +53,7 @@ export interface ElectronAPI {
     options?: Record<string, unknown>,
   ) => Promise<FileTranscriptionResult>;
   checkFunASRStatus: () => Promise<FunASRStatusResult>;
-  installFunASR: () => Promise<{ installed: boolean; error?: string }>;
+  installFunASR: () => Promise<FunASRInstallResult>;
   restartFunasrServer: () => Promise<{
     success: boolean;
     message?: string;
@@ -60,16 +66,12 @@ export interface ElectronAPI {
   downloadModels: (
     callback?: (progress: DownloadProgress) => void,
   ) => Promise<ModelCheckResult>;
-  downloadModel: (
-    modelName: string,
-  ) => Promise<{ success: boolean; error?: string }>;
+  downloadModel: (modelName: string) => Promise<OperationResult>;
   getAvailableModels: () => Promise<ModelInfo[]>;
   getCurrentModel: () => Promise<string>;
-  switchModel: (
-    modelName: string,
-  ) => Promise<{ success: boolean; error?: string }>;
+  switchModel: (modelName: string) => Promise<OperationResult>;
   onModelDownloadProgress: (
-    callback: (eventOrProgress: any, progress?: DownloadProgress) => void,
+    callback: (eventOrProgress: unknown, progress?: DownloadProgress) => void,
   ) => () => void;
 
   // AI text processing
@@ -107,9 +109,7 @@ export interface ElectronAPI {
     limit: number,
     offset: number,
   ) => Promise<TranscriptionRecord[]>;
-  deleteTranscription: (
-    id: number,
-  ) => Promise<{ success: boolean; error?: string }>;
+  deleteTranscription: (id: number) => Promise<OperationResult>;
   diarizeAudio: (id: number) => Promise<{
     success: boolean;
     segments?: Array<{
@@ -120,7 +120,7 @@ export interface ElectronAPI {
     }>;
     error?: string;
   }>;
-  clearAllTranscriptions: () => Promise<{ success: boolean; error?: string }>;
+  clearAllTranscriptions: () => Promise<OperationResult>;
   searchTranscriptions: (
     query: string,
     limit?: number,
@@ -172,15 +172,7 @@ export interface ElectronAPI {
   ) => Promise<FileTranscriptionResult>;
   cancelFileTranscription: () => Promise<{ success: boolean }>;
   onFileTranscriptionProgress: (
-    callback: (data: {
-      progress?: number;
-      status?: string;
-      phase?: string;
-      message?: string;
-      processed_ms?: number;
-      total_ms?: number;
-      progress_pct?: number;
-    }) => void,
+    callback: (data: FileTranscriptionProgressData) => void,
   ) => () => void;
 
   // AI review
@@ -204,7 +196,7 @@ export interface ElectronAPI {
     checksumsUrl: string;
     latestVersion: string;
   }) => Promise<UpdateDownloadResult>;
-  cancelUpdateDownload: () => Promise<{ success: boolean; error?: string }>;
+  cancelUpdateDownload: () => Promise<OperationResult>;
   installUpdate: (filePath: string) => Promise<boolean>;
   onUpdateDownloadProgress: (
     callback: (data: UpdateProgressData) => void,
@@ -227,16 +219,7 @@ export interface ElectronAPI {
     callback: (data: TranscriptionRecord) => void,
   ) => () => void;
   onProcessingUpdate: (
-    callback: (
-      eventOrData: any,
-      data?: {
-        status?: string;
-        progress?: number;
-        type?: string;
-        isLoading?: boolean;
-        isReady?: boolean;
-      },
-    ) => void,
+    callback: (eventOrData: unknown, data?: ProcessingUpdateData) => void,
   ) => () => void;
   onError: (callback: (data: { error: string }) => void) => () => void;
   onSettingsUpdate: (
@@ -252,9 +235,6 @@ export interface ElectronAPI {
   openSettingsWindow: () => Promise<void>;
   closeSettingsWindow: () => Promise<void>;
   hideSettingsWindow: () => Promise<void>;
-
-  // Python environment
-  installFunASR: () => Promise<import("./types/ipc").FunASRInstallResult>;
 }
 
 export interface AppConstants {

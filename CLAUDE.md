@@ -45,12 +45,12 @@ Instructions for AI agents working. All content in English.
 - Use the active planning workflow for non-trivial tasks, architectural decisions, or work that spans multiple moving parts.
 - If new evidence invalidates the current approach, stop and re-plan instead of forcing the original path through.
 - Treat these areas as high-risk and apply stronger planning, review, and verification:
-  - `main.js` and `preload.js` boundaries (Electron IPC bridge)
-  - `src/helpers/ipc-contracts.js` and IPC channel changes
+  - `main.ts` and `preload.ts` boundaries (Electron IPC bridge)
+  - `src/helpers/ipc-contracts.ts` and IPC channel changes
   - `src/helpers/ipc/` handler modules (domain-scoped IPC handlers)
-  - `src/helpers/funasrManager.js` and its sub-modules (Python subprocess lifecycle)
-  - `src/helpers/windowManager.js` (sandbox, CSP, window creation)
-  - `src/helpers/database.js` (safeStorage encryption, schema)
+  - `src/helpers/funasrManager.ts` and its sub-modules (Python subprocess lifecycle)
+  - `src/helpers/windowManager.ts` (sandbox, CSP, window creation)
+  - `src/helpers/database.ts` (safeStorage encryption, schema)
   - packaging/release and electron-builder configuration
 
 ### Change Discipline
@@ -80,15 +80,15 @@ Instructions for AI agents working. All content in English.
 - No empty `catch` — log, rethrow, or handle errors intentionally.
 - Error handling: always handle real error paths (main process, IPC, network); skip defensive code only for states that truly cannot occur.
 - No magic numbers or hardcoded config.
-- Use existing IPC contract constants from `src/helpers/ipc-contracts.js` — zero hardcoded channel strings.
+- Use existing IPC contract constants from `src/helpers/ipc-contracts.ts` — zero hardcoded channel strings.
 - ESLint with 0 warnings, 0 errors.
 
 ### Prohibited
 
 1. No modifying FunASR Python subprocess lifecycle without test coverage.
 2. No silent error swallowing in main process.
-3. No hardcoded IPC channel strings — use `ipc-contracts.js` constants.
-4. No new IPC handler files without registering in `src/helpers/ipc/index.js`.
+3. No hardcoded IPC channel strings — use `ipc-contracts.ts` constants.
+4. No new IPC handler files without registering in `src/helpers/ipc/index.ts`.
 
 ## Verification
 
@@ -119,8 +119,8 @@ Instructions for AI agents working. All content in English.
 
 - Project overview & tech stack → `README.md`
 - Architecture & data flow → `CONTRIBUTING.md` (架构概览 section)
-- IPC contracts → `src/helpers/ipc-contracts.js` (typed source: `ipc-contracts.ts`)
-- AI prompt templates → `src/helpers/aiPrompts.js`
+- IPC contracts → `src/helpers/ipc-contracts.ts` (single source of truth, `as const` channels)
+- AI prompt templates → `src/helpers/aiPrompts.ts`
 - Security measures → `SECURITY.md`
 - CI gate check → `scripts/ci-check.js` and `/ci-gate` skill
 
