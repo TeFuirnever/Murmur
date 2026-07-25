@@ -1,3 +1,8 @@
+// [20260725_Tier3_Phase6Migrate] Migrated from .js to .ts as part of
+// Tier 3 batch 1. Pattern: declare explicit types for `let` bindings
+// assigned in beforeAll (TS7034). `pkg` is JSON-parsed so it's typed
+// as the structural subset this test reads (scripts + devDependencies).
+// Template reference: phase4-i18n.test.ts (commit d52f2e0).
 import { describe, it, expect, beforeAll } from "vitest";
 import fs from "fs";
 import path from "path";
@@ -6,7 +11,12 @@ const rootDir = path.resolve(__dirname, "../../");
 
 describe("Phase 6: E2E testing infrastructure", () => {
   describe("Playwright dependency", () => {
-    let pkg;
+    // [20260725_Tier3_Phase6Migrate] Structural type covers only what
+    // this test reads; avoids `any` (forbidden by backend-type-safety).
+    let pkg: {
+      devDependencies?: Record<string, string>;
+      scripts?: Record<string, string>;
+    };
 
     beforeAll(() => {
       pkg = JSON.parse(
@@ -57,7 +67,7 @@ describe("Phase 6: E2E testing infrastructure", () => {
       expect(fs.existsSync(configPath)).toBe(true);
     });
 
-    let configContent;
+    let configContent: string;
 
     beforeAll(() => {
       const configPath = path.join(rootDir, "playwright.config.js");
@@ -72,7 +82,7 @@ describe("Phase 6: E2E testing infrastructure", () => {
   });
 
   describe("Lifecycle test content", () => {
-    let content;
+    let content: string;
 
     beforeAll(() => {
       const suitesDir = path.join(rootDir, "tests/e2e/suites");
@@ -97,7 +107,7 @@ describe("Phase 6: E2E testing infrastructure", () => {
   });
 
   describe("E2E test script in package.json", () => {
-    let pkg;
+    let pkg: { scripts?: Record<string, string> };
 
     beforeAll(() => {
       pkg = JSON.parse(
@@ -111,7 +121,7 @@ describe("Phase 6: E2E testing infrastructure", () => {
   });
 
   describe("CI integration", () => {
-    let ciContent;
+    let ciContent: string;
 
     beforeAll(() => {
       const ciPath = path.join(rootDir, ".github/workflows/ci.yml");

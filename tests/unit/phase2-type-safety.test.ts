@@ -1,3 +1,8 @@
+// [20260725_Tier3_Phase2Migrate] Migrated from .js to .ts as part of
+// Tier 3 batch 1. Pattern: declare explicit types for `let` bindings
+// assigned in beforeAll (TS7034). tsconfig + typeFile are JSON-parsed /
+// string-read so they're typed structurally (only fields this test reads).
+// Template reference: phase4-i18n.test.ts (commit d52f2e0).
 import { describe, it, expect, beforeAll } from "vitest";
 import fs from "fs";
 import path from "path";
@@ -6,7 +11,19 @@ const rootDir = path.resolve(__dirname, "../../");
 
 describe("Phase 2: Type safety gradual enhancement", () => {
   describe("tsconfig.json for renderer process", () => {
-    let tsconfig;
+    // [20260725_Tier3_Phase2Migrate] Structural subset of tsconfig.json
+    // — only the fields this test reads. Avoids `any`.
+    let tsconfig: {
+      compilerOptions?: {
+        allowJs?: boolean;
+        checkJs?: boolean;
+        strict?: boolean;
+        module?: string;
+        jsx?: string;
+      };
+      include?: string[] | string;
+      exclude?: string[];
+    };
 
     beforeAll(() => {
       const content = fs.readFileSync(
@@ -21,29 +38,29 @@ describe("Phase 2: Type safety gradual enhancement", () => {
     });
 
     it("should have allowJs enabled", () => {
-      expect(tsconfig.compilerOptions.allowJs).toBe(true);
+      expect(tsconfig.compilerOptions?.allowJs).toBe(true);
     });
 
     it("should not have checkJs enabled (gradual migration)", () => {
-      expect(tsconfig.compilerOptions.checkJs).toBeFalsy();
+      expect(tsconfig.compilerOptions?.checkJs).toBeFalsy();
     });
 
     it("should have strict mode enabled for full type safety", () => {
-      expect(tsconfig.compilerOptions.strict).toBe(true);
+      expect(tsconfig.compilerOptions?.strict).toBe(true);
     });
 
     it("should target ESNext modules for Vite compatibility", () => {
-      expect(tsconfig.compilerOptions.module).toMatch(/ESNext|esnext/i);
+      expect(tsconfig.compilerOptions?.module).toMatch(/ESNext|esnext/i);
     });
 
     it("should have jsx set to react-jsx", () => {
-      expect(tsconfig.compilerOptions.jsx).toBe("react-jsx");
+      expect(tsconfig.compilerOptions?.jsx).toBe("react-jsx");
     });
 
     it("should include src directory", () => {
       const includes = Array.isArray(tsconfig.include)
         ? tsconfig.include
-        : [tsconfig.include];
+        : [tsconfig.include ?? ""];
       expect(includes.some((i) => i.includes("src"))).toBe(true);
     });
 
@@ -61,7 +78,7 @@ describe("Phase 2: Type safety gradual enhancement", () => {
   // Original block asserted: jsconfig exists + checkJs === true.
 
   describe("electronAPI.d.ts type declarations", () => {
-    let typeFile;
+    let typeFile: string;
 
     beforeAll(() => {
       const typePath = path.join(rootDir, "src", "electronAPI.d.ts");
@@ -95,7 +112,7 @@ describe("Phase 2: Type safety gradual enhancement", () => {
   });
 
   describe("ipc-contracts type annotations", () => {
-    let contracts;
+    let contracts: string;
 
     beforeAll(() => {
       // [20260724_TS_Migration_IpcContracts] Now reads from .ts source of truth
@@ -115,7 +132,7 @@ describe("Phase 2: Type safety gradual enhancement", () => {
   });
 
   describe("Vite config supports TS", () => {
-    let viteConfig;
+    let viteConfig: string;
 
     beforeAll(() => {
       viteConfig = fs.readFileSync(

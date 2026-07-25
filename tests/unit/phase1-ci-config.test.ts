@@ -1,4 +1,8 @@
-import { describe, it, expect } from "vitest";
+// [20260725_Tier3_Phase1Migrate] Migrated from .js to .ts as part of
+// Tier 3 batch 1 (file-reading tests). Pattern: declare explicit types
+// for `let` bindings assigned in beforeAll — strict tsc requires this.
+// Template reference: phase4-i18n.test.ts (commit d52f2e0).
+import { describe, it, expect, beforeAll } from "vitest";
 import fs from "fs";
 import path from "path";
 
@@ -71,7 +75,9 @@ describe("Phase 1: CI/CD configuration", () => {
   });
 
   describe("build.yml", () => {
-    let content;
+    // [20260725_Tier3_Phase1Migrate] Explicit string type — strict tsc
+    // rejects implicit any on `let content;` (TS7034).
+    let content: string;
 
     beforeAll(() => {
       content = fs.readFileSync(

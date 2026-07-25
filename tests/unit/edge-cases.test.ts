@@ -1,3 +1,11 @@
+// [20260725_Tier3_EdgeCasesMigrate] Migrated from .js to .ts as part of
+// Tier 3 batch 1. Pattern: declare explicit types for `let` bindings assigned
+// from require() in beforeEach — strict tsc (TS7034/TS7005) cannot infer the
+// type because the assignment happens in a callback whose type does not flow
+// back to the declaration site. Each binding is typed via
+// `typeof import("<module>").<export>` to reuse the source module's own types
+// without introducing `any`. Template reference: phase4-i18n.test.ts
+// (commit d52f2e0).
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import fs from "fs";
 import path from "path";
@@ -5,7 +13,10 @@ import os from "os";
 
 describe("edge cases: template + file config", () => {
   describe("parseTemplateFile edge cases", () => {
-    let parseTemplateFile;
+    // [20260725_Tier3_EdgeCasesMigrate] Named export; index the module
+    // namespace type to reuse the source's (content, fileName) => PromptTemplate | null
+    // signature.
+    let parseTemplateFile: typeof import("../../src/helpers/aiPrompts").parseTemplateFile;
 
     beforeEach(() => {
       vi.resetModules();
@@ -18,7 +29,10 @@ describe("edge cases: template + file config", () => {
         "---\r\nname: win\r\nlabel: Win\r\n---\r\nWindows content.";
       const result = parseTemplateFile(content, "win.md");
       expect(result).not.toBeNull();
-      expect(result.name).toBe("win");
+      // [20260725_Tier3_EdgeCasesMigrate] Non-null assertion: the prior
+      // expect().not.toBeNull() guards this at runtime; the narrowing just
+      // isn't visible to tsc. Same convention as database-error-paths.test.ts.
+      expect(result!.name).toBe("win");
     });
 
     it("handles template with only whitespace in body", () => {
@@ -31,7 +45,8 @@ describe("edge cases: template + file config", () => {
       const content = "---\nname:\nlabel:\n---\nSome content here.";
       const result = parseTemplateFile(content, "fallback.md");
       expect(result).not.toBeNull();
-      expect(result.name).toBe("fallback");
+      // [20260725_Tier3_EdgeCasesMigrate] Non-null after the assertion above.
+      expect(result!.name).toBe("fallback");
     });
 
     it("handles multilingual content in system prompt", () => {
@@ -39,14 +54,18 @@ describe("edge cases: template + file config", () => {
         "---\nname: multilingual\n---\nTranslate to English. 翻译成中文。日本語に翻訳。";
       const result = parseTemplateFile(content, "multi.md");
       expect(result).not.toBeNull();
-      expect(result.system).toContain("翻译");
-      expect(result.system).toContain("日本語");
+      // [20260725_Tier3_EdgeCasesMigrate] Non-null after the assertion above.
+      expect(result!.system).toContain("翻译");
+      expect(result!.system).toContain("日本語");
     });
   });
 
   describe("fileConfig edge cases", () => {
-    let loadFileConfig;
-    let saveFileConfig;
+    // [20260725_Tier3_EdgeCasesMigrate] Named exports; the module namespace
+    // type provides the (configPath, settings) => void / => SettingsRecord
+    // signatures directly.
+    let loadFileConfig: typeof import("../../src/helpers/fileConfig").loadFileConfig;
+    let saveFileConfig: typeof import("../../src/helpers/fileConfig").saveFileConfig;
 
     beforeEach(() => {
       vi.resetModules();
@@ -106,7 +125,9 @@ describe("edge cases: template + file config", () => {
   });
 
   describe("validateAIBaseUrl edge cases", () => {
-    let validateAIBaseUrl;
+    // [20260725_Tier3_EdgeCasesMigrate] Named export; same shape as in
+    // phase7-tier0-fixes.test.ts.
+    let validateAIBaseUrl: typeof import("../../src/helpers/ipc/aiHandlers").validateAIBaseUrl;
 
     beforeEach(() => {
       vi.resetModules();

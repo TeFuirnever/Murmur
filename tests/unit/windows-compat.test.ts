@@ -1,3 +1,6 @@
+// [20260725_Tier3_WindowsCompatMigrate] Migrated from .js to .ts as part
+// of Tier 3 batch 1. Pattern: type untyped function params (TS7008).
+// Template reference: phase4-i18n.test.ts (commit d52f2e0).
 /**
  * Windows compatibility regression tests.
  *
@@ -14,12 +17,13 @@ const srcRoot = path.join(__dirname, "../../src/helpers");
 // [20260724_TS_BigBang_TestFix] Read .ts if it exists (post-migration),
 // otherwise fall back to .js (pre-migration). This keeps static-analysis
 // tests working across the migration boundary.
-function readHelperSource(name) {
+// [20260725_Tier3_WindowsCompatMigrate] Param typing: string → string.
+function readHelperSource(name: string): string {
   const tsPath = path.join(srcRoot, `${name}.ts`);
   if (fs.existsSync(tsPath)) return fs.readFileSync(tsPath, "utf-8");
   return fs.readFileSync(path.join(srcRoot, `${name}.js`), "utf-8");
 }
-function readEntrySource(name) {
+function readEntrySource(name: string): string {
   const root = path.join(__dirname, "../..");
   const tsPath = path.join(root, `${name}.ts`);
   if (fs.existsSync(tsPath)) return fs.readFileSync(tsPath, "utf-8");

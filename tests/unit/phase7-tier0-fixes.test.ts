@@ -1,3 +1,12 @@
+// [20260725_Tier3_Phase7Tier0FixesMigrate] Migrated from .js to .ts as part
+// of Tier 3 batch 1. Pattern: declare explicit types for `let` bindings
+// assigned from require() in beforeEach/beforeAll — strict tsc (TS7034/TS7005)
+// cannot infer the type because the assignment happens in a callback whose
+// type does not flow back to the declaration site. Each binding is typed via
+// `typeof import("<module>").<export>` to reuse the source module's own
+// types without introducing `any`. Template reference: phase4-i18n.test.ts
+// (commit d52f2e0).
+//
 // [20260724_TS_BigBang_TestFix] Replace all createRequire usages with
 // vite-intercepted require + vi.resetModules(). createRequire uses Node's
 // native resolver which cannot load .ts files. The tests only needed module
@@ -11,7 +20,10 @@ describe("Tier 0 fixes", () => {
   // [20260724_TS_BigBang_TestFix] END
 
   describe("T0-2: Python version detection requires 3.8+", () => {
-    let PythonEnvironment;
+    // [20260725_Tier3_Phase7Tier0FixesMigrate] require() returns the default
+    // export directly under esbuild CJS interop, so the binding holds the
+    // class constructor itself. `.default` indexes the module namespace type.
+    let PythonEnvironment: typeof import("../../src/helpers/pythonEnvironment").default;
 
     beforeEach(() => {
       PythonEnvironment = require("../../src/helpers/pythonEnvironment");
@@ -50,7 +62,9 @@ describe("Tier 0 fixes", () => {
   });
 
   describe("T0-4: PYTHONUTF8=1 in buildPythonEnvironment", () => {
-    let PythonEnvironment;
+    // [20260725_Tier3_Phase7Tier0FixesMigrate] Same default-export shape as
+    // the T0-2 block above.
+    let PythonEnvironment: typeof import("../../src/helpers/pythonEnvironment").default;
 
     beforeEach(() => {
       PythonEnvironment = require("../../src/helpers/pythonEnvironment");
@@ -88,7 +102,9 @@ describe("Tier 0 fixes", () => {
   });
 
   describe("T0-3: SSRF validation allows localhost for local models", () => {
-    let validateAIBaseUrl;
+    // [20260725_Tier3_Phase7Tier0FixesMigrate] Named export; index the
+    // module namespace type by member name to reuse the source signature.
+    let validateAIBaseUrl: typeof import("../../src/helpers/ipc/aiHandlers").validateAIBaseUrl;
 
     beforeEach(() => {
       const aiHandlers = require("../../src/helpers/ipc/aiHandlers");
@@ -151,7 +167,10 @@ describe("Tier 0 fixes", () => {
   });
 
   describe("T1-1: processTextWithAI supports local models without API key", () => {
-    let processTextWithAI;
+    // [20260725_Tier3_Phase7Tier0FixesMigrate] Named async export; the
+    // mock db/logger passed at call sites satisfy the source's structural
+    // DatabaseManager/Logger interfaces.
+    let processTextWithAI: typeof import("../../src/helpers/ipc/aiHandlers").processTextWithAI;
 
     beforeEach(() => {
       const aiHandlers = require("../../src/helpers/ipc/aiHandlers");
@@ -201,7 +220,9 @@ describe("Tier 0 fixes", () => {
   });
 
   describe("T1-1: checkAIStatus supports local models without API key", () => {
-    let checkAIStatus;
+    // [20260725_Tier3_Phase7Tier0FixesMigrate] Named async export; first
+    // argument is the testConfig | null per source signature.
+    let checkAIStatus: typeof import("../../src/helpers/ipc/aiHandlers").checkAIStatus;
 
     beforeEach(() => {
       const aiHandlers = require("../../src/helpers/ipc/aiHandlers");

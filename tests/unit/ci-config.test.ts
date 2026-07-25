@@ -1,3 +1,7 @@
+// [20260725_Tier3_CiConfigMigrate] Migrated from .js to .ts as part of
+// Tier 3 batch 1. No `let` bindings — pure JSON.parse + fs reads, so
+// type annotations are inferred. Renamed for consistency with the
+// TS migration goal (Tier 3.1 in ts-migration-audit-and-evolution.md §5).
 import { describe, it, expect } from "vitest";
 import fs from "fs";
 import path from "path";

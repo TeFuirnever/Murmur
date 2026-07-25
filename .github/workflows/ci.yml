@@ -68,6 +68,27 @@ jobs:
       - name: Build renderer
         run: pnpm run build:renderer
 
+      # [20260725_E2E_BootHealthGate] Gate 3 (boot health) — runs the new
+      # 7-test boot smoke suite per e2e-functional-verification-strategy.md
+      # §4.1 / §7 Stage 1.
+      #
+      # STATUS: NON-BLOCKING until validated on real macOS (architect
+      # review condition). The suite was authored against spec but could
+      # not be run in the dev sandbox (firstWindow 30s timeout — env-wide,
+      # 01-lifecycle fails identically). KNOWN_RENDERER_NOISE allowlist
+      # at tests/e2e/suites/00-boot-health.test.js:43-45 is unvalidated.
+      #
+      # PROMOTION PLAN:
+      #   1. Watch this step on the next 2-3 PRs (capture real output).
+      #   2. If green 3x consecutive, flip to blocking by removing
+      #      continue-on-error below AND add `retries: 1` per architect
+      #      recommendation (CI macOS firstWindow flakiness — see spec §7
+      #      Stage 0 acceptance at line 518-519).
+      #   3. Expand KNOWN_RENDERER_NOISE based on observed console output.
+      - name: E2E boot health (non-blocking — pending validation)
+        run: pnpm test:e2e:boot
+        continue-on-error: true
+
       - name: E2E tests
         run: pnpm test:e2e
         continue-on-error: true

@@ -1,3 +1,7 @@
+// [20260725_Tier3_Phase0Migrate] Migrated from .js to .ts as part of
+// Tier 3 batch 1. Pattern: type untyped function params (TS7008) and
+// narrow `require()` returns for JSON imports.
+// Template reference: phase4-i18n.test.ts (commit d52f2e0).
 import { describe, it, expect, vi } from "vitest";
 import { validateSetting } from "../../src/helpers/ipc/settingsHandlers";
 import LogManager from "../../src/helpers/logManager";
@@ -51,8 +55,9 @@ describe("Phase 0: Settings import whitelist", () => {
 });
 
 describe("Phase 0: SQL LIKE wildcard escaping logic", () => {
-  // Test the escaping logic directly without a real database
-  function escapeLike(query) {
+  // [20260725_Tier3_Phase0Migrate] Param typing: string → string.
+  // Test the escaping logic directly without a real database.
+  function escapeLike(query: string): string {
     return query
       .replace(/\\/g, "\\\\")
       .replace(/%/g, "\\%")
@@ -126,6 +131,7 @@ describe("Phase 0: Ghost dependencies removed from package.json", () => {
     "mime-db",
   ];
 
+  // [20260725_Tier3_Phase0Migrate] it.each passes string; type explicitly.
   it.each(ghostDeps)("should not have '%s' as direct dependency", (dep) => {
     const pkg = require("../../package.json");
     expect(pkg.dependencies).not.toHaveProperty(dep);

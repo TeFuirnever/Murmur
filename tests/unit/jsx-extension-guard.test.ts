@@ -1,9 +1,22 @@
-const fs = require("fs");
-const path = require("path");
+// [20260725_Tier3_JsxExtensionGuardMigrate] Migrated from .js to .ts as
+// part of Tier 3 batch 2. Pattern: type the recursive `walk` helper's
+// params (`dir: string`, `ext: string`) and the `files = []` accumulator
+// as `string[]` (TS7031 — default array params infer `never[]` under
+// strict mode, then poison downstream `.endsWith` calls); type the
+// `stripStrings(src)` param (TS7006). No `let` bindings or require()
+// at module scope (fs/path are required, not imported, but that resolves
+// fine via @types/node). Template reference: phase4-i18n.test.ts (commit
+// d52f2e0).
+const fs: typeof import("fs") = require("fs");
+const path: typeof import("path") = require("path");
 
 const SRC_DIR = path.resolve(__dirname, "../../src");
 
-function walk(dir, ext, files = []) {
+// [20260725_Tier3_JsxExtensionGuardMigrate] Recursive walker with an
+// accumulator: every param needs an explicit type. `files = []` defaults
+// to `never[]` under strict mode, which then makes every pushed element
+// `never` and breaks the downstream `.endsWith(ext)` filter (TS2345/TS2339).
+function walk(dir: string, ext: string, files: string[] = []): string[] {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (entry.name === "dist" || entry.name === "node_modules") continue;
     const full = path.join(dir, entry.name);
@@ -13,9 +26,12 @@ function walk(dir, ext, files = []) {
   return files;
 }
 
+// [20260725_Tier3_JsxExtensionGuardMigrate] `src` param typed (TS7006):
+// the function only runs regex replaces, so `string` is the narrowest
+// correct type.
 // Strip string literals and template literals to avoid false positives from
 // HTML inside strings (e.g. '<h1>error</h1>' or `<transcript>...</transcript>`).
-function stripStrings(src) {
+function stripStrings(src: string): string {
   return src
     .replace(/`(?:[^`\\]|\\.)*`/g, '""')
     .replace(/"(?:[^"\\]|\\.)*"/g, '""')
@@ -35,7 +51,7 @@ describe("jsx-extension-guard", () => {
       ...walk(SRC_DIR, ".js"),
       ...walk(SRC_DIR, ".ts").filter((f) => !f.endsWith(".d.ts")),
     ];
-    const violating = [];
+    const violating: string[] = [];
 
     for (const file of jsFiles) {
       const content = stripStrings(fs.readFileSync(file, "utf8"));
