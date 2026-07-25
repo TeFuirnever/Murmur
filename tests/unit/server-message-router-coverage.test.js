@@ -85,16 +85,23 @@ describe("ServerMessageRouter - extended coverage", () => {
     await expect(p2).rejects.toThrow("错误");
   });
 
-  it("sendCommand rejects when stdin not writable", () => {
+  it("sendCommand rejects when stdin not writable", async () => {
     router.attach(proc);
     proc.stdin.writable = false;
-    expect(router.sendCommand("test")).rejects.toThrow("未就绪");
+    // [20260725_TDDFix_UnawaitedRejection] Add `await` — without it Vitest
+    // emits "Promise returned by expect().rejects.toThrow() was not awaited"
+    // which will fail in the next Vitest major. Guarded by the regression
+    // test in rejection-assertions-awaited.test.ts.
+    await expect(router.sendCommand("test")).rejects.toThrow("未就绪");
+    // [20260725_TDDFix_UnawaitedRejection] END
   });
 
-  it("sendRaw rejects when stdin not writable", () => {
+  it("sendRaw rejects when stdin not writable", async () => {
     router.attach(proc);
     proc.stdin.writable = false;
-    expect(router.sendRaw({ action: "test" })).rejects.toThrow("未就绪");
+    // [20260725_TDDFix_UnawaitedRejection] See note above.
+    await expect(router.sendRaw({ action: "test" })).rejects.toThrow("未就绪");
+    // [20260725_TDDFix_UnawaitedRejection] END
   });
 
   it("sendCommand uses default timeout", async () => {

@@ -115,8 +115,13 @@ describe("ServerMessageRouter", () => {
     await expect(p2).rejects.toThrow();
   });
 
-  it("rejects when server process is not attached", () => {
+  it("rejects when server process is not attached", async () => {
     router.detach();
-    expect(router.sendCommand("test")).rejects.toThrow("未就绪");
+    // [20260725_TDDFix_UnawaitedRejection] Add `await` — without it Vitest
+    // emits "Promise returned by expect().rejects.toThrow() was not awaited"
+    // which will fail in the next Vitest major. Guarded by the regression
+    // test in rejection-assertions-awaited.test.ts.
+    await expect(router.sendCommand("test")).rejects.toThrow("未就绪");
+    // [20260725_TDDFix_UnawaitedRejection] END
   });
 });
