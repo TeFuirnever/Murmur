@@ -68,6 +68,25 @@ jobs:
       - name: Build renderer
         run: pnpm run build:renderer
 
+      # [20260725_E2E_LaunchDiagnosis] Diagnostic step: launches ONLY the
+      # Electron app with full stderr/stdout/console capture (see
+      # tests/e2e/helpers/electron-launch.js attachDiagnosticListeners).
+      # Grep "[e2e-launch]" in this step's output to find:
+      #   - env snapshot (NODE_ENV, RUNNER_OS, CSC_IDENTITY_AUTO_DISCOVERY)
+      #   - bundle existence check (dist-main/main.js etc.)
+      #   - main process console.log/error
+      #   - raw stdout/stderr (ELECTRON_ENABLE_LOGGING=1 forces Electron
+      #     to emit GPU/code-signing/init errors here)
+      #   - process exit code/signal
+      #   - window event timing
+      #
+      # This step is non-blocking. Its purpose is to surface WHY every
+      # e2e test times out at firstWindow() on CI macOS. See spec §7
+      # Stage 0 "2026-07-25 update" for context.
+      - name: E2E launch diagnosis (non-blocking)
+        run: pnpm test:e2e:diag
+        continue-on-error: true
+
       # [20260725_E2E_BootHealthGate] Gate 3 (boot health) — runs the new
       # 7-test boot smoke suite per e2e-functional-verification-strategy.md
       # §4.1 / §7 Stage 1.
