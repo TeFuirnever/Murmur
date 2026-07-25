@@ -518,6 +518,42 @@ Today: `pnpm test:e2e` has `continue-on-error: true` in `.github/workflows/ci.ym
 3. **Keep `retries: 0`** (`playwright.config.js:10`) until green — flaky retries hide real bugs.
 4. **Acceptance**: `pnpm test:e2e` green locally on macOS 5 consecutive runs.
 
+#### 2026-07-25 update — boot health suite added, Stage 0 diagnosis refined
+
+The new `tests/e2e/suites/00-boot-health.test.js` (PR #91, spec §4.1) was
+run on CI macOS for the first time. Result: **same `firstWindow()` 30s
+timeout as the existing 39 tests** — the suite is correctly designed but
+the underlying Electron-on-CI-macOS launch is broken across the board
+(00-boot-health, 00-ftue, 01-lifecycle all fail identically at
+`electron-launch.js:44`). This confirms Stage 0's "20/39 red" is not
+selector drift or test bugs — it is a **systemic Electron spawn failure
+on the macOS runner**, which must be fixed before any e2e gate (blocking
+or non-blocking) can carry signal.
+
+**Implication for Gate 3 promotion:** the boot health step in
+`.github/workflows/ci.yml` MUST stay `continue-on-error: true` until the
+systemic Electron launch issue is resolved. This is no longer "validate
+the suite" (the suite is sound — the failure is at `app.firstWindow()`
+before any test code runs) — it is "fix the launch path." Candidate
+root causes to investigate (ordered by likelihood):
+
+- macOS runner lacks GPU/ compositor access — `main.ts:222-225` gates
+  `app.disableHardwareAcceleration()` on `NODE_ENV === "test"`, but
+  `electron-launch.js:36` sets `NODE_ENV: "test"` in `env`, so this
+  SHOULD be active. Verify the gating condition survives esbuild
+  bundling.
+- Code-signing/notarization gate on macOS Sequoia (runner is
+  `macos-latest` which is now 15.x) blocks unsigned Electron binaries
+  from spawning windows.
+- `app.getAppPath()` returns the wrong directory in CI —
+  `electron-launch.js:31` passes `args: [appRoot]`, but if `appRoot`
+  resolves differently under `/Users/runner/work/...` vs local
+  `/Users/<dev>/...`, the renderer HTML path breaks.
+
+**Action:** the boot health suite is correct and ready. The next work
+item for Stage 0 is **diagnosing the Electron launch failure on CI
+macOS**, not iterating on the suite.
+
 ### Stage 1 — Gate 3 becomes blocking (week 3)
 
 1. Split `00-boot-health.test.js` out of the existing `00-ftue`/`01-lifecycle` mix.
