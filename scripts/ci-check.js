@@ -154,12 +154,18 @@ async function main() {
   }
 
   // Stage 1: parallel fast checks
+  // [20260725_Autopilot_T2.2] Add typecheck:tests — runs tsc against
+  // tsconfig.test.json which covers tests/**. Catches type errors in .ts
+  // and .tsx test files that pnpm test (vitest transform) does not.
   const stage1 = await Promise.all([
     run("pnpm format:check", "format:check"),
     run("pnpm lint", "lint"),
     run("pnpm license:check", "license:check"),
+    run("pnpm typecheck", "typecheck"),
+    run("pnpm typecheck:tests", "typecheck:tests"),
   ]);
   stage1.forEach(printResult);
+  // [20260725_Autopilot_T2.2] END
 
   // [20260724_TS_BigBang_BuildPipeline] Add build:main to ci-check so the
   // main bundle is validated locally, matching CI workflows.

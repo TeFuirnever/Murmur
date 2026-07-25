@@ -213,12 +213,12 @@ e2e 只覆盖了 28 个 electronAPI 方法，剩余 62 个通道没有端到端�
 
 | 文件                             | 当前                                  | 改进                                                     |
 | -------------------------------- | ------------------------------------- | -------------------------------------------------------- |
-| windows-compat                   | 读 clipboard.js 检查 windowsHide      | 测试 pasteWindows 实际行为：spawn 调用参数含 windowsHide |
-| phase3-semi-auto-update          | 读 updateManager.js 检查 require 路径 | 测试 updateManager 实际加载行为                          |
+| windows-compat                   | 读 clipboard.ts 检查 windowsHide      | 测试 pasteWindows 实际行为：spawn 调用参数含 windowsHide |
+| phase3-semi-auto-update          | 读 updateManager.ts 检查 require 路径 | 测试 updateManager 实际加载行为                          |
 | phase4-i18n                      | 读 locale 文件检查 key 存在           | 测试 i18next.t() 返回非空字符串                          |
-| phase5-a11y                      | 读 main.js 检查 a11y 配置             | 测试 a11y 权限检查实际行为                               |
-| updateManager-require-resolution | 读 updateManager.js 检查 require      | 测试 require 实际能解析                                  |
-| settings-refactor                | 读 providerPresets.js 检查 guide      | 测试 getProviderPresets 返回值                           |
+| phase5-a11y                      | 读 main.ts 检查 a11y 配置             | 测试 a11y 权限检查实际行为                               |
+| updateManager-require-resolution | 读 updateManager.ts 检查 require      | 测试 require 实际能解析                                  |
+| settings-refactor                | 读 providerPresets.ts 检查 guide      | 测试 getProviderPresets 返回值                           |
 
 **优先级**: 中（不阻塞合并，但应逐步迁移）
 

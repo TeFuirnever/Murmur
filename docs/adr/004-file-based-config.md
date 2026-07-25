@@ -2,6 +2,8 @@
 
 **状态**: 已采纳 (2026-05-23)
 
+> [20260725_CodeReview_T1.5] 本 ADR 写于 ADR-010 big-bang 之前。下文 `.js` 文件名是写作时的快照，当前源码已迁移到 `.ts`（`fileConfig.ts`、`database.ts`）。见 `docs/adr/010-backend-ts-migration-strategy.md`。
+
 ## 上下文
 
 Murmur 的所有设置存储在 SQLite 数据库中，加密字段使用 safeStorage。这对于 GUI 应用是足够的，但不支持：

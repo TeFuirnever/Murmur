@@ -1,0 +1,30 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["vitest/globals", "node"]
+  },
+  "include": [
+    "src/**/*",
+    "main.ts",
+    "preload.ts",
+    "tests/**/*.ts",
+    "tests/**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "dist-main",
+    "dist-preload",
+    "tests/e2e/**",
+    "tests/**/*.js",
+    "tests/_tsresolve.setup.js",
+    "tests/unit/clipboardHandlers.test.ts",
+    "tests/unit/hotkeyHandlers.test.ts",
+    "tests/unit/transcriptionHandlers.test.ts",
+    "tests/unit/preload-bridge-contract.test.ts",
+    "tests/unit/ipc-contract-completeness.test.ts",
+    "tests/unit/database-error-paths.test.ts",
+    "tests/unit/rejection-assertions-awaited.test.ts"
+  ]
+}

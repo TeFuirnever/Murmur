@@ -36,6 +36,7 @@
     "test:e2e": "playwright test --config playwright.config.js",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit",
+    "typecheck:tests": "tsc --noEmit -p tsconfig.test.json",
     "format": "prettier --write \"*.{js,json,md,yml}\" \"src/**/*.{js,jsx,ts,tsx,css}\" \"tests/**/*.{js,ts}\" \"scripts/**/*.js\"",
     "format:check": "prettier --check \"*.{js,json,md,yml}\" \"src/**/*.{js,jsx,ts,tsx,css}\" \"tests/**/*.{js,ts}\" \"scripts/**/*.js\"",
     "license:check": "license-checker --failOn \"GPL-*;AGPL-*\" --excludePrivatePackages",

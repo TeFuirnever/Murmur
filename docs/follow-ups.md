@@ -1,5 +1,7 @@
 # Follow-ups（v3 反思后遗留事项）
 
+> [20260725_Autopilot_T1.5] 本文档为时间快照，文中 `.js` 文件名引用是写作时（ADR-010 big-bang 之前）的状态。当前源码已全部迁移到 `.ts`（见 `docs/adr/010-backend-ts-migration-strategy.md`）。下文保留原始文件名作为决策时的快照。
+
 ## ~~P1：路径遍历防护~~ ✅ 已修复
 
 原始 SHOW_ITEM / OPEN_LOG channel 已在重构中移除。当前路径遍历防护覆盖：

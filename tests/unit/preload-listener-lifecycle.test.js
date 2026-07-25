@@ -75,4 +75,40 @@ describe("preload listener lifecycle", () => {
     }
     expect(listeners.get(channel).length).toBe(0);
   });
+
+  // [20260725_CodeReview_ListenerHelper] Characterization tests covering
+  // multiple `on*` listener registrations. These lock the behavior the
+  // makeListener helper extraction must preserve: each on* registers exactly
+  // one handler on its channel, returns an unsubscribe that removes exactly
+  // that handler, and does not touch other channels.
+  const SINGLE_PAYLOAD_LISTENERS = [
+    { method: "onWindowMaximizeChange", channel: "window-maximize-change" },
+    { method: "onToggleDictation", channel: "toggle-dictation" },
+    { method: "onHotkeyTriggered", channel: "hotkey-triggered" },
+    { method: "onTranscriptionUpdate", channel: "transcription-update" },
+    { method: "onError", channel: "error" },
+    { method: "onSettingsUpdate", channel: "settings-update" },
+    { method: "onUpdateDownloadProgress", channel: "update-download-progress" },
+    { method: "onUpdateDownloadComplete", channel: "update-download-complete" },
+    { method: "onUpdateDownloadError", channel: "update-download-error" },
+  ];
+
+  for (const { method, channel } of SINGLE_PAYLOAD_LISTENERS) {
+    it(`${method} registers exactly one listener on ${channel} and unsub removes it`, () => {
+      const cb = vi.fn();
+      const unsub = exposed.electronAPI[method](cb);
+      expect(listeners.get(channel)?.length ?? 0).toBe(1);
+      unsub();
+      expect(listeners.get(channel)?.length ?? 0).toBe(0);
+    });
+  }
+
+  it("subscribing to one channel does not register handlers on another", () => {
+    exposed.electronAPI.onHotkeyTriggered(() => {});
+    exposed.electronAPI.onSettingsUpdate(() => {});
+    expect(listeners.get("hotkey-triggered")?.length ?? 0).toBe(1);
+    expect(listeners.get("settings-update")?.length ?? 0).toBe(1);
+    expect(listeners.get("error")?.length ?? 0).toBe(0);
+  });
+  // [20260725_CodeReview_ListenerHelper] END
 });

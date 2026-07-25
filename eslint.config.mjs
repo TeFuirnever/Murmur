@@ -42,10 +42,12 @@ export default tseslint.config(
   },
 
   // Node.js globals for main process and test files
+  // [20260725_Autopilot_T1.2] main.js/preload.js → main.ts/preload.ts
+  // after ADR-010 big-bang backend migration.
   {
     files: [
-      "main.js",
-      "preload.js",
+      "main.ts",
+      "preload.ts",
       "tests/**/*.{js,ts}",
       "scripts/**/*.js",
       "src/helpers/**/*.{js,ts}",

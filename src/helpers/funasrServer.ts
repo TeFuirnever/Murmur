@@ -9,6 +9,9 @@ import path from "path";
 import ServerMessageRouter from "./serverMessageRouter";
 import { createTempAudioFile, cleanupTempFile } from "./audioFileHelpers";
 import * as C from "./ipc-contracts";
+// [20260725_CodeReview_OperationResult] Replaces inline `{ success; error? }`
+// shape duplicated across diarizeAudio + cancelTranscription.
+import type { OperationResult } from "../types/ipc";
 
 // [20260724_Fix_DynamicTranscriptionTimeout] Dynamic timeout based on file
 // size. Previously hardcoded to 300000ms (5 min), which failed for long
@@ -512,27 +515,27 @@ class FunASRServer {
   async diarizeAudio(
     audioPath: string,
     segments: unknown,
-  ): Promise<{ success: boolean; error?: string }> {
+  ): Promise<OperationResult> {
     if (!this.serverReady) return { success: false, error: "服务器未就绪" };
     try {
       return (await this.messageRouter.sendCommand(
         "diarize",
         { audio_path: audioPath, segments },
         { timeout: 120000 },
-      )) as { success: boolean; error?: string };
+      )) as OperationResult;
     } catch (err) {
       return { success: false, error: (err as Error).message };
     }
   }
 
-  async cancelTranscription(): Promise<{ success: boolean; error?: string }> {
+  async cancelTranscription(): Promise<OperationResult> {
     if (!this.serverReady) return { success: false, error: "服务器未就绪" };
     try {
       return (await this.messageRouter.sendCommand(
         "cancel_transcription",
         {},
         { timeout: 5000 },
-      )) as { success: boolean; error?: string };
+      )) as OperationResult;
     } catch (err) {
       return { success: false, error: (err as Error).message };
     }
