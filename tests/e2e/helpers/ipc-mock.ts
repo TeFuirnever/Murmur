@@ -6,11 +6,21 @@
  *
  * Solves the "cannot register a second handler" limitation (Electron 20+).
  */
+// [20260726_Tier43_E2EHelpers] Migrated .js→.ts for TypeScript types.
+// Uses CommonJS (require / module.exports) rather than ESM import/export
+// because the 12 e2e suites are still .js (CJS) — see US-003. Playwright
+// 1.60 + Node 24 hit "exports is not defined in ES module scope"
+// (microsoft/playwright #37890) when a CJS .js suite imports an
+// ESM-compiled .ts helper. Type annotations come from JSDoc; the
+// ElectronApplication type name resolves via @playwright/test types.
+// IMPORTANT: the require("electron") calls inside app.evaluate() run in
+// the Electron MAIN process where ESM `import` is unavailable — they
+// must stay as require() regardless of the module system choice above.
 
 /**
  * Override an IPC handler with a static mock response.
  *
- * @param {import('@playwright/test').ElectronApplication} app
+ * @param {ElectronApplication} app
  * @param {string} channel - IPC channel name
  * @param {object} response - JSON-serializable response object
  *
@@ -31,7 +41,7 @@ async function mockIpcHandler(app, channel, response) {
 /**
  * Override multiple IPC handlers at once.
  *
- * @param {import('@playwright/test').ElectronApplication} app
+ * @param {ElectronApplication} app
  * @param {Record<string, object>} mocks - Channel → response map
  */
 async function mockIpcHandlers(app, mocks) {
@@ -43,7 +53,7 @@ async function mockIpcHandlers(app, mocks) {
 /**
  * Remove a mocked IPC handler (channel returns "no handler" errors).
  *
- * @param {import('@playwright/test').ElectronApplication} app
+ * @param {ElectronApplication} app
  * @param {string} channel
  */
 async function restoreIpcHandler(app, channel) {
@@ -57,3 +67,4 @@ async function restoreIpcHandler(app, channel) {
 }
 
 module.exports = { mockIpcHandler, mockIpcHandlers, restoreIpcHandler };
+// [20260726_Tier43_E2EHelpers] END

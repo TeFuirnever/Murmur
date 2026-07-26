@@ -12,8 +12,8 @@ import { test, expect } from "@playwright/test";
 import {
   launchElectronApp,
   closeElectronApp,
-} from "../helpers/electron-launch.js";
-import { mockIpcHandler } from "../helpers/ipc-mock.js";
+} from "../helpers/electron-launch";
+import { mockIpcHandler } from "../helpers/ipc-mock";
 
 test.describe("Suite 10: Error Resilience", () => {
   let electronApp;

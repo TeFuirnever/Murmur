@@ -63,16 +63,24 @@ describe("Phase 6: E2E testing infrastructure", () => {
 
   describe("E2E test configuration", () => {
     it("should have playwright config", () => {
-      const configPath = path.join(rootDir, "playwright.config.js");
-      expect(fs.existsSync(configPath)).toBe(true);
+      // [20260726_Tier43_E2EHelpers] Renamed playwright.config.js → .ts
+      // (Tier 4.3 e2e migration). Accept either extension for compat.
+      const configJs = path.join(rootDir, "playwright.config.js");
+      const configTs = path.join(rootDir, "playwright.config.ts");
+      expect(fs.existsSync(configJs) || fs.existsSync(configTs)).toBe(true);
     });
 
     let configContent: string;
 
     beforeAll(() => {
-      const configPath = path.join(rootDir, "playwright.config.js");
-      if (fs.existsSync(configPath)) {
-        configContent = fs.readFileSync(configPath, "utf8");
+      // [20260726_Tier43_E2EHelpers] Try .ts first (post-migration), fall
+      // back to .js for pre-migration compatibility.
+      const configTs = path.join(rootDir, "playwright.config.ts");
+      const configJs = path.join(rootDir, "playwright.config.js");
+      if (fs.existsSync(configTs)) {
+        configContent = fs.readFileSync(configTs, "utf8");
+      } else if (fs.existsSync(configJs)) {
+        configContent = fs.readFileSync(configJs, "utf8");
       }
     });
 

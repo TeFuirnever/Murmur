@@ -4,6 +4,11 @@
  * All test data uses clearly fake values to prevent
  * accidental credential exposure in CI logs.
  */
+// [20260726_Tier43_E2EHelpers] Migrated .js→.ts for TypeScript types.
+// Uses CommonJS (module.exports) rather than ESM export because the 12
+// e2e suites are still .js (CJS) — see US-003. Playwright 1.60 + Node 24
+// hit "exports is not defined in ES module scope" (microsoft/playwright
+// #37890) when a CJS .js suite imports an ESM-compiled .ts helper.
 
 /** Sample transcription responses */
 const TRANSCRIPTION_RESPONSES = {
@@ -127,3 +132,4 @@ module.exports = {
   DEFAULT_SETTINGS,
   FAKE_API_KEY,
 };
+// [20260726_Tier43_E2EHelpers] END

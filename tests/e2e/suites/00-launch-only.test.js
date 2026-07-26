@@ -24,7 +24,7 @@ import { test, expect } from "@playwright/test";
 import {
   launchElectronApp,
   closeElectronApp,
-} from "../helpers/electron-launch.js";
+} from "../helpers/electron-launch";
 
 test.describe.serial("Suite 0-Diag: Launch Only (no probes)", () => {
   let electronApp;
