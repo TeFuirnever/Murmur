@@ -1,33 +1,66 @@
-// [20260726_Tier3_WindowManagerEventsMigrate] Migrated from .js to .ts as
-// part of Tier 3 batch 5 (final electron-mock batch). Pattern: same as
-// preload-loadable.test.ts — type the `let` bindings (TS7034) assigned in
-// beforeEach, type the Module._resolveFilename override via a local ResolveFn
-// (Node's internal is undocumented in @types/node), and type the require
-// cache write through `unknown` because the stub NodeJS.Module omits most
-// fields. The MockBrowserWindow vi.fn uses `this` as a constructor, so its
-// `this` is typed via a local BrowserWindowStub interface. The onHandlers map
-// carries (event, ...args) => void listeners the suite invokes directly.
-// Template reference: phase4-i18n.test.ts (commit d52f2e0).
+// [20260726_Tier32_WindowManagerEvents] FINAL blocker for deleting
+// tests/_tsresolve.setup.js. Converted from createRequire + Module.
+// _resolveFilename monkey-patching (CJS injection of an "electron" stub +
+// requireCJS load of windowManager.ts through the shim's .ts loader +
+// sole-default-export unwrap) to a standard vitest ESM mock.
 //
-// [20260724_TS_BigBang_TestFix] This test uses createRequire + Module.
-// _resolveFilename monkey-patch to inject an electron stub into CJS
-// require("electron"). vi.mock cannot intercept CJS require(), so this
-// approach is necessary while windowManager uses require("electron").
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { createRequire } from "module";
+// Why the CJS machinery existed: vitest 4's vi.mock could not intercept
+// native require("electron") in CJS. windowManager.ts has since been
+// migrated to ESM `import { BrowserWindow, session, app } from "electron"`,
+// so vi.mock("electron", ...) now intercepts it directly — no shim, no
+// cache poisoning, no .ts loader. After this change the shim has zero
+// consumers and can be deleted in a follow-up commit (along with its
+// setupFiles entry in vitest.config.js).
+//
+// Pattern:
+//   - vi.hoisted exposes a mutable `electronMock` shared between the mock
+//     factory (which runs at hoist time, before any import) and test bodies.
+//   - vi.mock("electron", () => electronMock) registers the ESM module
+//     override. Because the factory returns the live object, re-assigning
+//     electronMock.BrowserWindow in beforeEach takes effect for any module
+//     imported AFTER the re-assignment.
+//   - Each test does `vi.resetModules()` (in beforeEach) + dynamic
+//     `import()` of WindowManager so its `BrowserWindow` binding resolves
+//     to the freshly-configured MockBrowserWindow spy. This replaces the
+//     old `delete requireCJS.cache[wmPath]` cache-bust.
+//
+// Template reference: preload-bridge-contract.test.ts (vi.hoisted pattern),
+// updateManager-behavioral.test.ts (vi.mock("electron") shape).
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import * as C from "../../src/helpers/ipc-contracts";
 
-const requireCJS = createRequire(import.meta.url);
-const Module = requireCJS("module");
+// [20260726_Tier32_WindowManagerEvents] vi.mock factories are hoisted above
+// all imports, so the shared state they close over must also be hoisted.
+// `electronMock` is a mutable holder: beforeEach re-assigns .BrowserWindow
+// to a fresh spy; the mock factory returns this object so the source's
+// `import { BrowserWindow } from "electron"` always reads the current spy
+// at import time.
+//
+// [20260726_Tier32_WindowManagerEvents] Type note: `BrowserWindow` is typed
+// as ReturnType<typeof vi.fn> (the same shape `MockBrowserWindow` is
+// declared with below) so beforeEach can assign a constructor-style vi.fn
+// (vi.fn infers Mock<Procedure | Constructable> from a `function(this: ...)`
+// body) into the slot. Without this explicit annotation, vi.hoisted infers
+// Mock<Procedure> from the bare `vi.fn()` seed and the constructor-style
+// reassignment fails TS2322.
+type ViFn = ReturnType<typeof vi.fn>;
+const electronMock = vi.hoisted(() => ({
+  BrowserWindow: vi.fn() as ViFn,
+  app: { getAppPath: vi.fn(() => "/fake/app/path") as ViFn },
+  session: {
+    defaultSession: {
+      webRequest: { onHeadersReceived: vi.fn() as ViFn },
+    },
+  },
+}));
 
-// [20260726_Tier3_WindowManagerEventsMigrate] Internal resolver signature.
-// Node's _resolveFilename is undocumented; this captures what the override +
-// the .call(this, request, ...rest) forward need (matches preload-loadable).
-type ResolveFn = (this: unknown, request: string, ...rest: unknown[]) => string;
+vi.mock("electron", () => electronMock);
 
-// [20260726_Tier3_WindowManagerEventsMigrate] The MockBrowserWindow vi.fn is
-// invoked with `new`, so `this` inside its body is the instance. Typing `this`
-// via an explicit interface avoids TS2683 (this implicitly has any). Only the
-// fields the body assigns + the tests read are listed.
+// [20260726_Tier32_WindowManagerEvents] The MockBrowserWindow vi.fn is
+// invoked with `new`, so `this` inside its body is the instance. Typing
+// `this` via an explicit interface avoids TS2683 (this implicitly has any).
+// Only the fields the body assigns + the tests read are listed. Preserved
+// verbatim from the pre-refactor file.
 interface BrowserWindowInstance {
   webContents: { send: ReturnType<typeof vi.fn> };
   on: ReturnType<typeof vi.fn>;
@@ -40,26 +73,34 @@ interface BrowserWindowInstance {
   isDestroyed: ReturnType<typeof vi.fn>;
 }
 
-// [20260726_Tier3_WindowManagerEventsMigrate] event-name -> listener. The
+// [20260726_Tier32_WindowManagerEvents] event-name -> listener. The
 // listeners are invoked directly by the suite (onHandlers.maximize()), so
-// they are typed as (...args) => void.
+// they are typed as (...args) => void. Preserved from pre-refactor file.
 type EventListener = (...args: unknown[]) => void;
 
 describe("windowManager — real module execution with mocked electron", () => {
-  let origResolve: ResolveFn;
   let sendSpy: ReturnType<typeof vi.fn>;
   let onHandlers: Record<string, EventListener>;
-  // [20260726_Tier3_WindowManagerEventsMigrate] MockBrowserWindow is a vi.fn
-  // used as a constructor + asserted on via toHaveBeenCalledWith. ReturnType
-  // of vi.fn carries the .mock.calls array the assertions read.
+  // [20260726_Tier32_WindowManagerEvents] MockBrowserWindow is a vi.fn used
+  // as a constructor + asserted on via toHaveBeenCalledWith. Re-assigning
+  // electronMock.BrowserWindow here each test, then dynamically importing
+  // WindowManager, ensures the source's `new BrowserWindow(...)` calls the
+  // per-test spy. Replaces the old requireCJS.cache[wmPath] deletion.
   let MockBrowserWindow: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
+    // [20260726_Tier32_WindowManagerEvents] Clear the module registry so the
+    // next dynamic import() of windowManager re-evaluates and re-binds its
+    // `BrowserWindow` import to the freshly-configured electronMock below.
+    // Equivalent to the old `delete requireCJS.cache[wmPath]` cache-bust.
+    vi.resetModules();
+
     sendSpy = vi.fn();
     onHandlers = {};
-    // [20260726_Tier3_WindowManagerEventsMigrate] vi.fn used as a constructor:
+    // [20260726_Tier32_WindowManagerEvents] vi.fn used as a constructor:
     // the typed `this` parameter routes the body's assignments through the
     // BrowserWindowInstance interface so no field access reads as `any`.
+    // Body preserved verbatim from the pre-refactor file.
     MockBrowserWindow = vi.fn(function (this: BrowserWindowInstance) {
       this.webContents = { send: sendSpy };
       this.on = vi.fn((event: string, handler: EventListener) => {
@@ -75,56 +116,31 @@ describe("windowManager — real module execution with mocked electron", () => {
       return this;
     });
 
-    const electronStub = {
-      BrowserWindow: MockBrowserWindow,
-      // [20260724_TS_BigBang_DirnameFix] windowManager now uses app.getAppPath()
-      // for preload/renderer paths. Provide a stub so tests don't crash.
-      app: { getAppPath: vi.fn(() => "/fake/app/path") },
-      // [20260724_TS_BigBang_DirnameFix] END
-      session: {
-        defaultSession: {
-          webRequest: { onHeadersReceived: vi.fn() },
-        },
-      },
-    };
-
-    origResolve = Module._resolveFilename as ResolveFn;
-    Module._resolveFilename = function (
-      request: string,
-      ...rest: unknown[]
-    ): string {
-      if (request === "electron") return "electron-stub";
-      return origResolve.call(this, request, ...rest);
-    } as ResolveFn;
-    // [20260726_Tier3_WindowManagerEventsMigrate] Cache entry cast through
-    // unknown: the stub object omits most NodeJS.Module fields (children/
-    // parent/path/...) — windowManager only reads `exports`.
-    requireCJS.cache["electron-stub"] = {
-      id: "electron-stub",
-      filename: "electron-stub",
-      loaded: true,
-      exports: electronStub,
-    } as unknown as NodeModule;
-
-    // [20260724_TS_BigBang_TestFix] Extensionless path resolves to .ts after
-    // migration (the tsresolve.setup registers a .ts extension handler +
-    // .ts resolution in Module._resolveFilename).
-    const wmPath = requireCJS.resolve("../../src/helpers/windowManager");
-    delete requireCJS.cache[wmPath];
-    // [20260724_TS_BigBang_TestFix] END
+    // [20260726_Tier32_WindowManagerEvents] Re-bind the mocked electron's
+    // BrowserWindow to the per-test spy. app/session stubs persist across
+    // tests (their behavior is identical in every test); only BrowserWindow
+    // needs a fresh spy. windowManager.ts reads `BrowserWindow` at call
+    // time (inside createMainWindow/createHistoryWindow/createSettingsWindow),
+    // so the import-time binding is what matters — handled by resetModules +
+    // dynamic import in each test.
+    electronMock.BrowserWindow = MockBrowserWindow;
+    electronMock.app.getAppPath = vi.fn(() => "/fake/app/path");
+    electronMock.session.defaultSession.webRequest.onHeadersReceived = vi.fn();
   });
 
-  afterEach(() => {
-    Module._resolveFilename =
-      origResolve as unknown as typeof Module._resolveFilename;
-    delete requireCJS.cache["electron-stub"];
-  });
+  // [20260726_Tier32_WindowManagerEvents] Helper: dynamic import after
+  // resetModules so the source's `BrowserWindow` import resolves to the
+  // per-test MockBrowserWindow. The source uses `export default WindowManager`,
+  // so the ESM namespace's `.default` is the class.
+  async function loadWindowManager(): Promise<
+    typeof import("../../src/helpers/windowManager").default
+  > {
+    const mod = await import("../../src/helpers/windowManager");
+    return mod.default;
+  }
 
   it("maximize/unmaximize listeners fire webContents.send with C.EVENTS.WINDOW_MAXIMIZE_CHANGE — no ReferenceError", async () => {
-    const C = requireCJS("../../src/helpers/ipc-contracts");
-    // [20260726_Tier3_WindowManagerEventsMigrate] require returns the class
-    // directly (setupFile PART 3 unwraps sole-default-export modules).
-    const WindowManager = requireCJS("../../src/helpers/windowManager");
+    const WindowManager = await loadWindowManager();
     const wm = new WindowManager();
     process.env.NODE_ENV = "development";
     await wm.createMainWindow();
@@ -149,7 +165,7 @@ describe("windowManager — real module execution with mocked electron", () => {
   });
 
   it("respects setDefaultAlwaysOnTop(false) in BrowserWindow options", async () => {
-    const WindowManager = requireCJS("../../src/helpers/windowManager");
+    const WindowManager = await loadWindowManager();
     const wm = new WindowManager();
     wm.setDefaultAlwaysOnTop(false);
     process.env.NODE_ENV = "development";
@@ -161,7 +177,7 @@ describe("windowManager — real module execution with mocked electron", () => {
   });
 
   it("defaults to alwaysOnTop: true when setDefaultAlwaysOnTop not called", async () => {
-    const WindowManager = requireCJS("../../src/helpers/windowManager");
+    const WindowManager = await loadWindowManager();
     const wm = new WindowManager();
     process.env.NODE_ENV = "development";
     await wm.createMainWindow();
@@ -172,7 +188,7 @@ describe("windowManager — real module execution with mocked electron", () => {
   });
 
   it("history window respects alwaysOnTop setting", async () => {
-    const WindowManager = requireCJS("../../src/helpers/windowManager");
+    const WindowManager = await loadWindowManager();
     const wm = new WindowManager();
     wm.setDefaultAlwaysOnTop(false);
     process.env.NODE_ENV = "development";
@@ -184,7 +200,7 @@ describe("windowManager — real module execution with mocked electron", () => {
   });
 
   it("settings window respects alwaysOnTop setting", async () => {
-    const WindowManager = requireCJS("../../src/helpers/windowManager");
+    const WindowManager = await loadWindowManager();
     const wm = new WindowManager();
     wm.setDefaultAlwaysOnTop(false);
     process.env.NODE_ENV = "development";
@@ -196,15 +212,15 @@ describe("windowManager — real module execution with mocked electron", () => {
   });
 
   it("showHistoryWindow uses current alwaysOnTop value", async () => {
-    const WindowManager = requireCJS("../../src/helpers/windowManager");
+    const WindowManager = await loadWindowManager();
     const wm = new WindowManager();
     wm.setDefaultAlwaysOnTop(false);
     process.env.NODE_ENV = "development";
     await wm.createHistoryWindow();
 
     const setAlwaysOnTopSpy = vi.fn();
-    // [20260726_Tier3_WindowManagerEventsMigrate] historyWindow is a public
-    // field typed as Electron.BrowserWindow | null; non-null after
+    // [20260726_Tier32_WindowManagerEvents] historyWindow is a public field
+    // typed as Electron.BrowserWindow | null; non-null after
     // createHistoryWindow resolved. Assign the spy via a structural cast so
     // the source's readonly-ish surface accepts the override.
     (
@@ -218,7 +234,7 @@ describe("windowManager — real module execution with mocked electron", () => {
   });
 
   it("showSettingsWindow uses current alwaysOnTop value", async () => {
-    const WindowManager = requireCJS("../../src/helpers/windowManager");
+    const WindowManager = await loadWindowManager();
     const wm = new WindowManager();
     wm.setDefaultAlwaysOnTop(false);
     process.env.NODE_ENV = "development";

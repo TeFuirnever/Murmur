@@ -7,9 +7,16 @@
 // reference: phase4-i18n.test.ts (commit d52f2e0).
 // [20260724_TS_BigBang_TestFix] Adapt for .ts migration: read .ts if exists,
 // check both require() and import syntax for ipc-contracts resolution.
+// [20260726_Tier32_UpdateManagerRequireResolution] Tier 3.2: converted the
+// in-test `require()` to a top-level `import * as contracts`. The namespace
+// import preserves the exact shape of the typeof-import type annotation
+// (contracts.UPDATE.CHECK etc.), so all assertions stay type-safe without
+// `any`. No vi.resetModules was involved, so hoisting is safe.
+// [20260726_Tier32_UpdateManagerRequireResolution] END
 import { describe, it, expect } from "vitest";
 import path from "path";
 import fs from "fs";
+import * as contracts from "../../src/helpers/ipc-contracts";
 
 const SRC_HELPERS = path.resolve(__dirname, "../../src/helpers");
 
@@ -34,8 +41,9 @@ describe("updateManager require resolution", () => {
     // [20260725_Tier3_UpdateManagerRequireResolutionMigrate] Typed via the
     // module namespace type so `contracts.UPDATE.CHECK` reuses the source's
     // `as const` literal types without `any`.
-    const contracts: typeof import("../../src/helpers/ipc-contracts") = require("../../src/helpers/ipc-contracts");
-    // [20260724_TS_BigBang_TestFix] END
+    // [20260726_Tier32_UpdateManagerRequireResolution] `contracts` is now a
+    // top-level ESM namespace import; same shape as the previous
+    // typeof-import annotation.
     expect(contracts.UPDATE).toBeDefined();
     expect(contracts.UPDATE.CHECK).toBe("check-update");
     expect(contracts.UPDATE.DOWNLOAD).toBe("download-update");

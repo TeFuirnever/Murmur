@@ -4,7 +4,17 @@
 // (TS7053) and the window stub surfaces so the suite's vi.fn mocks stay
 // type-checked. `_preMaximizeBounds` and `webContents` are added per-test via
 // the surface type. Template reference: phase4-i18n.test.ts (commit d52f2e0).
+// [20260726_Tier32_WindowHandlers] Tier 3.2: converted the in-beforeEach
+// `register = require(...).register` to a top-level ESM named import. The
+// previous `let register: typeof import("...").register` + reassignment was
+// only there because `require()` couldn't be hoisted; a static import removes
+// both the declaration and the require line. No vi.mock was involved, so the
+// imported binding is the real source's `register`. All `Parameters<typeof
+// register>[...]` references continue to type-check against the imported
+// function's signature.
+// [20260726_Tier32_WindowHandlers] END
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { register } from "../../src/helpers/ipc/windowHandlers";
 
 // [20260726_Tier3_WindowHandlersMigrate] Handler shape: ipcMain.handle
 // registers `(event, ...args) => result` callbacks. Tests invoke them with
@@ -78,10 +88,8 @@ interface MockManagers {
 describe("windowHandlers", () => {
   let ipcMain: MockIpcMain;
   let managers: MockManagers;
-  let register: typeof import("../../src/helpers/ipc/windowHandlers").register;
 
   beforeEach(() => {
-    register = require("../../src/helpers/ipc/windowHandlers").register;
     ipcMain = createMockIpcMain();
 
     const mainWindow: MockWindow = {

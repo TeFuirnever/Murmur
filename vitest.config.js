@@ -8,12 +8,14 @@ export default defineConfig({
     include: ["tests/**/*.test.{js,ts,jsx,tsx}"],
     exclude: ["tests/e2e/**", "node_modules/**"],
     globals: true,
-    // [20260724_TS_BigBang_Resolver] Setup file that monkey-patches Node's
-    // native require resolver so bare require("../../src/...") in .js test
-    // files resolves .ts after the .js twins are deleted. See
-    // tests/_tsresolve.setup.js for full rationale.
-    setupFiles: ["./tests/_tsresolve.setup.js"],
-    // [20260724_TS_BigBang_Resolver] END
+    // [20260726_Tier32_ShimDeleted] The _tsresolve.setup.js shim has been
+    // deleted. All test files now use ESM `import` for source modules;
+    // vi.mock intercepts electron imports at the module level; per-test
+    // module isolation uses vi.resetModules + dynamic import(). No test
+    // depends on the .ts CJS loader, .ts resolution patch, or default-
+    // export unwrap that the shim provided.
+    // setupFiles: [], (empty — no monkey-patches needed)
+    // [20260726_Tier32_ShimDeleted] END
     coverage: {
       provider: "v8",
       reporter: ["text", "text-summary"],

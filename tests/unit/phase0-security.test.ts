@@ -2,7 +2,17 @@
 // Tier 3 batch 1. Pattern: type untyped function params (TS7008) and
 // narrow `require()` returns for JSON imports.
 // Template reference: phase4-i18n.test.ts (commit d52f2e0).
+// [20260726_Tier32_Phase0Security] Tier 3.2: converted the 4 in-test require()
+// calls to top-level ESM imports. Two `const fs = require("fs")` inside
+// LogManager spy tests → one top-level `import fs from "fs"`; Node's module
+// cache means vi.spyOn(fs, ...) on the imported binding still mutates the
+// shared fs object the LogManager code path uses. Two `const pkg = require(...)`
+// inside package.json assertions → one top-level `import pkg from ...` (tsconfig
+// already has resolveJsonModule:true, so the JSON namespace is typed).
+// [20260726_Tier32_Phase0Security] END
 import { describe, it, expect, vi } from "vitest";
+import fs from "fs";
+import pkg from "../../package.json";
 import { validateSetting } from "../../src/helpers/ipc/settingsHandlers";
 import LogManager from "../../src/helpers/logManager";
 
@@ -87,7 +97,6 @@ describe("Phase 0: SQL LIKE wildcard escaping logic", () => {
 
 describe("Phase 0: LogManager uses sync I/O for crash safety", () => {
   it("should use fs.appendFileSync for app logs", () => {
-    const fs = require("fs");
     const logManager = new LogManager();
 
     const appendFileSyncSpy = vi
@@ -102,7 +111,6 @@ describe("Phase 0: LogManager uses sync I/O for crash safety", () => {
   });
 
   it("should use fs.appendFileSync for FunASR logs", () => {
-    const fs = require("fs");
     const logManager = new LogManager();
 
     const appendFileSyncSpy = vi
@@ -133,7 +141,6 @@ describe("Phase 0: Ghost dependencies removed from package.json", () => {
 
   // [20260725_Tier3_Phase0Migrate] it.each passes string; type explicitly.
   it.each(ghostDeps)("should not have '%s' as direct dependency", (dep) => {
-    const pkg = require("../../package.json");
     expect(pkg.dependencies).not.toHaveProperty(dep);
   });
 });
@@ -141,7 +148,6 @@ describe("Phase 0: Ghost dependencies removed from package.json", () => {
 // [20260612_Fix_BindingsPackaging] Ensure native sqlite runtime helper is packaged.
 describe("Phase 0: Native sqlite runtime dependencies", () => {
   it("should keep bindings as a direct production dependency", () => {
-    const pkg = require("../../package.json");
     expect(pkg.dependencies).toHaveProperty("bindings");
   });
 });

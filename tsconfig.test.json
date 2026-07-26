@@ -18,7 +18,6 @@
     "dist-preload",
     "tests/e2e/**",
     "tests/**/*.js",
-    "tests/_tsresolve.setup.js",
     "tests/unit/clipboardHandlers.test.ts",
     "tests/unit/hotkeyHandlers.test.ts",
     "tests/unit/transcriptionHandlers.test.ts",
