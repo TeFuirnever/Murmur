@@ -4,6 +4,13 @@
 // at the bottom became ESM named exports — no consumer requires main.ts as a
 // module (e2e tests launch the bundled dist-main/main.js via Electron, and
 // unit tests read source as text), so ESM is safe.
+
+// [20260725_E2E_CiStartupCanary] FIRST-LINE CANARY — must run before any
+// import to confirm main.ts is even loaded by Electron. If this does not
+// appear in CI logs, the issue is BEFORE main.ts (Electron binary itself,
+// esbuild bundle, or app path resolution).
+console.error("[main:canary] main.ts module-load-started");
+// [20260725_E2E_CiStartupCanary] END
 import {
   app,
   globalShortcut,
@@ -182,10 +189,23 @@ async function startApp(): Promise<void> {
   }
 
   // Ensure dock is visible on macOS
-  if (process.platform === "darwin" && app.dock) {
-    app.dock.show();
-    logger.info("macOS Dock已显示");
+  // [20260725_E2E_CiStartupFix] Skip on CI runners — app.dock.show()
+  // throws when no interactive GUI session is available (macOS GitHub
+  // Actions runners have no Dock). The thrown error escaped startApp
+  // as an unhandled rejection because the caller at line 229 did not
+  // await startApp(). With the caller fix above this is now caught,
+  // but skipping dock.show() in CI is also correct: CI doesn't need
+  // a Dock icon, and calling it just to swallow the error is noise.
+  if (process.platform === "darwin" && app.dock && process.env.CI !== "true") {
+    try {
+      await app.dock.show();
+      logger.info("macOS Dock已显示");
+    } catch (err) {
+      // Defensive: dock.show can still fail on unusual macOS configs.
+      logger.warn("macOS Dock显示失败 (非致命):", err);
+    }
   }
+  // [20260725_E2E_CiStartupFix] END
 
   // Initialize FunASR manager at startup (don't wait to avoid blocking)
   logger.info("开始初始化FunASR管理器...");
@@ -225,13 +245,71 @@ if (process.env.NODE_ENV === "test") {
 }
 // [20260724_Fix_E2E_Headless] END
 
-// App event handlers
-app.whenReady().then(() => {
-  if (safeStorage && safeStorage.isEncryptionAvailable()) {
-    databaseManager.setSafeStorage(safeStorage);
-  }
-  startApp();
+// [20260725_E2E_CiStartupCanary] PRE-WHENREADY CANARY — runs after all
+// top-level imports and disableHardwareAcceleration, before whenReady
+// is registered. If canary #1 prints but this doesn't, an import is
+// throwing at module-load time.
+console.error("[main:canary] main.ts pre-whenReady (imports done)");
+// [20260725_E2E_CiStartupCanary] END
+
+// [20260725_E2E_CiStartupCanary] READY-EVENT CANARY — registers a direct
+// listener on the 'ready' event IN ADDITION to whenReady().then(). If
+// ready fires but whenReady().then() doesn't, we have a Playwright/Electron
+// Promise-interop bug. If neither fires, Electron itself never initializes.
+app.on("ready", () => {
+  console.error("[main:canary] app.on('ready') fired");
 });
+// [20260725_E2E_CiStartupCanary] END
+
+// App event handlers
+// [20260725_E2E_CiStartupFix] The original `.then(() => { startApp(); })`
+// had two issues that combined to produce silent CI macOS failure:
+//
+// 1. `startApp()` is async and returns a Promise, but the .then() callback
+//    is sync. Any rejection inside startApp (e.g. from app.dock.show() on
+//    a CI runner without a GUI session) became an unhandled rejection —
+//    caught by process.on('unhandledRejection') at line 31 which only
+//    logs, never quits. The app sat half-initialized until Playwright's
+//    30s firstWindow timeout disconnected the inspector (exit code 0).
+//    See docs/research/e2e-functional-verification-strategy.md §7 Stage 0
+//    "2026-07-25 update 2" for the full evidence chain.
+//
+// 2. `app.dock.show()` at startApp:186 requires a macOS Dock session.
+//    On CI macOS runners (which have no interactive GUI), this throws.
+//    Now guarded by a try/catch and skipped when CI=true.
+//
+// The fix: wrap whenReady callback in async IIFE with try/catch that
+// logs the failure AND quits the app so Playwright sees a real exit
+// code instead of timing out. Canaries at each phase help narrow any
+// future regression.
+// [20260725_E2E_CiStartupFix] END
+app.whenReady().then(async () => {
+  // [20260725_E2E_CiStartupFix] Phase canaries — stderr so Playwright's
+  // app.process().stderr listener captures them in CI logs. Each marks
+  // a distinct phase so a future hang pinpoints the failing step.
+  console.error("[main:startup] phase=whenReady-fired");
+  try {
+    if (safeStorage && safeStorage.isEncryptionAvailable()) {
+      databaseManager.setSafeStorage(safeStorage);
+    }
+    console.error("[main:startup] phase=safeStorage-done");
+    await startApp();
+    console.error("[main:startup] phase=startApp-complete");
+  } catch (err) {
+    // CRITICAL: previously this rejection was unhandled, leaving the
+    // app half-alive. Now we log with stack AND quit so the CI run
+    // surfaces a real failure rather than a 30s timeout.
+    console.error("[main:startup] phase=startApp-failed", err);
+    if (err instanceof Error) {
+      console.error("[main:startup] stack:", err.stack);
+    }
+    // app.quit() ignores exit codes; use process.exit after the
+    // will-quit handlers run so the failure is visible to Playwright.
+    app.quit();
+    process.exitCode = 1;
+  }
+});
+// [20260725_E2E_CiStartupFix] END
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {

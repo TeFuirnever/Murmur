@@ -135,7 +135,11 @@ async function launchElectronApp({ env = {} } = {}) {
   const fs = require("fs");
   const mainBundle = path.join(appRoot, "dist-main/main.js");
   const preloadBundle = path.join(appRoot, "dist-preload/preload.js");
-  const rendererHtml = path.join(appRoot, "dist/index.html");
+  // [20260725_E2E_CiStartupProbe] Correct path: build:renderer script is
+  // `cd src && vite build`, and vite.config.js sets outDir: "dist", so
+  // the renderer HTML ends up at src/dist/, not <root>/dist/. Previous
+  // diagnostic reported false negative (existed=false when file was fine).
+  const rendererHtml = path.join(appRoot, "src/dist/index.html");
   console.log(`${DIAG_PREFIX} bundle check:`);
   console.log(
     `${DIAG_PREFIX}   dist-main/main.js exists=${fs.existsSync(mainBundle)}`,
@@ -144,9 +148,55 @@ async function launchElectronApp({ env = {} } = {}) {
     `${DIAG_PREFIX}   dist-preload/preload.js exists=${fs.existsSync(preloadBundle)}`,
   );
   console.log(
-    `${DIAG_PREFIX}   dist/index.html exists=${fs.existsSync(rendererHtml)}`,
+    `${DIAG_PREFIX}   src/dist/index.html exists=${fs.existsSync(rendererHtml)}`,
   );
-  // [20260725_E2E_LaunchDiagnosis] END
+  // [20260725_E2E_CiStartupProbe] END
+
+  // [20260725_E2E_ElectronBinaryCheck] Verify the Electron binary exists
+  // in node_modules. The electron npm package's postinstall downloads
+  // Electron.app to node_modules/electron/dist/. If that dir is empty or
+  // missing, electron.launch() will silently spawn a broken process.
+  const electronPath = require("electron");
+  console.log(`${DIAG_PREFIX} electron path: ${electronPath}`);
+  const electronBundleExists = fs.existsSync(electronPath);
+  console.log(`${DIAG_PREFIX} electron binary exists: ${electronBundleExists}`);
+  if (fs.existsSync(electronPath)) {
+    const stat = fs.statSync(electronPath);
+    console.log(
+      `${DIAG_PREFIX} electron binary size: ${stat.size} bytes (stub launcher, ~50KB expected)`,
+    );
+  }
+  // [20260725_E2E_ElectronBinaryCheck_v2] The 50KB binary is just the
+  // launcher stub; the real Electron framework lives in
+  // Electron.app/Contents/Frameworks/. Total dist/ should be ~200-300MB.
+  // If it's only a few MB on CI, the postinstall download failed.
+  // Path: electronPath = .../dist/Electron.app/Contents/MacOS/Electron
+  //   dist dir = 4 levels up (MacOS → Contents → Electron.app → dist)
+  const electronDistDir = path.dirname(
+    path.dirname(path.dirname(path.dirname(electronPath))),
+  );
+  let totalSize = 0;
+  try {
+    const execSync = require("child_process").execSync;
+    const duOut = execSync(`du -sk ${electronDistDir}`, { encoding: "utf8" });
+    totalSize = parseInt(duOut.split(/\s+/)[0], 10) || 0;
+  } catch (e) {
+    console.log(`${DIAG_PREFIX} du failed: ${e.message}`);
+  }
+  console.log(
+    `${DIAG_PREFIX} electron dist total: ${totalSize} KB (expected ~200000-300000 KB)`,
+  );
+  const frameworkDir = path.join(
+    electronDistDir,
+    "Electron.app",
+    "Contents",
+    "Frameworks",
+    "Electron Framework.framework",
+  );
+  console.log(
+    `${DIAG_PREFIX} Electron Framework.framework exists: ${fs.existsSync(frameworkDir)}`,
+  );
+  // [20260725_E2E_ElectronBinaryCheck_v2] END
 
   console.log(
     `${DIAG_PREFIX} calling electron.launch() at ${new Date().toISOString()}`,
@@ -154,7 +204,17 @@ async function launchElectronApp({ env = {} } = {}) {
   const launchStart = Date.now();
 
   const app = await electron.launch({
-    args: [appRoot],
+    // [20260725_E2E_CiStartupProbe] Pass --require ci-probe.js as the
+    // FIRST arg so it executes before dist-main/main.js. If [probe]
+    // lines appear in CI logs but [main:canary] don't, the problem
+    // is in main.ts module-load (e.g. an import side-effect that
+    // hangs on CI macOS).
+    args: [
+      "--require",
+      path.join(PROJECT_ROOT, "tests/e2e/helpers/ci-probe.js"),
+      appRoot,
+    ],
+    // [20260725_E2E_CiStartupProbe] END
     env: {
       ...process.env,
       NODE_ENV: "test",
