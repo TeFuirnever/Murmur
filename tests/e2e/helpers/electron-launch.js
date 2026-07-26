@@ -162,9 +162,39 @@ async function launchElectronApp({ env = {} } = {}) {
   console.log(`${DIAG_PREFIX} electron binary exists: ${electronBundleExists}`);
   if (fs.existsSync(electronPath)) {
     const stat = fs.statSync(electronPath);
-    console.log(`${DIAG_PREFIX} electron binary size: ${stat.size} bytes`);
+    console.log(
+      `${DIAG_PREFIX} electron binary size: ${stat.size} bytes (stub launcher, ~50KB expected)`,
+    );
   }
-  // [20260725_E2E_ElectronBinaryCheck] END
+  // [20260725_E2E_ElectronBinaryCheck_v2] The 50KB binary is just the
+  // launcher stub; the real Electron framework lives in
+  // Electron.app/Contents/Frameworks/. Total dist/ should be ~200-300MB.
+  // If it's only a few MB on CI, the postinstall download failed.
+  const electronDistDir = path.dirname(
+    path.dirname(path.dirname(electronPath)),
+  );
+  let totalSize = 0;
+  try {
+    const execSync = require("child_process").execSync;
+    const duOut = execSync(`du -sk ${electronDistDir}`, { encoding: "utf8" });
+    totalSize = parseInt(duOut.split(/\s+/)[0], 10) || 0;
+  } catch (e) {
+    console.log(`${DIAG_PREFIX} du failed: ${e.message}`);
+  }
+  console.log(
+    `${DIAG_PREFIX} electron dist total: ${totalSize} KB (expected ~200000-300000 KB)`,
+  );
+  const frameworkDir = path.join(
+    electronDistDir,
+    "Electron.app",
+    "Contents",
+    "Frameworks",
+    "Electron Framework.framework",
+  );
+  console.log(
+    `${DIAG_PREFIX} Electron Framework.framework exists: ${fs.existsSync(frameworkDir)}`,
+  );
+  // [20260725_E2E_ElectronBinaryCheck_v2] END
 
   console.log(
     `${DIAG_PREFIX} calling electron.launch() at ${new Date().toISOString()}`,
