@@ -7,7 +7,15 @@
 // Electron.IpcMain / source Managers — the test stubs them — so local
 // Mock* types describe the surface the tests exercise. No `any`.
 // Template reference: phase4-i18n.test.ts (commit d52f2e0).
+//
+// [20260726_Tier32_ModelHandlers] Tier 3.2: converted cargo-cult require() +
+// vi.resetModules() to top-level ESM import. No vi.mock() was used, so the
+// shim existed only to load the .ts source. The `let register: typeof import`
+// declaration collapses to the import. beforeEach retains the mock ipcMain /
+// managers setup and the register() call.
+// [20260726_Tier32_ModelHandlers] END
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { register } from "../../src/helpers/ipc/modelHandlers";
 
 // [20260726_Tier3_ModelHandlersMigrate] Handler shape: ipcMain.handle
 // registers `(event, ...args) => result` callbacks. Tests invoke them with
@@ -47,11 +55,8 @@ interface MockManagers {
 describe("modelHandlers", () => {
   let ipcMain: MockIpcMain;
   let managers: MockManagers;
-  let register: typeof import("../../src/helpers/ipc/modelHandlers").register;
 
   beforeEach(() => {
-    vi.resetModules();
-    register = require("../../src/helpers/ipc/modelHandlers").register;
     ipcMain = createMockIpcMain();
 
     managers = {

@@ -6,23 +6,18 @@
 // any under TS7008. The mock Response objects are partial; cast to
 // `unknown as Response` so the structural Response shape stays intact.
 // Template reference: phase4-i18n.test.ts (commit d52f2e0).
-import { describe, it, expect, vi, beforeEach } from "vitest";
+//
+// [20260726_Tier32_DetectLocalModels] Tier 3.2: converted cargo-cult
+// require() + vi.resetModules() to top-level ESM import. The shim only
+// existed to load the .ts source (no vi.mock was ever used). The nested
+// describe's beforeEach that did the require is removed; the outer
+// beforeEach (vi.resetModules only) is also removed as it no-ops.
+// [20260726_Tier32_DetectLocalModels] END
+import { describe, it, expect, vi } from "vitest";
+import { detectLocalModels } from "../../src/helpers/detectLocalModels";
 
 describe("detectLocalModels", () => {
-  // [20260726_Tier3_DetectLocalModelsMigrate] Named async export; the
-  // `let` here is assigned in the nested beforeEach below.
-  let detectLocalModels: typeof import("../../src/helpers/detectLocalModels").detectLocalModels;
-
-  beforeEach(() => {
-    vi.resetModules();
-  });
-
   describe("with fetch mock", () => {
-    beforeEach(() => {
-      const detect = require("../../src/helpers/detectLocalModels");
-      detectLocalModels = detect.detectLocalModels;
-    });
-
     it("returns empty array when no local models running", async () => {
       const originalFetch = globalThis.fetch;
       // [20260726_Tier3_DetectLocalModelsMigrate] globalThis.fetch is

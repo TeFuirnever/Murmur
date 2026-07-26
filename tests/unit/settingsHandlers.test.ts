@@ -5,7 +5,14 @@
 // the mock args to register()'s source signature at the call site. The
 // handler return type is Record<string, unknown> so result.ai_api_key etc.
 // read without `any`. Template reference: phase4-i18n.test.ts (commit d52f2e0).
+//
+// [20260726_Tier32_SettingsHandlers] Tier 3.2: converted cargo-cult require()
+// + vi.resetModules() to top-level ESM import. No vi.mock() was used; shim
+// existed only to load the .ts source. beforeEach retains mock ipcMain /
+// managers setup and register() call.
+// [20260726_Tier32_SettingsHandlers] END
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { register } from "../../src/helpers/ipc/settingsHandlers";
 
 // [20260726_Tier3_SettingsHandlersMigrate] Handler shape: ipcMain.handle
 // registers `(event, ...args) => result` callbacks. Tests invoke them with
@@ -44,11 +51,8 @@ interface MockManagers {
 describe("settingsHandlers", () => {
   let ipcMain: MockIpcMain;
   let managers: MockManagers;
-  let register: typeof import("../../src/helpers/ipc/settingsHandlers").register;
 
   beforeEach(() => {
-    vi.resetModules();
-    register = require("../../src/helpers/ipc/settingsHandlers").register;
     ipcMain = createMockIpcMain();
 
     managers = {

@@ -5,26 +5,26 @@
 // class pattern as database-coverage.test.ts. The saveFileConfig arg is
 // `Record<string, unknown>` per the source; record literals pass through.
 // Template reference: phase4-i18n.test.ts (commit d52f2e0).
+//
+// [20260726_Tier32_FileConfig] Tier 3.2: converted 2 cargo-cult require()
+// sites to top-level ESM imports. Top-level beforeEach had vi.resetModules()
+// + require (no vi.mock) → replaced with top-level named imports; beforeEach
+// is deleted entirely (it only did require+reset). Inner describe's
+// `DatabaseManager = require(...)` is replaced by a top-level default import.
+// The `db` instance still needs `let` (per-test fresh instance + tmpDir).
+// [20260726_Tier32_FileConfig] END
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import fs from "fs";
 import path from "path";
 import os from "os";
+import {
+  loadFileConfig,
+  saveFileConfig,
+  FILE_CONFIGURABLE_KEYS,
+} from "../../src/helpers/fileConfig";
+import DatabaseManager from "../../src/helpers/database";
 
 describe("fileConfig", () => {
-  // [20260726_Tier3_FileConfigMigrate] Named exports; type via the module
-  // namespace so each binding carries the source's real (function/array) type.
-  let loadFileConfig: typeof import("../../src/helpers/fileConfig").loadFileConfig;
-  let saveFileConfig: typeof import("../../src/helpers/fileConfig").saveFileConfig;
-  let FILE_CONFIGURABLE_KEYS: typeof import("../../src/helpers/fileConfig").FILE_CONFIGURABLE_KEYS;
-
-  beforeEach(() => {
-    vi.resetModules();
-    const fileConfig = require("../../src/helpers/fileConfig");
-    loadFileConfig = fileConfig.loadFileConfig;
-    saveFileConfig = fileConfig.saveFileConfig;
-    FILE_CONFIGURABLE_KEYS = fileConfig.FILE_CONFIGURABLE_KEYS;
-  });
-
   describe("loadFileConfig", () => {
     it("returns empty object when config file does not exist", () => {
       const result = loadFileConfig("/non/existent/murmur.json");
@@ -150,12 +150,10 @@ describe("fileConfig", () => {
   describe("getSetting with file config fallback", () => {
     // [20260726_Tier3_FileConfigMigrate] Default-export class; the require
     // returns the constructor under CJS interop. `db` is the class instance.
-    let DatabaseManager: typeof import("../../src/helpers/database").default;
     let db: InstanceType<typeof DatabaseManager>;
     let configDir: string;
 
     beforeEach(() => {
-      DatabaseManager = require("../../src/helpers/database");
       db = new DatabaseManager({
         info: vi.fn(),
         error: vi.fn(),

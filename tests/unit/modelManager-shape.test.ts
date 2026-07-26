@@ -7,25 +7,26 @@
 // is typed, `m.modelConfigs` is Record<string, ModelConfig>, so
 // `Object.values(...)` yields ModelConfig[] and `config.cache_path` resolves.
 // Template reference: phase4-i18n.test.ts (commit d52f2e0).
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+//
+// [20260726_Tier32_ModelManagerShape] Tier 3.2: converted cargo-cult
+// require() + vi.resetModules() to top-level ESM default import. No vi.mock()
+// was used — the resetModules call was cargo-cult from .js era. The original
+// comment claimed resetModules reset module-level caches (globalModelCheckCache),
+// but the tests call `m.clearCache()` per-test on a fresh instance, so any
+// module-level cache is irrelevant. beforeEach retains tmpDir setup.
+// [20260726_Tier32_ModelManagerShape] END
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
+import ModelManager from "../../src/helpers/modelManager";
 
-// [20260724_TS_BigBang_TestFix] Replace createRequire with vite-intercepted
-// require + vi.resetModules() for .ts compatibility. Module-level cache
-// variables (globalModelCheckCache) are reset by re-importing the module,
-// which vi.resetModules() + fresh require achieves.
 describe("modelManager.checkModelFiles contract", () => {
-  let ModelManager: typeof import("../../src/helpers/modelManager").default;
   let tmpDir: string;
 
   beforeEach(() => {
-    vi.resetModules();
-    ModelManager = require("../../src/helpers/modelManager");
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "mm-test-"));
   });
-  // [20260724_TS_BigBang_TestFix] END
 
   afterEach(() => {
     fs.rmSync(tmpDir, { recursive: true, force: true });

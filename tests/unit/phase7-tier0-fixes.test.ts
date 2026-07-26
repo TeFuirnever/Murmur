@@ -3,32 +3,28 @@
 // assigned from require() in beforeEach/beforeAll — strict tsc (TS7034/TS7005)
 // cannot infer the type because the assignment happens in a callback whose
 // type does not flow back to the declaration site. Each binding is typed via
-// `typeof import("<module>").<export>` to reuse the source module's own
-// types without introducing `any`. Template reference: phase4-i18n.test.ts
+// `typeof import("<module>").<export>` to reuse the source module's own types
+// without introducing `any`. Template reference: phase4-i18n.test.ts
 // (commit d52f2e0).
 //
-// [20260724_TS_BigBang_TestFix] Replace all createRequire usages with
-// vite-intercepted require + vi.resetModules(). createRequire uses Node's
-// native resolver which cannot load .ts files. The tests only needed module
-// isolation (delete-cache), which vi.resetModules() provides equivalently.
-import { describe, it, expect, vi, beforeEach } from "vitest";
+// [20260726_Tier32_Phase7Tier0Fixes] Tier 3.2: converted 5 of 8 cargo-cult
+// require() sites + all vi.resetModules() to top-level ESM imports. The 5
+// source requires (PythonEnvironment default x2, aiHandlers named x3) all
+// lived in beforeEach blocks with no vi.mock → safe to hoist. The remaining
+// 3 require() calls are `require("fs")` INSIDE one it() body that mutates
+// Node's built-in fs.existsSync — those don't depend on resetModules and
+// converting them is out of scope (deferred, see TODO in that test).
+// [20260726_Tier32_Phase7Tier0Fixes] END
+import { describe, it, expect, vi } from "vitest";
+import PythonEnvironment from "../../src/helpers/pythonEnvironment";
+import {
+  validateAIBaseUrl,
+  processTextWithAI,
+  checkAIStatus,
+} from "../../src/helpers/ipc/aiHandlers";
 
 describe("Tier 0 fixes", () => {
-  beforeEach(() => {
-    vi.resetModules();
-  });
-  // [20260724_TS_BigBang_TestFix] END
-
   describe("T0-2: Python version detection requires 3.8+", () => {
-    // [20260725_Tier3_Phase7Tier0FixesMigrate] require() returns the default
-    // export directly under esbuild CJS interop, so the binding holds the
-    // class constructor itself. `.default` indexes the module namespace type.
-    let PythonEnvironment: typeof import("../../src/helpers/pythonEnvironment").default;
-
-    beforeEach(() => {
-      PythonEnvironment = require("../../src/helpers/pythonEnvironment");
-    });
-
     it("rejects Python 3.6", () => {
       const env = new PythonEnvironment();
       expect(env.isPythonVersionSupported({ major: 3, minor: 6 })).toBe(false);
@@ -62,14 +58,6 @@ describe("Tier 0 fixes", () => {
   });
 
   describe("T0-4: PYTHONUTF8=1 in buildPythonEnvironment", () => {
-    // [20260725_Tier3_Phase7Tier0FixesMigrate] Same default-export shape as
-    // the T0-2 block above.
-    let PythonEnvironment: typeof import("../../src/helpers/pythonEnvironment").default;
-
-    beforeEach(() => {
-      PythonEnvironment = require("../../src/helpers/pythonEnvironment");
-    });
-
     it("sets PYTHONUTF8=1 to prevent GBK/CP936 encoding corruption on Windows", () => {
       const env = new PythonEnvironment({
         info: () => {},
@@ -83,6 +71,13 @@ describe("Tier 0 fixes", () => {
     });
 
     it("PYTHONUTF8 is set even when embedded Python is used", () => {
+      // [20260726_Tier32_DeferredDynamicRequire] The 3 require("fs") calls
+      // below mutate Node's built-in fs.existsSync for the duration of this
+      // test. They do NOT depend on vi.resetModules (fs is a Node builtin,
+      // not a source module), so removing resetModules above is safe. The
+      // require() form is retained because converting to a top-level
+      // `import fs from "fs"` would require restructuring the save/restore
+      // logic (the test patches a method on the imported object). Deferred.
       const env = new PythonEnvironment({
         info: () => {},
         warn: () => {},
@@ -102,15 +97,6 @@ describe("Tier 0 fixes", () => {
   });
 
   describe("T0-3: SSRF validation allows localhost for local models", () => {
-    // [20260725_Tier3_Phase7Tier0FixesMigrate] Named export; index the
-    // module namespace type by member name to reuse the source signature.
-    let validateAIBaseUrl: typeof import("../../src/helpers/ipc/aiHandlers").validateAIBaseUrl;
-
-    beforeEach(() => {
-      const aiHandlers = require("../../src/helpers/ipc/aiHandlers");
-      validateAIBaseUrl = aiHandlers.validateAIBaseUrl;
-    });
-
     it("rejects localhost by default (cloud mode)", () => {
       expect(validateAIBaseUrl("http://localhost:11434/v1")).toBe(false);
       expect(validateAIBaseUrl("https://localhost/v1")).toBe(false);
@@ -167,16 +153,6 @@ describe("Tier 0 fixes", () => {
   });
 
   describe("T1-1: processTextWithAI supports local models without API key", () => {
-    // [20260725_Tier3_Phase7Tier0FixesMigrate] Named async export; the
-    // mock db/logger passed at call sites satisfy the source's structural
-    // DatabaseManager/Logger interfaces.
-    let processTextWithAI: typeof import("../../src/helpers/ipc/aiHandlers").processTextWithAI;
-
-    beforeEach(() => {
-      const aiHandlers = require("../../src/helpers/ipc/aiHandlers");
-      processTextWithAI = aiHandlers.processTextWithAI;
-    });
-
     it("proceeds without API key when base URL is localhost", async () => {
       const db = {
         getSetting: vi.fn(async (key) => {
@@ -220,15 +196,6 @@ describe("Tier 0 fixes", () => {
   });
 
   describe("T1-1: checkAIStatus supports local models without API key", () => {
-    // [20260725_Tier3_Phase7Tier0FixesMigrate] Named async export; first
-    // argument is the testConfig | null per source signature.
-    let checkAIStatus: typeof import("../../src/helpers/ipc/aiHandlers").checkAIStatus;
-
-    beforeEach(() => {
-      const aiHandlers = require("../../src/helpers/ipc/aiHandlers");
-      checkAIStatus = aiHandlers.checkAIStatus;
-    });
-
     it("does not reject localhost URL in checkAIStatus", async () => {
       const db = {
         getSetting: vi.fn(async (key) => {

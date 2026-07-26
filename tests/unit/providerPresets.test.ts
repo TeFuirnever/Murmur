@@ -6,22 +6,20 @@
 // `ProviderPresetData | undefined` return is narrowed with non-null assertions
 // after the prior `toBeDefined()` (suite convention). Template reference:
 // phase4-i18n.test.ts (commit d52f2e0).
-import { describe, it, expect, beforeEach } from "vitest";
+//
+// [20260726_Tier32_ProviderPresets] Tier 3.2: converted cargo-cult require()
+// + vi.resetModules() to top-level ESM import. No vi.mock() was used; shim
+// existed only to load the .ts source. `beforeEach` was ONLY the require, so
+// it is deleted entirely (it would have been an empty block). The `beforeEach`
+// import is dropped from the vitest import list since nothing else uses it.
+// [20260726_Tier32_ProviderPresets] END
+import { describe, it, expect } from "vitest";
+import {
+  getProviderPresets,
+  getProviderByName,
+} from "../../src/helpers/providerPresets";
 
 describe("providerPresets", () => {
-  // [20260726_Tier3_ProviderPresetsMigrate] Named exports; the module
-  // namespace type provides the () => ProviderPresetData[] and
-  // (name: string) => ProviderPresetData | undefined signatures directly.
-  let getProviderPresets: typeof import("../../src/helpers/providerPresets").getProviderPresets;
-  let getProviderByName: typeof import("../../src/helpers/providerPresets").getProviderByName;
-
-  beforeEach(() => {
-    vi.resetModules();
-    const presets = require("../../src/helpers/providerPresets");
-    getProviderPresets = presets.getProviderPresets;
-    getProviderByName = presets.getProviderByName;
-  });
-
   describe("getProviderPresets", () => {
     it("returns non-empty array of providers", () => {
       const presets = getProviderPresets();
