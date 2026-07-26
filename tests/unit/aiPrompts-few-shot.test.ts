@@ -1,14 +1,25 @@
+// [20260726_Tier3_AiPromptsFewShotMigrate] Migrated from .js to .ts as part
+// of Tier 3 batch 2. Pattern: type the destructured require() binding via
+// `typeof import("<module>").<export>` so buildPrompt reuses the source
+// signature from src/helpers/aiPrompts.ts, and annotate the describe.each
+// callback param as `string` (TS7008 — describe.each infers the table as
+// `ReadonlyArray<unknown>` so the callback parameter is implicitly `any`).
+// No `let`-bare bindings in this file. Template reference: phase4-i18n.test.ts
+// (commit d52f2e0).
+//
 // [20260724_Feat_PromptFewShot] Regression tests for AI prompt few-shot examples.
 // Ensures each platform-style prompt includes concrete examples per ADR-012 Issue #4c.
 import { describe, it, expect } from "vitest";
 
-const { buildPrompt } = require("../../src/helpers/aiPrompts");
+const {
+  buildPrompt,
+}: typeof import("../../src/helpers/aiPrompts") = require("../../src/helpers/aiPrompts");
 
 describe("AI Prompt few-shot examples (ADR-012 Issue #4c)", () => {
   // Platform prompts that need few-shot examples
   const PLATFORM_MODES = ["xiaohongshu", "dianping", "douyin", "zhihu"];
 
-  describe.each(PLATFORM_MODES)("mode: %s", (mode) => {
+  describe.each(PLATFORM_MODES)("mode: %s", (mode: string) => {
     it("system prompt contains at least one example section", () => {
       const result = buildPrompt(mode, "这是一段测试文本");
       // Look for example markers: ## 示例, ## 范例, 示例：, 例子：

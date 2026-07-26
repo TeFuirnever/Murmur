@@ -1,5 +1,17 @@
+// [20260726_Tier3_IpcContractsMigrate] Migrated from .js to .ts as part of
+// Tier 3 batch 2. Pattern: type the require() binding C via
+// `typeof import("<module>")` so the namespace reuses src/helpers/
+// ipc-contracts.ts's own `as const` shapes. This resolves the Object.entries/
+// Object.values iteration errors (TS2769/TS18046) — without the annotation,
+// `const C = require(...)` is `any`, and iterating `any` yields `unknown`
+// members that break the inner Object.entries(channels) calls. No `let`-bare
+// bindings and no untyped function params in this file. Template reference:
+// phase4-i18n.test.ts (commit d52f2e0).
 import { describe, it, expect } from "vitest";
-const C = require("../../src/helpers/ipc-contracts");
+
+// [20260726_Tier3_IpcContractsMigrate] require() under esbuild CJS interop
+// returns the module namespace, aligning with the named `export const` members.
+const C: typeof import("../../src/helpers/ipc-contracts") = require("../../src/helpers/ipc-contracts");
 
 describe("ipc-contracts", () => {
   it("exports all domain objects", () => {

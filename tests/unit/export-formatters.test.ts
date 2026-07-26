@@ -1,3 +1,12 @@
+// [20260726_Tier3_ExportFormattersMigrate] Migrated from .js to .ts as part
+// of Tier 3 batch 2. Pattern: type the destructured require() bindings via
+// `typeof import("<module>").<export>` so each formatter reuses the source
+// signature from src/helpers/exportFormatters.ts (including the
+// `TranscriptionForExport` param type and `FormatInfo | null` return) without
+// introducing `any`. The `sampleTranscription` object literal is inferred to
+// satisfy `TranscriptionForExport` structurally at each call site. No
+// `let`-bare bindings or untyped function params in this file. Template
+// reference: phase4-i18n.test.ts (commit d52f2e0).
 import { describe, it, expect } from "vitest";
 
 const {
@@ -6,7 +15,7 @@ const {
   formatVTT,
   formatMD,
   getFormatInfo,
-} = require("../../src/helpers/exportFormatters");
+}: typeof import("../../src/helpers/exportFormatters") = require("../../src/helpers/exportFormatters");
 
 const sampleTranscription = {
   text: "你好世界",
@@ -81,6 +90,10 @@ describe("exportFormatters", () => {
       for (const fmt of ["txt", "srt", "vtt", "md", "docx"]) {
         const info = getFormatInfo(fmt);
         expect(info).toBeDefined();
+        // [20260726_Tier3_ExportFormattersMigrate] getFormatInfo returns
+        // `FormatInfo | null`; vitest's toBeDefined() doesn't narrow the type,
+        // so guard before reading members (avoids `!` assertions).
+        if (!info) throw new Error(`expected format info for "${fmt}"`);
         expect(info.ext).toBeTruthy();
         expect(info.formatter).toBeInstanceOf(Function);
       }

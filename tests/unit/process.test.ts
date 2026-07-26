@@ -1,6 +1,17 @@
+// [20260726_Tier3_ProcessTestMigrate] Migrated from .js to .ts as part of
+// Tier 3 batch 2. Pattern: type the destructured require() bindings via
+// `typeof import("<module>").<export>` so each name reuses the source's own
+// type without introducing `any`. require() under esbuild CJS interop returns
+// the namespace object, so named destructuring aligns 1:1 with `export const`
+// / `export function` members of src/utils/process.ts. No `let`-bare or
+// untyped function params in this file. Template reference: phase4-i18n.test.ts
+// (commit d52f2e0).
 import { describe, it, expect } from "vitest";
 
-const { runCommand, TIMEOUTS } = require("../../src/utils/process");
+const {
+  runCommand,
+  TIMEOUTS,
+}: typeof import("../../src/utils/process") = require("../../src/utils/process");
 
 describe("process utils", () => {
   it("TIMEOUTS has expected keys", () => {
