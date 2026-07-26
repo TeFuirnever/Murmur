@@ -7,11 +7,8 @@
 // untyped function params in this file. Template reference: phase4-i18n.test.ts
 // (commit d52f2e0).
 import { describe, it, expect } from "vitest";
-
-const {
-  runCommand,
-  TIMEOUTS,
-}: typeof import("../../src/utils/process") = require("../../src/utils/process");
+// [20260726_Tier32_Process] Convert CJS require() → ESM named import.
+import { runCommand, TIMEOUTS } from "../../src/utils/process";
 
 describe("process utils", () => {
   it("TIMEOUTS has expected keys", () => {

@@ -9,10 +9,9 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import fs from "fs";
 import path from "path";
 import os from "os";
-
-// [20260726_Tier3_AudioFileHelpersMigrate] Source named exports pulled out
-// via the module namespace so each binding has its real (function) type.
-const audioHelpers: typeof import("../../src/helpers/audioFileHelpers") = require("../../src/helpers/audioFileHelpers");
+// [20260726_Tier32_AudioFileHelpers] Convert CJS require() → ESM namespace
+// import. The `audioHelpers.X` accessor calls below unchanged.
+import * as audioHelpers from "../../src/helpers/audioFileHelpers";
 const createTempAudioFile = audioHelpers.createTempAudioFile;
 const cleanupTempFile = audioHelpers.cleanupTempFile;
 const getFFmpegPath = audioHelpers.getFFmpegPath;

@@ -12,8 +12,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { EventEmitter } from "events";
 import { PassThrough } from "stream";
 import type { ChildProcess } from "child_process";
-
-const ServerMessageRouter: typeof import("../../src/helpers/serverMessageRouter").default = require("../../src/helpers/serverMessageRouter");
+// [20260726_Tier32_ServerMessageRouterCoverage] Convert CJS require() → ESM
+// default import.
+import ServerMessageRouter from "../../src/helpers/serverMessageRouter";
 const MAX_ENTRY_AGE = 15 * 60 * 1000;
 
 // [20260726_Tier3_ServerMessageRouterCoverageMigrate] Mock process shape:

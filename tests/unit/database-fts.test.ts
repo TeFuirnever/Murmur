@@ -11,8 +11,8 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import path from "path";
 import fs from "fs";
 import os from "os";
-
-const DatabaseManager: typeof import("../../src/helpers/database").default = require("../../src/helpers/database");
+// [20260726_Tier32_DatabaseFts] Convert CJS require() → ESM default import.
+import DatabaseManager from "../../src/helpers/database";
 
 describe("FTS5 search", () => {
   let db: InstanceType<typeof DatabaseManager>;

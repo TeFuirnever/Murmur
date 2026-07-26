@@ -9,10 +9,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import path from "path";
 import fs from "fs";
 import os from "os";
-
-// [20260726_Tier3_DatabaseCoverageMigrate] Default-export class; the require
-// returns the constructor under CJS interop.
-const DatabaseManager: typeof import("../../src/helpers/database").default = require("../../src/helpers/database");
+// [20260726_Tier32_DatabaseCoverage] Convert CJS require() → ESM default
+// import. The _tsresolve.setup PART 3 unwrap previously handed tests the
+// class directly; ESM `import X from` does the same via Vite's transform.
+import DatabaseManager from "../../src/helpers/database";
 
 // [20260726_Tier3_DatabaseCoverageMigrate] better-sqlite3 Database shape:
 // only the .prepare().run() and .backup()/.close() surface the suite

@@ -7,8 +7,11 @@
 // at module scope (fs/path are required, not imported, but that resolves
 // fine via @types/node). Template reference: phase4-i18n.test.ts (commit
 // d52f2e0).
-const fs: typeof import("fs") = require("fs");
-const path: typeof import("path") = require("path");
+// [20260726_Tier32_JsxExtensionGuard] Convert CJS require() → ESM default
+// imports. Drop the redundant `typeof import("...")` annotation — ESM import
+// binding carries the type.
+import fs from "fs";
+import path from "path";
 
 const SRC_DIR = path.resolve(__dirname, "../../src");
 
