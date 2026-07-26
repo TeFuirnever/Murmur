@@ -4,6 +4,16 @@
 //
 // EVENTS are one-way (main -> renderer via webContents.send), so they are
 // intentionally excluded from this two-way `ipcMain.handle` coverage check.
+//
+// [20260726_Tier32_IpcContractCompleteness] All 6 vi.mock calls above are
+// module-level (hoisted by vitest) and apply to every import of those modules
+// across all tests in this file. None are changed between tests, so no test
+// needs per-test module isolation. The vi.resetModules() that used to live
+// in afterEach only existed to make the dynamic `await import(...)` calls
+// re-evaluate — but every test calls registerAll fresh with its own mock
+// managers bag, and the registrations array is reset in beforeEach, so cached
+// imports are harmless. The require shim was never needed here (the file used
+// dynamic import, not require).
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // Mock electron — every handler module imports named members from it.
@@ -235,7 +245,10 @@ describe("IPC contract completeness", () => {
   afterEach(() => {
     if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
     else process.env.NODE_ENV = originalNodeEnv;
-    vi.resetModules();
+    // [20260726_Tier32_IpcContractCompleteness] vi.resetModules() removed —
+    // see file header. Module-level vi.mock factories are unchanged across
+    // tests, and per-test isolation comes from the fresh `registrations` array
+    // and fresh managers bag each test constructs.
   });
 
   function createMockIpcMain() {

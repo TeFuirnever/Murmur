@@ -24,21 +24,39 @@
 //     `pythonEnv` / `modelManager` fields the downloadModels regression pokes
 //     directly, mirroring the `dbp()` helper in database-coverage.
 //   - `! ` non-null after `toBeDefined()` / `toHaveBeenCalled()` guards.
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 
 vi.mock("electron", () => ({
   app: { getPath: vi.fn(() => "/tmp/test-user-data") },
 }));
 
+// [20260726_Tier32_RegressionSessionFixes] Convert 30 require() sites +
+// 7 vi.resetModules() calls to top-level ESM imports. The single vi.mock
+// above is hoisted by vitest and applies to every import of every source
+// module across all 10 describe blocks; no describe changes a mock factory
+// between tests, so per-test module isolation was never needed. The require
+// shim (_tsresolve.setup) was only needed to load .ts source.
+//
+// Conversion approach (minimal diff to test bodies):
+//   - namespace-import each source module at top level
+//   - for direct-use sites (C, envHandlers, FunASRManager, os): delete the
+//     local require line; the namespace import already provides the name
+//   - for destructure sites ({ register }, { buildPrompt }, { processTextWithAI }):
+//     replace the require() RHS with the namespace variable and drop the
+//     `typeof import(...)` annotation (TS now infers from the typed namespace)
+import * as C from "../../src/helpers/ipc-contracts";
+import * as envHandlers from "../../src/helpers/ipc/environmentHandlers";
+import * as transcriptionHandlers from "../../src/helpers/ipc/transcriptionHandlers";
+import * as settingsHandlers from "../../src/helpers/ipc/settingsHandlers";
+import * as aiPrompts from "../../src/helpers/aiPrompts";
+import * as aiHandlers from "../../src/helpers/ipc/aiHandlers";
+import FunASRManager from "../../src/helpers/funasrManager";
+import os from "os";
+
 // ---------------------------------------------------------------------------
 // Regression tests for fixes from the 2026-05-22/23 session.
 // Each test guards against a specific bug that was fixed.
 // ---------------------------------------------------------------------------
-
-// [20260726_Tier3_RegressionSessionFixesMigrate] ipc-contracts namespace,
-// typed via the source module so every `C.FUNASR.STATUS` / `C.EVENTS.*`
-// channel constant carries its literal-string type (TS7005).
-const C: typeof import("../../src/helpers/ipc-contracts") = require("../../src/helpers/ipc-contracts");
 
 // [20260726_Tier3_RegressionSessionFixesMigrate] Handler shape: ipcMain.handle
 // registers `(event, ...args) => result` callbacks. Tests invoke them with
@@ -99,7 +117,6 @@ function fsurf(m: FunASRManagerInstance): FunASRSurface {
 // 1. FUNASR.STATUS spread order — success field computed AFTER spread
 describe("FUNASR.STATUS spread order regression", () => {
   it("defaults to success:true when checkStatus returns no success field", async () => {
-    const envHandlers: typeof import("../../src/helpers/ipc/environmentHandlers") = require("../../src/helpers/ipc/environmentHandlers");
     const ipcMain = createIpcMain();
 
     const managers = {
@@ -134,7 +151,6 @@ describe("FUNASR.STATUS spread order regression", () => {
   });
 
   it("propagates success:false when checkStatus explicitly fails", async () => {
-    const envHandlers: typeof import("../../src/helpers/ipc/environmentHandlers") = require("../../src/helpers/ipc/environmentHandlers");
     const ipcMain = createIpcMain();
 
     const managers = {
@@ -170,7 +186,6 @@ describe("FUNASR.STATUS spread order regression", () => {
   });
 
   it("preserves success:true from checkStatus", async () => {
-    const envHandlers: typeof import("../../src/helpers/ipc/environmentHandlers") = require("../../src/helpers/ipc/environmentHandlers");
     const ipcMain = createIpcMain();
 
     const managers = {
@@ -234,7 +249,6 @@ describe("FUNASR.STATUS status_message", () => {
   }
 
   it("includes status_message when server is ready", async () => {
-    const envHandlers: typeof import("../../src/helpers/ipc/environmentHandlers") = require("../../src/helpers/ipc/environmentHandlers");
     const ipcMain = createIpcMain();
     const managers = createEnvManagers({
       modelsInitialized: true,
@@ -252,7 +266,6 @@ describe("FUNASR.STATUS status_message", () => {
   });
 
   it("includes status_message when initializing", async () => {
-    const envHandlers: typeof import("../../src/helpers/ipc/environmentHandlers") = require("../../src/helpers/ipc/environmentHandlers");
     const ipcMain = createIpcMain();
     const managers = createEnvManagers({
       initializationPromise: Promise.resolve(),
@@ -269,7 +282,6 @@ describe("FUNASR.STATUS status_message", () => {
   });
 
   it("includes status_message when not ready", async () => {
-    const envHandlers: typeof import("../../src/helpers/ipc/environmentHandlers") = require("../../src/helpers/ipc/environmentHandlers");
     const ipcMain = createIpcMain();
     const managers = createEnvManagers();
 
@@ -285,14 +297,13 @@ describe("FUNASR.STATUS status_message", () => {
 
 // 2. TRANSCRIPTION.SAVE canonical return shape
 describe("TRANSCRIPTION.SAVE return shape regression", () => {
-  beforeEach(() => {
-    vi.resetModules();
-  });
+  // [20260726_Tier32_RegressionSessionFixes] vi.resetModules() removed — the
+  // hoisted vi.mock("electron") at the top of this file applies to every
+  // import in every describe block, and no test in this describe changes a
+  // mock factory between tests.
 
   it("returns {success:true} on successful save", async () => {
-    const {
-      register,
-    }: typeof import("../../src/helpers/ipc/transcriptionHandlers") = require("../../src/helpers/ipc/transcriptionHandlers");
+    const { register } = transcriptionHandlers;
     const ipcMain = createIpcMain();
 
     const managers = {
@@ -317,9 +328,7 @@ describe("TRANSCRIPTION.SAVE return shape regression", () => {
   });
 
   it("returns {success:false, error} on failure", async () => {
-    const {
-      register,
-    }: typeof import("../../src/helpers/ipc/transcriptionHandlers") = require("../../src/helpers/ipc/transcriptionHandlers");
+    const { register } = transcriptionHandlers;
     const ipcMain = createIpcMain();
 
     const managers = {
@@ -348,9 +357,10 @@ describe("TRANSCRIPTION.SAVE return shape regression", () => {
 
 // 3. SETTINGS_UPDATE broadcast on save
 describe("SETTINGS_UPDATE broadcast regression", () => {
-  beforeEach(() => {
-    vi.resetModules();
-  });
+  // [20260726_Tier32_RegressionSessionFixes] vi.resetModules() removed — the
+  // hoisted vi.mock("electron") at the top of this file applies to every
+  // import in every describe block, and no test in this describe changes a
+  // mock factory between tests.
 
   function createManagers() {
     const sendSpy = vi.fn();
@@ -376,9 +386,7 @@ describe("SETTINGS_UPDATE broadcast regression", () => {
   }
 
   it("sends SETTINGS_UPDATE event on save-setting", async () => {
-    const {
-      register,
-    }: typeof import("../../src/helpers/ipc/settingsHandlers") = require("../../src/helpers/ipc/settingsHandlers");
+    const { register } = settingsHandlers;
     const ipcMain = createIpcMain();
     const { managers, sendSpy } = createManagers();
 
@@ -395,9 +403,7 @@ describe("SETTINGS_UPDATE broadcast regression", () => {
   });
 
   it("sends SETTINGS_UPDATE event on set-setting", async () => {
-    const {
-      register,
-    }: typeof import("../../src/helpers/ipc/settingsHandlers") = require("../../src/helpers/ipc/settingsHandlers");
+    const { register } = settingsHandlers;
     const ipcMain = createIpcMain();
     const { managers, sendSpy } = createManagers();
 
@@ -414,9 +420,7 @@ describe("SETTINGS_UPDATE broadcast regression", () => {
   });
 
   it("sends SETTINGS_UPDATE event on reset-settings", async () => {
-    const {
-      register,
-    }: typeof import("../../src/helpers/ipc/settingsHandlers") = require("../../src/helpers/ipc/settingsHandlers");
+    const { register } = settingsHandlers;
     const ipcMain = createIpcMain();
     const { managers, sendSpy } = createManagers();
 
@@ -436,9 +440,7 @@ describe("SETTINGS_UPDATE broadcast regression", () => {
 // 4. aiPrompts returns {system, user} structure
 describe("aiPrompts system/user structure regression", () => {
   it("buildPrompt returns {system, user} for optimize mode", () => {
-    const {
-      buildPrompt,
-    }: typeof import("../../src/helpers/aiPrompts") = require("../../src/helpers/aiPrompts");
+    const { buildPrompt } = aiPrompts;
     const result = buildPrompt("optimize", "测试文本");
 
     expect(result).toHaveProperty("system");
@@ -450,9 +452,7 @@ describe("aiPrompts system/user structure regression", () => {
   });
 
   it("buildPrompt returns {system, user} for optimize_long mode", () => {
-    const {
-      buildPrompt,
-    }: typeof import("../../src/helpers/aiPrompts") = require("../../src/helpers/aiPrompts");
+    const { buildPrompt } = aiPrompts;
     const result = buildPrompt("optimize_long", "长文本测试");
 
     expect(result).toHaveProperty("system");
@@ -461,9 +461,7 @@ describe("aiPrompts system/user structure regression", () => {
   });
 
   it("buildPrompt falls back to optimize for unknown mode", () => {
-    const {
-      buildPrompt,
-    }: typeof import("../../src/helpers/aiPrompts") = require("../../src/helpers/aiPrompts");
+    const { buildPrompt } = aiPrompts;
     const result = buildPrompt("unknown_mode", "文本");
 
     expect(result).toHaveProperty("system");
@@ -471,9 +469,7 @@ describe("aiPrompts system/user structure regression", () => {
   });
 
   it("system prompt contains core rules", () => {
-    const {
-      buildPrompt,
-    }: typeof import("../../src/helpers/aiPrompts") = require("../../src/helpers/aiPrompts");
+    const { buildPrompt } = aiPrompts;
     const { system } = buildPrompt("optimize", "文本");
 
     expect(system).toContain("绝对禁止");
@@ -483,14 +479,13 @@ describe("aiPrompts system/user structure regression", () => {
 
 // 5. SSRF validation in processTextWithAI (not just checkAIStatus)
 describe("processTextWithAI SSRF regression", () => {
-  beforeEach(() => {
-    vi.resetModules();
-  });
+  // [20260726_Tier32_RegressionSessionFixes] vi.resetModules() removed — the
+  // hoisted vi.mock("electron") at the top of this file applies to every
+  // import in every describe block, and no test in this describe changes a
+  // mock factory between tests.
 
   it("rejects internal base URL in process flow", async () => {
-    const {
-      processTextWithAI,
-    }: typeof import("../../src/helpers/ipc/aiHandlers") = require("../../src/helpers/ipc/aiHandlers");
+    const { processTextWithAI } = aiHandlers;
 
     const db = {
       getSetting: vi.fn(async (key: string) => {
@@ -513,9 +508,7 @@ describe("processTextWithAI SSRF regression", () => {
   });
 
   it("rejects http base URL in process flow", async () => {
-    const {
-      processTextWithAI,
-    }: typeof import("../../src/helpers/ipc/aiHandlers") = require("../../src/helpers/ipc/aiHandlers");
+    const { processTextWithAI } = aiHandlers;
 
     const db = {
       getSetting: vi.fn(async (key: string) => {
@@ -539,12 +532,14 @@ describe("processTextWithAI SSRF regression", () => {
 
 // 6. downloadModels must call findPythonExecutable — not use stale pythonCmd
 describe("downloadModels python path regression", () => {
-  beforeEach(() => {
-    vi.resetModules();
-  });
+  // [20260726_Tier32_RegressionSessionFixes] vi.resetModules() removed — the
+  // hoisted vi.mock("electron") at the top of this file applies to every
+  // import in every describe block, and no test in this describe changes a
+  // mock factory between tests.
 
   function createManager(): FunASRManagerInstance {
-    const FunASRManager: typeof import("../../src/helpers/funasrManager").default = require("../../src/helpers/funasrManager");
+    // [20260726_Tier32_RegressionSessionFixes] FunASRManager is now the
+    // top-level default import; no per-test require needed.
     const mgr = new FunASRManager();
     // [20260726_Tier3_RegressionSessionFixesMigrate] Override internal methods
     // to avoid real filesystem/electron calls. pythonEnv/modelManager are
@@ -598,9 +593,10 @@ describe("downloadModels python path regression", () => {
 // ---------------------------------------------------------------------------
 
 describe("TRANSCRIBE_FILE allowed extensions regression", () => {
-  beforeEach(() => {
-    vi.resetModules();
-  });
+  // [20260726_Tier32_RegressionSessionFixes] vi.resetModules() removed — the
+  // hoisted vi.mock("electron") at the top of this file applies to every
+  // import in every describe block, and no test in this describe changes a
+  // mock factory between tests.
 
   const mockManagers = () => ({
     funasrManager: {
@@ -623,9 +619,7 @@ describe("TRANSCRIBE_FILE allowed extensions regression", () => {
   });
 
   it("accepts .ogg files (was rejected before BUG 1 fix)", async () => {
-    const {
-      register,
-    }: typeof import("../../src/helpers/ipc/transcriptionHandlers") = require("../../src/helpers/ipc/transcriptionHandlers");
+    const { register } = transcriptionHandlers;
     const ipcMain = createIpcMain();
     const managers = mockManagers();
     register(
@@ -633,7 +627,6 @@ describe("TRANSCRIBE_FILE allowed extensions regression", () => {
       managers as unknown as Parameters<typeof register>[1],
     );
 
-    const os: typeof import("os") = require("os");
     const result = await ipcMain._handlers[C.TRANSCRIPTION.TRANSCRIBE_FILE]!(
       createEvent(),
       `${os.homedir()}/test.ogg`,
@@ -644,9 +637,7 @@ describe("TRANSCRIBE_FILE allowed extensions regression", () => {
   });
 
   it("accepts .wma files (was rejected before BUG 1 fix)", async () => {
-    const {
-      register,
-    }: typeof import("../../src/helpers/ipc/transcriptionHandlers") = require("../../src/helpers/ipc/transcriptionHandlers");
+    const { register } = transcriptionHandlers;
     const ipcMain = createIpcMain();
     const managers = mockManagers();
     register(
@@ -654,7 +645,6 @@ describe("TRANSCRIBE_FILE allowed extensions regression", () => {
       managers as unknown as Parameters<typeof register>[1],
     );
 
-    const os: typeof import("os") = require("os");
     const result = await ipcMain._handlers[C.TRANSCRIPTION.TRANSCRIBE_FILE]!(
       createEvent(),
       `${os.homedir()}/test.wma`,
@@ -665,9 +655,7 @@ describe("TRANSCRIBE_FILE allowed extensions regression", () => {
   });
 
   it("accepts .aac files (was rejected before BUG 1 fix)", async () => {
-    const {
-      register,
-    }: typeof import("../../src/helpers/ipc/transcriptionHandlers") = require("../../src/helpers/ipc/transcriptionHandlers");
+    const { register } = transcriptionHandlers;
     const ipcMain = createIpcMain();
     const managers = mockManagers();
     register(
@@ -675,7 +663,6 @@ describe("TRANSCRIBE_FILE allowed extensions regression", () => {
       managers as unknown as Parameters<typeof register>[1],
     );
 
-    const os: typeof import("os") = require("os");
     const result = await ipcMain._handlers[C.TRANSCRIPTION.TRANSCRIBE_FILE]!(
       createEvent(),
       `${os.homedir()}/test.aac`,
@@ -686,9 +673,7 @@ describe("TRANSCRIBE_FILE allowed extensions regression", () => {
   });
 
   it("still rejects unsupported formats like .txt", async () => {
-    const {
-      register,
-    }: typeof import("../../src/helpers/ipc/transcriptionHandlers") = require("../../src/helpers/ipc/transcriptionHandlers");
+    const { register } = transcriptionHandlers;
     const ipcMain = createIpcMain();
     const managers = mockManagers();
     register(
@@ -707,14 +692,13 @@ describe("TRANSCRIBE_FILE allowed extensions regression", () => {
 });
 
 describe("TRANSCRIBE_FILE /Volumes/ path validation regression", () => {
-  beforeEach(() => {
-    vi.resetModules();
-  });
+  // [20260726_Tier32_RegressionSessionFixes] vi.resetModules() removed — the
+  // hoisted vi.mock("electron") at the top of this file applies to every
+  // import in every describe block, and no test in this describe changes a
+  // mock factory between tests.
 
   it("accepts files from /Volumes/ (was rejected before BUG 3 fix)", async () => {
-    const {
-      register,
-    }: typeof import("../../src/helpers/ipc/transcriptionHandlers") = require("../../src/helpers/ipc/transcriptionHandlers");
+    const { register } = transcriptionHandlers;
     const ipcMain = createIpcMain();
     const managers = {
       funasrManager: {
@@ -747,9 +731,7 @@ describe("TRANSCRIBE_FILE /Volumes/ path validation regression", () => {
   });
 
   it("allows Windows drive paths like E:\\", async () => {
-    const {
-      register,
-    }: typeof import("../../src/helpers/ipc/transcriptionHandlers") = require("../../src/helpers/ipc/transcriptionHandlers");
+    const { register } = transcriptionHandlers;
     const ipcMain = createIpcMain();
     const managers = {
       funasrManager: {
@@ -775,9 +757,7 @@ describe("TRANSCRIBE_FILE /Volumes/ path validation regression", () => {
   });
 
   it("still rejects paths outside homedir, tmpdir, and /Volumes/", async () => {
-    const {
-      register,
-    }: typeof import("../../src/helpers/ipc/transcriptionHandlers") = require("../../src/helpers/ipc/transcriptionHandlers");
+    const { register } = transcriptionHandlers;
     const ipcMain = createIpcMain();
     const managers = {
       funasrManager: {
@@ -810,9 +790,10 @@ describe("TRANSCRIBE_FILE /Volumes/ path validation regression", () => {
 
 // 6. TRANSCRIBE_FILE sets result.id from lastInsertRowid (not dbResult.id)
 describe("TRANSCRIBE_FILE result.id regression", () => {
-  beforeEach(() => {
-    vi.resetModules();
-  });
+  // [20260726_Tier32_RegressionSessionFixes] vi.resetModules() removed — the
+  // hoisted vi.mock("electron") at the top of this file applies to every
+  // import in every describe block, and no test in this describe changes a
+  // mock factory between tests.
 
   function createEvent() {
     return {
@@ -848,9 +829,7 @@ describe("TRANSCRIBE_FILE result.id regression", () => {
   }
 
   it("sets result.id from lastInsertRowid after successful transcription", async () => {
-    const {
-      register,
-    }: typeof import("../../src/helpers/ipc/transcriptionHandlers") = require("../../src/helpers/ipc/transcriptionHandlers");
+    const { register } = transcriptionHandlers;
     const ipcMain = createIpcMain();
 
     const managers = createManagers();

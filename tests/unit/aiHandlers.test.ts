@@ -7,7 +7,7 @@
 // through unknown to the DOM lib's Response type). The global.fetch mock's
 // `.mock.calls` is read via a vi.Mock cast. Template reference:
 // phase4-i18n.test.ts (commit d52f2e0).
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import fs from "fs";
 import path from "path";
 
@@ -21,6 +21,13 @@ vi.mock("electron", () => ({
 // the four bindings (register, processTextWithAI, checkAIStatus, getAIModes)
 // infer their source signatures without restating them.
 type AiHandlersModule = typeof import("../../src/helpers/ipc/aiHandlers");
+
+// [20260726_Tier32_AiHandlers] Convert require() + vi.resetModules() to a
+// top-level ESM namespace import. The vi.mock("electron", ...) above is
+// hoisted by vitest and applies to every import of the source module across
+// all tests, so per-test isolation via resetModules was never needed here.
+// The require shim (_tsresolve.setup) was only needed to load .ts source.
+import * as aiHandlersNS from "../../src/helpers/ipc/aiHandlers";
 
 // [20260726_Tier3_AiHandlersMigrate] Fetch mock return: the source only reads
 // ok/status/statusText/json()/text(), so this is the narrowest shape that
@@ -88,19 +95,16 @@ function setupDb(overrides: Record<string, unknown> = {}): {
 }
 
 describe("aiHandlers", () => {
-  let register: AiHandlersModule["register"];
-  let processTextWithAI: AiHandlersModule["processTextWithAI"];
-  let checkAIStatus: AiHandlersModule["checkAIStatus"];
-  let getAIModes: AiHandlersModule["getAIModes"];
-
-  beforeEach(() => {
-    vi.resetModules();
-    const aiHandlers: AiHandlersModule = require("../../src/helpers/ipc/aiHandlers");
-    register = aiHandlers.register;
-    processTextWithAI = aiHandlers.processTextWithAI;
-    checkAIStatus = aiHandlers.checkAIStatus;
-    getAIModes = aiHandlers.getAIModes;
-  });
+  // [20260726_Tier32_AiHandlers] Bind source functions at top level. The
+  // module is loaded once with vi.mock("electron") applied; per-test state
+  // lives in the managers/fetch stubs each test sets up, not in the module
+  // instance. The `let` is kept only so the inner describe bodies read names
+  // without the namespace prefix; assignment happens once, not per-test.
+  const aiHandlers: AiHandlersModule = aiHandlersNS;
+  const register = aiHandlers.register;
+  const processTextWithAI = aiHandlers.processTextWithAI;
+  const checkAIStatus = aiHandlers.checkAIStatus;
+  const getAIModes = aiHandlers.getAIModes;
 
   describe("register", () => {
     it("registers process-text and check-ai-status handlers", () => {

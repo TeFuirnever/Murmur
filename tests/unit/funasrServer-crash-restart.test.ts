@@ -18,6 +18,13 @@ vi.mock("electron", () => ({
 // the ESM default namespace to the class itself).
 type FunASRServerCtor = typeof import("../../src/helpers/funasrServer").default;
 
+// [20260726_Tier32_FunasrServerCrashRestart] Convert require() +
+// vi.resetModules() to a top-level ESM default import. vi.mock is hoisted.
+// funasrServer.ts uses `export default FunASRServer`, so the ESM default
+// import is the class constructor itself — same shape the setupFile unwrap
+// produced via CJS interop.
+import FunASRServer from "../../src/helpers/funasrServer";
+
 // [20260726_Tier3_FunasrServerCrashRestartMigrate] StartupParams mirrors the
 // source's private interface (pythonEnv/pythonCmd/serverPath/modelCachePath).
 // Re-declared locally rather than imported because the source interface is
@@ -64,17 +71,9 @@ interface LoggerStub {
 }
 
 describe("FunASR server auto-restart", () => {
-  let FunASRServer: FunASRServerCtor;
   let logger: LoggerStub;
 
   beforeEach(() => {
-    vi.resetModules();
-    // [20260726_Tier3_FunasrServerCrashRestartMigrate] Assign the raw require()
-    // result: tests/_sresolve.setup.js PART 3 unwraps {__esModule, default} →
-    // default for sole-default-export modules, so require() returns the class
-    // itself (not a namespace). The type annotation is still the source's
-    // `default` (the class) — the runtime and static types agree post-unwrap.
-    FunASRServer = require("../../src/helpers/funasrServer");
     logger = {
       info: vi.fn(),
       warn: vi.fn(),
