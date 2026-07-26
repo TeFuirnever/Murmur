@@ -1,3 +1,12 @@
+// [20260726_Tier3_ModelManagerShapeMigrate] Migrated from .js to .ts as part
+// of Tier 3 batch 3. Pattern: type the module-level `let ModelManager` via
+// `typeof import("...").default` (the source default-exports the class); the
+// _tsresolve.setup unwraps the ESM default to the class at runtime, so
+// `ModelManager = require(...)` + `new ModelManager()` works unchanged. Type
+// `let tmpDir` as string (assigned in beforeEach, TS7034). Once ModelManager
+// is typed, `m.modelConfigs` is Record<string, ModelConfig>, so
+// `Object.values(...)` yields ModelConfig[] and `config.cache_path` resolves.
+// Template reference: phase4-i18n.test.ts (commit d52f2e0).
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "fs";
 import os from "os";
@@ -8,8 +17,8 @@ import path from "path";
 // variables (globalModelCheckCache) are reset by re-importing the module,
 // which vi.resetModules() + fresh require achieves.
 describe("modelManager.checkModelFiles contract", () => {
-  let ModelManager;
-  let tmpDir;
+  let ModelManager: typeof import("../../src/helpers/modelManager").default;
+  let tmpDir: string;
 
   beforeEach(() => {
     vi.resetModules();

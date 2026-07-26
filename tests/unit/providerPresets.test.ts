@@ -1,8 +1,19 @@
+// [20260726_Tier3_ProviderPresetsMigrate] Migrated from .js to .ts as part of
+// Tier 3 batch 3. Pattern: type the `let getProviderPresets` / `let
+// getProviderByName` bindings via the source's named exports (TS7034). Once
+// typed, the `(p) =>` / `(m) =>` callback params infer ProviderPresetData /
+// string from the source signatures, and getProviderByName's
+// `ProviderPresetData | undefined` return is narrowed with non-null assertions
+// after the prior `toBeDefined()` (suite convention). Template reference:
+// phase4-i18n.test.ts (commit d52f2e0).
 import { describe, it, expect, beforeEach } from "vitest";
 
 describe("providerPresets", () => {
-  let getProviderPresets;
-  let getProviderByName;
+  // [20260726_Tier3_ProviderPresetsMigrate] Named exports; the module
+  // namespace type provides the () => ProviderPresetData[] and
+  // (name: string) => ProviderPresetData | undefined signatures directly.
+  let getProviderPresets: typeof import("../../src/helpers/providerPresets").getProviderPresets;
+  let getProviderByName: typeof import("../../src/helpers/providerPresets").getProviderByName;
 
   beforeEach(() => {
     vi.resetModules();
@@ -32,7 +43,9 @@ describe("providerPresets", () => {
 
     it("includes DeepSeek preset", () => {
       const presets = getProviderPresets();
-      const deepseek = presets.find((p) => p.name === "deepseek");
+      // [20260726_Tier3_ProviderPresetsMigrate] find() returns T | undefined;
+      // non-null after the defined assertion (suite convention).
+      const deepseek = presets.find((p) => p.name === "deepseek")!;
       expect(deepseek).toBeDefined();
       expect(deepseek.base_url).toContain("deepseek");
     });
@@ -57,7 +70,7 @@ describe("providerPresets", () => {
 
     it("includes Ollama preset (local, no API key)", () => {
       const presets = getProviderPresets();
-      const ollama = presets.find((p) => p.name === "ollama");
+      const ollama = presets.find((p) => p.name === "ollama")!;
       expect(ollama).toBeDefined();
       expect(ollama.requires_api_key).toBe(false);
       expect(ollama.base_url).toContain("localhost");
@@ -65,28 +78,28 @@ describe("providerPresets", () => {
 
     it("includes OpenAI preset", () => {
       const presets = getProviderPresets();
-      const openai = presets.find((p) => p.name === "openai");
+      const openai = presets.find((p) => p.name === "openai")!;
       expect(openai).toBeDefined();
       expect(openai.base_url).toContain("openai.com");
     });
 
     it("includes Groq preset", () => {
       const presets = getProviderPresets();
-      const groq = presets.find((p) => p.name === "groq");
+      const groq = presets.find((p) => p.name === "groq")!;
       expect(groq).toBeDefined();
       expect(groq.base_url).toContain("groq.com");
     });
 
     it("includes Moonshot preset", () => {
       const presets = getProviderPresets();
-      const moonshot = presets.find((p) => p.name === "moonshot");
+      const moonshot = presets.find((p) => p.name === "moonshot")!;
       expect(moonshot).toBeDefined();
       expect(moonshot.base_url).toContain("moonshot.cn");
     });
 
     it("includes MiniMax preset", () => {
       const presets = getProviderPresets();
-      const minimax = presets.find((p) => p.name === "minimax");
+      const minimax = presets.find((p) => p.name === "minimax")!;
       expect(minimax).toBeDefined();
       expect(minimax.base_url).toContain("minimaxi.com");
     });
@@ -131,37 +144,43 @@ describe("providerPresets", () => {
         (p) => p.registration?.recommended === true,
       );
       for (const p of recommended) {
-        expect(p.registration.url).toBeTruthy();
+        // [20260726_Tier3_ProviderPresetsMigrate] Non-null: the filter kept
+        // only presets whose registration?.recommended === true, so
+        // registration is present.
+        expect(p.registration!.url).toBeTruthy();
       }
     });
 
     it("deepseek is recommended with registration", () => {
-      const deepseek = getProviderByName("deepseek");
+      // [20260726_Tier3_ProviderPresetsMigrate] getProviderByName returns
+      // T | undefined; non-null after the subsequent assertions. The
+      // registration sub-object is asserted defined before each access.
+      const deepseek = getProviderByName("deepseek")!;
       expect(deepseek.registration).toBeDefined();
-      expect(deepseek.registration.recommended).toBe(true);
-      expect(deepseek.registration.url).toContain("deepseek.com");
+      expect(deepseek.registration!.recommended).toBe(true);
+      expect(deepseek.registration!.url).toContain("deepseek.com");
       expect(deepseek.registration).not.toHaveProperty("guide");
     });
 
     it("siliconflow is recommended with registration", () => {
-      const siliconflow = getProviderByName("siliconflow");
+      const siliconflow = getProviderByName("siliconflow")!;
       expect(siliconflow.registration).toBeDefined();
-      expect(siliconflow.registration.recommended).toBe(true);
-      expect(siliconflow.registration.url).toContain("siliconflow.cn");
+      expect(siliconflow.registration!.recommended).toBe(true);
+      expect(siliconflow.registration!.url).toContain("siliconflow.cn");
       expect(siliconflow.registration).not.toHaveProperty("guide");
     });
 
     it("groq has registration without recommended flag", () => {
-      const groq = getProviderByName("groq");
+      const groq = getProviderByName("groq")!;
       expect(groq.registration).toBeDefined();
-      expect(groq.registration.recommended).toBeUndefined();
+      expect(groq.registration!.recommended).toBeUndefined();
     });
 
     it("openrouter has registration with free models", () => {
-      const openrouter = getProviderByName("openrouter");
+      const openrouter = getProviderByName("openrouter")!;
       expect(openrouter).toBeDefined();
       expect(openrouter.registration).toBeDefined();
-      expect(openrouter.registration.url).toContain("openrouter.ai");
+      expect(openrouter.registration!.url).toContain("openrouter.ai");
       expect(openrouter.models.length).toBeGreaterThan(0);
       expect(openrouter.models.some((m) => m.includes("free"))).toBe(true);
     });
@@ -177,7 +196,7 @@ describe("providerPresets", () => {
 
   describe("getProviderByName", () => {
     it("returns matching provider", () => {
-      const deepseek = getProviderByName("deepseek");
+      const deepseek = getProviderByName("deepseek")!;
       expect(deepseek).toBeDefined();
       expect(deepseek.name).toBe("deepseek");
     });
@@ -185,7 +204,7 @@ describe("providerPresets", () => {
     // [20260725_TDD_ProviderPresets] openai lookup — verifies the find()
     // happy path returns a fully-defined preset for a known provider name.
     it("returns defined preset with name 'openai' for getProviderByName('openai')", () => {
-      const openai = getProviderByName("openai");
+      const openai = getProviderByName("openai")!;
       expect(openai).toBeDefined();
       expect(openai.name).toBe("openai");
       expect(openai.label).toBe("OpenAI");

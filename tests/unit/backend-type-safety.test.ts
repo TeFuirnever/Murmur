@@ -1,3 +1,11 @@
+// [20260726_Tier3_BackendTypeSafetyMigrate] Migrated from .js to .ts as part
+// of Tier 3 batch 3. Pattern: annotate the scanner helper params (TS7006) and
+// the `let files` accumulator (TS7034) with explicit string / string[] types;
+// guard array-index access (`lines[i]`) with a non-null assertion since
+// noUncheckedIndexedAccess widens the element to `string | undefined` even
+// though the index is bounded by the array length. Template reference:
+// phase4-i18n.test.ts (commit d52f2e0).
+//
 // [20260724_TS_BigBang_TestFix] Salvaged from ts-migration-parity.test.js.
 // The parity test was deleted (it asserted dual-source .js+.ts coexistence),
 // but these two type-safety guards are still valuable and now cover ALL
@@ -22,7 +30,7 @@ const rootDir = path.resolve(__dirname, "../..");
 // the scanner could never reach. The walker fix surfaces the real renderer
 // `as any` sites (HMR, performance.memory, webkitAudioContext) so they can
 // be explicitly allowlisted instead of hidden.
-function walkTsFiles(dir, out) {
+function walkTsFiles(dir: string, out: string[]): void {
   if (!fs.existsSync(dir)) return;
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
@@ -49,7 +57,9 @@ function collectProjectTsFiles() {
     "src/settings",
     "src", // picks up src/electronAPI.d.ts, src/vite-env.d.ts, src/App.tsx, src/main.tsx
   ];
-  const files = [];
+  // [20260726_Tier3_BackendTypeSafetyMigrate] Explicit string[] so tsc does
+  // not widen the never-assigned accumulator to any[] (TS7034).
+  const files: string[] = [];
   for (const dir of dirs) {
     walkTsFiles(path.join(rootDir, dir), files);
   }
@@ -115,7 +125,11 @@ describe("Project type safety — all .ts/.tsx/.d.ts follow standards", () => {
       const content = fs.readFileSync(fullPath, "utf8");
       const lines = content.split("\n");
       lineLoop: for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
+        // [20260726_Tier3_BackendTypeSafetyMigrate] Non-null assertion: the
+        // loop guard `i < lines.length` bounds the index, but
+        // noUncheckedIndexedAccess still widens the element to
+        // `string | undefined`. Same convention as the rest of the suite.
+        const line = lines[i]!;
         if (line.trim().startsWith("//")) continue;
         if (/\b:\s*any\b/.test(line) || /\bas\s+any\b/.test(line)) {
           for (const allowed of ALLOWED_ANY_PATTERNS) {

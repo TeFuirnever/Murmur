@@ -1,11 +1,22 @@
+// [20260726_Tier3_AiPromptsMigrate] Migrated from .js to .ts as part of Tier 3
+// batch 3. Pattern: declare explicit types for `let` bindings assigned from
+// require() in beforeEach — strict tsc (TS7034/TS7005) cannot infer the type
+// because the assignment happens in a callback whose type does not flow back
+// to the declaration site. Each binding is typed via
+// `typeof import("<module>").<export>` to reuse the source module's own types
+// without introducing `any`. Template reference: phase4-i18n.test.ts
+// (commit d52f2e0).
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import fs from "fs";
 import path from "path";
 
 describe("aiPrompts", () => {
-  let buildPrompt;
-  let parseTemplateFile;
-  let loadCustomTemplates;
+  // [20260726_Tier3_AiPromptsMigrate] Named exports; the module namespace
+  // type provides the (content, fileName) / (dir) / (mode, text, opts)
+  // signatures directly.
+  let buildPrompt: typeof import("../../src/helpers/aiPrompts").buildPrompt;
+  let parseTemplateFile: typeof import("../../src/helpers/aiPrompts").parseTemplateFile;
+  let loadCustomTemplates: typeof import("../../src/helpers/aiPrompts").loadCustomTemplates;
 
   beforeEach(() => {
     vi.resetModules();
@@ -40,8 +51,11 @@ label: 简洁
 ---
 简洁模式。`;
       const result = parseTemplateFile(content, "concise.md");
-      expect(result.name).toBe("concise");
-      expect(result.label).toBe("简洁");
+      // [20260726_Tier3_AiPromptsMigrate] Non-null after parseTemplateFile
+      // returns a value for valid frontmatter. Source return type is
+      // PromptTemplate | null; the assertion guards this at runtime.
+      expect(result!.name).toBe("concise");
+      expect(result!.label).toBe("简洁");
     });
 
     it("returns null for file without frontmatter", () => {
@@ -65,7 +79,8 @@ user_template: "请处理: {text}"
 ---
 处理文本。`;
       const result = parseTemplateFile(content, "custom.md");
-      expect(result.user).toBe("请处理: {text}");
+      // [20260726_Tier3_AiPromptsMigrate] Non-null after valid frontmatter.
+      expect(result!.user).toBe("请处理: {text}");
     });
   });
 
@@ -92,6 +107,8 @@ user_template: "请处理: {text}"
       try {
         const result = loadCustomTemplates(dir);
         expect(result).toHaveLength(2);
+        // [20260726_Tier3_AiPromptsMigrate] Param typed via the source's
+        // PromptTemplate (loadCustomTemplates returns PromptTemplate[]).
         expect(result.map((t) => t.name)).toContain("notes");
         expect(result.map((t) => t.name)).toContain("translate");
       } finally {
@@ -108,7 +125,10 @@ user_template: "请处理: {text}"
       try {
         const result = loadCustomTemplates(dir);
         expect(result).toHaveLength(1);
-        expect(result[0].name).toBe("ok");
+        // [20260726_Tier3_AiPromptsMigrate] Non-null assertion: the prior
+        // expect().toHaveLength(1) guards this at runtime; noUncheckedIndexedAccess
+        // just hides the narrowing from tsc. Same convention as edge-cases.test.ts.
+        expect(result[0]!.name).toBe("ok");
       } finally {
         fs.rmSync(dir, { recursive: true });
       }
@@ -168,6 +188,7 @@ user_template: "请处理: {text}"
       const customTemplates = [
         {
           name: "review",
+          label: "Review", // [20260726_Tier3_AiPromptsMigrate] label required by PromptTemplate
           system: "Review this.",
           user: "Review: {text}\nPlease check.",
         },

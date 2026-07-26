@@ -1,13 +1,22 @@
+// [20260726_Tier3_DatabaseFtsMigrate] Migrated from .js to .ts as part of
+// Tier 3 batch 3. Pattern: same as database.test.ts — type the module-level
+// `const DatabaseManager` via `typeof import("...").default`, type `let db`
+// as the instance and `let tmpDir` as string (both assigned in beforeEach,
+// TS7034). searchTranscriptions returns TranscriptionRecord[], so the `.map`
+// and index-access on results pick up element types automatically; the
+// `results[0].text` access is guarded by a prior length assertion so a
+// non-null assertion is added per suite convention. Template reference:
+// phase4-i18n.test.ts (commit d52f2e0).
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import path from "path";
 import fs from "fs";
 import os from "os";
 
-const DatabaseManager = require("../../src/helpers/database");
+const DatabaseManager: typeof import("../../src/helpers/database").default = require("../../src/helpers/database");
 
 describe("FTS5 search", () => {
-  let db;
-  let tmpDir;
+  let db: InstanceType<typeof DatabaseManager>;
+  let tmpDir: string;
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "murmur-fts-"));
@@ -65,7 +74,8 @@ describe("FTS5 search", () => {
     db.saveTranscription({ text: "to keep" });
 
     expect(db.searchTranscriptions("deleted")).toHaveLength(1);
-    db.deleteTranscription(lastInsertRowid);
+    // [20260726_Tier3_DatabaseFtsMigrate] Coerce number | bigint → number.
+    db.deleteTranscription(Number(lastInsertRowid));
     expect(db.searchTranscriptions("deleted")).toHaveLength(0);
     expect(db.searchTranscriptions("keep")).toHaveLength(1);
   });
@@ -81,7 +91,8 @@ describe("FTS5 search", () => {
     db2.initialize(tmpDir);
     const results = db2.searchTranscriptions("中文");
     expect(results).toHaveLength(1);
-    expect(results[0].text).toBe("测试中文搜索");
+    // [20260726_Tier3_DatabaseFtsMigrate] Non-null after the length assertion.
+    expect(results[0]!.text).toBe("测试中文搜索");
     db2.close();
   });
 

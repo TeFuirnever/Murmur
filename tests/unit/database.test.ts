@@ -1,13 +1,21 @@
+// [20260726_Tier3_DatabaseMigrate] Migrated from .js to .ts as part of Tier 3
+// batch 3. Pattern: type the module-level `const DatabaseManager` via
+// `typeof import("...").default` (the source's default-exported class); type
+// the `let db` instance via `InstanceType<typeof DatabaseManager>` and the
+// `let tmpDir` as string, both assigned in beforeEach (TS7034). The
+// _tsresolve.setup unwraps the ESM default to the class at runtime, so
+// `new DatabaseManager()` works unchanged. Template reference:
+// phase4-i18n.test.ts (commit d52f2e0).
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import path from "path";
 import fs from "fs";
 import os from "os";
 
-const DatabaseManager = require("../../src/helpers/database");
+const DatabaseManager: typeof import("../../src/helpers/database").default = require("../../src/helpers/database");
 
 describe("DatabaseManager", () => {
-  let db;
-  let tmpDir;
+  let db: InstanceType<typeof DatabaseManager>;
+  let tmpDir: string;
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "murmur-test-"));
@@ -31,10 +39,14 @@ describe("DatabaseManager", () => {
 
       expect(result.changes).toBe(1);
 
-      const row = db.getTranscriptionById(result.lastInsertRowid);
+      // [20260726_Tier3_DatabaseMigrate] lastInsertRowid is number | bigint
+      // (better-sqlite3 RunResult); getTranscriptionById takes number, so
+      // coerce. row is TranscriptionRecord | undefined — non-null after the
+      // defined assertion (suite convention, no @ts-ignore).
+      const row = db.getTranscriptionById(Number(result.lastInsertRowid));
       expect(row).toBeDefined();
-      expect(row.text).toBe("你好世界");
-      expect(row.confidence).toBeCloseTo(0.95);
+      expect(row!.text).toBe("你好世界");
+      expect(row!.confidence).toBeCloseTo(0.95);
     });
 
     it("rejects empty text", () => {
@@ -61,9 +73,10 @@ describe("DatabaseManager", () => {
   describe("deleteTranscription", () => {
     it("deletes a transcription by id", () => {
       const { lastInsertRowid } = db.saveTranscription({ text: "to delete" });
-      db.deleteTranscription(lastInsertRowid);
+      // [20260726_Tier3_DatabaseMigrate] Coerce number | bigint → number.
+      db.deleteTranscription(Number(lastInsertRowid));
 
-      expect(db.getTranscriptionById(lastInsertRowid)).toBeUndefined();
+      expect(db.getTranscriptionById(Number(lastInsertRowid))).toBeUndefined();
     });
   });
 
@@ -106,11 +119,22 @@ describe("DatabaseManager", () => {
 
   describe("SQLite pragmas", () => {
     it("sets journal_mode to WAL and busy_timeout", () => {
-      // File-based temp DB (not :memory:), so WAL pragma takes effect
-      const mode = db.db.pragma("journal_mode", { simple: true });
+      // [20260726_Tier3_DatabaseMigrate] DatabaseManager.db is private, but
+      // this test asserts the pragma state set during initialize(). Access
+      // via a structural cast through `unknown` (no `any`) exposing only the
+      // `pragma` method used here. File-based temp DB (not :memory:), so WAL
+      // pragma takes effect.
+      const rawDb = (
+        db as unknown as {
+          db: {
+            pragma: (name: string, opts?: { simple?: boolean }) => unknown;
+          };
+        }
+      ).db;
+      const mode = rawDb.pragma("journal_mode", { simple: true });
       expect(mode).toBe("wal");
 
-      const timeout = db.db.pragma("busy_timeout", { simple: true });
+      const timeout = rawDb.pragma("busy_timeout", { simple: true });
       expect(timeout).toBe(5000);
     });
   });
