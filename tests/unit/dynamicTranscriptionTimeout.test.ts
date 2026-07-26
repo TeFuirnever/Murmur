@@ -1,10 +1,24 @@
+// [20260726_Tier3_DynamicTranscriptionTimeoutMigrate] Migrated from .js to
+// .ts as part of Tier 3 batch 3. Pattern: `calculateTranscriptionTimeout` is
+// module-private in src/helpers/funasrServer.ts (no `export` keyword on the
+// function declaration — see ADR-014 / Tier 3 §5.0.1), so `typeof import("...")`
+// does NOT surface it on the module namespace. However, the source attaches
+// it as a PUBLIC STATIC on the default-exported FunASRServer class
+// (`static calculateTranscriptionTimeout = calculateTranscriptionTimeout`),
+// and the _tsresolve.setup unwraps the ESM default to the class at runtime, so
+// `require("...").calculateTranscriptionTimeout` resolves to that static at
+// runtime. The binding is therefore typed via
+// `typeof import("...").default.calculateTranscriptionTimeout` to reuse the
+// source's own `(fileSizeBytes: number) => TranscriptionTimeout` signature —
+// no `any`, no TODO blocker. Template reference: phase4-i18n.test.ts
+// (commit d52f2e0).
+//
 // [20260724_Fix_DynamicTranscriptionTimeout] Tests for dynamic file
 // transcription timeout based on file size (ADR-012 Issue #1).
 import { describe, it, expect } from "vitest";
 
-const {
-  calculateTranscriptionTimeout,
-} = require("../../src/helpers/funasrServer");
+const calculateTranscriptionTimeout: typeof import("../../src/helpers/funasrServer").default.calculateTranscriptionTimeout =
+  require("../../src/helpers/funasrServer").calculateTranscriptionTimeout;
 
 describe("Dynamic transcription timeout (ADR-012 Issue #1)", () => {
   describe("calculateTranscriptionTimeout", () => {
