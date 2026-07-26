@@ -6,8 +6,22 @@
  * - MediaRecorder mock (navigator.mediaDevices.getUserMedia)
  * - Clean state per suite
  */
+// [20260726_Tier43_E2EHelpers] Migrated .js→.ts for TypeScript types.
+// IMPORTANT: This file deliberately uses CommonJS syntax (require /
+// module.exports) rather than ESM import/export. Reason: the 12 e2e
+// suites are still .js (CJS) — see US-003. Playwright 1.60 + Node 24
+// hit "exports is not defined in ES module scope" (microsoft/playwright
+// #37890) when a CJS .js suite imports an ESM-compiled .ts helper.
+// Keeping the helper CJS-compiled preserves runtime parity with the
+// pre-migration .js helpers. Type annotations come from JSDoc; the
+// type names (ElectronApplication, Page) resolve via the @playwright/test
+// types picked up by tsconfig's moduleResolution.
+
 const { _electron: electron } = require("@playwright/test");
 const path = require("path");
+const fs = require("fs");
+const { execSync } = require("child_process");
+// [20260726_Tier43_E2EHelpers] END
 
 // [20260724_TS_BigBang_TestFix] Fix PROJECT_ROOT: tests/e2e/helpers is 3
 // levels below project root (helpers → e2e → tests → Murmur). The original
@@ -24,7 +38,7 @@ const DIAG_PREFIX = "[e2e-launch]";
 
 // [20260725_E2E_LaunchDiagnosis] Newer Electron on macOS Sequoia (15.x)
 // can silently block window creation when the binary lacks a valid code
-// signature or has quarantine attributes carried in from extraction.
+// signing or has quarantine attributes carried in from extraction.
 // Log the relevant env so CI output shows whether the gate fired.
 function logDiagnosticEnvironment() {
   const interesting = [
@@ -113,7 +127,7 @@ function attachDiagnosticListeners(app, label) {
  * Launch the Murmur Electron app for testing.
  * @param {object} [options] - Launch options
  * @param {Record<string, string>} [options.env] - Additional env vars
- * @returns {Promise<{app: import('@playwright/test').ElectronApplication, window: import('@playwright/test').Page}>}
+ * @returns {Promise<{app: ElectronApplication, window: Page}>}
  */
 async function launchElectronApp({ env = {} } = {}) {
   // [20260725_E2E_LaunchDiagnosis] Dump env + paths BEFORE launch so
@@ -132,7 +146,6 @@ async function launchElectronApp({ env = {} } = {}) {
   // [20260725_E2E_LaunchDiagnosis] Verify the bundle exists BEFORE launch
   // — if global-setup didn't run (or the build silently failed) the
   // launch would hang for 30s with no clear cause.
-  const fs = require("fs");
   const mainBundle = path.join(appRoot, "dist-main/main.js");
   const preloadBundle = path.join(appRoot, "dist-preload/preload.js");
   // [20260725_E2E_CiStartupProbe] Correct path: build:renderer script is
@@ -177,11 +190,12 @@ async function launchElectronApp({ env = {} } = {}) {
   );
   let totalSize = 0;
   try {
-    const execSync = require("child_process").execSync;
     const duOut = execSync(`du -sk ${electronDistDir}`, { encoding: "utf8" });
     totalSize = parseInt(duOut.split(/\s+/)[0], 10) || 0;
   } catch (e) {
-    console.log(`${DIAG_PREFIX} du failed: ${e.message}`);
+    const msg =
+      e && typeof e === "object" && "message" in e ? e.message : String(e);
+    console.log(`${DIAG_PREFIX} du failed: ${msg}`);
   }
   console.log(
     `${DIAG_PREFIX} electron dist total: ${totalSize} KB (expected ~200000-300000 KB)`,
@@ -209,6 +223,8 @@ async function launchElectronApp({ env = {} } = {}) {
     // lines appear in CI logs but [main:canary] don't, the problem
     // is in main.ts module-load (e.g. an import side-effect that
     // hangs on CI macOS).
+    // [20260726_Tier43_E2EHelpers] ci-probe stays .js: Electron's
+    // --require flag cannot transpile TypeScript, only .js/.json/.node.
     args: [
       "--require",
       path.join(PROJECT_ROOT, "tests/e2e/helpers/ci-probe.js"),
@@ -256,11 +272,18 @@ async function launchElectronApp({ env = {} } = {}) {
   // Inject MediaRecorder mock — getUserMedia returns an empty audio stream.
   // This prevents "NotAllowedError: Permission denied" in test environment.
   await window.addInitScript(() => {
-    if (!navigator.mediaDevices) {
-      navigator.mediaDevices = {};
+    const nav = navigator;
+    if (!nav.mediaDevices) {
+      // lib.dom.d.ts marks mediaDevices as readonly; in the test harness
+      // we intentionally stub it before the app reads it.
+      Object.defineProperty(nav, "mediaDevices", {
+        value: {},
+        writable: true,
+        configurable: true,
+      });
     }
-    if (!navigator.mediaDevices.getUserMedia) {
-      navigator.mediaDevices.getUserMedia = async () => {
+    if (!nav.mediaDevices.getUserMedia) {
+      nav.mediaDevices.getUserMedia = async () => {
         // Create a silent audio context to produce a real MediaStream
         const ctx = new AudioContext();
         const oscillator = ctx.createOscillator();
@@ -281,7 +304,7 @@ async function launchElectronApp({ env = {} } = {}) {
 
 /**
  * Gracefully close the Electron app.
- * @param {import('@playwright/test').ElectronApplication} app
+ * @param {ElectronApplication} app
  */
 async function closeElectronApp(app) {
   if (app) {

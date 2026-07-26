@@ -9,7 +9,7 @@ import { test, expect } from "@playwright/test";
 import {
   launchElectronApp,
   closeElectronApp,
-} from "../helpers/electron-launch.js";
+} from "../helpers/electron-launch";
 
 test.describe("Suite 1: Application Lifecycle", () => {
   let electronApp;

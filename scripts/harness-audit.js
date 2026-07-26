@@ -469,13 +469,18 @@ function checkEvalCoverage() {
   if (hasUnitTests) pts += 1;
 
   // E2E tests (2 pts)
-  const hasE2e = exists("tests/e2e") && exists("playwright.config.js");
+  // [20260726_Tier43_E2EHelpers] Accept playwright.config.ts OR .js —
+  // config was migrated to TypeScript as part of the e2e helpers TS migration.
+  const hasPlaywrightConfig =
+    exists("playwright.config.ts") || exists("playwright.config.js");
+  const hasE2e = exists("tests/e2e") && hasPlaywrightConfig;
   checks.push({
     name: "E2E tests + Playwright",
     pass: hasE2e,
-    detail: "tests/e2e/ + playwright.config.js",
+    detail: "tests/e2e/ + playwright.config.{ts,js}",
   });
   if (hasE2e) pts += 2;
+  // [20260726_Tier43_E2EHelpers] END
 
   // Coverage thresholds >= 80% (2 pts)
   const vitestConfig = readIf("vitest.config.js");

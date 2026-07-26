@@ -35,7 +35,7 @@ import { test, expect } from "@playwright/test";
 import {
   launchElectronApp,
   closeElectronApp,
-} from "../helpers/electron-launch.js";
+} from "../helpers/electron-launch";
 
 // [20260725_E2E_BootHealthGate] Known-noisy renderer messages that must not
 // fail test 0.5. Adding to this list requires a citation — the goal is to
