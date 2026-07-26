@@ -1,3 +1,12 @@
+// [20260726_Tier3_AiHandlersMigrate] Migrated from .js to .ts as part of
+// Tier 3 batch 5 (final electron-mock batch). Pattern: type the 4
+// `let` bindings assigned from require() with `typeof import(...)` (TS7034),
+// type the createIpcMain-equivalent `handlers` map (TS7053), type the
+// mockFetch/mockFetchError helpers' params + the global.fetch assignment
+// (TS7006 + TS2322 — the fetch mock returns a Response-shaped stub, cast
+// through unknown to the DOM lib's Response type). The global.fetch mock's
+// `.mock.calls` is read via a vi.Mock cast. Template reference:
+// phase4-i18n.test.ts (commit d52f2e0).
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import fs from "fs";
 import path from "path";
@@ -8,24 +17,57 @@ vi.mock("electron", () => ({
   },
 }));
 
-function mockFetch(response) {
-  global.fetch = vi.fn(async () => ({
+// [20260726_Tier3_AiHandlersMigrate] Source module shape — typeof import lets
+// the four bindings (register, processTextWithAI, checkAIStatus, getAIModes)
+// infer their source signatures without restating them.
+type AiHandlersModule = typeof import("../../src/helpers/ipc/aiHandlers");
+
+// [20260726_Tier3_AiHandlersMigrate] Fetch mock return: the source only reads
+// ok/status/statusText/json()/text(), so this is the narrowest shape that
+// satisfies the call sites. Cast through unknown to Response at the assignment
+// to global.fetch because the DOM lib Response requires ~14 more fields.
+interface FetchResponseStub {
+  ok: boolean;
+  status: number;
+  statusText?: string;
+  json?: () => Promise<unknown>;
+  text?: () => Promise<string>;
+}
+
+// [20260726_Tier3_AiHandlersMigrate] vi.fn typing on global.fetch: vitest's
+// Mock carries the `.mock.calls` array. Used to read fetch.mock.calls[0][1].body
+// — the second positional arg is the RequestInit carrying the JSON body.
+type FetchMock = ReturnType<
+  typeof vi.fn<(input: unknown, init?: unknown) => Promise<FetchResponseStub>>
+>;
+
+// [20260726_Tier3_AiHandlersMigrate] ipcMain.handle registers
+// (event, ...args) => result callbacks; tests only assert on registration, so
+// unknown[] args + void return suffices for the `registers` describe block.
+type MockHandler = (...args: unknown[]) => void;
+
+function mockFetch(response: unknown): void {
+  const fn = vi.fn(async () => ({
     ok: true,
     status: 200,
     json: async () => response,
-  }));
+  })) as FetchMock;
+  global.fetch = fn as unknown as typeof global.fetch;
 }
 
-function mockFetchError(status, body) {
-  global.fetch = vi.fn(async () => ({
+function mockFetchError(status: number, body: unknown): void {
+  const fn = vi.fn(async () => ({
     ok: false,
     status,
     statusText: `HTTP ${status}`,
     text: async () => JSON.stringify(body),
-  }));
+  })) as FetchMock;
+  global.fetch = fn as unknown as typeof global.fetch;
 }
 
-function setupDb(overrides = {}) {
+function setupDb(overrides: Record<string, unknown> = {}): {
+  getSetting: (key: string) => Promise<unknown>;
+} {
   const defaults = {
     ai_api_key: "test-key",
     ai_base_url: "https://api.openai.com/v1",
@@ -33,21 +75,27 @@ function setupDb(overrides = {}) {
     ai_temperature: 0.3,
     ai_max_tokens: 2000,
   };
-  const settings = { ...defaults, ...overrides };
+  // [20260726_Tier3_AiHandlersMigrate] Index signature so the string `key`
+  // from getSetting can index settings (TS7053). Values are unioned to the
+  // possible setting types the suite overrides (string | number).
+  const settings: Record<string, string | number> = {
+    ...defaults,
+    ...overrides,
+  };
   return {
-    getSetting: vi.fn(async (key) => settings[key] ?? null),
+    getSetting: vi.fn(async (key: string) => settings[key] ?? null),
   };
 }
 
 describe("aiHandlers", () => {
-  let register;
-  let processTextWithAI;
-  let checkAIStatus;
-  let getAIModes;
+  let register: AiHandlersModule["register"];
+  let processTextWithAI: AiHandlersModule["processTextWithAI"];
+  let checkAIStatus: AiHandlersModule["checkAIStatus"];
+  let getAIModes: AiHandlersModule["getAIModes"];
 
   beforeEach(() => {
     vi.resetModules();
-    const aiHandlers = require("../../src/helpers/ipc/aiHandlers");
+    const aiHandlers: AiHandlersModule = require("../../src/helpers/ipc/aiHandlers");
     register = aiHandlers.register;
     processTextWithAI = aiHandlers.processTextWithAI;
     checkAIStatus = aiHandlers.checkAIStatus;
@@ -56,18 +104,27 @@ describe("aiHandlers", () => {
 
   describe("register", () => {
     it("registers process-text and check-ai-status handlers", () => {
-      const handlers = {};
+      // [20260726_Tier3_AiHandlersMigrate] handlers map: channel -> handler.
+      // Typed as Record<string, MockHandler | undefined> so the index access
+      // in the handle() callback body type-checks (TS7053).
+      const handlers: Record<string, MockHandler | undefined> = {};
       const ipcMain = {
-        handle: vi.fn((channel, handler) => {
+        handle: vi.fn((channel: string, handler: MockHandler) => {
           handlers[channel] = handler;
         }),
       };
 
-      register(ipcMain, {
-        databaseManager: {},
-        logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
-        templatesDir: "/tmp/test-templates",
-      });
+      // [20260726_Tier3_AiHandlersMigrate] Cast the mock ipcMain/managers to
+      // register()'s source signature: structurally compatible with the
+      // subset of Electron.IpcMain / Managers the handler uses. `unknown` bridge.
+      register(
+        ipcMain as unknown as Parameters<typeof register>[0],
+        {
+          databaseManager: {},
+          logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
+          templatesDir: "/tmp/test-templates",
+        } as unknown as Parameters<typeof register>[1],
+      );
 
       expect(ipcMain.handle).toHaveBeenCalledWith(
         "process-text",
@@ -109,7 +166,7 @@ describe("aiHandlers", () => {
 
     it("uses configurable temperature and max_tokens from settings", async () => {
       const db = {
-        getSetting: vi.fn(async (key) => {
+        getSetting: vi.fn(async (key: string) => {
           if (key === "ai_api_key") return "test-key";
           if (key === "ai_base_url") return "https://api.openai.com/v1";
           if (key === "ai_model") return "gpt-4";
@@ -140,14 +197,20 @@ describe("aiHandlers", () => {
         }),
       );
 
-      const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+      // [20260726_Tier3_AiHandlersMigrate] global.fetch is typed as the DOM
+      // Response overload set, which lacks `.mock`. Cast to FetchMock to read
+      // the captured calls; the second positional arg carries the RequestInit.
+      const fetchMock = global.fetch as unknown as FetchMock;
+      const body = JSON.parse(
+        (fetchMock.mock.calls[0]![1] as { body: string }).body,
+      );
       expect(body.temperature).toBe(0.7);
       expect(body.max_tokens).toBe(4000);
     });
 
     it("uses default temperature and max_tokens when not configured", async () => {
       const db = {
-        getSetting: vi.fn(async (key) => {
+        getSetting: vi.fn(async (key: string) => {
           if (key === "ai_api_key") return "test-key";
           if (key === "ai_base_url") return "https://api.openai.com/v1";
           if (key === "ai_model") return "gpt-3.5-turbo";
@@ -163,7 +226,10 @@ describe("aiHandlers", () => {
 
       await processTextWithAI("test", "optimize", db, logger);
 
-      const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+      const fetchMock = global.fetch as unknown as FetchMock;
+      const body = JSON.parse(
+        (fetchMock.mock.calls[0]![1] as { body: string }).body,
+      );
       expect(body.temperature).toBe(0.3);
       expect(body.max_tokens).toBe(2000);
     });
@@ -220,7 +286,7 @@ describe("aiHandlers", () => {
       ["not a url", "garbage rejected"],
     ])("rejects unsafe base URL %s (%s)", async (baseUrl) => {
       const db = {
-        getSetting: vi.fn(async (key) => {
+        getSetting: vi.fn(async (key: string) => {
           if (key === "ai_api_key") return "test-key";
           if (key === "ai_base_url") return baseUrl;
           if (key === "ai_model") return "gpt-3.5-turbo";
@@ -309,7 +375,7 @@ describe("aiHandlers", () => {
         expect(names).toContain("optimize");
         expect(names).toContain("meeting");
         const meeting = modes.find((m) => m.name === "meeting");
-        expect(meeting.label).toBe("会议纪要");
+        expect(meeting!.label).toBe("会议纪要");
       } finally {
         fs.rmSync(dir, { recursive: true });
       }
