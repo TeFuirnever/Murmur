@@ -1,10 +1,27 @@
+// [20260726_Tier3_IpcContractsOrphansMigrate] Migrated from .js to .ts as
+// part of Tier 3 batch 2. Pattern: type the destructured require() binding C
+// via `typeof import("<module>")` so the namespace reuses src/helpers/
+// ipc-contracts.ts's own `as const` shapes (no `any`). The recursive walker
+// `walk` needs an explicit `string[]` return type (TS7023 — it self-references)
+// and a typed `dir: string` param (TS7006). The generic `flatten` helper
+// operates over the contract's nested-but-heterogeneous shape, so it uses
+// `Record<string, unknown>` for both input and output and an explicit return
+// annotation; the accumulator is declared `Record<string, unknown>` so the
+// `out[key] = v` assignment satisfies TS7053. No `let`-bare bindings. Template
+// reference: phase4-i18n.test.ts (commit d52f2e0).
 import { describe, it, expect } from "vitest";
 import fs from "fs";
 import path from "path";
-const C = require("../../src/helpers/ipc-contracts");
 
-function walk(dir) {
-  const out = [];
+// [20260726_Tier3_IpcContractsOrphansMigrate] require() under esbuild CJS
+// interop returns the module namespace, so this aligns with the named
+// `export const FUNASR/MODELS/...` members of ipc-contracts.ts.
+const C: typeof import("../../src/helpers/ipc-contracts") = require("../../src/helpers/ipc-contracts");
+
+// [20260726_Tier3_IpcContractsOrphansMigrate] Recursive walker needs an
+// explicit `string[]` return type (TS7023) and `dir: string` (TS7006).
+function walk(dir: string): string[] {
+  const out: string[] = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) out.push(...walk(full));
@@ -16,11 +33,21 @@ function walk(dir) {
   return out;
 }
 
-function flatten(obj, prefix = "") {
-  const out = {};
+// [20260726_Tier3_IpcContractsOrphansMigrate] The contract namespace is
+// heterogeneous (objects, arrays, strings), so model it as
+// `Record<string, unknown>` and recurse. Explicit return annotation lets the
+// caller's Object.keys iterate over a known shape.
+function flatten(
+  obj: Record<string, unknown>,
+  prefix = "",
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(obj)) {
     if (typeof v === "object" && v !== null) {
-      Object.assign(out, flatten(v, prefix ? `${prefix}.${k}` : k));
+      Object.assign(
+        out,
+        flatten(v as Record<string, unknown>, prefix ? `${prefix}.${k}` : k),
+      );
     } else {
       out[prefix ? `${prefix}.${k}` : k] = v;
     }
