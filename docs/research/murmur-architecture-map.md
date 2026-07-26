@@ -18,7 +18,7 @@ Murmur is a Chinese-optimized speech-to-text desktop app. Electron main process 
 Key fixtures:
 
 - `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/tests/_tsresolve.setup.js` — Vitest setup; PART1 registers `.ts` extension handler (esbuild transform to CJS), PART2 resolves extensionless require to `.ts`, PART3 unwraps ESM default-export to the class. This is the linchpin that lets `.js` unit tests require `.ts` source.
-- `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/tests/e2e/helpers/electron-launch.js` — `launchElectronApp()` launches Electron with `args:[appRoot]` (so `app.getAppPath()` is the project root, not `dist-main/`), `NODE_ENV=test`, `MURMUR_DB_PATH=:memory:` (in-memory SQLite), and injects a `getUserMedia` mock.
+- `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/tests/e2e/helpers/electron-launch.ts` — `launchElectronApp()` launches Electron with `args:[appRoot]` (so `app.getAppPath()` is the project root, not `dist-main/`), `NODE_ENV=test`, `MURMUR_DB_PATH=:memory:` (in-memory SQLite), and injects a `getUserMedia` mock.
 - `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/tests/e2e/helpers/global-setup.js` — builds `dist-main`, `dist-preload`, `src/dist` once before all e2e suites.
 - `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/tests/e2e/helpers/ipc-mock.js` — `mockIpcHandler(app, channel, response)` uses `app.evaluate` to `removeHandler` then re-register a static mock. Works around Electron 20+ "cannot register a second handler".
 - `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/tests/e2e/helpers/fixtures.js` — shared test fixtures.
@@ -983,6 +983,6 @@ Of these, **pure-logic extractions worth unit-testing**:
 | Vitest config       | `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/vitest.config.js`                     |
 | Vitest setup        | `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/tests/_tsresolve.setup.js`            |
 | Playwright config   | `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/playwright.config.js`                 |
-| E2E launch helper   | `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/tests/e2e/helpers/electron-launch.js` |
+| E2E launch helper   | `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/tests/e2e/helpers/electron-launch.ts` |
 | E2E global setup    | `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/tests/e2e/helpers/global-setup.js`    |
 | E2E IPC mock        | `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/tests/e2e/helpers/ipc-mock.js`        |

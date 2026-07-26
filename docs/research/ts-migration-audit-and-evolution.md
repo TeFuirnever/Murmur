@@ -164,7 +164,7 @@ unknown>`, routed to each handler via `asManagers<T>()` which casts
   `any` (forbidden by `backend-type-safety` test) while letting structural
   compatibility flow at runtime.
 
-**The seam is deliberate and tested.** `tests/unit/backend-type-safety.test.js`
+**The seam is deliberate and tested.** `tests/unit/backend-type-safety.test.ts`
 walks every backend `.ts` file dynamically (no hardcoded list) and asserts
 zero `: any` / `as any` / `@ts-ignore`. `tests/unit/preload-bridge-contract.test.ts`
 asserts the preload surface matches the `.d.ts`. This is more disciplined
@@ -186,7 +186,7 @@ renderer that constructs the wrong shape compiles fine but fails at runtime.
 | `as any` in source                                | ⚠️ 7 sites, all in renderer, all justified | HMR (`import.meta.hot`), `performance.memory`, `webkitAudioContext`, AudioWorklet |
 | `: any` annotations in source                     | ⚠️ 1 site                                  | `src/main.tsx:223` (HMR callback)                                                 |
 | `module.exports` in `.ts` source                  | ✅ Zero functional                         | only in migration-header comments                                                 |
-| `backend-type-safety` guard test                  | ✅ Dynamic, walks all backend `.ts`        | `tests/unit/backend-type-safety.test.js`                                          |
+| `backend-type-safety` guard test                  | ✅ Dynamic, walks all backend `.ts`        | `tests/unit/backend-type-safety.test.ts`                                          |
 | ESLint `no-explicit-any: off`                     | ⚠️ Concession                              | Required because of renderer's HMR/browser-API casts                              |
 | ESLint `no-require-imports: off`                  | ⚠️ Concession                              | Required because of lazy `require("electron")` pattern                            |
 
@@ -265,7 +265,7 @@ This document's backlog drove a multi-wave autopilot session. Results:
 
 - **Type extracts**: `ProcessingUpdateData`, `FileTranscriptionProgressData`, `OperationResult` added to `src/types/ipc.ts` — replaces 16+ inline duplications across `preload.ts`, `electronAPI.d.ts`, `funasrServer.ts`, `useModelStatus.tsx`
 - **`makeListener<T>` helper**: extracted in `preload.ts` — 10 single-payload `on*` listeners refactored (DRY win); 2 heterogeneous listeners stay inline
-- **`backend-type-safety.test.js` scope fix**: extended from `.ts`-only (excluding `.d.ts`) to project-wide (`.ts` + `.tsx` + `.d.ts` + `src/hooks`/`components`/`settings`). Allowlist expanded from 2 to 6 entries. Closed the "allowlist theater" gap (code-review finding).
+- **`backend-type-safety.test.ts` scope fix**: extended from `.ts`-only (excluding `.d.ts`) to project-wide (`.ts` + `.tsx` + `.d.ts` + `src/hooks`/`components`/`settings`). Allowlist expanded from 2 to 6 entries. Closed the "allowlist theater" gap (code-review finding).
 - **`tests/unit/preload-listener-lifecycle.test.js`**: 2 → 12 characterization tests covering each listener subscribe/unsubscribe/cross-channel isolation
 - **`tests/unit/rejection-assertions-awaited.test.ts` (NEW)**: per-occurrence scanner for unawaited `.rejects.` assertions, handles multi-line patterns via paren-depth tracking
 - **`tests/unit/test-typecheck-coverage.test.ts` (NEW)**: TDD regression test proving `tsconfig.test.json` covers `tests/**`
@@ -274,7 +274,7 @@ This document's backlog drove a multi-wave autopilot session. Results:
 
 1. **Gradual test migration is not viable for strict-mode codebases.** The plan estimated 1-2 weeks for 3.1; reality showed each `.js` test needs per-file strict-typing work (implicit any, `noUncheckedIndexedAccess` array access, mock typing). Batch rename surfaces 5-15 errors per file. Tier 3 is genuinely week-scale.
 
-2. **`skipLibCheck: true` creates a one-sided drift detector.** Tier 2.3's preload annotation catches preload→d.ts drift but not d.ts internal errors. The `backend-type-safety.test.js` extension to `.d.ts` files closes half this gap; the third-party `noDeprecation` conflict (`@types/node` vs `electron.d.ts`) prevents fully flipping `skipLibCheck: false`.
+2. **`skipLibCheck: true` creates a one-sided drift detector.** Tier 2.3's preload annotation catches preload→d.ts drift but not d.ts internal errors. The `backend-type-safety.test.ts` extension to `.d.ts` files closes half this gap; the third-party `noDeprecation` conflict (`@types/node` vs `electron.d.ts`) prevents fully flipping `skipLibCheck: false`.
 
 3. **TDD SKILL's "refactoring is not part of the loop" is a real constraint.** Wave 3 (Tier 2.3 finalize type extracts) was initially skipped as refactor-not-TDD. User override + characterization tests made it viable, but the discipline matters: refactor without behavior-locking tests is dangerous in typed code.
 
@@ -366,7 +366,7 @@ Should we adopt @electron-toolkit/typed-ipc (Tier 4.2)?
 │   ├── Is the IPC surface growing fast?                    → if YES, adopt (less manual sync)
 │   ├── Is electronAPI.d.ts drifting from preload.ts?       → DRIFT DETECTOR NOW EXISTS
 │   │                                                         (preloadApi: ElectronAPI annotation
-│   │                                                          + backend-type-safety.test.js scan)
+│   │                                                          + backend-type-safety.test.ts scan)
 │   │                                                         so drift is caught. Adopt only if the
 │   │                                                         manual sync burden grows.
 │   └── Otherwise: keep the hand-rolled pattern. It works.
@@ -378,7 +378,7 @@ Should we adopt @electron-toolkit/typed-ipc (Tier 4.2)?
 | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
 | Default-export the IPC contracts file                                      | esbuild CJS wraps as `{default: X}`, breaking `C.AI` access. Use named exports.                                      | `ipc-contracts.ts:1-6` header                  |
 | `import { app } from "electron"` at top of manager modules                 | Hoisted import fails in unit tests (electron absent). Use lazy `require()` with `try/catch`.                         | [S5], 9 documented sites                       |
-| Use `any` to silence type errors in backend                                | Forbidden by `backend-type-safety` guard test. Use `unknown` + cast.                                                 | [S1], `tests/unit/backend-type-safety.test.js` |
+| Use `any` to silence type errors in backend                                | Forbidden by `backend-type-safety` guard test. Use `unknown` + cast.                                                 | [S1], `tests/unit/backend-type-safety.test.ts` |
 | Add a new IPC handler without a `.d.ts` entry                              | Renderer loses typing; contract drift.                                                                               | [S5], [S9]                                     |
 | Migrate `.js` test files one at a time without removing the shim           | The shim's Part 3 (esModule unwrap) silently breaks named-export modules if mixed. Either keep shim or remove fully. | `_tsresolve.setup.js:99-117`                   |
 | `module.exports = Class` in `.ts` source                                   | esbuild output shape breaks `new require()()`. Use `export default Class`.                                           | ADR-010 export-strategy table                  |
@@ -408,7 +408,7 @@ Should we adopt @electron-toolkit/typed-ipc (Tier 4.2)?
 - `src/helpers/ipc/index.ts:29,73-78` — `ManagersBag` + `asManagers<T>` seam
 - `src/electronAPI.d.ts:1-285` — comprehensive renderer-side typing
 - `tests/_tsresolve.setup.js:1-118` — the 3-part Node module monkey-patch
-- `tests/unit/backend-type-safety.test.js` — dynamic `any` guard
+- `tests/unit/backend-type-safety.test.ts` — dynamic `any` guard
 - `tsconfig.json:8-25` — strict mode + include scope
 - `eslint.config.mjs:38-40` — three rule concessions
 - `package.json:12-15` — tsx (dev) vs esbuild (prod) dual path

@@ -58,7 +58,7 @@ Each section is one journey. For every journey you get:
 ### Conventions every file follows
 
 - `import { test, expect } from "@playwright/test"` (ESM; config is ESM).
-- `import { launchElectronApp, closeElectronApp } from "../helpers/electron-launch.js"`.
+- `import { launchElectronApp, closeElectronApp } from "../helpers/electron-launch.ts"`.
 - `import { mockIpcHandler, mockIpcHandlers } from "../helpers/ipc-mock.js"`.
 - `let electronApp; let window;` at describe scope.
 - `beforeAll` launches; `afterAll` closes. Suites that need a fresh app per test
@@ -113,7 +113,7 @@ import { test, expect } from "@playwright/test";
 import {
   launchElectronApp,
   closeElectronApp,
-} from "../helpers/electron-launch.js";
+} from "../helpers/electron-launch.ts";
 import { mockIpcHandlers, mockIpcHandler } from "../helpers/ipc-mock.js";
 
 test.describe("Suite 11: Recording Journey (mock ASR + mock AI)", () => {
@@ -271,7 +271,7 @@ import path from "path";
 import {
   launchElectronApp,
   closeElectronApp,
-} from "../helpers/electron-launch.js";
+} from "../helpers/electron-launch.ts";
 import { mockIpcHandlers, mockIpcHandler } from "../helpers/ipc-mock.js";
 
 const TMP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "murmur-e2e-file-"));
@@ -425,7 +425,7 @@ import { test, expect } from "@playwright/test";
 import {
   launchElectronApp,
   closeElectronApp,
-} from "../helpers/electron-launch.js";
+} from "../helpers/electron-launch.ts";
 import { mockIpcHandler } from "../helpers/ipc-mock.js";
 
 test.describe("Suite 13: Model Download Journey", () => {
@@ -574,7 +574,7 @@ import { test, expect } from "@playwright/test";
 import {
   launchElectronApp,
   closeElectronApp,
-} from "../helpers/electron-launch.js";
+} from "../helpers/electron-launch.ts";
 
 test.describe("Suite 14: Tray Management", () => {
   let electronApp;
@@ -746,7 +746,7 @@ import { test, expect } from "@playwright/test";
 import {
   launchElectronApp,
   closeElectronApp,
-} from "../helpers/electron-launch.js";
+} from "../helpers/electron-launch.ts";
 
 test.describe("Suite 15: Multi-Window Management", () => {
   let electronApp;
@@ -895,7 +895,7 @@ import { test, expect } from "@playwright/test";
 import {
   launchElectronApp,
   closeElectronApp,
-} from "../helpers/electron-launch.js";
+} from "../helpers/electron-launch.ts";
 import { mockIpcHandlers } from "../helpers/ipc-mock.js";
 
 test.describe("Suite 16: Error Resilience", () => {
@@ -1052,7 +1052,7 @@ import path from "path";
 import {
   launchElectronApp,
   closeElectronApp,
-} from "../helpers/electron-launch.js";
+} from "../helpers/electron-launch.ts";
 import { mockIpcHandler } from "../helpers/ipc-mock.js";
 
 const DB_FILE = path.join(
@@ -1215,7 +1215,7 @@ import path from "path";
 import {
   launchElectronApp,
   closeElectronApp,
-} from "../helpers/electron-launch.js";
+} from "../helpers/electron-launch.ts";
 import { mockIpcHandler } from "../helpers/ipc-mock.js";
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "murmur-update-"));

@@ -24,7 +24,7 @@ Keep the `asManagers<T>` cast. Do not refactor to:
 - `any` (forbidden by `backend-type-safety` test)
 - a single concrete `ManagersBag` interface (couples every handler to every manager)
 
-The seam is audited by `tests/unit/backend-type-safety.test.js` (dynamic, walks all backend `.ts` files asserting zero `any`/`as any`/`@ts-ignore`). The cast through `unknown` is the maximum type-safety achievable without per-handler registry overhead.
+The seam is audited by `tests/unit/backend-type-safety.test.ts` (dynamic, walks all backend `.ts` files asserting zero `any`/`as any`/`@ts-ignore`). The cast through `unknown` is the maximum type-safety achievable without per-handler registry overhead.
 
 ## Consequences
 
@@ -44,7 +44,7 @@ The seam is audited by `tests/unit/backend-type-safety.test.js` (dynamic, walks 
 - `src/helpers/ipc/index.ts:29,73-78` — bag type + cast helper
 - `src/helpers/ipc/index.ts:82-124` — `registerAll` routing
 - `main.ts:147-155` — bag assembly point
-- `tests/unit/backend-type-safety.test.js` — `any` guard
+- `tests/unit/backend-type-safety.test.ts` — `any` guard
 - `docs/research/ts-migration-audit-and-evolution.md` §2.3 Decision 3 — original audit of this seam
 
 ## Note on the preload ↔ d.ts drift detector (Tier 2.3)
