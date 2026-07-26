@@ -6,15 +6,17 @@
 // no `any` is needed and the real source methods are still type-checked at
 // the construction site. Template reference: phase4-i18n.test.ts (commit
 // d52f2e0).
-import { describe, it, expect, vi, beforeEach } from "vitest";
+//
+// [20260726_Tier32_FunasrManagerInitRace] Tier 3.2: converted cargo-cult
+// require() + vi.resetModules() to top-level ESM default import. The shim
+// existed only to load the .ts source (no vi.mock anywhere). `asSurface`'s
+// `InstanceType<typeof FunASRManager>` now resolves via the imported class.
+// beforeEach is removed (it only did resetModules + the require assignment).
+// [20260726_Tier32_FunasrManagerInitRace] END
+import { describe, it, expect, vi } from "vitest";
+import FunASRManager from "../../src/helpers/funasrManager";
 
-// [20260724_TS_BigBang_TestFix] Replace createRequire with vite-intercepted
-// require + vi.resetModules() for .ts compatibility.
 describe("funasrManager preInitializeModels race", () => {
-  // [20260726_Tier3_FunasrManagerInitRaceMigrate] Default-export class; the
-  // require returns the constructor under CJS interop.
-  let FunASRManager: typeof import("../../src/helpers/funasrManager").default;
-
   // [20260726_Tier3_FunasrManagerInitRaceMigrate] Test-only surface: the
   // suite reassigns these instance methods and pokes the private `server`
   // field. Return types are widened to `Promise<unknown>` / `unknown` so
@@ -30,12 +32,6 @@ describe("funasrManager preInitializeModels race", () => {
     preInitializeModels: () => Promise<unknown>;
     server: { _startFunASRServer: (...args: never[]) => Promise<unknown> };
   }
-
-  beforeEach(() => {
-    vi.resetModules();
-    FunASRManager = require("../../src/helpers/funasrManager");
-  });
-  // [20260724_TS_BigBang_TestFix] END
 
   // [20260726_Tier3_FunasrManagerInitRaceMigrate] Cast helper: the manager
   // class declares `server` private and the methods are non-readonly; the

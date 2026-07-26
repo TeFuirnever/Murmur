@@ -6,26 +6,23 @@
 // `typeof import("<module>").<export>` to reuse the source module's own types
 // without introducing `any`. Template reference: phase4-i18n.test.ts
 // (commit d52f2e0).
-import { describe, it, expect, vi, beforeEach } from "vitest";
+//
+// [20260726_Tier32_AiPrompts] Tier 3.2: converted cargo-cult require() +
+// vi.resetModules() to top-level ESM import. No vi.mock() was used, so the
+// shim existed only to load the .ts source. Pattern A (single top-level
+// require + resetModules in beforeEach). vitest imports trimmed to what's
+// actually used (describe/it/expect).
+// [20260726_Tier32_AiPrompts] END
+import { describe, it, expect } from "vitest";
 import fs from "fs";
 import path from "path";
+import {
+  buildPrompt,
+  parseTemplateFile,
+  loadCustomTemplates,
+} from "../../src/helpers/aiPrompts";
 
 describe("aiPrompts", () => {
-  // [20260726_Tier3_AiPromptsMigrate] Named exports; the module namespace
-  // type provides the (content, fileName) / (dir) / (mode, text, opts)
-  // signatures directly.
-  let buildPrompt: typeof import("../../src/helpers/aiPrompts").buildPrompt;
-  let parseTemplateFile: typeof import("../../src/helpers/aiPrompts").parseTemplateFile;
-  let loadCustomTemplates: typeof import("../../src/helpers/aiPrompts").loadCustomTemplates;
-
-  beforeEach(() => {
-    vi.resetModules();
-    const aiPrompts = require("../../src/helpers/aiPrompts");
-    buildPrompt = aiPrompts.buildPrompt;
-    parseTemplateFile = aiPrompts.parseTemplateFile;
-    loadCustomTemplates = aiPrompts.loadCustomTemplates;
-  });
-
   describe("parseTemplateFile", () => {
     it("parses valid template with frontmatter and body", () => {
       const content = `---

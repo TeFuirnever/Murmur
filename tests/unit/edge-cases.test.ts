@@ -6,24 +6,23 @@
 // `typeof import("<module>").<export>` to reuse the source module's own types
 // without introducing `any`. Template reference: phase4-i18n.test.ts
 // (commit d52f2e0).
-import { describe, it, expect, vi, beforeEach } from "vitest";
+//
+// [20260726_Tier32_EdgeCases] Tier 3.2: converted 3 cargo-cult require() +
+// vi.resetModules() sites to top-level ESM imports. Pattern B (multiple
+// resetModules calls in nested describes) — each describe had its own
+// beforeEach that only did require + resetModules, so all three beforeWhatevers
+// are deleted. No vi.mock() anywhere; shim existed only to load .ts source.
+// [20260726_Tier32_EdgeCases] END
+import { describe, it, expect } from "vitest";
 import fs from "fs";
 import path from "path";
 import os from "os";
+import { parseTemplateFile } from "../../src/helpers/aiPrompts";
+import { loadFileConfig, saveFileConfig } from "../../src/helpers/fileConfig";
+import { validateAIBaseUrl } from "../../src/helpers/ipc/aiHandlers";
 
 describe("edge cases: template + file config", () => {
   describe("parseTemplateFile edge cases", () => {
-    // [20260725_Tier3_EdgeCasesMigrate] Named export; index the module
-    // namespace type to reuse the source's (content, fileName) => PromptTemplate | null
-    // signature.
-    let parseTemplateFile: typeof import("../../src/helpers/aiPrompts").parseTemplateFile;
-
-    beforeEach(() => {
-      vi.resetModules();
-      const aiPrompts = require("../../src/helpers/aiPrompts");
-      parseTemplateFile = aiPrompts.parseTemplateFile;
-    });
-
     it("handles Windows line endings (\\r\\n)", () => {
       const content =
         "---\r\nname: win\r\nlabel: Win\r\n---\r\nWindows content.";
@@ -61,19 +60,6 @@ describe("edge cases: template + file config", () => {
   });
 
   describe("fileConfig edge cases", () => {
-    // [20260725_Tier3_EdgeCasesMigrate] Named exports; the module namespace
-    // type provides the (configPath, settings) => void / => SettingsRecord
-    // signatures directly.
-    let loadFileConfig: typeof import("../../src/helpers/fileConfig").loadFileConfig;
-    let saveFileConfig: typeof import("../../src/helpers/fileConfig").saveFileConfig;
-
-    beforeEach(() => {
-      vi.resetModules();
-      const fileConfig = require("../../src/helpers/fileConfig");
-      loadFileConfig = fileConfig.loadFileConfig;
-      saveFileConfig = fileConfig.saveFileConfig;
-    });
-
     it("handles file with array root", () => {
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), "murmur-edge-"));
       const configPath = path.join(dir, "murmur.json");
@@ -125,16 +111,6 @@ describe("edge cases: template + file config", () => {
   });
 
   describe("validateAIBaseUrl edge cases", () => {
-    // [20260725_Tier3_EdgeCasesMigrate] Named export; same shape as in
-    // phase7-tier0-fixes.test.ts.
-    let validateAIBaseUrl: typeof import("../../src/helpers/ipc/aiHandlers").validateAIBaseUrl;
-
-    beforeEach(() => {
-      vi.resetModules();
-      const aiHandlers = require("../../src/helpers/ipc/aiHandlers");
-      validateAIBaseUrl = aiHandlers.validateAIBaseUrl;
-    });
-
     it("rejects javascript: protocol", () => {
       expect(validateAIBaseUrl("javascript:alert(1)")).toBe(false);
     });

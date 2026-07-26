@@ -7,7 +7,15 @@
 // the under-limit branch returns whatever the wrapped handler returned
 // (string here), so each call site picks the right union member via the
 // assertion flow. Template reference: phase4-i18n.test.ts (commit d52f2e0).
+//
+// [20260726_Tier32_IpcRateLimiter] Tier 3.2: this file used vi.resetModules()
+// + require() but had no vi.mock() to reset — the shim was only needed to
+// load the .ts source. Converted to top-level ESM import; the vi.resetModules
+// + dynamic require pattern was cargo-cult from .js era. vi.useFakeTimers
+// stays (timers are orthogonal to module isolation).
+// [20260726_Tier32_IpcRateLimiter] END
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import createRateLimitedHandler from "../../src/helpers/ipcRateLimiter";
 
 // [20260726_Tier3_IpcRateLimiterMigrate] The over-limit branch returns this
 // shape from the source. Tests reading `.success`/`.error` cast the unknown
@@ -18,13 +26,8 @@ interface RateLimitResult {
 }
 
 describe("ipcRateLimiter", () => {
-  // [20260726_Tier3_IpcRateLimiterMigrate] Default export of a function.
-  let createRateLimitedHandler: typeof import("../../src/helpers/ipcRateLimiter").default;
-
   beforeEach(() => {
-    vi.resetModules();
     vi.useFakeTimers();
-    createRateLimitedHandler = require("../../src/helpers/ipcRateLimiter");
   });
 
   afterEach(() => {

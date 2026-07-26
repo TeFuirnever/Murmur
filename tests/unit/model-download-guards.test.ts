@@ -16,18 +16,21 @@
 // instance type-checked). The validateAudioPath return is a discriminated
 // union; reads of `.ext`/`.error` go via a tiny `as` cast at each call site.
 // Template reference: phase4-i18n.test.ts (commit d52f2e0).
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+//
+// [20260726_Tier32_ModelDownloadGuards] Tier 3.2: converted 3 cargo-cult
+// require() sites + vi.resetModules() to top-level ESM imports. The module-
+// scope `const C = require(...)` / `const validateAudioPath = require(...)`
+// become `import * as C` / `import { validateAudioPath }`. The describe's
+// `ModelManager = require(...)` + vi.resetModules() become a top-level
+// default import; beforeEach retains the tmpDir setup.
+// [20260726_Tier32_ModelDownloadGuards] END
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
-
-// [20260724_TS_BigBang_TestFix] Replace createRequire with vite-intercepted
-// require so .ts files resolve after migration. vi.resetModules() replaces
-// delete-require.cache for module isolation.
-const C: typeof import("../../src/helpers/ipc-contracts") = require("../../src/helpers/ipc-contracts");
-const validateAudioPath: typeof import("../../src/helpers/audioPathValidator").validateAudioPath =
-  require("../../src/helpers/audioPathValidator").validateAudioPath;
-// [20260724_TS_BigBang_TestFix] END
+import * as C from "../../src/helpers/ipc-contracts";
+import { validateAudioPath } from "../../src/helpers/audioPathValidator";
+import ModelManager from "../../src/helpers/modelManager";
 
 // [20260726_Tier3_ModelDownloadGuardsMigrate] Structural surface for the
 // ModelManager instance: the suite overrides getModelCachePath per test and
@@ -52,13 +55,9 @@ function asSurface<T>(m: T): ModelManagerTestSurface {
 // ─── modelManager: model files missing ───────────────────────────
 
 describe("modelManager — model files missing", () => {
-  // [20260726_Tier3_ModelDownloadGuardsMigrate] Default-export class.
-  let ModelManager: typeof import("../../src/helpers/modelManager").default;
   let tmpDir: string;
 
   beforeEach(() => {
-    vi.resetModules();
-    ModelManager = require("../../src/helpers/modelManager");
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "mm-guard-"));
   });
 
