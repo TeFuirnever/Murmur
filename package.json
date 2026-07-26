@@ -4,13 +4,6 @@
   "description": "Murmur - 基于FunASR和可配置AI模型的中文优化语音转文字应用",
   "main": "dist-main/main.js",
   "private": true,
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "electron",
-      "electron-builder",
-      "better-sqlite3"
-    ]
-  },
   "scripts": {
     "start": "electron .",
     "prestart": "npm run build:main && npm run build:preload",

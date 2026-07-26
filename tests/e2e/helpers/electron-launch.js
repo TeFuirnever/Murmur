@@ -152,6 +152,20 @@ async function launchElectronApp({ env = {} } = {}) {
   );
   // [20260725_E2E_CiStartupProbe] END
 
+  // [20260725_E2E_ElectronBinaryCheck] Verify the Electron binary exists
+  // in node_modules. The electron npm package's postinstall downloads
+  // Electron.app to node_modules/electron/dist/. If that dir is empty or
+  // missing, electron.launch() will silently spawn a broken process.
+  const electronPath = require("electron");
+  console.log(`${DIAG_PREFIX} electron path: ${electronPath}`);
+  const electronBundleExists = fs.existsSync(electronPath);
+  console.log(`${DIAG_PREFIX} electron binary exists: ${electronBundleExists}`);
+  if (fs.existsSync(electronPath)) {
+    const stat = fs.statSync(electronPath);
+    console.log(`${DIAG_PREFIX} electron binary size: ${stat.size} bytes`);
+  }
+  // [20260725_E2E_ElectronBinaryCheck] END
+
   console.log(
     `${DIAG_PREFIX} calling electron.launch() at ${new Date().toISOString()}`,
   );
