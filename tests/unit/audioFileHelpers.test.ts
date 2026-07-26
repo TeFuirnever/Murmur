@@ -1,16 +1,24 @@
+// [20260726_Tier3_AudioFileHelpersMigrate] Migrated from .js to .ts as part
+// of Tier 3 batch 4. Pattern: destructure-require into typed consts via the
+// module namespace `typeof import("...")` (TS7053/TS7008). Each const takes
+// the source's named export signature without introducing `any`. The
+// `createdFiles` array collects temp paths for afterEach cleanup; it is typed
+// as `string[]` since createTempAudioFile resolves to a path string.
+// Template reference: phase4-i18n.test.ts (commit d52f2e0).
 import { describe, it, expect, vi, afterEach } from "vitest";
 import fs from "fs";
 import path from "path";
 import os from "os";
 
-const {
-  createTempAudioFile,
-  cleanupTempFile,
-  getFFmpegPath,
-  _resetFFmpegCache,
-  _setFFmpegDetector,
-  convertAudioFile,
-} = require("../../src/helpers/audioFileHelpers");
+// [20260726_Tier3_AudioFileHelpersMigrate] Source named exports pulled out
+// via the module namespace so each binding has its real (function) type.
+const audioHelpers: typeof import("../../src/helpers/audioFileHelpers") = require("../../src/helpers/audioFileHelpers");
+const createTempAudioFile = audioHelpers.createTempAudioFile;
+const cleanupTempFile = audioHelpers.cleanupTempFile;
+const getFFmpegPath = audioHelpers.getFFmpegPath;
+const _resetFFmpegCache = audioHelpers._resetFFmpegCache;
+const _setFFmpegDetector = audioHelpers._setFFmpegDetector;
+const convertAudioFile = audioHelpers.convertAudioFile;
 
 const mockLogger = {
   info: vi.fn(),
@@ -18,7 +26,7 @@ const mockLogger = {
   warn: vi.fn(),
 };
 
-const createdFiles = [];
+const createdFiles: string[] = [];
 
 afterEach(async () => {
   for (const f of createdFiles) {
@@ -97,9 +105,15 @@ describe("audioFileHelpers", () => {
     });
 
     it("throws for unsupported type", async () => {
-      await expect(createTempAudioFile(mockLogger, 42)).rejects.toThrow(
-        "不支持的音频数据类型",
-      );
+      // [20260726_Tier3_AudioFileHelpersMigrate] Source signature only
+      // accepts AudioBlob; the test deliberately passes an invalid runtime
+      // type to assert the throw. Bridge via unknown.
+      await expect(
+        createTempAudioFile(
+          mockLogger,
+          42 as unknown as import("../../src/helpers/audioFileHelpers").AudioBlob,
+        ),
+      ).rejects.toThrow("不支持的音频数据类型");
     });
 
     it("throws for empty buffer", async () => {
@@ -175,7 +189,10 @@ describe("audioFileHelpers", () => {
 
   describe("_defaultDetectFFmpeg", () => {
     it("uses default detector when no custom detector is set", () => {
-      _setFFmpegDetector(null);
+      // [20260726_Tier3_AudioFileHelpersMigrate] Source signature is
+      // `(fn: () => string | null) | null` would not match — the impl
+      // accepts null to clear the override. Cast via the function type.
+      _setFFmpegDetector(null as unknown as () => string | null);
       _resetFFmpegCache();
       const result = getFFmpegPath();
       // null when ffmpeg not on PATH, string path when installed

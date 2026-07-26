@@ -1,12 +1,21 @@
+// [20260726_Tier3_FileConfigMigrate] Migrated from .js to .ts as part of
+// Tier 3 batch 4. Pattern: explicit types for `let` bindings assigned from
+// require() in beforeEach (TS7034) via `typeof import("...").<export>`; the
+// nested `let DatabaseManager`/`let db` block uses the same default-export
+// class pattern as database-coverage.test.ts. The saveFileConfig arg is
+// `Record<string, unknown>` per the source; record literals pass through.
+// Template reference: phase4-i18n.test.ts (commit d52f2e0).
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import fs from "fs";
 import path from "path";
 import os from "os";
 
 describe("fileConfig", () => {
-  let loadFileConfig;
-  let saveFileConfig;
-  let FILE_CONFIGURABLE_KEYS;
+  // [20260726_Tier3_FileConfigMigrate] Named exports; type via the module
+  // namespace so each binding carries the source's real (function/array) type.
+  let loadFileConfig: typeof import("../../src/helpers/fileConfig").loadFileConfig;
+  let saveFileConfig: typeof import("../../src/helpers/fileConfig").saveFileConfig;
+  let FILE_CONFIGURABLE_KEYS: typeof import("../../src/helpers/fileConfig").FILE_CONFIGURABLE_KEYS;
 
   beforeEach(() => {
     vi.resetModules();
@@ -139,9 +148,11 @@ describe("fileConfig", () => {
   });
 
   describe("getSetting with file config fallback", () => {
-    let DatabaseManager;
-    let db;
-    let configDir;
+    // [20260726_Tier3_FileConfigMigrate] Default-export class; the require
+    // returns the constructor under CJS interop. `db` is the class instance.
+    let DatabaseManager: typeof import("../../src/helpers/database").default;
+    let db: InstanceType<typeof DatabaseManager>;
+    let configDir: string;
 
     beforeEach(() => {
       DatabaseManager = require("../../src/helpers/database");
@@ -155,7 +166,10 @@ describe("fileConfig", () => {
     });
 
     afterEach(() => {
-      if (db.db) db.close();
+      // [20260726_Tier3_FileConfigMigrate] db.db is private; close() guards
+      // against double-close internally, but we still check via the runtime
+      // result of close(). Use a structural cast for the read-only check.
+      if ((db as unknown as { db: unknown }).db) db.close();
       fs.rmSync(configDir, { recursive: true });
     });
 

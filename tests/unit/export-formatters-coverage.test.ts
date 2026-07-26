@@ -1,20 +1,31 @@
+// [20260726_Tier3_ExportFormattersCoverageMigrate] Migrated from .js to .ts
+// as part of Tier 3 batch 4. Pattern: destructure-require into typed consts
+// via the source module namespace (TS7053/TS7005), then reuse
+// `TranscriptionSegment`/`TranscriptionForExport` from the source types for
+// the inline `segs` literal so property checks stay strict. The nested
+// `buildPrompt` require inside the suite follows the same `typeof import`
+// pattern. Template reference: phase4-i18n.test.ts (commit d52f2e0).
 import { describe, it, expect } from "vitest";
 
-const {
-  formatTXT,
-  formatSRT,
-  formatVTT,
-  formatMD,
-  formatDOCX,
-  getFormatInfo,
-  smartMergeSrt,
-} = require("../../src/helpers/exportFormatters");
+// [20260726_Tier3_ExportFormattersCoverageMigrate] Pull named exports out
+// via the module namespace so each binding has its real (function) type.
+const exportFormatters: typeof import("../../src/helpers/exportFormatters") = require("../../src/helpers/exportFormatters");
+const formatTXT = exportFormatters.formatTXT;
+const formatSRT = exportFormatters.formatSRT;
+const formatVTT = exportFormatters.formatVTT;
+const formatMD = exportFormatters.formatMD;
+const formatDOCX = exportFormatters.formatDOCX;
+const getFormatInfo = exportFormatters.getFormatInfo;
+const smartMergeSrt = exportFormatters.smartMergeSrt;
 
 describe("exportFormatters - extended coverage", () => {
-  const segs = [
-    { start_ms: 0, end_ms: 2000, text: "你好" },
-    { start_ms: 2000, end_ms: 4000, text: "世界" },
-  ];
+  // [20260726_Tier3_ExportFormattersCoverageMigrate] Annotated with the
+  // source TranscriptionSegment so start_ms/end_ms/text are checked.
+  const segs: import("../../src/helpers/exportFormatters").TranscriptionSegment[] =
+    [
+      { start_ms: 0, end_ms: 2000, text: "你好" },
+      { start_ms: 2000, end_ms: 4000, text: "世界" },
+    ];
 
   describe("formatMD", () => {
     it("produces markdown with metadata", () => {
@@ -59,10 +70,11 @@ describe("exportFormatters - extended coverage", () => {
 
   describe("formatSRT edge cases", () => {
     it("handles segments that end with punctuation", () => {
-      const punctSegs = [
-        { start_ms: 0, end_ms: 2000, text: "你好。" },
-        { start_ms: 2000, end_ms: 4000, text: "世界" },
-      ];
+      const punctSegs: import("../../src/helpers/exportFormatters").TranscriptionSegment[] =
+        [
+          { start_ms: 0, end_ms: 2000, text: "你好。" },
+          { start_ms: 2000, end_ms: 4000, text: "世界" },
+        ];
       const out = formatSRT({ text: "test", parsedSegments: punctSegs });
       expect(out).toContain("你好。");
       expect(out).toContain("世界");
@@ -112,29 +124,32 @@ describe("exportFormatters - extended coverage", () => {
 
   describe("getFormatInfo", () => {
     it("returns info for txt", () => {
-      const info = getFormatInfo("txt");
+      // [20260726_Tier3_ExportFormattersCoverageMigrate] getFormatInfo
+      // returns FormatInfo | null; cast to the non-null branch after the
+      // implicit truthy assertion below.
+      const info = getFormatInfo("txt")!;
       expect(info.formatter).toBeTruthy();
       expect(info.ext).toBe(".txt");
       expect(info.mime).toBe("text/plain");
     });
 
     it("returns info for srt", () => {
-      const info = getFormatInfo("srt");
+      const info = getFormatInfo("srt")!;
       expect(info.ext).toBe(".srt");
     });
 
     it("returns info for vtt", () => {
-      const info = getFormatInfo("vtt");
+      const info = getFormatInfo("vtt")!;
       expect(info.ext).toBe(".vtt");
     });
 
     it("returns info for md", () => {
-      const info = getFormatInfo("md");
+      const info = getFormatInfo("md")!;
       expect(info.ext).toBe(".md");
     });
 
     it("returns info for docx", () => {
-      const info = getFormatInfo("docx");
+      const info = getFormatInfo("docx")!;
       expect(info.ext).toBe(".docx");
     });
 
@@ -149,11 +164,17 @@ describe("exportFormatters - extended coverage", () => {
       const segs = [{ start_ms: 0, end_ms: 4000, text: longText }];
       const merged = smartMergeSrt(segs);
       expect(merged.length).toBe(1);
-      expect(merged[0].text).toContain("\n");
+      expect(merged[0]!.text).toContain("\n");
     });
 
     it("returns empty array for null segments", () => {
-      expect(smartMergeSrt(null)).toEqual([]);
+      // [20260726_Tier3_ExportFormattersCoverageMigrate] Source signature
+      // is `TranscriptionSegment[]`; null is the runtime guard branch.
+      expect(
+        smartMergeSrt(
+          null as unknown as import("../../src/helpers/exportFormatters").TranscriptionSegment[],
+        ),
+      ).toEqual([]);
       expect(smartMergeSrt([])).toEqual([]);
     });
 
@@ -164,7 +185,7 @@ describe("exportFormatters - extended coverage", () => {
       ];
       const merged = smartMergeSrt(segs);
       expect(merged.length).toBe(1);
-      expect(merged[0].text).toBe("你好");
+      expect(merged[0]!.text).toBe("你好");
     });
 
     it("splits at punctuation when text over 42 chars", () => {
@@ -176,7 +197,7 @@ describe("exportFormatters - extended coverage", () => {
         },
       ];
       const merged = smartMergeSrt(segs);
-      expect(merged[0].text).toContain("\n");
+      expect(merged[0]!.text).toContain("\n");
     });
   });
 
@@ -203,7 +224,10 @@ describe("exportFormatters - extended coverage", () => {
   });
 
   describe("buildPrompt review modes", () => {
-    const { buildPrompt } = require("../../src/helpers/aiPrompts");
+    // [20260726_Tier3_ExportFormattersCoverageMigrate] Same module-namespace
+    // pattern as the top-level exportFormatters destructure.
+    const buildPrompt: typeof import("../../src/helpers/aiPrompts").buildPrompt =
+      require("../../src/helpers/aiPrompts").buildPrompt;
 
     it("returns dianping prompt", () => {
       const p = buildPrompt("dianping", "test");

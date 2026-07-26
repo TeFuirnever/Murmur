@@ -1,13 +1,58 @@
+// [20260726_Tier3_DatabaseCoverageMigrate] Migrated from .js to .ts as part
+// of Tier 3 batch 4. Pattern: typed `DatabaseManager` const via
+// `typeof import("...").default` (TS7005) and explicit `let db: InstanceType<...>`
+// / `let tmpDir: string` to satisfy strict tsc TS7034 for bindings assigned
+// in beforeEach callbacks. Private fields accessed via
+// `as unknown as { db: ..., safeStorage: ..., _migrateSettings: ... }` casts.
+// Template reference: phase4-i18n.test.ts (commit d52f2e0).
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import path from "path";
 import fs from "fs";
 import os from "os";
 
-const DatabaseManager = require("../../src/helpers/database");
+// [20260726_Tier3_DatabaseCoverageMigrate] Default-export class; the require
+// returns the constructor under CJS interop.
+const DatabaseManager: typeof import("../../src/helpers/database").default = require("../../src/helpers/database");
+
+// [20260726_Tier3_DatabaseCoverageMigrate] better-sqlite3 Database shape:
+// only the .prepare().run() and .backup()/.close() surface the suite
+// exercises when poking at the private `db` field via `as unknown as`.
+interface BetterSqliteDbShape {
+  prepare: (sql: string) => {
+    run: (...args: unknown[]) => { lastInsertRowid: number | bigint };
+  };
+  backup: (path: string) => Promise<unknown>;
+  close: () => void;
+}
+
+// [20260726_Tier3_DatabaseCoverageMigrate] The DatabaseManager class declares
+// its db/safeStorage/logger/_migrateSettings members private. The suite pokes
+// them directly to drive encryption + migration tests, so each such access is
+// cast through `as unknown as` to a structural type with those members public.
+interface DatabasePrivateSurface {
+  db: BetterSqliteDbShape | null;
+  safeStorage: SafeStorageStub | null;
+  logger: { info: () => void; warn: () => void; error: () => void } | null;
+  _migrateSettings: () => void;
+}
+
+// [20260726_Tier3_DatabaseCoverageMigrate] Local cast helper keeps call sites
+// short. Returning the structural surface avoids repeating
+// `as unknown as DatabasePrivateSurface` at every private-field access.
+function dbp(d: InstanceType<typeof DatabaseManager>): DatabasePrivateSurface {
+  return d as unknown as DatabasePrivateSurface;
+}
+
+// [20260726_Tier3_DatabaseCoverageMigrate] Electron.SafeStorage stub shape.
+interface SafeStorageStub {
+  isEncryptionAvailable: () => boolean;
+  encryptString: (s: string) => Buffer;
+  decryptString: (b: Buffer) => string;
+}
 
 describe("DatabaseManager - extended coverage", () => {
-  let db;
-  let tmpDir;
+  let db: InstanceType<typeof DatabaseManager>;
+  let tmpDir: string;
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "murmur-test-"));
@@ -26,12 +71,12 @@ describe("DatabaseManager - extended coverage", () => {
     it("accepts a logger", () => {
       const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
       const d = new DatabaseManager(logger);
-      expect(d.logger).toBe(logger);
+      expect(dbp(d).logger).toBe(logger);
     });
 
     it("defaults logger to null", () => {
       const d = new DatabaseManager();
-      expect(d.logger).toBeNull();
+      expect(dbp(d).logger).toBeNull();
     });
   });
 
@@ -43,7 +88,7 @@ describe("DatabaseManager - extended coverage", () => {
         decryptString: vi.fn(),
       };
       db.setSafeStorage(ss);
-      expect(db.safeStorage).toBe(ss);
+      expect(dbp(db).safeStorage).toBe(ss);
     });
   });
 
@@ -78,8 +123,8 @@ describe("DatabaseManager - extended coverage", () => {
     it("returns default when encrypted value cannot be decrypted without safeStorage", () => {
       const encrypted = Buffer.from("enc").toString("base64");
       const raw = JSON.stringify({ _enc: encrypted });
-      db.db
-        .prepare(
+      dbp(db)
+        .db!.prepare(
           "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)",
         )
         .run("ai_api_key", raw);
@@ -123,8 +168,8 @@ describe("DatabaseManager - extended coverage", () => {
       db.setSafeStorage(ss1);
 
       db.setSetting("settings_schema_version", 0);
-      db.db
-        .prepare(
+      dbp(db)
+        .db!.prepare(
           "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)",
         )
         .run("ai_api_key", JSON.stringify("plaintext-key"));
@@ -134,8 +179,8 @@ describe("DatabaseManager - extended coverage", () => {
         encryptString: vi.fn().mockReturnValue(Buffer.from("enc")),
         decryptString: vi.fn().mockReturnValue("plaintext-key"),
       };
-      db.safeStorage = ss2;
-      db._migrateSettings();
+      dbp(db).safeStorage = ss2;
+      dbp(db)._migrateSettings();
 
       expect(db.getSetting("settings_schema_version")).toBe(1);
       expect(ss2.encryptString).toHaveBeenCalledWith("plaintext-key");
@@ -155,23 +200,38 @@ describe("DatabaseManager - extended coverage", () => {
         encryptString: vi.fn(),
         decryptString: vi.fn(),
       };
-      db.safeStorage = ss2;
-      db._migrateSettings();
+      dbp(db).safeStorage = ss2;
+      dbp(db)._migrateSettings();
       expect(ss2.encryptString).not.toHaveBeenCalled();
     });
   });
 
   describe("saveTranscription", () => {
     it("rejects non-object input", () => {
-      expect(() => db.saveTranscription(null)).toThrow("转录数据无效");
-      expect(() => db.saveTranscription("string")).toThrow("转录数据无效");
+      // [20260726_Tier3_DatabaseCoverageMigrate] Source signature is
+      // `Partial<TranscriptionRecord>`; the test deliberately feeds invalid
+      // runtime types to assert the throw. Cast via unknown to keep tsc happy.
+      expect(() =>
+        db.saveTranscription(
+          null as unknown as Partial<
+            import("../../src/helpers/database").TranscriptionRecord
+          >,
+        ),
+      ).toThrow("转录数据无效");
+      expect(() =>
+        db.saveTranscription(
+          "string" as unknown as Partial<
+            import("../../src/helpers/database").TranscriptionRecord
+          >,
+        ),
+      ).toThrow("转录数据无效");
     });
 
     it("saves with all optional fields defaulted", () => {
       const r = db.saveTranscription({ text: "test" });
-      const row = db.getTranscriptionById(r.lastInsertRowid);
-      expect(row.language).toBe("zh-CN");
-      expect(row.source_type).toBe("recording");
+      const row = db.getTranscriptionById(Number(r.lastInsertRowid));
+      expect(row!.language).toBe("zh-CN");
+      expect(row!.source_type).toBe("recording");
     });
   });
 
@@ -181,14 +241,14 @@ describe("DatabaseManager - extended coverage", () => {
         text: "test",
         segments: JSON.stringify([{ start_ms: 0, text: "test" }]),
       });
-      const row = db.getTranscriptionWithSegments(r.lastInsertRowid);
-      expect(row.parsedSegments).toEqual([{ start_ms: 0, text: "test" }]);
+      const row = db.getTranscriptionWithSegments(Number(r.lastInsertRowid));
+      expect(row!.parsedSegments).toEqual([{ start_ms: 0, text: "test" }]);
     });
 
     it("returns empty array when no segments", () => {
       const r = db.saveTranscription({ text: "no segs" });
-      const row = db.getTranscriptionWithSegments(r.lastInsertRowid);
-      expect(row.parsedSegments).toEqual([]);
+      const row = db.getTranscriptionWithSegments(Number(r.lastInsertRowid));
+      expect(row!.parsedSegments).toEqual([]);
     });
 
     it("handles invalid JSON segments with logger", () => {
@@ -196,11 +256,11 @@ describe("DatabaseManager - extended coverage", () => {
       const logDb = new DatabaseManager({ warn: vi.fn(), error: vi.fn() });
       logDb.initialize(tmpDir);
       const r = logDb.saveTranscription({ text: "bad segs" });
-      logDb.db
-        .prepare("UPDATE transcriptions SET segments = ? WHERE id = ?")
+      dbp(logDb)
+        .db!.prepare("UPDATE transcriptions SET segments = ? WHERE id = ?")
         .run("not-json", r.lastInsertRowid);
-      const row = logDb.getTranscriptionWithSegments(r.lastInsertRowid);
-      expect(row.parsedSegments).toEqual([]);
+      const row = logDb.getTranscriptionWithSegments(Number(r.lastInsertRowid));
+      expect(row!.parsedSegments).toEqual([]);
       logDb.close();
     });
 
@@ -220,7 +280,7 @@ describe("DatabaseManager - extended coverage", () => {
       const log = { warn: vi.fn(), error: vi.fn() };
       const logDb = new DatabaseManager(log);
       logDb.initialize(tmpDir);
-      logDb.db.close();
+      dbp(logDb).db!.close();
       expect(logDb.getTranscriptionWithSegments(1)).toBeNull();
       expect(log.error).toHaveBeenCalled();
     });
@@ -273,11 +333,11 @@ describe("DatabaseManager - extended coverage", () => {
       const logDb = new DatabaseManager(logger);
       logDb.initialize(tmpDir);
       logDb.saveTranscription({ text: "test" });
-      logDb.db.backup = () => {
+      dbp(logDb).db!.backup = (() => {
         const p = Promise.reject(new Error("test backup error"));
         p.catch(() => {});
         return p;
-      };
+      }) as unknown as BetterSqliteDbShape["backup"];
       logDb.backup(path.join(tmpDir, "backup.db"));
       await new Promise((r) => setTimeout(r, 50));
       expect(logger.error).toHaveBeenCalled();
@@ -288,13 +348,13 @@ describe("DatabaseManager - extended coverage", () => {
   describe("close", () => {
     it("sets db to null after close", () => {
       db.close();
-      expect(db.db).toBeNull();
+      expect(dbp(db).db).toBeNull();
     });
 
     it("is safe to call twice", () => {
       db.close();
       db.close();
-      expect(db.db).toBeNull();
+      expect(dbp(db).db).toBeNull();
     });
   });
 
@@ -325,8 +385,8 @@ describe("DatabaseManager - extended coverage", () => {
 
   describe("getSetting", () => {
     it("handles non-JSON stored value", () => {
-      db.db
-        .prepare(
+      dbp(db)
+        .db!.prepare(
           "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)",
         )
         .run("raw", "not-json");
@@ -336,8 +396,8 @@ describe("DatabaseManager - extended coverage", () => {
 
   describe("getAllSettings", () => {
     it("handles non-JSON stored value", () => {
-      db.db
-        .prepare(
+      dbp(db)
+        .db!.prepare(
           "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)",
         )
         .run("bad", "not-json");
