@@ -3,10 +3,16 @@
 // can plant a symlink inside an allowed directory that points outside the
 // sandbox (e.g. /etc/passwd.wav). The validator must resolve the real path
 // via fs.realpathSync before the allowed-directory check.
+// [20260726_Tier32_AudioPathValidatorSymlink] Tier 3.2: converted the in-test
+// require() of audioPathValidator to a top-level ESM namespace import. The
+// require was called inside an it() body with no vi.mock / vi.resetModules,
+// so hoisting to a static import is behavior-preserving.
+// [20260726_Tier32_AudioPathValidatorSymlink] END
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "fs";
 import path from "path";
 import os from "os";
+import * as audioPathValidator from "../../src/helpers/audioPathValidator";
 
 describe("audioPathValidator — symlink escape prevention", () => {
   let tmpDir: string;
@@ -63,9 +69,7 @@ describe("audioPathValidator — symlink escape prevention", () => {
       return;
     }
 
-    const {
-      validateAudioPath,
-    } = require("../../src/helpers/audioPathValidator");
+    const { validateAudioPath } = audioPathValidator;
     const result = validateAudioPath(symlinkPath);
 
     // The symlink's real path escapes the allowed set — must be rejected.

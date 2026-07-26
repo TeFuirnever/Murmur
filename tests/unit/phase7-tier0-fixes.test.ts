@@ -14,8 +14,18 @@
 // 3 require() calls are `require("fs")` INSIDE one it() body that mutates
 // Node's built-in fs.existsSync — those don't depend on resetModules and
 // converting them is out of scope (deferred, see TODO in that test).
+// [20260726_Tier32_Phase7Tier0Fixes] Tier 3.2 final: converted the last 3
+// require("fs") sites in the PYTHONUTF8 test. A single top-level
+// `import fs from "fs"` replaces all three `require("fs")` calls. Because
+// Node caches built-in modules as a process-wide singleton, the imported
+// binding is the SAME object the PythonEnvironment code path reaches via
+// `require("fs").existsSync` (also cached), so monkey-patching
+// `fs.existsSync = () => true` and restoring in a `finally` block works
+// identically to the previous require-each-time form. No vi.resetModules is
+// involved, so hoisting the import is behavior-preserving.
 // [20260726_Tier32_Phase7Tier0Fixes] END
 import { describe, it, expect, vi } from "vitest";
+import fs from "fs";
 import PythonEnvironment from "../../src/helpers/pythonEnvironment";
 import {
   validateAIBaseUrl,
@@ -71,27 +81,25 @@ describe("Tier 0 fixes", () => {
     });
 
     it("PYTHONUTF8 is set even when embedded Python is used", () => {
-      // [20260726_Tier32_DeferredDynamicRequire] The 3 require("fs") calls
-      // below mutate Node's built-in fs.existsSync for the duration of this
-      // test. They do NOT depend on vi.resetModules (fs is a Node builtin,
-      // not a source module), so removing resetModules above is safe. The
-      // require() form is retained because converting to a top-level
-      // `import fs from "fs"` would require restructuring the save/restore
-      // logic (the test patches a method on the imported object). Deferred.
+      // [20260726_Tier32_Phase7Tier0Fixes] fs mutation test: the top-level
+      // `import fs from "fs"` binding is Node's process-wide fs singleton
+      // (built-in modules are not re-evaluated), so assigning
+      // `fs.existsSync = () => true` and restoring in `finally` works
+      // identically to the previous `require("fs").existsSync = ...` form.
       const env = new PythonEnvironment({
         info: () => {},
         warn: () => {},
         error: () => {},
       });
       // Simulate embedded python present (won't actually exist, but force the branch)
-      const origExistsSync = require("fs").existsSync;
-      require("fs").existsSync = () => true;
+      const origExistsSync = fs.existsSync;
+      fs.existsSync = () => true;
       try {
         env.getEmbeddedPythonPath = () => "/fake/embedded/python/bin/python3";
         const result = env.buildPythonEnvironment();
         expect(result.PYTHONUTF8).toBe("1");
       } finally {
-        require("fs").existsSync = origExistsSync;
+        fs.existsSync = origExistsSync;
       }
     });
   });

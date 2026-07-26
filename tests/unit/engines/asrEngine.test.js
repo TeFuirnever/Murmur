@@ -1,15 +1,24 @@
+// [20260726_Tier32_AsrEngineJs] Tier 3.2: converted the two require() calls
+// (and the now-redundant vi.resetModules()) to top-level ESM imports. Both
+// source modules (asrEngine, funasrManager) have no module-level mutable
+// state — validateASREngine is pure, createASREngineRegistry returns a fresh
+// instance, FunASRManager is a class — so removing resetModules and hoisting
+// the imports is behavior-preserving. This was the last vitest consumer of
+// tests/_tsresolve.setup.js, so the shim can now be deleted.
+// [20260726_Tier32_AsrEngineJs] END
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+  validateASREngine,
+  createASREngineRegistry,
+} from "../../../src/helpers/engines/asrEngine";
+import FunASRManager from "../../../src/helpers/funasrManager";
 
 describe("ASREngine interface", () => {
-  let validateASREngine;
-  let createASREngineRegistry;
-
-  beforeEach(() => {
-    vi.resetModules();
-    const asrEngine = require("../../../src/helpers/engines/asrEngine");
-    validateASREngine = asrEngine.validateASREngine;
-    createASREngineRegistry = asrEngine.createASREngineRegistry;
-  });
+  // [20260726_Tier32_AsrEngineJs] No outer beforeEach needed: the previous
+  // outer beforeEach only did vi.resetModules() + require() to populate
+  // validateASREngine / createASREngineRegistry, which are now top-level
+  // ESM imports. The inner createASREngineRegistry describe keeps its own
+  // beforeEach for the registry + mockEngine fixtures.
 
   describe("validateASREngine", () => {
     it("accepts an object with all required methods", () => {
@@ -140,7 +149,8 @@ describe("ASREngine interface", () => {
 
   describe("FunASRManager satisfies ASREngine", () => {
     it("FunASRManager implements all required methods", () => {
-      const FunASRManager = require("../../../src/helpers/funasrManager");
+      // [20260726_Tier32_AsrEngineJs] FunASRManager is now a top-level
+      // default import (class) — same shape as the previous require().
       const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
       const manager = new FunASRManager(logger);
       expect(
