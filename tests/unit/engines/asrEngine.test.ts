@@ -1,3 +1,8 @@
+// [20260726_Tier43_AsrEngineRename] Renamed from .js → .ts as the final
+// Tier 3.1 cleanup (architect flagged this file in PR #99 review as the
+// lone remaining .js in tests/unit/). Content unchanged — Tier 3.2
+// already converted the require() calls to ESM imports.
+// [20260726_Tier43_AsrEngineRename] END
 // [20260726_Tier32_AsrEngineJs] Tier 3.2: converted the two require() calls
 // (and the now-redundant vi.resetModules()) to top-level ESM imports. Both
 // source modules (asrEngine, funasrManager) have no module-level mutable
@@ -64,8 +69,11 @@ describe("ASREngine interface", () => {
   });
 
   describe("createASREngineRegistry", () => {
-    let registry;
-    let mockEngine;
+    // [20260726_Tier43_AsrEngineRename] Explicit types required after .ts
+    // rename — previously .js was excluded from tsconfig.test.json.
+    let registry: import("../../../src/helpers/engines/asrEngine").ASREngineRegistry;
+    let mockEngine: import("../../../src/helpers/engines/asrEngine").ASREngine;
+    // [20260726_Tier43_AsrEngineRename] END
 
     beforeEach(() => {
       registry = createASREngineRegistry();
@@ -73,7 +81,12 @@ describe("ASREngine interface", () => {
         transcribeAudio: vi.fn(async () => ({ success: true, text: "hello" })),
         transcribeFile: vi.fn(async () => ({ success: true, text: "file" })),
         cancelTranscription: vi.fn(async () => ({ success: true })),
-        checkStatus: vi.fn(async () => ({ success: true, installed: true })),
+        checkStatus: vi.fn(async () => ({
+          success: true,
+          installed: true,
+          models_downloaded: true,
+          initializing: false,
+        })),
         shutdown: vi.fn(async () => {}),
       };
     });
@@ -85,7 +98,17 @@ describe("ASREngine interface", () => {
     });
 
     it("refuses to register invalid engine", () => {
-      expect(registry.register("bad", {})).toBe(false);
+      // [20260726_Tier43_AsrEngineRename] Cast through unknown: the test
+      // intentionally passes an invalid shape (empty object) to verify
+      // runtime validation rejects it. ASREngine type forbids {}, so
+      // cast to satisfy tsc while preserving the runtime test intent.
+      expect(
+        registry.register(
+          "bad",
+          {} as unknown as import("../../../src/helpers/engines/asrEngine").ASREngine,
+        ),
+      ).toBe(false);
+      // [20260726_Tier43_AsrEngineRename] END
       expect(registry.get("bad")).toBeUndefined();
     });
 
