@@ -11,8 +11,13 @@ vi.mock("electron", () => ({
   app: { getPath: vi.fn(() => "/tmp/test-user-data") },
 }));
 
+// [20260726_Tier32_DatabaseEncryptionFailure] Convert require() +
+// vi.resetModules() to a top-level ESM default import. vi.mock is hoisted
+// and applies to this import; the require shim was only needed for .ts
+// loading. database.ts uses `export default DatabaseManager`.
+import DatabaseManager from "../../src/helpers/database";
+
 describe("DatabaseManager — encryption failure resilience", () => {
-  let DatabaseManager: ReturnType<typeof require>;
   let tmpDir: string;
   let db: {
     initialize: (dir: string) => void;
@@ -23,10 +28,22 @@ describe("DatabaseManager — encryption failure resilience", () => {
   };
 
   beforeEach(() => {
-    vi.resetModules();
-    DatabaseManager = require("../../src/helpers/database");
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "murmur-enc-test-"));
-    db = new DatabaseManager();
+    // [20260726_Tier32_DatabaseEncryptionFailure] Cast through unknown: the
+    // previous require() binding was `any` (ReturnType<typeof require>), so
+    // the hand-written `db` interface above was effectively unenforced. With
+    // the typed default import the real DatabaseManager's setSafeStorage
+    // accepts SafeStorage (not unknown), which is narrower — structurally
+    // incompatible with this local interface even though the runtime shape is
+    // identical. The `as unknown` mirrors the FunASRSurface/dbp() cast
+    // pattern used across the other suites for private-field access.
+    db = new DatabaseManager() as unknown as {
+      initialize: (dir: string) => void;
+      setSafeStorage: (s: unknown) => void;
+      setSetting: (k: string, v: unknown) => unknown;
+      getSetting: (k: string, d?: unknown) => unknown;
+      close: () => void;
+    };
     db.initialize(tmpDir);
   });
 

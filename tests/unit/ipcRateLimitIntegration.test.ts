@@ -7,11 +7,17 @@
 // return bare objects — `unknown` lets `result.success`/`result.error` reads
 // happen via a narrow per-call cast at the assertion sites. Template
 // reference: phase4-i18n.test.ts (commit d52f2e0).
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 
 vi.mock("electron", () => ({
   app: { getPath: vi.fn(() => "/tmp/test-user-data") },
 }));
+
+// [20260726_Tier32_IpcRateLimitIntegration] Convert require() +
+// vi.resetModules() to a top-level ESM import. vi.mock is hoisted and applies
+// to every import of the source module. The require shim was only needed for
+// .ts loading. registerAll is a named export on ipc/index.ts.
+import { registerAll } from "../../src/helpers/ipc/index";
 
 // [20260726_Tier3_IpcRateLimitIntegrationMigrate] Handler shape: registerAll
 // routes through a rate-limiting wrapper, so handlers may be the original
@@ -26,9 +32,9 @@ interface MockIpcMain {
 }
 
 describe("IPC rate limit integration", () => {
-  beforeEach(() => {
-    vi.resetModules();
-  });
+  // [20260726_Tier32_IpcRateLimitIntegration] vi.resetModules() removed — the
+  // hoisted vi.mock("electron") applies to every import, and no test in this
+  // suite changes a mock factory between tests.
 
   // [20260726_Tier3_IpcRateLimitIntegrationMigrate] handlers map typed as
   // Record<string, IpcHandler | undefined> so the `handlers[channel] = fn`
@@ -92,8 +98,6 @@ describe("IPC rate limit integration", () => {
   }
 
   it("rate-limits process-text channel", async () => {
-    const registerAll: typeof import("../../src/helpers/ipc/index").registerAll =
-      require("../../src/helpers/ipc/index").registerAll;
     const ipcMain = createIpcMain();
     registerAll(
       ipcMain as unknown as Parameters<typeof registerAll>[0],
@@ -122,8 +126,6 @@ describe("IPC rate limit integration", () => {
   });
 
   it("rate-limits download-models with strict limit", async () => {
-    const registerAll: typeof import("../../src/helpers/ipc/index").registerAll =
-      require("../../src/helpers/ipc/index").registerAll;
     const ipcMain = createIpcMain();
     registerAll(
       ipcMain as unknown as Parameters<typeof registerAll>[0],
@@ -146,8 +148,6 @@ describe("IPC rate limit integration", () => {
   });
 
   it("does not rate-limit unrestricted channels", async () => {
-    const registerAll: typeof import("../../src/helpers/ipc/index").registerAll =
-      require("../../src/helpers/ipc/index").registerAll;
     const ipcMain = createIpcMain();
     registerAll(
       ipcMain as unknown as Parameters<typeof registerAll>[0],

@@ -22,6 +22,11 @@ vi.mock("electron", () => ({
 // default namespace to the class itself).
 type LogManagerCtor = typeof import("../../src/helpers/logManager").default;
 
+// [20260726_Tier32_LogManager] Convert require() + vi.resetModules() to a
+// top-level ESM default import. vi.mock is hoisted and applies to every
+// import of the module. logManager.ts uses `export default LogManager`.
+import LogManager from "../../src/helpers/logManager";
+
 // [20260726_Tier3_LogManagerMigrate] The LogManager class declares
 // logDir/logFile/funasrLogFile/_initialized private. createManager() reassigns
 // them to redirect output into the per-test temp dir, so this surface exposes
@@ -41,15 +46,9 @@ function surface(mgr: InstanceType<LogManagerCtor>): LogManagerSurface {
 }
 
 describe("LogManager", () => {
-  let LogManager: LogManagerCtor;
   let tmpDir: string;
 
   beforeEach(() => {
-    vi.resetModules();
-    // [20260726_Tier3_LogManagerMigrate] Assign the raw require() result: the
-    // setupFile unwraps {__esModule, default} → default for sole-default-export
-    // modules, so require() returns the class itself.
-    LogManager = require("../../src/helpers/logManager");
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "murmur-log-test-"));
   });
 
