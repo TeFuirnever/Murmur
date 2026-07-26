@@ -443,7 +443,7 @@ describe("IPC rate limiter integration", () => {
 **方案**:
 
 ```javascript
-// electron-launch.js
+// electron-launch.ts
 const app = await electron.launch({
   args: [appRoot, "--disable-gpu", "--no-sandbox"],
   env: {
@@ -474,7 +474,7 @@ tests/fixtures/
 
 ```
 tests/helpers/
-  electron-launch.js    # ✅ 已有
+  electron-launch.ts    # ✅ 已有
   ipc-mock.js           # ✅ 已有
   global-setup.js       # ✅ 已有
   fixtures.js           # 新增：加载 fixture 文件
@@ -896,7 +896,7 @@ tests/
 │   │   ├── 10-error-resilience.test.ts # Tier 3
 │   │   └── 11-update-flow.test.ts # Tier 3
 │   ├── helpers/
-│   │   ├── electron-launch.js      # ✅ 已有
+│   │   ├── electron-launch.ts      # ✅ 已有
 │   │   ├── ipc-mock.js             # ✅ 已有
 │   │   ├── global-setup.js         # ✅ 已有
 │   │   ├── fixtures.js             # 新增

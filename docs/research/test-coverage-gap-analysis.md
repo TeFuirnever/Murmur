@@ -144,7 +144,7 @@ Plus `tests/e2e/legacy/` (3 files: `ipc.test.js`, `launch.test.js`, `settings.te
 
 #### E2E seam quality (when they run)
 
-- `electron-launch.js` — launches via `.` (package.json main) so `getAppPath()` is correct. Good.
+- `electron-launch.ts` — launches via `.` (package.json main) so `getAppPath()` is correct. Good.
 - `ipc-mock.js` — removes + re-registers handlers in main process via `electronApp.evaluate`. Clean approach for Electron 20+ single-handler limit.
 - `fixtures.js` — shared data constants (transcription/AI/model/history/settings responses). Good but only used implicitly; not a true fixture injection framework.
 
@@ -347,6 +347,6 @@ All 12 Electron-dependent helpers + all 10 IPC handler files (`src/helpers/ipc/*
 - IPC contracts: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/src/helpers/ipc-contracts.ts`
 - Largest untested handler: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/src/helpers/ipc/transcriptionHandlers.ts`
 - Security-critical untested: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/src/helpers/updateManager.ts`
-- E2E launch helper: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/tests/e2e/helpers/electron-launch.js`
+- E2E launch helper: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/tests/e2e/helpers/electron-launch.ts`
 - Example behavioral test (gold standard): `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/tests/unit/aiHandlers.test.js`, `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/tests/unit/database.test.js`
 - Example source-string test (weak): `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/tests/unit/phase3-semi-auto-update.test.js`

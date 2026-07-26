@@ -12,7 +12,7 @@ all 39 suites) fails identically with:
 
 ```
 TimeoutError: electronApplication.firstWindow: Timeout 30000ms exceeded
-  at ../helpers/electron-launch.js:205
+  at ../helpers/electron-launch.ts:205
 ```
 
 The blocking "E2E boot health" gate in `.github/workflows/ci.yml` is
@@ -154,11 +154,11 @@ minutes and the search space is too large to brute-force.
 
 ## Artifacts left in place
 
-- `tests/e2e/helpers/electron-launch.js` — full instrumentation (env dump,
+- `tests/e2e/helpers/electron-launch.ts` — full instrumentation (env dump,
   bundle check, binary check, stderr/stdout listeners, phase canaries)
 - `tests/e2e/helpers/ci-probe.js` — CJS probe loaded via `--require`
-- `tests/e2e/suites/00-launch-only.test.js` — minimal launch smoke test
-- `tests/e2e/suites/00-boot-health.test.js` — 7-test boot gate (spec §4.1)
+- `tests/e2e/suites/00-launch-only.test.ts` — minimal launch smoke test
+- `tests/e2e/suites/00-boot-health.test.ts` — 7-test boot gate (spec §4.1)
 - `.github/workflows/ci.yml` — non-blocking diagnostic + boot health + e2e
 - `package.json` — `test:e2e:diag`, `test:e2e:boot` scripts
 - `main.ts` — `app.dock.show()` guard + whenReady try/catch + canaries
