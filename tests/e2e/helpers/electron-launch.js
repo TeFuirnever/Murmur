@@ -170,8 +170,10 @@ async function launchElectronApp({ env = {} } = {}) {
   // launcher stub; the real Electron framework lives in
   // Electron.app/Contents/Frameworks/. Total dist/ should be ~200-300MB.
   // If it's only a few MB on CI, the postinstall download failed.
+  // Path: electronPath = .../dist/Electron.app/Contents/MacOS/Electron
+  //   dist dir = 4 levels up (MacOS → Contents → Electron.app → dist)
   const electronDistDir = path.dirname(
-    path.dirname(path.dirname(electronPath)),
+    path.dirname(path.dirname(path.dirname(electronPath))),
   );
   let totalSize = 0;
   try {
