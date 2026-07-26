@@ -16,9 +16,13 @@
 // [20260724_Fix_DynamicTranscriptionTimeout] Tests for dynamic file
 // transcription timeout based on file size (ADR-012 Issue #1).
 import { describe, it, expect } from "vitest";
-
-const calculateTranscriptionTimeout: typeof import("../../src/helpers/funasrServer").default.calculateTranscriptionTimeout =
-  require("../../src/helpers/funasrServer").calculateTranscriptionTimeout;
+// [20260726_Tier32_DynamicTranscriptionTimeout] Convert CJS require() → ESM
+// import. The static `calculateTranscriptionTimeout` on the default-exported
+// FunASRServer class is destructured post-import; the local binding keeps the
+// same name and signature the suite exercises.
+import FunASRServer from "../../src/helpers/funasrServer";
+const calculateTranscriptionTimeout =
+  FunASRServer.calculateTranscriptionTimeout;
 
 describe("Dynamic transcription timeout (ADR-012 Issue #1)", () => {
   describe("calculateTranscriptionTimeout", () => {

@@ -6,8 +6,10 @@
 // `as unknown as Parameters<...>`. Template reference: phase4-i18n.test.ts
 // (commit d52f2e0).
 import { describe, it, expect, vi } from "vitest";
-const C: typeof import("../../src/helpers/ipc-contracts") = require("../../src/helpers/ipc-contracts");
-const sysHandlers: typeof import("../../src/helpers/ipc/systemHandlers") = require("../../src/helpers/ipc/systemHandlers");
+// [20260726_Tier32_SystemHandlersChannels] Convert two CJS require() → ESM
+// namespace imports.
+import * as C from "../../src/helpers/ipc-contracts";
+import * as sysHandlers from "../../src/helpers/ipc/systemHandlers";
 
 // [20260726_Tier3_SystemHandlersChannelsMigrate] Handler shape: ipcMain.handle
 // registers `(event, ...args) => result` callbacks. The suite only asserts

@@ -8,8 +8,11 @@
 // types via `as unknown as Parameters<...>`. Template reference:
 // phase4-i18n.test.ts (commit d52f2e0).
 import { describe, it, expect, vi } from "vitest";
-const C: typeof import("../../src/helpers/ipc-contracts") = require("../../src/helpers/ipc-contracts");
-const envHandlers: typeof import("../../src/helpers/ipc/environmentHandlers") = require("../../src/helpers/ipc/environmentHandlers");
+// [20260726_Tier32_EnvironmentHandlers] Convert two CJS require() → ESM
+// namespace imports. The `C.EVENTS.X` and `envHandlers.register(...)` call
+// sites below unchanged.
+import * as C from "../../src/helpers/ipc-contracts";
+import * as envHandlers from "../../src/helpers/ipc/environmentHandlers";
 
 // [20260726_Tier3_EnvironmentHandlersMigrate] Handler shape: ipcMain.handle
 // registers `(event, ...args) => result` callbacks; tests invoke them with a

@@ -6,10 +6,16 @@
 // `buildPrompt` require inside the suite follows the same `typeof import`
 // pattern. Template reference: phase4-i18n.test.ts (commit d52f2e0).
 import { describe, it, expect } from "vitest";
+// [20260726_Tier32_ExportFormattersCoverage] Convert CJS require() → ESM
+// namespace import. The accessor consts below unchanged.
+import * as exportFormatters from "../../src/helpers/exportFormatters";
+// [20260726_Tier32_ExportFormattersCoverage] Hoist the buildPrompt require
+// (previously inside the describe block) to a top-level import — same value,
+// same name, ESM imports are file-scoped so hoisting is semantically safe.
+import { buildPrompt } from "../../src/helpers/aiPrompts";
 
 // [20260726_Tier3_ExportFormattersCoverageMigrate] Pull named exports out
 // via the module namespace so each binding has its real (function) type.
-const exportFormatters: typeof import("../../src/helpers/exportFormatters") = require("../../src/helpers/exportFormatters");
 const formatTXT = exportFormatters.formatTXT;
 const formatSRT = exportFormatters.formatSRT;
 const formatVTT = exportFormatters.formatVTT;
@@ -224,10 +230,8 @@ describe("exportFormatters - extended coverage", () => {
   });
 
   describe("buildPrompt review modes", () => {
-    // [20260726_Tier3_ExportFormattersCoverageMigrate] Same module-namespace
-    // pattern as the top-level exportFormatters destructure.
-    const buildPrompt: typeof import("../../src/helpers/aiPrompts").buildPrompt =
-      require("../../src/helpers/aiPrompts").buildPrompt;
+    // [20260726_Tier32_ExportFormattersCoverage] buildPrompt is now imported
+    // at the top of the file (hoisted from the original nested require()).
 
     it("returns dianping prompt", () => {
       const p = buildPrompt("dianping", "test");

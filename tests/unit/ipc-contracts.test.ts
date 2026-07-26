@@ -8,10 +8,8 @@
 // bindings and no untyped function params in this file. Template reference:
 // phase4-i18n.test.ts (commit d52f2e0).
 import { describe, it, expect } from "vitest";
-
-// [20260726_Tier3_IpcContractsMigrate] require() under esbuild CJS interop
-// returns the module namespace, aligning with the named `export const` members.
-const C: typeof import("../../src/helpers/ipc-contracts") = require("../../src/helpers/ipc-contracts");
+// [20260726_Tier32_IpcContracts] Convert CJS require() → ESM namespace import.
+import * as C from "../../src/helpers/ipc-contracts";
 
 describe("ipc-contracts", () => {
   it("exports all domain objects", () => {

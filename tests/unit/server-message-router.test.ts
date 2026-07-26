@@ -11,8 +11,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { EventEmitter } from "events";
 import { PassThrough } from "stream";
 import type { ChildProcess } from "child_process";
-
-const ServerMessageRouter: typeof import("../../src/helpers/serverMessageRouter").default = require("../../src/helpers/serverMessageRouter");
+// [20260726_Tier32_ServerMessageRouter] Convert CJS require() → ESM default import.
+import ServerMessageRouter from "../../src/helpers/serverMessageRouter";
 
 // [20260726_Tier3_ServerMessageRouterMigrate] Mock process: an EventEmitter
 // (for close/error) plus the three PassThrough streams the router reads/writes.

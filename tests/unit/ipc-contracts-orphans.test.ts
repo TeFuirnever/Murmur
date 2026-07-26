@@ -12,11 +12,9 @@
 import { describe, it, expect } from "vitest";
 import fs from "fs";
 import path from "path";
-
-// [20260726_Tier3_IpcContractsOrphansMigrate] require() under esbuild CJS
-// interop returns the module namespace, so this aligns with the named
-// `export const FUNASR/MODELS/...` members of ipc-contracts.ts.
-const C: typeof import("../../src/helpers/ipc-contracts") = require("../../src/helpers/ipc-contracts");
+// [20260726_Tier32_IpcContractsOrphans] Convert CJS require() → ESM namespace
+// import. `flatten(C)` etc. unchanged.
+import * as C from "../../src/helpers/ipc-contracts";
 
 // [20260726_Tier3_IpcContractsOrphansMigrate] Recursive walker needs an
 // explicit `string[]` return type (TS7023) and `dir: string` (TS7006).

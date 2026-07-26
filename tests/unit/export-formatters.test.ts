@@ -8,14 +8,14 @@
 // `let`-bare bindings or untyped function params in this file. Template
 // reference: phase4-i18n.test.ts (commit d52f2e0).
 import { describe, it, expect } from "vitest";
-
-const {
+// [20260726_Tier32_ExportFormatters] Convert CJS require() → ESM named import.
+import {
   formatTXT,
   formatSRT,
   formatVTT,
   formatMD,
   getFormatInfo,
-}: typeof import("../../src/helpers/exportFormatters") = require("../../src/helpers/exportFormatters");
+} from "../../src/helpers/exportFormatters";
 
 const sampleTranscription = {
   text: "你好世界",

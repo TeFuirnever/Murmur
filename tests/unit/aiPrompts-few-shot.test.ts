@@ -10,10 +10,8 @@
 // [20260724_Feat_PromptFewShot] Regression tests for AI prompt few-shot examples.
 // Ensures each platform-style prompt includes concrete examples per ADR-012 Issue #4c.
 import { describe, it, expect } from "vitest";
-
-const {
-  buildPrompt,
-}: typeof import("../../src/helpers/aiPrompts") = require("../../src/helpers/aiPrompts");
+// [20260726_Tier32_AiPromptsFewShot] Convert CJS require() → ESM import.
+import { buildPrompt } from "../../src/helpers/aiPrompts";
 
 describe("AI Prompt few-shot examples (ADR-012 Issue #4c)", () => {
   // Platform prompts that need few-shot examples
