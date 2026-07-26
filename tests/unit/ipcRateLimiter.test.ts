@@ -1,7 +1,25 @@
+// [20260726_Tier3_IpcRateLimiterMigrate] Migrated from .js to .ts as part
+// of Tier 3 batch 4. Pattern: typed `let createRateLimitedHandler` via
+// `typeof import("...").default` (TS7034) since the source uses
+// `export default`. The handler's return type is `Promise<unknown>` (the
+// source's IpcHandler), so test reads of `.success`/`.error` on the rate-
+// limited branch are bridged via a small `RateLimitResult` structural cast —
+// the under-limit branch returns whatever the wrapped handler returned
+// (string here), so each call site picks the right union member via the
+// assertion flow. Template reference: phase4-i18n.test.ts (commit d52f2e0).
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
+// [20260726_Tier3_IpcRateLimiterMigrate] The over-limit branch returns this
+// shape from the source. Tests reading `.success`/`.error` cast the unknown
+// result through this type.
+interface RateLimitResult {
+  success: boolean;
+  error: string;
+}
+
 describe("ipcRateLimiter", () => {
-  let createRateLimitedHandler;
+  // [20260726_Tier3_IpcRateLimiterMigrate] Default export of a function.
+  let createRateLimitedHandler: typeof import("../../src/helpers/ipcRateLimiter").default;
 
   beforeEach(() => {
     vi.resetModules();
@@ -36,7 +54,7 @@ describe("ipcRateLimiter", () => {
 
     await limited({}, "a");
     await limited({}, "b");
-    const result = await limited({}, "c");
+    const result = (await limited({}, "c")) as RateLimitResult;
 
     expect(handler).toHaveBeenCalledTimes(2);
     expect(result.success).toBe(false);
@@ -81,7 +99,7 @@ describe("ipcRateLimiter", () => {
       await limited({}, i);
     }
     // 31st should fail
-    const result = await limited({}, "extra");
+    const result = (await limited({}, "extra")) as RateLimitResult;
     expect(result.success).toBe(false);
   });
 
@@ -90,7 +108,9 @@ describe("ipcRateLimiter", () => {
   // Targets the function-coverage gap that remained at 50%.
   describe("rateLimitedHandler execution path", () => {
     it("calls the wrapped handler and returns its result when under limit", async () => {
-      const handler = vi.fn(async (_event, arg) => `result:${arg}`);
+      const handler = vi.fn(
+        async (_event: unknown, arg: unknown) => `result:${arg}`,
+      );
       const limited = createRateLimitedHandler(handler, {
         maxCalls: 5,
         windowMs: 1000,
@@ -132,7 +152,7 @@ describe("ipcRateLimiter", () => {
       await limited({}, "a");
       await limited({}, "b");
       // Now blocked — would return rate-limit error.
-      const blocked = await limited({}, "c");
+      const blocked = (await limited({}, "c")) as RateLimitResult;
       expect(blocked.success).toBe(false);
 
       // Advance past the window so stale timestamps get shifted out of the

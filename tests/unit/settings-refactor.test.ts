@@ -1,6 +1,14 @@
 // [20260712_Test_SettingsRefactor] Regression tests for settings page refactor.
 // Each test guards against a specific issue found in code review.
 // Tags correspond to fix tags in the implementation files.
+//
+// [20260726_Tier3_SettingsRefactorMigrate] Migrated from .js to .ts as part
+// of Tier 3 batch 4. Pattern: pure fs/text processing — annotate the three
+// helper functions' params + returns (TS7008/TS7034) and let the locale JSON
+// parses flow through as `Record<string, unknown>` for the deep-lookup helper.
+// `let allSources` gets an explicit `string` type. No require(); the file is
+// otherwise already TS-friendly. Template reference: phase4-i18n.test.ts
+// (commit d52f2e0).
 import { describe, it, expect, beforeAll } from "vitest";
 import fs from "fs";
 import path from "path";
@@ -8,7 +16,7 @@ import path from "path";
 const rootDir = path.resolve(__dirname, "../..");
 
 // Helper: read all settings source files (ts/tsx) as one string
-function readAllSettingsSources() {
+function readAllSettingsSources(): string {
   const settingsDir = path.join(rootDir, "src/settings");
   const files = [
     path.join(rootDir, "src/settings.tsx"),
@@ -25,22 +33,29 @@ function readAllSettingsSources() {
 }
 
 // Helper: extract all t("...") keys from source text
-function extractI18nKeys(source) {
-  const keys = [];
+function extractI18nKeys(source: string): string[] {
+  const keys: string[] = [];
   // Match t("key") or t("key", "default") or t("key", { ... })
   const regex = /\bt\(\s*["']([^"']+)["']/g;
-  let match;
+  let match: RegExpExecArray | null;
   while ((match = regex.exec(source)) !== null) {
-    keys.push(match[1]);
+    // [20260726_Tier3_SettingsRefactorMigrate] match[1] is the capture group
+    // for [^"']+ — guaranteed defined when the regex matches.
+    keys.push(match[1]!);
   }
   return keys;
 }
 
 // Deep lookup: "settings.sections.general" -> obj.settings.sections.general
-function hasKey(obj, dottedKey) {
+function hasKey(obj: unknown, dottedKey: string): boolean {
   return (
-    dottedKey.split(".").reduce((acc, part) => {
-      if (acc && typeof acc === "object" && part in acc) return acc[part];
+    dottedKey.split(".").reduce<unknown>((acc, part) => {
+      if (
+        acc &&
+        typeof acc === "object" &&
+        part in (acc as Record<string, unknown>)
+      )
+        return (acc as Record<string, unknown>)[part];
       return undefined;
     }, obj) !== undefined
   );
@@ -48,15 +63,19 @@ function hasKey(obj, dottedKey) {
 
 const zhCN = JSON.parse(
   fs.readFileSync(path.join(rootDir, "src/i18n/locales/zh-CN.json"), "utf8"),
-);
+) as Record<string, unknown>;
 const en = JSON.parse(
   fs.readFileSync(path.join(rootDir, "src/i18n/locales/en.json"), "utf8"),
-);
+) as Record<string, unknown>;
 
 // Helper: find Chinese characters in a source file, excluding comments and
 // i18n fallback strings (second arg to t("key", "中文"))
-function findHardcodedChinese(source) {
-  const issues = [];
+interface HardcodedChineseIssue {
+  line: number;
+  text: string;
+}
+function findHardcodedChinese(source: string): HardcodedChineseIssue[] {
+  const issues: HardcodedChineseIssue[] = [];
 
   // First, strip all t(...) calls from the source — including multi-line ones.
   // This removes both the i18n key and any Chinese fallback string.
@@ -86,12 +105,14 @@ function findHardcodedChinese(source) {
 
   // Find Chinese in stripped source, then find which original line it's on
   const stringLiteralRegex = /["'`]([^"'`]*[\u4e00-\u9fff][^"'`]*)["'`]/g;
-  let match;
+  let match: RegExpExecArray | null;
   while ((match = stringLiteralRegex.exec(stripped)) !== null) {
     // Calculate line number from the stripped position
     const beforeMatch = stripped.substring(0, match.index);
     const strippedLineNum = beforeMatch.split("\n").length;
-    const text = match[1].substring(0, 50);
+    // [20260726_Tier3_SettingsRefactorMigrate] match[1] is the captured
+    // Chinese literal — defined when the regex matches.
+    const text = match[1]!.substring(0, 50);
 
     // Try to find this text in the original source near the same line
     // Search a window of +/- 3 lines around the stripped line number
@@ -99,7 +120,9 @@ function findHardcodedChinese(source) {
     for (let offset = -3; offset <= 3; offset++) {
       const checkLine = strippedLineNum - 1 + offset;
       if (checkLine >= 0 && checkLine < originalLines.length) {
-        if (originalLines[checkLine].includes(text.substring(0, 20))) {
+        // [20260726_Tier3_SettingsRefactorMigrate] originalLines[checkLine]
+        // is `string | undefined` under noUncheckedIndexedAccess — use ?? "".
+        if ((originalLines[checkLine] ?? "").includes(text.substring(0, 20))) {
           foundLine = checkLine + 1;
           break;
         }
@@ -116,7 +139,8 @@ import { getProviderPresets } from "../../src/helpers/providerPresets";
 // [20260724_TS_BigBang_TestFix] END
 
 describe("Settings refactor regression tests", () => {
-  let allSources;
+  // [20260726_Tier3_SettingsRefactorMigrate] String accumulator.
+  let allSources: string;
 
   beforeAll(() => {
     allSources = readAllSettingsSources();
@@ -247,7 +271,8 @@ describe("Settings refactor regression tests", () => {
         /export interface AIProviderPreset \{[\s\S]*?\}/,
       );
       expect(interfaceMatch).toBeTruthy();
-      expect(interfaceMatch[0]).toContain("registration");
+      // [20260726_Tier3_SettingsRefactorMigrate] Non-null after toBeTruthy.
+      expect(interfaceMatch![0]).toContain("registration");
     });
   });
 
@@ -358,16 +383,19 @@ describe("Settings refactor regression tests", () => {
   // [20260713_Fix_LocaleKeyConsistency] en.json and zh-CN.json must have
   // the same key structure (no key exists in one but not the other).
   describe("Locale file key consistency", () => {
-    function collectKeys(obj, prefix) {
-      const keys = [];
-      for (const k of Object.keys(obj)) {
+    // [20260726_Tier3_SettingsRefactorMigrate] Walks arbitrary locale JSON.
+    function collectKeys(obj: unknown, prefix: string): string[] {
+      const keys: string[] = [];
+      if (!obj || typeof obj !== "object") return keys;
+      for (const k of Object.keys(obj as Record<string, unknown>)) {
         const fullKey = prefix ? `${prefix}.${k}` : k;
+        const value = (obj as Record<string, unknown>)[k];
         if (
-          typeof obj[k] === "object" &&
-          obj[k] !== null &&
-          !Array.isArray(obj[k])
+          typeof value === "object" &&
+          value !== null &&
+          !Array.isArray(value)
         ) {
-          keys.push(...collectKeys(obj[k], fullKey));
+          keys.push(...collectKeys(value, fullKey));
         } else {
           keys.push(fullKey);
         }
