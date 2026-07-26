@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "strict": true,
+    "noImplicitAny": true,
+    "allowJs": true,
+    "checkJs": false,
+    "types": ["node"],
+    "skipLibCheck": true,
+    "isolatedModules": false
+  },
+  "include": ["tests/e2e/suites/**/*.ts", "tests/e2e/helpers/**/*.ts"],
+  "exclude": ["node_modules"]
+}
