@@ -1,5 +1,17 @@
 // [20260725_TDD_ClipboardHandlers] TDD tests for clipboardHandlers.ts
 // Tests verify channel registration completeness + key handler behaviors.
+//
+// [20260726_TypeGate_ClipboardHandlers] Re-enabled in the tsconfig.test.json
+// typecheck gate. Two strict-mode patterns surface here:
+//  (A) TS18046 — handlers are typed (...args: unknown[]) => unknown, so each
+//      `const result = await handler(...)` reads fields on `unknown`. Fix:
+//      cast at the assignment site to HandlerResult (success/error).
+//  (B) TS18048 — mockClipboardManager is Record<string, ReturnType<typeof vi.fn>>,
+//      so indexed access is possibly-undefined. Methods are populated in
+//      beforeEach, so mockImplementationOnce sites take a non-null assertion.
+//      The happy-path toHaveBeenCalledWith assertions are already fine.
+// Template reference: tests/unit/modelHandlers.test.ts (MockHandler + casts).
+// [20260726_TypeGate_ClipboardHandlers] END
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock electron — dialog is referenced by sibling handlers but kept for parity
@@ -9,6 +21,13 @@ vi.mock("electron", () => ({
     showSaveDialog: vi.fn(async () => ({ canceled: true })),
   },
 }));
+
+// [20260726_TypeGate_ClipboardHandlers] Structural shape for handler return
+// values read in assertions. Handlers are typed (...args: unknown[]) => unknown.
+interface HandlerResult {
+  success: boolean;
+  error?: string;
+}
 
 describe("clipboardHandlers", () => {
   let registeredHandlers: Map<string, (...args: unknown[]) => unknown>;
@@ -102,13 +121,15 @@ describe("clipboardHandlers", () => {
     });
 
     it("returns error result when pasteText throws", async () => {
-      mockClipboardManager.pasteText.mockImplementationOnce(() => {
+      // [20260726_TypeGate_ClipboardHandlers] mockClipboardManager indexed
+      // access is possibly-undefined; the method is populated in beforeEach.
+      mockClipboardManager.pasteText!.mockImplementationOnce(() => {
         throw new Error("paste failed");
       });
       const C = await setup();
       const handler = registeredHandlers.get(C.CLIPBOARD.PASTE)!;
 
-      const result = await handler({}, "boom");
+      const result = (await handler({}, "boom")) as HandlerResult;
       expect(result.success).toBe(false);
       expect(result.error).toContain("paste failed");
     });
@@ -127,13 +148,15 @@ describe("clipboardHandlers", () => {
     });
 
     it("returns error result when copyText throws", async () => {
-      mockClipboardManager.copyText.mockImplementationOnce(() => {
+      // [20260726_TypeGate_ClipboardHandlers] mockClipboardManager indexed
+      // access is possibly-undefined; the method is populated in beforeEach.
+      mockClipboardManager.copyText!.mockImplementationOnce(() => {
         throw new Error("copy failed");
       });
       const C = await setup();
       const handler = registeredHandlers.get(C.CLIPBOARD.COPY)!;
 
-      const result = await handler({}, "boom");
+      const result = (await handler({}, "boom")) as HandlerResult;
       expect(result.success).toBe(false);
       expect(result.error).toContain("copy failed");
     });
@@ -150,13 +173,15 @@ describe("clipboardHandlers", () => {
     });
 
     it("returns error result when readClipboard throws", async () => {
-      mockClipboardManager.readClipboard.mockImplementationOnce(() => {
+      // [20260726_TypeGate_ClipboardHandlers] mockClipboardManager indexed
+      // access is possibly-undefined; the method is populated in beforeEach.
+      mockClipboardManager.readClipboard!.mockImplementationOnce(() => {
         throw new Error("read failed");
       });
       const C = await setup();
       const handler = registeredHandlers.get(C.CLIPBOARD.READ)!;
 
-      const result = await handler({});
+      const result = (await handler({})) as HandlerResult;
       expect(result.success).toBe(false);
       expect(result.error).toContain("read failed");
     });
@@ -175,13 +200,15 @@ describe("clipboardHandlers", () => {
     });
 
     it("returns error result when writeClipboard throws", async () => {
-      mockClipboardManager.writeClipboard.mockImplementationOnce(() => {
+      // [20260726_TypeGate_ClipboardHandlers] mockClipboardManager indexed
+      // access is possibly-undefined; the method is populated in beforeEach.
+      mockClipboardManager.writeClipboard!.mockImplementationOnce(() => {
         throw new Error("write failed");
       });
       const C = await setup();
       const handler = registeredHandlers.get(C.CLIPBOARD.WRITE)!;
 
-      const result = await handler({}, "boom");
+      const result = (await handler({}, "boom")) as HandlerResult;
       expect(result.success).toBe(false);
       expect(result.error).toContain("write failed");
     });

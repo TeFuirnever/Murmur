@@ -1,5 +1,18 @@
 // [20260724_TDD_TranscriptionHandlers] TDD tests for transcriptionHandlers.ts
 // Tests verify channel registration completeness + key handler behaviors.
+//
+// [20260726_TypeGate_TranscriptionHandlers] Re-enabled in the tsconfig.test.json
+// typecheck gate. Two strict-mode patterns surface here:
+//  (A) TS18046 — handlers are typed (...args: unknown[]) => unknown, so each
+//      `const result = await handler(...)` reads fields on `unknown`. Fix:
+//      cast at the assignment site to the structural shape the assertions
+//      read (HandlerResult below covers success/error/canceled/lastInsertRowid).
+//  (B) TS18048 — mockDb is Record<string, ReturnType<typeof vi.fn>>, so indexed
+//      access is possibly-undefined. The mock is fully populated in beforeEach,
+//      so `.mockImplementationOnce`/`.mockReturnValueOnce` sites take a
+//      non-null assertion. No `any`.
+// Template reference: tests/unit/modelHandlers.test.ts (MockHandler + casts).
+// [20260726_TypeGate_TranscriptionHandlers] END
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock electron — dialog.showSaveDialog for EXPORT, dialog.showMessageBox
@@ -33,6 +46,16 @@ vi.mock("../../src/helpers/audioPathValidator", () => ({
     resolved: "/fake/path.wav",
   })),
 }));
+
+// [20260726_TypeGate_TranscriptionHandlers] Structural shape for handler
+// return values read in assertions below. Handlers are typed as returning
+// `unknown`; this cast bridges to the fields the tests inspect without `any`.
+interface HandlerResult {
+  success: boolean;
+  error?: string;
+  canceled?: boolean;
+  lastInsertRowid?: number;
+}
 
 describe("transcriptionHandlers", () => {
   let registeredHandlers: Map<string, (...args: unknown[]) => unknown>;
@@ -143,20 +166,24 @@ describe("transcriptionHandlers", () => {
       const C = await setup();
       const handler = registeredHandlers.get(C.TRANSCRIPTION.SAVE)!;
 
-      const result = await handler({}, { text: "hello" });
+      // [20260726_TypeGate_TranscriptionHandlers] handler returns unknown;
+      // cast to HandlerResult to read success/lastInsertRowid.
+      const result = (await handler({}, { text: "hello" })) as HandlerResult;
       expect(result.success).toBe(true);
       expect(result.lastInsertRowid).toBe(42);
       expect(mockDb.saveTranscription).toHaveBeenCalledWith({ text: "hello" });
     });
 
     it("returns error on exception", async () => {
-      mockDb.saveTranscription.mockImplementationOnce(() => {
+      // [20260726_TypeGate_TranscriptionHandlers] mockDb indexed access is
+      // possibly-undefined; the method is populated in beforeEach so assert.
+      mockDb.saveTranscription!.mockImplementationOnce(() => {
         throw new Error("DB locked");
       });
       const C = await setup();
       const handler = registeredHandlers.get(C.TRANSCRIPTION.SAVE)!;
 
-      const result = await handler({}, { text: "hello" });
+      const result = (await handler({}, { text: "hello" })) as HandlerResult;
       expect(result.success).toBe(false);
       expect(result.error).toContain("DB locked");
     });
@@ -173,7 +200,7 @@ describe("transcriptionHandlers", () => {
       const C = await setup();
       const handler = registeredHandlers.get(C.TRANSCRIPTION.VALIDATE_FILE)!;
 
-      const result = await handler({}, "/fake/file.xyz");
+      const result = (await handler({}, "/fake/file.xyz")) as HandlerResult;
       expect(result.success).toBe(false);
     });
 
@@ -183,7 +210,7 @@ describe("transcriptionHandlers", () => {
 
       // validateAudioPath mock returns valid:true, but fs.statSync will fail
       // on /fake/path.wav since the file doesn't exist
-      const result = await handler({}, "/fake/path.wav");
+      const result = (await handler({}, "/fake/path.wav")) as HandlerResult;
       expect(result.success).toBe(false);
       expect(result.error).toContain("不存在");
     });
@@ -199,17 +226,19 @@ describe("transcriptionHandlers", () => {
       const C = await setup();
       const handler = registeredHandlers.get(C.TRANSCRIPTION.EXPORT)!;
 
-      const result = await handler({}, 42, "txt");
+      const result = (await handler({}, 42, "txt")) as HandlerResult;
       expect(result.success).toBe(false);
       expect(result.canceled).toBe(true);
     });
 
     it("returns error when transcription not found", async () => {
-      mockDb.getTranscriptionById.mockReturnValueOnce(null);
+      // [20260726_TypeGate_TranscriptionHandlers] mockDb indexed access —
+      // non-null; method populated in beforeEach.
+      mockDb.getTranscriptionById!.mockReturnValueOnce(null);
       const C = await setup();
       const handler = registeredHandlers.get(C.TRANSCRIPTION.EXPORT)!;
 
-      const result = await handler({}, 999, "txt");
+      const result = (await handler({}, 999, "txt")) as HandlerResult;
       expect(result.success).toBe(false);
     });
   });
@@ -219,17 +248,19 @@ describe("transcriptionHandlers", () => {
       const C = await setup();
       const handler = registeredHandlers.get(C.TRANSCRIPTION.AI_REVIEW)!;
 
-      const result = await handler({}, 42, "optimize");
+      const result = (await handler({}, 42, "optimize")) as HandlerResult;
       expect(mockProcessTextWithAI).toHaveBeenCalled();
       expect(result.success).toBe(true);
     });
 
     it("returns error when transcription not found", async () => {
-      mockDb.getTranscriptionById.mockReturnValueOnce(null);
+      // [20260726_TypeGate_TranscriptionHandlers] mockDb indexed access —
+      // non-null; method populated in beforeEach.
+      mockDb.getTranscriptionById!.mockReturnValueOnce(null);
       const C = await setup();
       const handler = registeredHandlers.get(C.TRANSCRIPTION.AI_REVIEW)!;
 
-      const result = await handler({}, 999, "optimize");
+      const result = (await handler({}, 999, "optimize")) as HandlerResult;
       expect(result.success).toBe(false);
     });
 
@@ -240,7 +271,7 @@ describe("transcriptionHandlers", () => {
       const C = await setup();
       const handler = registeredHandlers.get(C.TRANSCRIPTION.AI_REVIEW)!;
 
-      const result = await handler({}, 42, "optimize");
+      const result = (await handler({}, 42, "optimize")) as HandlerResult;
       expect(result.success).toBe(false);
       expect(result.error).toContain("不可用");
     });

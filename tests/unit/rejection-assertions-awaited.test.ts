@@ -250,8 +250,10 @@ function flatOffsetToLineNo(
   let lineIdx = 0;
   let pos = 0;
   while (pos < offset && lineIdx < codeLines.length - 1) {
-    // +1 for the newline separator
-    const lineLen = codeLines[lineIdx].text.length + 1;
+    // +1 for the newline separator. [20260726_TypeGate_RejectionAssertions]
+    // loop guard `lineIdx < codeLines.length - 1` guarantees the index is in
+    // bounds; non-null assertion satisfies noUncheckedIndexedAccess.
+    const lineLen = codeLines[lineIdx]!.text.length + 1;
     if (pos + lineLen > offset) break;
     pos += lineLen;
     lineIdx += 1;
