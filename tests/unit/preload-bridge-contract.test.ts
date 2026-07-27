@@ -9,6 +9,14 @@
 //   1. exposeInMainWorld was called with the key "electronAPI"
 //   2. the exposed object has >= 50 methods (regression guard for surface area)
 //   3. specific critical methods exist with typeof === "function"
+//
+// [20260726_TypeGate_PreloadBridgeContract] Re-enabled in the tsconfig.test.json
+// typecheck gate. The smoke-call test invokes critical methods on the exposed
+// electronAPI, which is cast to Record<string, (...args) => unknown>. With
+// noUncheckedIndexedAccess each indexed access is possibly-undefined (TS2722),
+// so each invocation takes a non-null assertion — the prior test already
+// asserts typeof api[name] === "function" for every critical name. No `any`.
+// [20260726_TypeGate_PreloadBridgeContract] END
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // vi.mock factories are hoisted above all other code, so any variable they
@@ -117,16 +125,19 @@ describe("preload bridge contract", () => {
     const invokeMock = ipcRenderer.invoke as ReturnType<typeof vi.fn>;
     invokeMock.mockClear();
 
-    api.processText("hello", "optimize");
-    api.checkModelFiles();
-    api.saveTranscription({ text: "x" });
-    api.getTranscriptions(10, 0);
-    api.setSetting("foo", "bar");
-    api.getSetting("foo");
-    api.minimizeWindow();
-    api.registerHotkey("CmdOrCtrl+Shift+Space");
-    api.pasteText("hi");
-    api.checkForUpdates();
+    // [20260726_TypeGate_PreloadBridgeContract] Record<string, ...> indexed
+    // access is possibly-undefined under noUncheckedIndexedAccess; the prior
+    // test asserts every name below is typeof === "function", so non-null.
+    api.processText!("hello", "optimize");
+    api.checkModelFiles!();
+    api.saveTranscription!({ text: "x" });
+    api.getTranscriptions!(10, 0);
+    api.setSetting!("foo", "bar");
+    api.getSetting!("foo");
+    api.minimizeWindow!();
+    api.registerHotkey!("CmdOrCtrl+Shift+Space");
+    api.pasteText!("hi");
+    api.checkForUpdates!();
 
     expect(invokeMock).toHaveBeenCalledTimes(10);
   });

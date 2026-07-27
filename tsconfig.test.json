@@ -17,13 +17,6 @@
     "dist-main",
     "dist-preload",
     "tests/e2e/**",
-    "tests/**/*.js",
-    "tests/unit/clipboardHandlers.test.ts",
-    "tests/unit/hotkeyHandlers.test.ts",
-    "tests/unit/transcriptionHandlers.test.ts",
-    "tests/unit/preload-bridge-contract.test.ts",
-    "tests/unit/ipc-contract-completeness.test.ts",
-    "tests/unit/database-error-paths.test.ts",
-    "tests/unit/rejection-assertions-awaited.test.ts"
+    "tests/**/*.js"
   ]
 }

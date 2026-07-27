@@ -487,7 +487,7 @@ When migrating or writing new tests, `.ts` source using `import { app } from "el
 
 > _Vitest issue #4166 confirms `vi.mock` does not intercept `require()`; the workaround is a `Module._resolveFilename` monkey-patch._ — [S7]
 
-Murmur already ships this patch in `tests/_tsresolve.setup.js` (loaded by `vitest.config.js:15`).
+~~Murmur already ships this patch in `tests/_tsresolve.setup.js` (loaded by `vitest.config.js:15`).~~ **Updated 2026-07-26:** `tests/_tsresolve.setup.js` has been deleted (Tier 3.2). All tests now use ESM `import`; `vi.mock` intercepts at the module level. The `Module._resolveFilename` pattern survives only in `tests/unit/preload-loadable.test.ts` and `tests/unit/preload-listener-lifecycle.test.ts` for CJS-bundle-specific stubbing (not source `.ts` loading).
 
 ### R7 — `app.disableHardwareAcceleration()` in test mode
 
