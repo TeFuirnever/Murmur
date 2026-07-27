@@ -278,12 +278,12 @@ function checkQualityGates() {
   if (hasCiScript) pts += 2;
 
   // Coverage thresholds (2 pts)
-  const vitestConfig = readIf("vitest.config.js");
+  const vitestConfig = readIf("vitest.config.ts");
   const hasThresholds = /thresholds/.test(vitestConfig);
   checks.push({
     name: "Coverage thresholds",
     pass: hasThresholds,
-    detail: "vitest.config.js",
+    detail: "vitest.config.ts",
   });
   if (hasThresholds) pts += 2;
 
@@ -483,14 +483,14 @@ function checkEvalCoverage() {
   // [20260726_Tier43_E2EHelpers] END
 
   // Coverage thresholds >= 80% (2 pts)
-  const vitestConfig = readIf("vitest.config.js");
+  const vitestConfig = readIf("vitest.config.ts");
   const stmtMatch = vitestConfig.match(/statements:\s*(\d+)/);
   const stmtThreshold = stmtMatch ? parseInt(stmtMatch[1], 10) : 0;
   const highCoverage = stmtThreshold >= 80;
   checks.push({
     name: `Coverage threshold ≥80%: ${stmtThreshold}%`,
     pass: highCoverage,
-    detail: "vitest.config.js",
+    detail: "vitest.config.ts",
   });
   if (highCoverage) pts += 2;
 
@@ -499,7 +499,7 @@ function checkEvalCoverage() {
   checks.push({
     name: `Coverage threshold ≥90%: ${stmtThreshold}%`,
     pass: veryHighCoverage,
-    detail: "vitest.config.js",
+    detail: "vitest.config.ts",
   });
   if (veryHighCoverage) pts += 1;
 

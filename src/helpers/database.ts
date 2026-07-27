@@ -43,6 +43,26 @@ interface Logger {
 
 type Primitive = string | number | boolean | null | undefined;
 
+// [20260726_TechDebt_TypedRows] Typed helper wrapping better-sqlite3's
+// untyped .get()/.all() returns. Eliminates the 10 `as { field: type }`
+// casts that were scattered across this file. better-sqlite3 returns
+// `unknown` by design (the row shape depends on the query), so a typed
+// wrapper is the idiomatic fix per the library docs.
+/** Cast a better-sqlite3 row to a typed shape. Use for single-row queries. */
+function getRow<T>(
+  stmt: Database.Statement,
+  ...params: Primitive[]
+): T | undefined {
+  return stmt.get(...params) as T | undefined;
+}
+
+/** Cast a better-sqlite3 count query result. Convenience for `{ cnt: number }`. */
+function getCount(stmt: Database.Statement, ...params: Primitive[]): number {
+  const row = stmt.get(...params) as { cnt: number } | undefined;
+  return row?.cnt ?? 0;
+}
+// [20260726_TechDebt_TypedRows] END
+
 class DatabaseManager {
   private db: Database.Database | null = null;
   private dbPath: string | null = null;
@@ -220,14 +240,15 @@ class DatabaseManager {
       `);
 
       // Rebuild only if FTS index is empty (first creation after migration)
-      const ftsCount = this.db!.prepare(
-        "SELECT count(*) AS cnt FROM transcriptions_fts",
-      ).get() as { cnt: number };
-      if (ftsCount.cnt === 0) {
-        const baseCount = this.db!.prepare(
-          "SELECT count(*) AS cnt FROM transcriptions",
-        ).get() as { cnt: number };
-        if (baseCount.cnt > 0) {
+      // [20260726_TechDebt_TypedRows] Using getCount helper instead of cast
+      const ftsCount = getCount(
+        this.db!.prepare("SELECT count(*) AS cnt FROM transcriptions_fts"),
+      );
+      if (ftsCount === 0) {
+        const baseCount = getCount(
+          this.db!.prepare("SELECT count(*) AS cnt FROM transcriptions"),
+        );
+        if (baseCount > 0) {
           this.db!.exec(
             "INSERT INTO transcriptions_fts(transcriptions_fts) VALUES ('rebuild')",
           );
@@ -281,7 +302,8 @@ class DatabaseManager {
     if (version < 1) {
       // v1: encrypt api_api_key if stored as plaintext
       const stmt = this.db!.prepare("SELECT value FROM settings WHERE key = ?");
-      const row = stmt.get("ai_api_key") as { value: string } | undefined;
+      // [20260726_TechDebt_TypedRows] Using getRow helper instead of cast
+      const row = getRow<{ value: string }>(stmt, "ai_api_key");
       if (row && this.safeStorage && this.safeStorage.isEncryptionAvailable()) {
         try {
           const parsed = JSON.parse(row.value);
@@ -442,10 +464,11 @@ class DatabaseManager {
       WHERE created_at >= date('now', '-7 days')
     `);
 
+    // [20260726_TechDebt_TypedRows] Using getRow helper instead of 3 casts
     return {
-      total: (totalStmt.get() as { total: number }).total,
-      today: (todayStmt.get() as { today: number }).today,
-      week: (weekStmt.get() as { week: number }).week,
+      total: getRow<{ total: number }>(totalStmt)?.total ?? 0,
+      today: getRow<{ today: number }>(todayStmt)?.today ?? 0,
+      week: getRow<{ week: number }>(weekStmt)?.week ?? 0,
     };
   }
 
@@ -462,7 +485,8 @@ class DatabaseManager {
 
   getSetting(key: string, defaultValue: unknown = null): unknown {
     const stmt = this.db!.prepare("SELECT value FROM settings WHERE key = ?");
-    const result = stmt.get(key) as { value: string } | undefined;
+    // [20260726_TechDebt_TypedRows] Using getRow helper instead of cast
+    const result = getRow<{ value: string }>(stmt, key);
 
     if (result) {
       if (this._encryptedKeys.has(key)) {

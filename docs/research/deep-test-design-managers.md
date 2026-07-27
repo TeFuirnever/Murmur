@@ -1926,9 +1926,9 @@ describe("FunASRManager delegation", () => {
 
 ## 5. 关键风险与注意事项
 
-1. **`tests/_tsresolve.setup.js` 依赖**：`.js` 测试用 `require("../../src/helpers/x")` 加载 `.ts` 文件依赖此 setup。新测试建议用 `.ts` + `import`，或复用现有 `vi.resetModules()` + `require()` 模式（见 modelManager-shape.test.js）。
+1. **`tests/_tsresolve.setup.js` 已删除**（2026-07-26 Tier 3.2）：所有 `.js` 测试已迁移到 `.ts`，所有 `require()` 已转换为 ESM `import`。新测试直接用 `.ts` + `import`，无需任何 monkey-patch。
 
-2. **模块级状态重置**：`modelManager.ts` 有 `globalModelCheckCache`/`globalModelCheckTime` 模块级变量。测试必须 `vi.resetModules()` + 重新 `require()` 才能隔离（否则并行测试串扰）。
+2. **模块级状态重置**（已过时）：`modelManager.ts` 有 `globalModelCheckCache`/`globalModelCheckTime` 模块级变量。测试现在用 ESM `import` + `vi.doMock()` 隔离（Tier 3.2 已删除 `vi.resetModules() + require()` 模式）。
 
 3. **平台 mock 不可逆风险**：`Object.defineProperty(process, "platform", ...)` 必须在 `afterEach`/finally 还原，否则污染同进程后续测试。推荐用 `vi.stubGlobal` 或单独的 helper。
 
