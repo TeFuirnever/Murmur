@@ -7,9 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-07-27
+
 ### Added
 
-- [20260725_Autopilot_T1.4] Backend TypeScript migration (ADR-010, big-bang completed 2026-07-24): all 39 backend `.js` files atomically migrated to `.ts`. ESM `import` source, esbuild bundles to `dist-main/main.js` + `dist-preload/preload.js` (CJS for Electron sandbox). `__dirname` → `app.getAppPath()` (13 sites). `tests/_tsresolve.setup.js` monkey-patches Node module system so legacy `.js` tests keep working against `.ts` source.
+- [20260725_Autopilot_T1.4] Backend TypeScript migration (ADR-010, big-bang completed 2026-07-24): all 39 backend `.js` files atomically migrated to `.ts`. ESM `import` source, esbuild bundles to `dist-main/main.js` + `dist-preload/preload.js` (CJS for Electron sandbox). `__dirname` → `app.getAppPath()` (13 sites).
+- E2E boot health smoke gate (7 tests covering Phase A-E of boot sequence) per `docs/research/e2e-functional-verification-strategy.md` §4.1
+- E2E launch diagnosis instrumentation (env dump, bundle check, stderr/stdout listeners)
+- Module identity regression test guard (prevents future cache-leak risk from `vi.resetModules` removal)
+- Dependabot remediation plan (`docs/research/dependabot-remediation-plan.md`, 30 alerts triaged)
+- TypeScript migration tech debt audit (`docs/research/ts-migration-tech-debt-audit.md`, 7 dimensions)
+- ADR-013: ManagersBag cast seam documentation
+- ADR-014: e2e CI macOS Electron launch investigation (8 CI iterations, root cause isolated to runtime not install)
+- AI prompt few-shot examples for platform modes (xiaohongshu, zhihu, douyin, dianping) — ADR-012 Issue #4c resolved
+- Promotion content: community post templates and video scripts
+- Promotion infographics: competitor comparison matrix and bento-grid features overview
+- Windows `bindings` runtime dependency fix (credit: @Deeeemooo, PR #50)
+- ASR benchmark scripts comparing Paraformer-large vs SenseVoice vs Fun-ASR-Nano
+
+### Changed
+
+- **Complete test migration to TypeScript**: 54 unit test files + 13 e2e suites + 4 e2e helpers all migrated from `.js` to `.ts` (100% TypeScript tests)
+- **Deleted `_tsresolve.setup.js`**: 118-line Node module monkey-patch removed; all 96 `require()` calls converted to ESM `import` across test files
+- **Typecheck gate strengthened**: `tsconfig.test.json` now has ZERO per-file exclusions (was 7); all 64 strict-mode errors in previously-excluded files fixed
+- **`no-require-imports` lint rule** re-enabled for `tests/unit/**` (Tier 3.3)
+- **Root config files migrated**: `vitest.config.js` → `.ts`, `postcss.config.js` → `.ts`, `playwright.config.js` → `.ts`
+- **database.ts typed Row helpers**: `getRow<T>()` + `getCount()` eliminate 7 structural casts for better-sqlite3 queries
+- Settings page refactored: 1195-line monolith split into 7 focused modules with full i18n coverage (154 keys, zero hardcoded Chinese)
+- Dynamic transcription timeout based on file size (replaces hardcoded 5-minute limit)
+- OpenRouter provider preset added with free-tier models
+- `ProviderPreset` type unified: `type ProviderPreset = AIProviderPreset`
+- Preload bridge: `export const preloadApi: ElectronAPI` drift detector + `makeListener<T>()` helper (10 listeners refactored)
+- `electronAPI.d.ts`: `any` → `unknown` at 2 sites; `OperationResult`, `ProcessingUpdateData`, `FileTranscriptionProgressData` type extracts
+
+### Fixed
+
+- CRITICAL: `auto_paste` option value mismatch (`'clipboard'` → `'clipboard_only'`) causing wrong paste behavior
+- Security: `tar` bumped from `^7.4.3` to `^7.5.19` (resolves 1 critical + 2 medium CVE)
+- Restored lost functionality: `cancelUpdateDownload` button, `testResult.usage` display, live `setAlwaysOnTop` side-effect, `localStorage` language persistence
+- Removed 21 dead TS re-export stubs that provided zero type safety
+- `main.ts`: `startApp()` now properly awaited in `whenReady` callback; `app.dock.show()` guarded on CI
+- Removed 3 dead legacy e2e test files (`tests/e2e/legacy/`)
+- Swept stale `.js` references across 8+ docs/ADRs to reflect `.ts` migration
 - AI prompt few-shot examples for platform modes (xiaohongshu, zhihu, douyin, dianping) — ADR-012 Issue #4c resolved
 - Promotion content: community post templates (即刻/V2EX/少数派) and video scripts (B站/抖音)
 - Promotion infographics: competitor comparison matrix and bento-grid features overview (HTML+Playwright)
