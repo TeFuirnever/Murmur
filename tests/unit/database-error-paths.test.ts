@@ -7,6 +7,14 @@
 //
 // Setup mirrors the existing database.test.js / database-coverage.test.js
 // pattern: temp dir, initialize, close + cleanup.
+//
+// [20260726_TypeGate_DbErrorPaths] Re-enabled in the tsconfig.test.json
+// typecheck gate. The mock `logger` (vi.fn() returning Mock<Procedure>) is not
+// structurally assignable to DatabaseManager's local `Logger` interface
+// (its methods are `(...args: unknown[]) => void`). Cast at the constructor
+// call via the source's own parameter type — `unknown` bridge, no `any`.
+// Template reference: tests/unit/modelHandlers.test.ts (as unknown as ...).
+// [20260726_TypeGate_DbErrorPaths] END
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import path from "path";
 import fs from "fs";
@@ -50,7 +58,12 @@ describe("DatabaseManager - error paths (TDD)", () => {
       warn: vi.fn(),
       error: vi.fn(),
     };
-    db = new DatabaseManager(logger);
+    // [20260726_TypeGate_DbErrorPaths] Cast the vi.fn()-based logger to the
+    // DatabaseManager constructor's expected parameter type — Mock<Procedure>
+    // is not structurally assignable to the source's local Logger interface.
+    db = new DatabaseManager(
+      logger as unknown as ConstructorParameters<typeof DatabaseManager>[0],
+    );
     db.initialize(tmpDir);
   });
 

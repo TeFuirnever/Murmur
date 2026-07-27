@@ -1,5 +1,18 @@
 // [20260725_TDD_HotkeyHandlers] TDD tests for hotkeyHandlers.ts
 // Tests verify channel registration completeness + key handler behaviors.
+//
+// [20260726_TypeGate_HotkeyHandlers] Re-enabled in the tsconfig.test.json
+// typecheck gate. Two strict-mode patterns surface here:
+//  (A) TS18046 — handlers are typed (...args: unknown[]) => unknown, so each
+//      `const result = await handler(...)` reads fields on `unknown`. Fix:
+//      cast at the assignment site to HandlerResult (success/error/isRecording)
+//      or to string for the GET_CURRENT getter.
+//  (B) TS18048 — mockHotkeyManager is Record<string, ReturnType<typeof vi.fn>>,
+//      so indexed access is possibly-undefined. Methods are populated in
+//      beforeEach, so assertion/mockClear/mockReturnValueOnce sites take a
+//      non-null assertion. No `any`.
+// Template reference: tests/unit/modelHandlers.test.ts (MockHandler + casts).
+// [20260726_TypeGate_HotkeyHandlers] END
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock electron — hotkeyHandlers imports BrowserWindow for the F2 path
@@ -8,6 +21,14 @@ vi.mock("electron", () => ({
     getAllWindows: vi.fn(() => []),
   },
 }));
+
+// [20260726_TypeGate_HotkeyHandlers] Structural shape for handler return
+// values read in assertions. Handlers are typed (...args: unknown[]) => unknown.
+interface HandlerResult {
+  success: boolean;
+  error?: string;
+  isRecording?: boolean;
+}
 
 describe("hotkeyHandlers", () => {
   let registeredHandlers: Map<string, (...args: unknown[]) => unknown>;
@@ -116,7 +137,12 @@ describe("hotkeyHandlers", () => {
       const C = await setup();
       const handler = registeredHandlers.get(C.HOTKEY.REGISTER)!;
 
-      const result = await handler(mockEvent, "CommandOrControl+Shift+Space");
+      // [20260726_TypeGate_HotkeyHandlers] handler returns unknown; cast to
+      // HandlerResult to read success.
+      const result = (await handler(
+        mockEvent,
+        "CommandOrControl+Shift+Space",
+      )) as HandlerResult;
       expect(result.success).toBe(true);
       expect(mockHotkeyManager.registerHotkey).toHaveBeenCalledWith(
         "CommandOrControl+Shift+Space",
@@ -140,8 +166,13 @@ describe("hotkeyHandlers", () => {
       const handler = registeredHandlers.get(C.HOTKEY.REGISTER)!;
 
       await handler(mockEvent, "CommandOrControl+Shift+Space");
-      mockHotkeyManager.registerHotkey.mockClear();
-      const second = await handler(mockEvent, "CommandOrControl+Shift+Space");
+      // [20260726_TypeGate_HotkeyHandlers] mockHotkeyManager indexed access is
+      // possibly-undefined; the method is populated in beforeEach so assert.
+      mockHotkeyManager.registerHotkey!.mockClear();
+      const second = (await handler(
+        mockEvent,
+        "CommandOrControl+Shift+Space",
+      )) as HandlerResult;
 
       expect(second.success).toBe(true);
       expect(mockHotkeyManager.registerHotkey).not.toHaveBeenCalled();
@@ -161,7 +192,10 @@ describe("hotkeyHandlers", () => {
       const C = await import("../../src/helpers/ipc-contracts");
       const handler = registeredHandlers.get(C.HOTKEY.REGISTER)!;
 
-      const result = await handler(mockEvent, "CommandOrControl+Shift+Space");
+      const result = (await handler(
+        mockEvent,
+        "CommandOrControl+Shift+Space",
+      )) as HandlerResult;
       expect(result.success).toBe(false);
       expect(result.error).toContain("未初始化");
     });
@@ -172,7 +206,10 @@ describe("hotkeyHandlers", () => {
       const C = await setup();
       const handler = registeredHandlers.get(C.HOTKEY.UNREGISTER)!;
 
-      const result = await handler(mockEvent, "CommandOrControl+Shift+Space");
+      const result = (await handler(
+        mockEvent,
+        "CommandOrControl+Shift+Space",
+      )) as HandlerResult;
       expect(result.success).toBe(true);
       expect(mockHotkeyManager.unregisterHotkey).toHaveBeenCalledWith(
         "CommandOrControl+Shift+Space",
@@ -185,7 +222,9 @@ describe("hotkeyHandlers", () => {
       const C = await setup();
       const handler = registeredHandlers.get(C.HOTKEY.GET_CURRENT)!;
 
-      const result = await handler(mockEvent);
+      // [20260726_TypeGate_HotkeyHandlers] GET_CURRENT returns the hotkey
+      // string (not an object); cast unknown to string.
+      const result = (await handler(mockEvent)) as string;
       expect(mockHotkeyManager.getRegisteredHotkeys).toHaveBeenCalled();
       expect(result).toBe("CommandOrControl+Shift+Space");
     });
@@ -193,12 +232,14 @@ describe("hotkeyHandlers", () => {
     it("filters out the F2 key and returns the main hotkey", async () => {
       const C = await setup();
       const handler = registeredHandlers.get(C.HOTKEY.GET_CURRENT)!;
-      mockHotkeyManager.getRegisteredHotkeys.mockReturnValueOnce([
+      // [20260726_TypeGate_HotkeyHandlers] mockHotkeyManager indexed access is
+      // possibly-undefined; the method is populated in beforeEach so assert.
+      mockHotkeyManager.getRegisteredHotkeys!.mockReturnValueOnce([
         "F2",
         "CommandOrControl+Shift+Space",
       ]);
 
-      const result = await handler(mockEvent);
+      const result = (await handler(mockEvent)) as string;
       expect(result).toBe("CommandOrControl+Shift+Space");
     });
   });
@@ -208,7 +249,7 @@ describe("hotkeyHandlers", () => {
       const C = await setup();
       const handler = registeredHandlers.get(C.HOTKEY.REGISTER_F2)!;
 
-      const result = await handler(mockEvent);
+      const result = (await handler(mockEvent)) as HandlerResult;
       expect(result.success).toBe(true);
       expect(mockHotkeyManager.registerF2DoubleClick).toHaveBeenCalledWith(
         expect.any(Function),
@@ -220,11 +261,13 @@ describe("hotkeyHandlers", () => {
       const handler = registeredHandlers.get(C.HOTKEY.REGISTER_F2)!;
 
       await handler(mockEvent);
-      mockHotkeyManager.registerF2DoubleClick.mockClear();
+      // [20260726_TypeGate_HotkeyHandlers] mockHotkeyManager indexed access is
+      // possibly-undefined; the method is populated in beforeEach so assert.
+      mockHotkeyManager.registerF2DoubleClick!.mockClear();
 
       // Second sender — different id
       const secondEvent = { sender: { id: 2, on: vi.fn() } };
-      const result = await handler(secondEvent);
+      const result = (await handler(secondEvent)) as HandlerResult;
       expect(result.success).toBe(true);
       expect(mockHotkeyManager.registerF2DoubleClick).not.toHaveBeenCalled();
     });
@@ -237,7 +280,7 @@ describe("hotkeyHandlers", () => {
       const unregisterHandler = registeredHandlers.get(C.HOTKEY.UNREGISTER_F2)!;
 
       await registerHandler(mockEvent);
-      const result = await unregisterHandler(mockEvent);
+      const result = (await unregisterHandler(mockEvent)) as HandlerResult;
       expect(result.success).toBe(true);
     });
 
@@ -245,7 +288,7 @@ describe("hotkeyHandlers", () => {
       const C = await setup();
       const handler = registeredHandlers.get(C.HOTKEY.UNREGISTER_F2)!;
 
-      const result = await handler(mockEvent);
+      const result = (await handler(mockEvent)) as HandlerResult;
       expect(result.success).toBe(false);
     });
   });
@@ -255,7 +298,7 @@ describe("hotkeyHandlers", () => {
       const C = await setup();
       const handler = registeredHandlers.get(C.HOTKEY.SET_STATE)!;
 
-      const result = await handler(mockEvent, true);
+      const result = (await handler(mockEvent, true)) as HandlerResult;
       expect(result.success).toBe(true);
       expect(mockHotkeyManager.setRecordingState).toHaveBeenCalledWith(true);
     });
@@ -274,7 +317,7 @@ describe("hotkeyHandlers", () => {
       const C = await import("../../src/helpers/ipc-contracts");
       const handler = registeredHandlers.get(C.HOTKEY.SET_STATE)!;
 
-      const result = await handler(mockEvent, true);
+      const result = (await handler(mockEvent, true)) as HandlerResult;
       expect(result.success).toBe(false);
       expect(result.error).toContain("未初始化");
     });
@@ -284,9 +327,11 @@ describe("hotkeyHandlers", () => {
     it("returns the recording state from hotkeyManager.getRecordingState", async () => {
       const C = await setup();
       const handler = registeredHandlers.get(C.HOTKEY.GET_STATE)!;
-      mockHotkeyManager.getRecordingState.mockReturnValueOnce(true);
+      // [20260726_TypeGate_HotkeyHandlers] mockHotkeyManager indexed access is
+      // possibly-undefined; the method is populated in beforeEach so assert.
+      mockHotkeyManager.getRecordingState!.mockReturnValueOnce(true);
 
-      const result = await handler(mockEvent);
+      const result = (await handler(mockEvent)) as HandlerResult;
       expect(result.success).toBe(true);
       expect(result.isRecording).toBe(true);
       expect(mockHotkeyManager.getRecordingState).toHaveBeenCalled();
@@ -306,7 +351,7 @@ describe("hotkeyHandlers", () => {
       const C = await import("../../src/helpers/ipc-contracts");
       const handler = registeredHandlers.get(C.HOTKEY.GET_STATE)!;
 
-      const result = await handler(mockEvent);
+      const result = (await handler(mockEvent)) as HandlerResult;
       expect(result.success).toBe(false);
       expect(result.error).toContain("未初始化");
     });

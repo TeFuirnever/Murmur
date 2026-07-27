@@ -14,6 +14,12 @@
 // managers bag, and the registrations array is reset in beforeEach, so cached
 // imports are harmless. The require shim was never needed here (the file used
 // dynamic import, not require).
+//
+// [20260726_TypeGate_IpcContractCompleteness] Re-enabled in the
+// tsconfig.test.json typecheck gate. The single strict-mode error (TS2345) is
+// the contract-group flatMap producing a literal union that `.includes(ch)`
+// rejects when ch is a plain string; widened to string[] at the assignment.
+// [20260726_TypeGate_IpcContractCompleteness] END
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // Mock electron — every handler module imports named members from it.
@@ -284,7 +290,10 @@ describe("IPC contract completeness", () => {
       C.UPDATE,
       C.SYSTEM,
     ];
-    const expectedChannels = contractGroups.flatMap((group) =>
+    // [20260726_TypeGate_IpcContractCompleteness] flatMap over typed contract
+    // groups yields a narrow literal union; widen to string[] so the
+    // `.includes(ch)` filter below (ch is string from registrations) typechecks.
+    const expectedChannels: string[] = contractGroups.flatMap((group) =>
       Object.values(group),
     );
 
