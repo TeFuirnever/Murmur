@@ -9,7 +9,7 @@
     "prestart": "npm run build:main && npm run build:preload",
     "predev": "npx electron-rebuild && npm run build:preload",
     "dev": "concurrently -k -r \"npm:dev:renderer\" \"npm:dev:main\"",
-    "dev:main": "cross-env NODE_ENV=development NODE_OPTIONS='--import tsx' electron main.ts --dev",
+    "dev:main": "npm run build:main && cross-env NODE_ENV=development electron . --dev",
     "build:main": "esbuild main.ts --bundle --platform=node --format=cjs --external:electron --external:better-sqlite3 --outfile=dist-main/main.js",
     "dev:renderer": "cd src && vite",
     "build:preload": "esbuild preload.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist-preload/preload.js",
