@@ -42,3 +42,25 @@ UI 文案本轮已澄清（"语音识别"≠"AI 文本优化"），但内部仍�
 - 写 ADR 文档化两类模型的边界，新人 onboarding 看一眼就懂
 
 破坏面较大，v1 发布后再统一重构。
+
+## Dev 启动防护网（P1/P2 后续）
+
+> 来源：`docs/research/electron-dev-startup-hardening.md`（2026-07-28 审计）。P0 已落地于 commit `f5c7f3f`（dev:main 运行时 smoke + better-sqlite3 ABI preflight）。下列为剩余项。
+
+### P1.1 — canary 提升为 E2E 强断言（~2h）
+
+`tests/e2e/helpers/electron-launch.ts` 缓冲 stderr，`firstWindow()` 后断言 `[main:canary]` 存在；失败时打印捕获的 stderr。硬化所有 E2E suite（不只新 smoke），关闭审计 Hole 3（canary 信号存在但无测试断言）。
+
+### P2.1 — 消除 dev/prod 加载不对称（silent-hang 的结构性根因）
+
+dev（tsx 直跑 `main.ts`）与 prod（`dist-main/main.js` bundle）加载机制不同，正是 silent-hang class 的温床。
+
+- **Option A**（ponytail 之选，~0.5d）：`esbuild main.ts --bundle --watch` 给 dev，`dev:main` 指向 bundle，dev/prod 同一 artifact。复用现有 esbuild config（`package.json` build:main）。
+- **Option B**（业界默认，~1 周）：迁 electron-vite，main/preload/renderer 统一 bundle + renderer HMR，结构性消除该 class。
+
+P0.1 smoke 已让 tsx-direct 安全可留 → Option A 可选；Option B 待第二次 dev-path 回归或 predev 手动 rebuild 的 dev-loop 痛点 justify 再启动。
+
+### P2.2 — 治本 dev/test ABI 互斥
+
+- 跑 UT 用 `ELECTRON_RUN_AS_NODE=1`（共享 electron ABI 135），消除 dev/test 切换。
+- 或把 better-sqlite3 在系统 Node 下的排除契约正式化（ADR + `vitest.config.ts:27-48` 边界文档化），让排除是 deliberate boundary 而非偶然。
