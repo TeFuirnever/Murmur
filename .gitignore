@@ -128,3 +128,4 @@ dist-main/
 .zcode/
 playwright-report/
 test-results/
+backups/
