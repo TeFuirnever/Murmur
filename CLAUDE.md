@@ -144,7 +144,7 @@ Domain context: see `docs/agents/domain.md`.
 
 - Mode: local-stdio
 - Engine: pglite
-- Embedding model: ollama:bge-m3 (1024d, local Ollama at localhost:11434)
+- Embedding model: ollama:nomic-embed-text (768d, local Ollama at localhost:11434) — verified 2026-07-28; bge-m3 no longer in local ollama list
 - Config file: ~/.gbrain/config.json (mode 0600)
 - Setup date: 2026-05-21 (embedding reconfigured 2026-06-15)
 - MCP registered: yes (user scope)
