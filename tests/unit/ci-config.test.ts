@@ -132,9 +132,13 @@ describe("CI/CD configuration", () => {
       fs.readFileSync(path.join(root, "package.json"), "utf8"),
     );
 
-    it("dev:main uses --import tsx/esm (not --require tsx/cjs)", () => {
+    it("dev:main registers tsx via NODE_OPTIONS (CLI --import is swallowed by Electron)", () => {
       const devMain = pkg.scripts["dev:main"];
-      expect(devMain).toContain("--import tsx/esm");
+      // Electron 36 does not forward a CLI --import to its internal Node ESM
+      // loader: `electron --import tsx/esm main.ts` treats tsx/esm as the app
+      // path (silent hang) and never loads main.ts. tsx must be registered via
+      // NODE_OPTIONS so Electron's own Node picks up the loader hook.
+      expect(devMain).toMatch(/NODE_OPTIONS=['"]?.*--import tsx( |['"]|$)/);
       expect(devMain).not.toContain("--require tsx/cjs");
     });
 
