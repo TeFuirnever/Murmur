@@ -96,6 +96,15 @@
       "ai_temperature": "创造性 (Temperature)",
       "ai_max_tokens": "最大输出长度"
     },
+    "effects": {
+      "enableEffects": "启用视觉特效",
+      "enableEffectsDesc": "在历史记录窗口显示动画背景（需要 WebGL 支持）",
+      "toggleOnToast": "✨ 特效已开启 — 请到设置中保存以持久化",
+      "toggleOffToast": "特效已关闭（本次）— 请到设置中保存以持久化",
+      "toggleOn": "✨ 开启特效",
+      "toggleOff": "关闭特效",
+      "toggleAriaLabel": "切换视觉特效"
+    },
     "recognition": {
       "autoPaste": "语音识别完成后的操作方式",
       "autoPasteDesc": "语音识别完成后的文本处理方式",
