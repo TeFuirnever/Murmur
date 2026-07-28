@@ -47,20 +47,20 @@ UI 文案本轮已澄清（"语音识别"≠"AI 文本优化"），但内部仍�
 
 > 来源：`docs/research/electron-dev-startup-hardening.md`（2026-07-28 审计）。P0 已落地于 commit `f5c7f3f`（dev:main 运行时 smoke + better-sqlite3 ABI preflight）。下列为剩余项。
 
-### P1.1 — canary 提升为 E2E 强断言（~2h）
+### P2.1 — 消除 dev/prod 加载不对称 ✅ 已落地（commit 2e93278，PR #117）
 
-`tests/e2e/helpers/electron-launch.ts` 缓冲 stderr，`firstWindow()` 后断言 `[main:canary]` 存在；失败时打印捕获的 stderr。硬化所有 E2E suite（不只新 smoke），关闭审计 Hole 3（canary 信号存在但无测试断言）。
+dev:main 改用 `build:main && electron .`，dev/e2e/prod 加载同一 artifact（dist-main/main.js）。tsx-direct 路径整个消失，silent-hang 温床根除。采用一次性 build（非 --watch）：architect 确认更优（electron 主进程无 HMR，改 main.ts 反正重启）。
 
-### P2.1 — 消除 dev/prod 加载不对称（silent-hang 的结构性根因）
+### P1.1 — canary 提升为 E2E 强断言 ⏸ 受阻（2026-07-28 试过）
 
-dev（tsx 直跑 `main.ts`）与 prod（`dist-main/main.js` bundle）加载机制不同，正是 silent-hang class 的温床。
+目标：electron-launch.ts 缓冲 main 输出，firstWindow 后断言 `[main:canary]`。试过发现两个阻塞：
+1. **canary 时序**：canary（`main.ts:12`）在 electron 启动早期触发，而 `mainOutputBuf` 在 `electron.launch()` 返回后才 attach → 错过早期 canary，gate 可能断言不到。需重想捕获方式（main 写文件 / gate 用晚期信号）。
+2. **e2e 环境**：worktree firstWindow timeout（主 repo 同 e2e diag 过、worktree 不通，疑 embedded python/资源差异）；CI e2e 也 non-blocking（ADR-014 firstWindow 至今未解决）。
 
-- **Option A**（ponytail 之选，~0.5d）：`esbuild main.ts --bundle --watch` 给 dev，`dev:main` 指向 bundle，dev/prod 同一 artifact。复用现有 esbuild config（`package.json` build:main）。
-- **Option B**（业界默认，~1 周）：迁 electron-vite，main/preload/renderer 统一 bundle + renderer HMR，结构性消除该 class。
+价值依赖 e2e 转 blocking（未来）；当前不急，#116 smoke 已是 blocking 兜底。
 
-P0.1 smoke 已让 tsx-direct 安全可留 → Option A 可选；Option B 待第二次 dev-path 回归或 predev 手动 rebuild 的 dev-loop 痛点 justify 再启动。
+### P2.2 — 治本 dev/test ABI 互斥 ⏸ A 不可行（2026-07-28 试过）
 
-### P2.2 — 治本 dev/test ABI 互斥
-
-- 跑 UT 用 `ELECTRON_RUN_AS_NODE=1`（共享 electron ABI 135），消除 dev/test 切换。
-- 或把 better-sqlite3 在系统 Node 下的排除契约正式化（ADR + `vitest.config.ts:27-48` 边界文档化），让排除是 deliberate boundary 而非偶然。
+- **Option A（`ELECTRON_RUN_AS_NODE` vitest）已证不可行**：试跑全 test → 84 fail / 79 files。Murmur test suite 不兼容 electron node runtime（electron-stub mock / 系统 node 模块行为差异，如 `preload-loadable.test.ts` 的 `requireCJS.cache["electron-stub"]`）。修 84 test 不值得。
+- **当前最优 = #116**：rebuild（CI test 前）+ pretest probe（本地 dev/test 切换提示），已 merged。
+- Option B（ADR 文档化排除契约）价值有限（#116 注释已解释 ABI split），按需。
