@@ -30,6 +30,7 @@
     "build:linux": "electron-builder --linux",
     "pack": "npm run build:main && npm run build:preload && npm run build:renderer && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --dir",
     "dist": "npm run prepare:python:embedded && npm run build:main && npm run build:preload && npm run build:renderer && electron-builder",
+    "pretest": "node scripts/check-native-abi.js",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",

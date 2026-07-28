@@ -126,7 +126,13 @@ describe("CI/CD configuration", () => {
   // [20260724_Fix_DevModeTsxLoader] Regression guard: Electron 36 loads .ts
   // entry files via the ESM loader. --require tsx/cjs only patches CJS
   // Module._extensions, which the ESM loader ignores, causing
-  // ERR_UNKNOWN_FILE_EXTENSION. --import tsx/esm registers an ESM loader hook.
+  // ERR_UNKNOWN_FILE_EXTENSION. [20260728_hardening] Empirically the CLI form
+  // `electron --import tsx/esm main.ts` does NOT work — Electron swallows the
+  // CLI --import, tsx/esm becomes the app path, and main.ts never loads
+  // (silent hang). tsx MUST register via NODE_OPTIONS='--import tsx' (the tsx
+  // main entry, not tsx/esm — which hijacks electron cli.js's require). See
+  // memory electron-tsx-esm-loader and the runtime smoke
+  // tests/unit/dev-main-smoke.test.ts (the guard that actually catches this).
   describe("dev mode entry point loading", () => {
     const pkg = JSON.parse(
       fs.readFileSync(path.join(root, "package.json"), "utf8"),
@@ -134,12 +140,9 @@ describe("CI/CD configuration", () => {
 
     it("dev:main registers tsx via NODE_OPTIONS (CLI --import is swallowed by Electron)", () => {
       const devMain = pkg.scripts["dev:main"];
-      // Electron 36 does not forward a CLI --import to its internal Node ESM
-      // loader: `electron --import tsx/esm main.ts` treats tsx/esm as the app
-      // path (silent hang) and never loads main.ts. tsx must be registered via
-      // NODE_OPTIONS so Electron's own Node picks up the loader hook.
       expect(devMain).toMatch(/NODE_OPTIONS=['"]?.*--import tsx( |['"]|$)/);
       expect(devMain).not.toContain("--require tsx/cjs");
+      expect(devMain).not.toContain("--import tsx/esm"); // CLI form — Electron swallows it
     });
 
     it("prestart builds main bundle before electron . (which reads package.json main)", () => {
