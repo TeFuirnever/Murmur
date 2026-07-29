@@ -89,12 +89,14 @@ Instructions for AI agents working. All content in English.
 2. No silent error swallowing in main process.
 3. No hardcoded IPC channel strings — use `ipc-contracts.ts` constants.
 4. No new IPC handler files without registering in `src/helpers/ipc/index.ts`.
+5. No adding settings without touching **all 4** places: `SettingsState` + `DEFAULT_SETTINGS` + `loadSettings` builder + `saveSettings` body in `useSettings.ts`, AND the key in `ALLOWED_SETTING_KEYS` (`settingsHandlers.ts`). Missing any one silently breaks persistence.
+6. No importing `ogl`/`motion` eagerly — they must stay lazy-loaded via `React.lazy` in `EffectsLayer.tsx` only. CI (`check-effects-isolation.js`) verifies they don't leak into entry chunks.
 
 ## Verification
 
 ### Delivery Gates
 
-- **All commits MUST pass `pnpm ci:check` before push.** This mirrors CI and runs: format check, lint, license check, test with coverage, build:preload, build:renderer.
+- **All commits MUST pass `pnpm ci:check` before push.** This mirrors CI and runs: format check, lint, license check, test with coverage, build:preload, build:renderer, effects chunk isolation check.
 - **Quick check:** `pnpm lint` + `pnpm test` for rapid iteration during development.
 - **Bug fix:** reproduce the bug, add a failing test **first**, then fix and verify; no implementation-only fixes, no fix-then-backfill tests.
 - **High-risk** (session flow, IPC, security, privacy, release packaging): include a risk statement and fresh verification evidence.

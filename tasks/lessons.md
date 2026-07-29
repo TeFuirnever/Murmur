@@ -48,4 +48,32 @@ Node.js spawns Python with `PYTHONUTF8=1` to prevent GBK corruption for Chinese 
 
 ---
 
-*Add new lessons as `[date] [summary]` entries with Rule/Context sections.*
+_Add new lessons as `[date] [summary]` entries with Rule/Context sections._
+
+---
+
+## L5: Settings persistence is a 4-touch + allowlist operation
+
+**Date:** 2026-07-29
+**Context:** Adding `effects_enabled` setting for visual effects
+
+Adding a new setting to Murmur requires touching **5 places**, and missing any one causes a **silent** failure — no error, no crash, just data that doesn't persist or a save that's silently rejected:
+
+1. `SettingsState` interface (`useSettings.ts`)
+2. `DEFAULT_SETTINGS` (`useSettings.ts`)
+3. `loadSettings` builder (`useSettings.ts`) — reading from DB
+4. `saveSettings` body (`useSettings.ts`) — **hardcoded per-key**, not auto-iterating SettingsState
+5. `ALLOWED_SETTING_KEYS` set (`settingsHandlers.ts`) — `validateSetting` rejects unknown keys; the IPC returns `{success: false}` but `setSetting` doesn't throw, so the UI shows "saved" while nothing was written
+
+**Rule:** When adding any setting, grep for an existing setting key (e.g. `window_always_on_top`) and update every place it appears. The saveSettings hardcoded list is the most-missed.
+
+---
+
+## L6: Electron tray icons need a purpose-built small-size asset
+
+**Date:** 2026-07-29
+**Context:** Fox mascot icon unreadable at 16×16 in macOS menu bar
+
+Downscaling a 1024px full-color app icon to 16×16 tray size produces an unreadable blob — the kawaii detail collapses. macOS tray also forces `setTemplateImage(true)` which strips color to a monochrome silhouette.
+
+**Rule:** Ship a dedicated `tray-icon-16.png` (manually optimized for tiny sizes) rather than reusing the app icon. For colored brand tray icons (Discord/Slack style), remove `setTemplateImage(true)`. See `tray.ts` `getTrayIconPath()` for the platform-conditional resolution.
