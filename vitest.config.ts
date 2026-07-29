@@ -57,20 +57,26 @@ export default defineConfig({
       //
       // REGRESSION PLAN: as component tests are added, bump thresholds to
       // lock in gains. Target roadmap:
-      //   - v1.1.0: 55% statements (add App.tsx + settings tests)
-      //   - v1.2.0: 70% statements (add history.tsx + hooks tests)
-      //   - v1.3.0: 80%+ (full component coverage, align with industry 80%)
+      //   ✅ v1.1.0: 65% statements (hooks + settings + panels + UI components)
+      //   - v1.2.0: 75% statements (App.tsx + more component coverage)
+      //   - v1.3.0: 80%+ (align with industry 80%)
       thresholds: {
-        statements: 52,
-        branches: 43,
-        functions: 50,
-        lines: 53,
+        statements: 62,
+        branches: 50,
+        functions: 60,
+        lines: 63,
       },
     },
   },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      // [20260729_Test_UIComponents] Mirror the renderer Vite config, which
+      // runs with root = src/, so bare "src/lib/utils" imports resolve. Two
+      // shadcn primitives (ui/input.tsx, ui/label.tsx) use this root-relative
+      // path; the rest of src/ uses relative paths. Without this alias those
+      // modules fail to resolve under the test runner (root = ".").
+      src: path.resolve(__dirname, "./src"),
     },
     extensions: [".ts", ".tsx", ".js", ".jsx", ".json"],
   },
