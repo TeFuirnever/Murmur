@@ -61,10 +61,10 @@ export default defineConfig({
       //   - v1.2.0: 70% statements (add history.tsx + hooks tests)
       //   - v1.3.0: 80%+ (full component coverage, align with industry 80%)
       thresholds: {
-        statements: 47,
-        branches: 38,
-        functions: 45,
-        lines: 47,
+        statements: 52,
+        branches: 43,
+        functions: 50,
+        lines: 53,
       },
     },
   },
