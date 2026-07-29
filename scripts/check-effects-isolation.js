@@ -58,10 +58,20 @@ function main() {
     if (!isEntry) continue;
 
     const content = fs.readFileSync(path.join(DIST_DIR, file), "utf8");
+    // [20260729_Fix_IsolationFalsePositive] Use regex matching the module
+    // specifier boundary (from "pkg" or require("pkg")), NOT a bare substring.
+    // A bare includes("motion") false-positives on CSS media queries like
+    // "(prefers-reduced-motion: reduce)" which legitimately live in the
+    // eagerly-imported EffectsLayer gate. After Rollup bundling, the entry
+    // chunk never contains the module-specifier boundary — that stays inside
+    // the lazy chunk (e.g. BlurText-[hash].js).
+    const ISOLATION_PATTERNS = {
+      motion: /(?:from|require\s*\()\s*["']motion\/react["']/,
+      ogl: /(?:from|require\s*\()\s*["']ogl["']/,
+    };
     for (const pkg of ISOLATED_PACKAGES) {
-      // Match the package name as a module identifier in bundled output.
-      // Vite usually preserves enough to grep for the package name.
-      if (content.includes(pkg)) {
+      const pattern = ISOLATION_PATTERNS[pkg];
+      if (pattern && pattern.test(content)) {
         violations.push({ file, pkg });
       }
     }
