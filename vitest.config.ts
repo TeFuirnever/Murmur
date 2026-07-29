@@ -19,22 +19,24 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "text-summary"],
-      include: [
-        "src/helpers/**/*.{js,ts}",
-        "src/utils/**/*.{js,ts}",
-        "src/bootstrap/**/*.{js,ts}",
-      ],
+      // [20260729_Gate_FullSrcCoverage] Full src/ coverage per industry
+      // standard. Previously only helpers/utils/bootstrap were tracked (~40
+      // files), leaving 46 files (React components, hooks, settings, i18n)
+      // invisible to the coverage gate. Now all src/ is tracked with
+      // realistic thresholds for a mixed backend+frontend Electron codebase
+      // where React components need jsdom + RTL (not yet fully set up).
+      include: ["src/**/*.{js,ts,tsx}"],
       exclude: [
-        // [20260724_TS_BigBang_TestFix] Changed .js → .ts to match migrated
-        // file names. These are Electron-dependent (require runtime
-        // IPC/BrowserWindow/app) and cannot be unit-tested.
+        // Type declarations (no executable code)
+        "src/**/*.d.ts",
+        "src/types/**",
+        // Build output
+        "src/dist/**",
+        "src/node_modules/**",
+        "src/coverage/**",
+        // Electron-dependent modules (require runtime IPC/BrowserWindow/app,
+        // cannot be unit-tested in node environment)
         "src/helpers/clipboard.ts",
-        // [20260725_Fix_WrongExclusion] 4 files removed from exclude — they
-        // have zero electron module dependency:
-        // - environment.ts: only reads process.versions.electron (no import)
-        // - funasrServer.ts: no electron reference at all
-        // - funasrManager.ts: no electron reference at all
-        // - pythonInstaller.ts: no electron reference at all
         "src/helpers/tray.ts",
         "src/helpers/hotkeyManager.ts",
         "src/helpers/pythonEnvironment.ts",
@@ -42,22 +44,27 @@ export default defineConfig({
         "src/helpers/updateManager.ts",
         "src/helpers/windowManager.ts",
         "src/helpers/logManager.ts",
-        // [20260724_TS_BigBang_TestFix] END
-        // IPC handlers (integration-level, require Electron IPC bridge)
         "src/helpers/ipc/**",
+        // Vendored react-bits components (third-party source, SPDX preserved)
+        "src/components/effects/Aurora.tsx",
+        "src/components/effects/BlurText.tsx",
       ],
-      // [20260729_Test_CoverageThresholdAdjust] Adjusted thresholds to match
-      // actual coverage after the coverage-improvement initiative (783→918 tests).
-      // statements/lines remain at 94 (exceeded at 95.18%/95.77%).
-      // branches lowered 88→82 and functions 95→94: the remaining gap is in
-      // funasrServer.ts health-monitor callback branches (setInterval + Promise.race
-      // inside a 30s loop), which require disproportionate mock complexity for
-      // diminishing returns. These thresholds keep CI green while leaving headroom.
+      // [20260729_Gate_FullSrcThresholds] Full-src thresholds set slightly
+      // below current actual coverage (46% stmts / 39% branches / 45% funcs /
+      // 47% lines) to provide a floor that prevents regression. The backend
+      // helper layer is at 95%+; the gap is untested React components
+      // (App.tsx, history.tsx, settings panels) needing jsdom + RTL.
+      //
+      // REGRESSION PLAN: as component tests are added, bump thresholds to
+      // lock in gains. Target roadmap:
+      //   - v1.1.0: 55% statements (add App.tsx + settings tests)
+      //   - v1.2.0: 70% statements (add history.tsx + hooks tests)
+      //   - v1.3.0: 80%+ (full component coverage, align with industry 80%)
       thresholds: {
-        statements: 94,
-        branches: 82,
-        functions: 94,
-        lines: 94,
+        statements: 44,
+        branches: 37,
+        functions: 42,
+        lines: 44,
       },
     },
   },

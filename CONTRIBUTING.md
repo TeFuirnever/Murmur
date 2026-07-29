@@ -112,17 +112,36 @@ chore: 升级 Electron 到 v36
 
 ### CI Gates
 
-每次 PR 自动运行以下检查：
+每次 PR 自动运行以下检查（全部必须通过才能 merge）：
 
 1. **Format check** — `pnpm format:check`（Prettier）
 2. **Lint** — `pnpm lint`（ESLint，0 warnings）
-3. **Security audit** — `pnpm audit --audit-level moderate`（非阻塞）
-4. **License compliance** — `pnpm license:check`（拦截 GPL/AGPL）
-5. **Dependency review** — PR 中自动审查新增依赖
-6. **Test + coverage** — `pnpm test -- --coverage`（覆盖率阈值：97%/90%/100%/98%）
-7. **Build preload** — `pnpm run build:preload`
-8. **Build renderer** — `pnpm run build:renderer`
-9. **E2E tests** — `pnpm test:e2e`（非阻塞）
+3. **Typecheck** — `pnpm typecheck` + `pnpm typecheck:tests`（严格模式）
+4. **Security audit** — `pnpm audit --audit-level moderate`（非阻塞）
+5. **License compliance** — `pnpm license:check`（拦截 GPL/AGPL）
+6. **Dependency review** — PR 中自动审查新增依赖（high 级别阻断）
+7. **Test + coverage** — `pnpm test -- --coverage`（覆盖率阈值：全 src/ 统计，statements 44% / branches 37% / functions 42% / lines 44%；后端 helpers 层独立 95%+）
+8. **Build main** — `pnpm run build:main`
+9. **Build preload** — `pnpm run build:preload`
+10. **Build renderer** — `pnpm run build:renderer`
+11. **Effects chunk isolation** — `node scripts/check-effects-isolation.js`（验证 ogl/motion 没泄漏到 entry chunk）
+12. **E2E tests** — `pnpm test:e2e`（非阻塞，验证中）
+
+### 本地门禁
+
+提交前在本地运行完整检查（和 CI 一致）：
+
+```bash
+pnpm ci:check          # 完整门禁（format + lint + typecheck + test + coverage + build + isolation）
+pnpm ci:check --e2e    # 含 e2e（慢）
+pnpm lint && pnpm test # 快速迭代
+```
+
+**覆盖率回归路线图**：全 src/ 覆盖率当前 46%（statements），后端 helpers 层 95%+。缺口在前端 React 组件（需要 jsdom + RTL）。
+
+- v1.1.0 目标：55%（加 App.tsx + settings 测试）
+- v1.2.0 目标：70%（加 history.tsx + hooks 测试）
+- v1.3.0 目标：80%+（全组件覆盖，对齐业界标准）
 
 ## 架构概览
 
