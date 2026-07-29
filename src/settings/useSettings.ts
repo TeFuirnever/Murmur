@@ -22,6 +22,10 @@ export interface SettingsState {
   auto_paste: string;
   close_behavior: string;
   theme: string;
+  // [20260729_Feat_EffectsToggle] Visual-effects toggle (History window).
+  // Defaults to false — effects are opt-in to protect low-end machines where
+  // WebGL falls back to SwiftShader (software rendering, high CPU).
+  effects_enabled: boolean;
 }
 
 // [20260712_Fix_ProviderPresetType] Use the canonical AIProviderPreset
@@ -61,6 +65,7 @@ const DEFAULT_SETTINGS: SettingsState = {
   auto_paste: "paste",
   close_behavior: "hide",
   theme: "system",
+  effects_enabled: false,
 };
 
 export function applyTheme(theme: string): void {
@@ -124,6 +129,9 @@ export function useSettings() {
           auto_paste: (allSettings.auto_paste || "paste") as string,
           close_behavior: (allSettings.close_behavior || "hide") as string,
           theme: (allSettings.theme || "system") as string,
+          // [20260729_Feat_EffectsToggle] Explicit === true so existing users
+          // (who have no effects_enabled row yet) default to off.
+          effects_enabled: allSettings.effects_enabled === true,
         };
         setSettings((prev) => ({ ...prev, ...loadedSettings }));
         applyTheme(loadedSettings.theme);
@@ -181,6 +189,14 @@ export function useSettings() {
         );
         await window.electronAPI.setSetting("theme", settings.theme);
         applyTheme(settings.theme);
+        // [20260729_Feat_EffectsToggle] Persist the effects toggle. This line
+        // is mandatory — saveSettings hardcodes each key individually, so
+        // omitting it silently drops the setting on save (UI shows "saved"
+        // but the DB never receives the value). See reviewer M3 finding.
+        await window.electronAPI.setSetting(
+          "effects_enabled",
+          settings.effects_enabled,
+        );
 
         toast.success(t("settings.saveSuccess", "设置已保存"));
       }

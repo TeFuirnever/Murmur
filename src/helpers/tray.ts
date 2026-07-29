@@ -35,10 +35,13 @@ class TrayManager {
 
       if (iconPath && fs.existsSync(iconPath)) {
         trayIcon = nativeImage.createFromPath(iconPath);
-        if (process.platform === "darwin") {
-          trayIcon = trayIcon.resize({ width: 16, height: 16 });
-          trayIcon.setTemplateImage(true);
-        }
+        // [20260729_Rebrand_FoxMascot] macOS tray now uses a dedicated 16px
+        // export (design/icon-rebrand/exported-png/icon-16.png) instead of
+        // downscaling the full-color 1024px app icon. The previous resize
+        // produced an unreadable blur at 16x16 because the kawaii fox detail
+        // collapsed. setTemplateImage(true) is removed so the tray shows the
+        // brand color (lavender + orange fox) rather than a forced monochrome
+        // silhouette — matching Discord/Slack/WeChat tray-icon convention.
       } else {
         // 如果图标文件不存在，创建一个简单的图标
         trayIcon = nativeImage.createEmpty();
@@ -74,6 +77,21 @@ class TrayManager {
 
   getTrayIconPath(): string {
     const isDev = process.env.NODE_ENV === "development";
+
+    // [20260729_Rebrand_FoxMascot] Use the dedicated small-size export for the
+    // tray. macOS menu bar renders at 16px; the full-color 1024px app icon
+    // becomes an unreadable blob when downscaled to 16px, so we ship a
+    // purpose-built 16px variant (assets/tray-icon-16.png, copied from
+    // design/icon-rebrand/exported-png/icon-16.png) that is optimized for the
+    // tiny menu-bar canvas.
+    // Windows/Linux tray sizes vary (16-32px); they use the full icon.png and
+    // rely on the OS to scale, which is acceptable on those platforms.
+    if (process.platform === "darwin") {
+      if (isDev) {
+        return path.join(app.getAppPath(), "assets", "tray-icon-16.png");
+      }
+      return path.join(process.resourcesPath, "assets", "tray-icon-16.png");
+    }
 
     if (isDev) {
       // [20260724_TS_BigBang_DirnameFix] app.getAppPath()-based icon path

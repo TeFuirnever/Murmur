@@ -1,12 +1,35 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { Toaster, toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import "./index.css";
 import { assertElectronAPI } from "./bootstrap/assertElectronAPI.js";
 import type { TranscriptionRecord } from "./types/ipc";
+import { EffectsLayer } from "./components/effects/EffectsLayer";
+// [20260729_Fix_BlurTextWiring] Lazy-import BlurText so it (and its motion dep)
+// only loads when effects are on. Used to animate the History title entrance.
+const BlurText = React.lazy(() =>
+  import("./components/effects/BlurText").then((m) => ({ default: m.default })),
+);
+import { Tooltip } from "./components/Tooltip";
+import { Sparkles } from "lucide-react";
+
 // 历史记录页面组件
 // eslint-disable-next-line react-refresh/only-export-components
 const HistoryPage = () => {
+  const { t } = useTranslation();
+  // [20260729_Feat_EffectsToggle] Load effects_enabled on mount. The History
+  // window is a separate renderer entry (history.html) and does not share state
+  // with the main App, so it reads the setting directly from the DB via IPC.
+  const [effectsEnabled, setEffectsEnabled] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!window.electronAPI?.getAllSettings) return;
+    window.electronAPI.getAllSettings().then((settings) => {
+      setEffectsEnabled(settings.effects_enabled === true);
+    });
+  }, []);
+
   const handleCopy = async (text: string) => {
     try {
       if (window.electronAPI) {
@@ -34,23 +57,93 @@ const HistoryPage = () => {
     }
   };
 
+  // [20260729_Feat_EffectsToggle] Discovery affordance: a sparkle icon in the
+  // header toggles effects locally + toasts the user to persist via Settings.
+  // Without this, a default-off feature buried in General settings ships
+  // invisibly (reviewer Architect finding).
+  const toggleEffectsLocal = () => {
+    const next = !effectsEnabled;
+    setEffectsEnabled(next);
+    toast.info(
+      next
+        ? t(
+            "settings.effects.toggleOnToast",
+            "✨ 特效已开启 — 请到设置中保存以持久化",
+          )
+        : t(
+            "settings.effects.toggleOffToast",
+            "特效已关闭（本次）— 请到设置中保存以持久化",
+          ),
+    );
+  };
+
+  // [20260729_Feat_EffectsToggle] When effects are on, make the root transparent
+  // so the fixed Aurora layer (-z-10) shows through. The OS window background is
+  // opaque, and the content cards below keep their solid bg-white, so text
+  // readability is preserved. When effects are off, keep the original solid bg.
+  const rootClassName = effectsEnabled
+    ? "min-h-screen bg-transparent relative"
+    : "min-h-screen bg-[#f5f5f7] dark:bg-[#1c1c1e]";
+
   return (
-    <div className="min-h-screen bg-[#f5f5f7] dark:bg-[#1c1c1e]">
+    <div className={rootClassName}>
+      {/* Effects render as a fixed full-screen layer behind all content. */}
+      <EffectsLayer enabled={effectsEnabled} />
+
       {/* 使用历史记录组件，但作为全屏页面而不是模态框 */}
-      <div className="h-screen flex flex-col">
+      <div className="h-screen flex flex-col relative z-10">
         {/* 标题栏 */}
         <div className="glass-effect flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-[#2c2c2e] shadow-sm sticky top-0">
           <div className="flex items-center space-x-3">
+            {/* [20260729_Fix_BlurTextWiring] Animate the title with BlurText when
+                effects are on; fall back to a plain h1 otherwise. Wrapped in
+                Suspense because BlurText is lazy-loaded. */}
             <h1 className="text-2xl font-bold text-[#1d1d1f] dark:text-[#f5f5f7]/80 text-heading">
-              Murmur - 转录历史
+              {effectsEnabled ? (
+                <React.Suspense fallback="Murmur - 转录历史">
+                  <BlurText
+                    text="Murmur - 转录历史"
+                    animateBy="letters"
+                    delay={30}
+                    className="text-2xl font-bold text-[#1d1d1f] dark:text-[#f5f5f7]/80"
+                  />
+                </React.Suspense>
+              ) : (
+                "Murmur - 转录历史"
+              )}
             </h1>
           </div>
-          <button
-            onClick={handleClose}
-            className="px-4 py-2 text-[#86868b] dark:text-[#86868b] hover:text-[#1d1d1f] dark:hover:text-[#f5f5f7]/80 hover:bg-[#f5f5f7] dark:hover:bg-[#3a3a3c] rounded-lg transition-colors"
-          >
-            关闭窗口
-          </button>
+          <div className="flex items-center space-x-2">
+            {/* [20260729_Feat_EffectsToggle] ✨ discovery + quick toggle */}
+            <Tooltip
+              content={
+                effectsEnabled
+                  ? t("settings.effects.toggleOff", "关闭特效")
+                  : t("settings.effects.toggleOn", "✨ 开启特效")
+              }
+            >
+              <button
+                onClick={toggleEffectsLocal}
+                aria-label={t(
+                  "settings.effects.toggleAriaLabel",
+                  "切换视觉特效",
+                )}
+                className={`p-2 rounded-lg transition-colors ${
+                  effectsEnabled
+                    ? "text-[#0071e3] dark:text-[#2997ff] bg-[#0071e3]/10"
+                    : "text-[#86868b] hover:text-[#1d1d1f] dark:hover:text-[#f5f5f7] hover:bg-[#f5f5f7] dark:hover:bg-[#3a3a3c]"
+                }`}
+              >
+                <Sparkles className="w-5 h-5" />
+              </button>
+            </Tooltip>
+            <button
+              onClick={handleClose}
+              className="px-4 py-2 text-[#86868b] dark:text-[#86868b] hover:text-[#1d1d1f] dark:hover:text-[#f5f5f7]/80 hover:bg-[#f5f5f7] dark:hover:bg-[#3a3a3c] rounded-lg transition-colors"
+            >
+              关闭窗口
+            </button>
+          </div>
         </div>
 
         {/* 历史记录内容 */}

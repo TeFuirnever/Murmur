@@ -53,6 +53,45 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
         </button>
       </div>
 
+      {/* [20260729_Feat_EffectsToggle] Visual-effects toggle (History window).
+          Copy of the always-on-top switch pattern above. Persisted via the
+          shared Save button (same mechanism as other settings). Effects are
+          opt-in (default off) to protect low-end machines from WebGL software
+          rendering. */}
+      <div className="flex items-center justify-between">
+        <div>
+          <label className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
+            {t("settings.effects.enableEffects", "启用视觉特效")}
+          </label>
+          <p className="text-xs text-[#86868b]">
+            {t(
+              "settings.effects.enableEffectsDesc",
+              "在历史记录窗口显示动画背景（需要 WebGL 支持）",
+            )}
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={settings.effects_enabled}
+          onClick={() =>
+            onInputChange("effects_enabled", !settings.effects_enabled)
+          }
+          className={`${
+            settings.effects_enabled
+              ? "bg-[#0071e3]"
+              : "bg-[#d2d2d7] dark:bg-[#3a3a3c]"
+          } relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-2`}
+        >
+          <span
+            aria-hidden="true"
+            className={`${
+              settings.effects_enabled ? "translate-x-4" : "translate-x-0"
+            } inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+          />
+        </button>
+      </div>
+
       {/* [20260712_Fix_AutoPasteValue] CRITICAL: option value must be
           "clipboard_only" (not "clipboard") to match App.tsx's runtime
           check: if (autoPaste === "clipboard_only"). Using "clipboard"

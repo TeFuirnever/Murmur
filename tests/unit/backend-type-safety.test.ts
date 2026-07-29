@@ -116,6 +116,11 @@ describe("Project type safety — all .ts/.tsx/.d.ts follow standards", () => {
       reason:
         "Context provider prop-shape mismatch shim — ModelStatusContextValue widens ModelStatus; tracked for proper fix in Tier 2.3 finalize",
     },
+    {
+      pattern: "{ value: any }",
+      reason:
+        "ogl ambient type shim (src/types/ogl.d.ts) — ogl ships no TypeScript declarations; uniform value types are inherently dynamic (number/number[]/string) so `any` is the accurate representation of the JS boundary",
+    },
   ];
 
   it("no project .ts/.tsx/.d.ts file uses explicit 'any' type (except allowlist)", () => {

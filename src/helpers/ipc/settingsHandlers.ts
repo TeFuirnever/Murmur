@@ -44,6 +44,8 @@ const ALLOWED_SETTING_KEYS = new Set<string>([
   "minimize_to_tray",
   "show_notifications",
   "model_download_path",
+  // [20260729_Feat_EffectsToggle] Visual-effects setting (History window).
+  "effects_enabled",
 ]);
 
 const MAX_VALUE_LENGTH = 10000;
