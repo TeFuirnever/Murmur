@@ -129,3 +129,9 @@ dist-main/
 playwright-report/
 test-results/
 backups/
+
+# Renderer build output (Vite) — not tracked, regenerated on build
+src/dist/
+
+# Icon design exploration masters (5MB+ WIP; exported-png/ is the reproducible source kept tracked)
+design/icon-rebrand/candidates/

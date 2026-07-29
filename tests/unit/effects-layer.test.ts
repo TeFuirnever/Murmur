@@ -4,7 +4,7 @@
 // visible seam at the loop boundary. The plan specified 4 stops ending where
 // they start; code review caught a 3-stop implementation missing the wrap.
 import { describe, it, expect } from "vitest";
-import { AURORA_COLOR_STOPS } from "../../src/components/effects/EffectsLayer";
+import { AURORA_COLOR_STOPS } from "../../src/components/effects/aurora-theme";
 
 describe("Aurora colorStops seamless loop", () => {
   it("exports at least 3 stops", () => {

@@ -17,16 +17,14 @@
 
 import { lazy, Suspense, useEffect, useState } from "react";
 import { detectWebGL } from "./detectWebGL";
+// [20260729_Fix_AuroraThemeExtract] Import from a non-component module to
+// satisfy react-refresh/only-export-components (component files must only
+// export components; constants live in aurora-theme.ts).
+import { AURORA_COLOR_STOPS } from "./aurora-theme";
 
 // Lazy import: Vite emits Aurora + its ogl dependency as a separate chunk.
 // Users with effects off never fetch this chunk.
 const Aurora = lazy(() => import("./Aurora"));
-
-// Murmur brand palette for Aurora. Matches the fox-rebrand lavender/purple system.
-// 4 stops with the first repeated at the end so the gradient loops seamlessly
-// (Aurora's shader interpolates between stops; a missing wrap-around creates a
-// visible seam at the loop boundary). Exported for test verification.
-export const AURORA_COLOR_STOPS = ["#0071e3", "#5856d6", "#af52de", "#0071e3"];
 
 export interface EffectsLayerProps {
   enabled: boolean;
