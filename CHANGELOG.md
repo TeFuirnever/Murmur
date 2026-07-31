@@ -11,6 +11,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `postinstall` 用系统 Node 重编 better-sqlite3 导致 ABI 不匹配(`NODE_MODULE_VERSION 137` vs Electron 36 需要的 `135`),`pnpm run dev` 加载原生模块即崩且错误被 `concurrently` 吞掉、终端无输出。删除有害的 `pnpm rebuild better-sqlite3`,改由 `electron-builder install-app-deps` 统一用 Electron ABI 编译。
 
+## [1.1.0] - 2026-07-31
+
+> [20260731_Changelog_BackfillV110] 补录 v1.1.0。本范围内的 PR（#119/#120/#122-#126）已并入 main，但发版动作（CHANGELOG 条目 + git tag + GitHub Release）此前未同步执行。本条目为补录。
+> [20260731_Changelog_BackfillV110] END
+
+### Added
+
+- **Fox 吉祥物 rebrand + react-bits 视觉特效**（PR #119, commit `a6a8d48`）：应用图标从通用蓝绿螺旋改为可爱手绘狐狸（Duolingo/LINE Friends 风格），统一 app icon / favicon / og-image / theme-color（薰衣草紫 #c4b5fd）；狐在中国文化中象征机敏专注，契合"Murmur 轻语"的中文语音输入定位。同时引入 react-bits 视觉特效组件
+- React 组件集成测试基础设施：jsdom + React Testing Library 环境，覆盖 5 个核心组件（PR #123, commit `8d48eae`）
+- 65 个新组件/hook 单元测试，前端覆盖率从无覆盖提升到 55%（PR #124, commit `ce23981`）
+- 77 个新组件/hook 单元测试，前端覆盖率 55% → 65%（PR #125, commit `3ad10c6`）
+- 17 个 App/杂项组件测试，前端覆盖率 65% → 70%（PR #126, commit `c41aeca`）
+
+### Changed
+
+- **vitest coverage 范围扩展**：从仅 `helpers/utils/bootstrap`（~40 文件）扩展到全 `src/**`（~86 文件），对齐行业最佳实践（commit `c5087ff`, PR #122）。此前 95% 覆盖率数字基于窄范围统计口径，扩展后真实整体覆盖率回落至 ~46%，由此启动了 65% → 70% → 80% 的追赶路线图
+- **coverage 阈值抬升**：`vitest.config.ts` thresholds 从 `statements: 62 / branches: 50 / functions: 60 / lines: 63` 提升到 `statements: 66 / branches: 53 / functions: 65 / lines: 67`，锁定 v1.1.0(65%)/v1.2.0(70%) 的覆盖率成果
+
+### Fixed
+
+- **dev/prod 加载同构**（commit `2e93278`, P2.1）：dev:main 改用 esbuild bundle（`build:main && electron .`），dev/e2e/prod 加载同一 artifact（`dist-main/main.js`）。根除 tsx-direct 路径导致的 silent-hang 温床（electron 不透传命令行 `--import`，致 `main.ts` 永不加载）。详见 `docs/research/electron-dev-startup-hardening.md` §P2.1
+- **dev 启动链路加固**（commit `b917fbf`）：修复 postinstall ABI 覆盖、tsx loader silent hang（改 `NODE_OPTIONS=--import tsx`）；新增 dev:main 运行时 smoke（断言 canary，抓 silent-hang）、better-sqlite3 ABI preflight、CI test 前 rebuild ABI
+- effects 隔离检查对 CSS media query 的误报（commit `163f9bc`, PR #120）
+
+### Notes
+
+- 本版本包含一个面向用户的视觉变更（Fox rebrand）+ 多项内部工程改进。`package.json` version 仍为 `1.0.3`，未单独发版——参见后续发版决策
+- 完整覆盖率路线图与"刷覆盖率 vs 战略转向"的权衡记录在 `docs/strategic-plan-gap-analysis.md`（历史快照）与 `.omc/plans/`
+
 ## [1.0.3] - 2026-07-27
 
 ### Added
