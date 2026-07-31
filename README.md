@@ -4,9 +4,9 @@
 
 # Murmur
 
-**开源 · 本地 · AI 语音输入**
+**开源 · 本地 · AI 语音转文字**
 
-说话就能打字，音频秒转文字。基于 FunASR，数据不出你的电脑。
+说话就能打字，音频秒转文字，AI 自动润色。基于 FunASR，数据不出你的电脑。
 
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)](#安装)
@@ -28,8 +28,12 @@
 
 [English](#english) · [中文](#中文)
 
-<!-- TODO: 录制产品演示 GIF 后替换 —— 说话 → 文字出现 → AI 润色 → 自动粘贴 -->
-<!-- <img src="assets/demo.gif" width="800" alt="Murmur Demo" /> -->
+<!-- [20260731_README_RewriteHero] Hero 区强化价值主张。
+     TODO（需项目维护者录制）：录制 10 秒产品演示 GIF，
+     展示「说话 → 文字出现 → AI 润色 → 自动粘贴」完整流程，
+     替换下方占位注释。这是 README 最高 ROI 的转化元素。 -->
+<!-- <img src="assets/demo.gif" width="800" alt="Murmur Demo — speak → text → AI polish → paste" /> -->
+<!-- [20260731_README_RewriteHero] END -->
 
 </div>
 
@@ -39,26 +43,33 @@
 
 ## 为什么选择 Murmur？
 
-**Murmur 是为中文优化的本地语音输入工具。** 按下快捷键，说话，文字就出现在光标处——全部在你的电脑上完成，无需联网，无需上传。
+**Murmur 是为中文优化的本地语音转文字工具。** 它不只是"语音输入"——按一下快捷键说话，文字出现在光标处；导入音频文件，批量转写并导出；再用 AI 去除口头禅、整理成会议纪要或小红书文案。全部在你的电脑上完成，无需联网，无需上传。
 
-|               |   Murmur   | macOS 原生听写 |  讯飞语记  | Whisper Desktop |
-| ------------- | :--------: | :------------: | :--------: | :-------------: |
-| 中文精度      | ⭐⭐⭐⭐⭐ |     ⭐⭐⭐     | ⭐⭐⭐⭐⭐ |     ⭐⭐⭐      |
-| 完全本地      |     ✅     |       ✅       |     ❌     |       ✅        |
-| AI 后处理     |     ✅     |       ❌       |     ❌     |       ❌        |
-| 开源免费      |     ✅     |       ✅       |     ❌     |       ✅        |
-| 11+ AI 模型   |     ✅     |       ❌       |     ❌     |       ❌        |
-| 自定义 Prompt |     ✅     |       ❌       |     ❌     |       ❌        |
+> **定位说明**：Murmur 不与 macOS/Windows 系统听写正面竞争实时性，而是聚焦三个系统听写做不到的事——**文件转录**、**AI 后处理**、**完全本地 + 可自定义模型**。实时流式转录在规划中（见[路线图](#-路线图)）。
+
+### 🆚 与同类工具对比
+
+| 能力                |   Murmur   | macOS 原生听写 |  讯飞语记  | Whisper Desktop |
+| ------------------- | :--------: | :------------: | :--------: | :-------------: |
+| **音频文件转录**    |     ✅     |       ❌       |     ✅     |       ✅        |
+| **AI 后处理**       |     ✅     |       ❌       |     ❌     |       ❌        |
+| **完全本地**        |     ✅     |       ✅       |     ❌     |       ✅        |
+| **自定义 Prompt**   |     ✅     |       ❌       |     ❌     |       ❌        |
+| **11+ AI 模型可选** |     ✅     |       ❌       |     ❌     |       ❌        |
+| 中文识别精度        | ⭐⭐⭐⭐⭐ |     ⭐⭐⭐     | ⭐⭐⭐⭐⭐ |     ⭐⭐⭐      |
+| 开源免费            |     ✅     |       ✅       |     ❌     |       ✅        |
+
+> 系统听写在"实时性"上更强（流式低延迟），Murmur 在"转写后能做什么"上更强（AI 润色 + 文件批处理 + 隐私）。两者可以共存。
 
 ## ✨ 特性
 
-| 🎤 高精度中文识别       | 🤖 AI 智能润色       | ⌨️ 全局热键       | 🔒 完全本地 |
-| ----------------------- | -------------------- | ----------------- | ----------- |
-| FunASR Paraformer-large | 去除口头禅、修正错话 | `Cmd+Shift+Space` | 零数据上传  |
+| 🎤 高精度中文识别       | 🤖 AI 智能润色           | 📁 音频文件转录       | 🔒 完全本地 |
+| ----------------------- | ------------------------ | --------------------- | ----------- |
+| FunASR Paraformer-large | 去口头禅、修错字、整纪要 | wav/mp3/m4a/flac 批量 | 零数据上传  |
 
-| 🌐 11+ AI 模型                        | 📁 音频文件转录  | 💾 转录历史          | 🌍 双语支持  |
-| ------------------------------------- | ---------------- | -------------------- | ------------ |
-| OpenAI/DeepSeek/通义/智谱/本地 Ollama | wav/mp3/m4a/flac | SQLite + 搜索 + 导出 | 中文/English |
+| ⌨️ 全局热键            | 🌐 11+ AI 模型                        | 💾 转录历史          | 🌍 双语支持  |
+| ---------------------- | ------------------------------------- | -------------------- | ------------ |
+| `Cmd+Shift+Space` 即录 | OpenAI/DeepSeek/通义/智谱/本地 Ollama | SQLite + 搜索 + 导出 | 中文/English |
 
 ## 🚀 安装
 
@@ -181,7 +192,7 @@ pnpm ci:check     # 本地运行所有 CI 门禁
 - [ ] 长音频分片转录（解决 10 分钟超时）
 - [ ] AI 流式响应
 
-详见 [docs/strategic-plan-gap-analysis.md](docs/strategic-plan-gap-analysis.md) 查看完整规划。
+详见 [docs/follow-ups.md](docs/follow-ups.md)（遗留事项跟踪）与 [CHANGELOG.md](CHANGELOG.md)（已交付）。`docs/strategic-plan-gap-analysis.md` 为历史战略快照，仅供参考。
 
 ## 🤝 参与贡献
 
@@ -211,34 +222,41 @@ PRs welcome! 见 [CONTRIBUTING.md](CONTRIBUTING.md) 了解开发环境搭建、�
 
 <div align="center">
 
-**Open Source · Local · AI Voice Input**
+**Open Source · Local · AI Speech-to-Text**
 
-Speak to type, convert audio to text in seconds. Powered by FunASR, all on your device.
+Speak to type, convert audio to text, AI auto-polish. Powered by FunASR, all on your device.
 
 </div>
 
 ## Why Murmur?
 
-**Murmur is a local-first voice input tool optimized for Chinese.** Press the hotkey, speak, and text appears at your cursor — all processed locally, no internet required.
+**Murmur is a local-first speech-to-text tool optimized for Chinese.** It's more than "voice input" — press a hotkey to dictate, import audio files for batch transcription, then use AI to remove filler words, or turn the transcript into meeting notes or a Xiaohongshu post. All processed locally, no internet required.
 
-|                    |   Murmur   | macOS Dictation |  iFlytek   | Whisper Desktop |
-| ------------------ | :--------: | :-------------: | :--------: | :-------------: |
-| Chinese Accuracy   | ⭐⭐⭐⭐⭐ |     ⭐⭐⭐      | ⭐⭐⭐⭐⭐ |     ⭐⭐⭐      |
-| Fully Local        |     ✅     |       ✅        |     ❌     |       ✅        |
-| AI Post-processing |     ✅     |       ❌        |     ❌     |       ❌        |
-| Open Source        |     ✅     |       ✅        |     ❌     |       ✅        |
-| 11+ AI Models      |     ✅     |       ❌        |     ❌     |       ❌        |
-| Custom Prompts     |     ✅     |       ❌        |     ❌     |       ❌        |
+> **Positioning**: Murmur doesn't compete head-on with macOS/Windows system dictation on real-time latency. It focuses on three things system dictation can't do — **file transcription**, **AI post-processing**, and **fully local + customizable models**. Real-time streaming is on the roadmap (see [Roadmap](#roadmap)).
+
+### 🆚 Comparison
+
+| Capability             |   Murmur   | macOS Dictation |  iFlytek   | Whisper Desktop |
+| ---------------------- | :--------: | :-------------: | :--------: | :-------------: |
+| **File Transcription** |     ✅     |       ❌        |     ✅     |       ✅        |
+| **AI Post-processing** |     ✅     |       ❌        |     ❌     |       ❌        |
+| **Fully Local**        |     ✅     |       ✅        |     ❌     |       ✅        |
+| **Custom Prompts**     |     ✅     |       ❌        |     ❌     |       ❌        |
+| **11+ AI Models**      |     ✅     |       ❌        |     ❌     |       ❌        |
+| Chinese Accuracy       | ⭐⭐⭐⭐⭐ |     ⭐⭐⭐      | ⭐⭐⭐⭐⭐ |     ⭐⭐⭐      |
+| Open Source            |     ✅     |       ✅        |     ❌     |       ✅        |
+
+> System dictation wins on real-time latency (streaming); Murmur wins on "what you can do after transcription" (AI polish + batch files + privacy). They can coexist.
 
 ## Features
 
-| 🎤 Accurate Chinese     | 🤖 AI Refinement                  | ⌨️ Global Hotkey  | 🔒 Fully Local   |
-| ----------------------- | --------------------------------- | ----------------- | ---------------- |
-| FunASR Paraformer-large | Remove filler words, fix mistakes | `Cmd+Shift+Space` | Zero data upload |
+| 🎤 Accurate Chinese     | 🤖 AI Polish                   | 📁 File Transcription  | 🔒 Fully Local   |
+| ----------------------- | ------------------------------ | ---------------------- | ---------------- |
+| FunASR Paraformer-large | Filler removal, fix, summarize | wav/mp3/m4a/flac batch | Zero data upload |
 
-| 🌐 11+ AI Models                | 📁 File Transcription | 💾 History               | 🌍 i18n         |
-| ------------------------------- | --------------------- | ------------------------ | --------------- |
-| OpenAI/DeepSeek/Qwen/GLM/Ollama | wav/mp3/m4a/flac      | SQLite + search + export | zh-CN / English |
+| ⌨️ Global Hotkey  | 🌐 11+ AI Models                | 💾 History               | 🌍 i18n         |
+| ----------------- | ------------------------------- | ------------------------ | --------------- |
+| `Cmd+Shift+Space` | OpenAI/DeepSeek/Qwen/GLM/Ollama | SQLite + search + export | zh-CN / English |
 
 ## Install
 
