@@ -452,7 +452,7 @@ describe("[20260729_Test_SettingsSections] AIConfigSection", () => {
     expect(modelSelect.tagName).toBe("SELECT");
   });
 
-  it.skip("renders a custom model text input when customModel is true", () => {
+  it("renders a custom model text input when customModel is true", () => {
     const props = buildAIConfigProps({
       customModel: true,
       settings: buildSettings({ ai_model: "my-custom-model" }),
