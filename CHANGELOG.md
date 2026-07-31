@@ -23,11 +23,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 65 个新组件/hook 单元测试，前端覆盖率从无覆盖提升到 55%（PR #124, commit `ce23981`）
 - 77 个新组件/hook 单元测试，前端覆盖率 55% → 65%（PR #125, commit `3ad10c6`）
 - 17 个 App/杂项组件测试，前端覆盖率 65% → 70%（PR #126, commit `c41aeca`）
+- 58 个 useRecording/model-status/App 扩展测试，覆盖率 70% → 79%（PR #128, commit `0cb65ed`）
+- 36 个 AIConfigSection/sonner 扩展测试，**lines 覆盖率突破 80%**（PR #130, commit `6c2170e`）
 
 ### Changed
 
 - **vitest coverage 范围扩展**：从仅 `helpers/utils/bootstrap`（~40 文件）扩展到全 `src/**`（~86 文件），对齐行业最佳实践（commit `c5087ff`, PR #122）。此前 95% 覆盖率数字基于窄范围统计口径，扩展后真实整体覆盖率回落至 ~46%，由此启动了 65% → 70% → 80% 的追赶路线图
-- **coverage 阈值抬升**：`vitest.config.ts` thresholds 从 `statements: 62 / branches: 50 / functions: 60 / lines: 63` 提升到 `statements: 66 / branches: 53 / functions: 65 / lines: 67`，锁定 v1.1.0(65%)/v1.2.0(70%) 的覆盖率成果
+- **coverage 阈值抬升**：`vitest.config.ts` thresholds 最终提升到 `statements: 77 / branches: 64 / functions: 73 / lines: 78`，锁定 80% lines 业界标准
+- **测试总数**：783 → 1184（+401），全 src/ 覆盖率：79.6% statements / **80.3% lines** / 76.2% functions / 67.1% branches
 
 ### Fixed
 
@@ -37,8 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Notes
 
-- 本版本包含一个面向用户的视觉变更（Fox rebrand）+ 多项内部工程改进。`package.json` version 仍为 `1.0.3`，未单独发版——参见后续发版决策
-- 完整覆盖率路线图与"刷覆盖率 vs 战略转向"的权衡记录在 `docs/strategic-plan-gap-analysis.md`（历史快照）与 `.omc/plans/`
+- 本版本包含一个面向用户的视觉变更（Fox rebrand + 视觉特效）+ 多项内部工程改进（测试覆盖率 80% 业界标准）
+- 完整覆盖率路线图记录在 `docs/strategic-plan-gap-analysis.md`（历史快照）与 `CONTRIBUTING.md` CI Gates 段
 
 ## [1.0.3] - 2026-07-27
 
