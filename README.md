@@ -35,6 +35,15 @@
 <!-- <img src="assets/demo.gif" width="800" alt="Murmur Demo — speak → text → AI polish → paste" /> -->
 <!-- [20260731_README_RewriteHero] END -->
 
+<!-- [20260731_README_Screenshots] 产品截图归档。
+     3 张真机截图（macOS 界面 / 小红书模式 / Windows bug）归档在
+     docs/promotion/screenshots/。注意：制作于 2026-07-20，icon 可能
+     过时（Fox rebrand 7/29）。如需用于 README Hero 区，建议重新截取。 -->
+
+📦 [产品截图存档](docs/promotion/screenshots/) · macOS 界面 / AI 小红书模式 / Windows bug 故事
+
+<!-- [20260731_README_Screenshots] END -->
+
 </div>
 
 ---
