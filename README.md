@@ -10,8 +10,19 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)](#安装)
-[![Tests](https://img.shields.io/badge/tests-672%20passing-brightgreen)](tests/)
-[![Coverage](https://img.shields.io/badge/coverage-95%25-brightgreen)](tests/)
+
+<!-- [20260731_README_DynamicBadge] Replaced hardcoded "tests-672 passing" /
+     "coverage-95%" badges (which were stale — the 95% figure used the old
+     narrow coverage scope of ~40 helper files; current full-src scope is
+     ~46%, see CHANGELOG [1.1.0]) with a dynamic CI status badge. Coverage
+     badge removed entirely because no codecov/coveralls uploader is wired
+     into CI yet — to restore it, add codecov-action to .github/workflows
+     and then link a codecov badge. -->
+
+[![CI](https://img.shields.io/github/actions/workflow/status/TeFuirnever/Murmur/ci.yml?branch=main&label=CI&style=flat)](https://github.com/TeFuirnever/Murmur/actions/workflows/ci.yml)
+
+<!-- [20260731_README_DynamicBadge] END -->
+
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![Stars](https://img.shields.io/github/stars/TeFuirnever/Murmur?style=social)](https://github.com/TeFuirnever/Murmur)
 
@@ -126,7 +137,7 @@ pnpm dev
 
 ```bash
 pnpm dev          # 启动开发模式
-pnpm test         # 运行测试（672 tests）
+pnpm test         # 运行测试（1000+ tests）
 pnpm lint         # 代码检查（0 warnings）
 pnpm typecheck    # TypeScript 类型检查
 pnpm ci:check     # 本地运行所有 CI 门禁
@@ -158,7 +169,7 @@ pnpm ci:check     # 本地运行所有 CI 门禁
 - [x] 半自动更新（SHA256 校验）
 - [x] 无障碍（ARIA + 键盘导航）
 - [x] GPU 自动检测（CUDA > MPS > CPU）
-- [x] TypeScript 严格模式（672 测试，95% 覆盖率）
+- [x] TypeScript 严格模式（全 src 覆盖率门禁，测试与覆盖率详见 CI）
 - [x] 文件配置支持（`~/.murmur.json`）
 - [x] AI Provider 快速开始引导（免费 API Key 获取）
 
@@ -289,7 +300,7 @@ pnpm dev
 - [x] Semi-auto update (SHA256 verified)
 - [x] Accessibility (ARIA + keyboard nav)
 - [x] GPU auto-detection (CUDA > MPS > CPU)
-- [x] TypeScript strict mode (672 tests, 95% coverage)
+- [x] TypeScript strict mode (full-src coverage gated, see CI for test count)
 - [x] File config support (`~/.murmur.json`)
 - [x] AI Provider quick-start guide (free API key)
 

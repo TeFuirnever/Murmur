@@ -1,5 +1,16 @@
 # Murmur GAP 分析：对标业界顶级开源项目
 
+> ⚠️ **STATUS: HISTORICAL SNAPSHOT (2026-05-24)**
+>
+> [20260731_StrategicPlan_Freeze] 本文件是 2026-05-24 的战略快照，**不是当前活跃的路线图**。具体过时之处：
+>
+> - 文中 `main.js`、`preload.js`、`src/helpers/*.js` 等 `.js` 引用已全部迁移到 `.ts`（ADR-010 big-bang, 2026-07-24）
+> - §十一"执行进度"的覆盖率数字（94%+/97%）基于旧的窄范围统计口径（仅 ~40 个 helper 文件），当前全 `src/**` 口径约 46%，详见 `vitest.config.ts` 注释
+> - "待执行"清单（T2-1 中国社区、T3-1 CLI 等）从未启动；"DEFER v1.1"表中的超时项已在 v1.0.3-v1.1.0 期间修复，见 ADR-012
+>
+> **当前权威路线图**：`docs/follow-ups.md`（遗留事项）+ `CHANGELOG.md`（已交付）+ `docs/adr/`（架构决策）。本文件保留为历史档案与战略思考记录，不再维护。
+> [20260731_StrategicPlan_Freeze] END
+
 > [20260725_Autopilot_T1.5] 本文档写于 ADR-010 big-bang 之前。文中 `main.js`、`preload.js`、`src/helpers/*.js` 等引用是历史快照（写作时确实是 `.js`）。当前源码已全部迁移到 `.ts`（见 `docs/adr/010-backend-ts-migration-strategy.md`）。下文保留原始文件名作为决策时的快照。
 
 ## Context
