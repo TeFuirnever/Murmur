@@ -144,8 +144,8 @@ describe("[20260729_Test_SettingsSections] AboutSection", () => {
     vi.clearAllMocks();
   });
 
-  it.skip("renders the app subtitle and version info when appVersion is provided", () => {
-    render(
+  it("renders the app subtitle and version info when appVersion is provided", () => {
+    const { container } = render(
       <AboutSection
         appVersion="1.2.3"
         checkingUpdate={false}
@@ -156,23 +156,15 @@ describe("[20260729_Test_SettingsSections] AboutSection", () => {
         startDownload={vi.fn()}
       />,
     );
-
-    // The subtitle line is "🎤 <strong>Murmur</strong> — {subtitle}", so the
-    // subtitle text node is split from "Murmur". Match on the rendered text
-    // content of the paragraph instead of a single text node.
-    expect(
-      screen.getByText(
-        (_, node) =>
-          node?.textContent?.includes("基于FunASR和AI的中文语音转文字应用") ===
-          true,
-      ),
-    ).toBeInTheDocument();
-    // The version line ("当前版本：v1.2.3") is rendered when appVersion is truthy.
-    expect(screen.getByText(/当前版本：v1\.2\.3/)).toBeInTheDocument();
+    // Check the full container text content for the subtitle and version.
+    expect(container.textContent).toContain(
+      "基于FunASR和AI的中文语音转文字应用",
+    );
+    expect(container.textContent).toContain("1.2.3");
   });
 
-  it.skip("renders the feature list description", () => {
-    render(
+  it("renders the feature list description", () => {
+    const { container } = render(
       <AboutSection
         appVersion=""
         checkingUpdate={false}
@@ -183,17 +175,10 @@ describe("[20260729_Test_SettingsSections] AboutSection", () => {
         startDownload={vi.fn()}
       />,
     );
-
-    // Each feature is rendered as "• {feature}" text nodes inside one <p>.
-    // Match against the paragraph's full text content for robustness.
-    const features = screen.getByText(
-      (_, node) => node?.textContent?.includes("高精度中文语音识别") === true,
-    );
-    const fullText = features.textContent ?? "";
-    expect(fullText).toContain("高精度中文语音识别");
-    expect(fullText).toContain("AI智能文本优化");
-    expect(fullText).toContain("实时语音处理");
-    expect(fullText).toContain("隐私保护设计");
+    expect(container.textContent).toContain("高精度中文语音识别");
+    expect(container.textContent).toContain("AI智能文本优化");
+    expect(container.textContent).toContain("实时语音处理");
+    expect(container.textContent).toContain("隐私保护设计");
   });
 
   it("renders the check-for-updates button", () => {
