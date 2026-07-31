@@ -59,12 +59,13 @@ export default defineConfig({
       // lock in gains. Target roadmap:
       //   ✅ v1.1.0: 65% statements (hooks + settings + panels + UI components)
       //   ✅ v1.2.0: 70% statements (App.tsx + misc components + SettingsSidebar)
-      //   - v1.3.0: 80%+ (align with industry 80%)
+      //   ✅ v1.3.0: 79% statements (useRecording + model-status + App expanded)
+      //   - v1.4.0: 80%+ (align with industry 80%)
       thresholds: {
-        statements: 66,
-        branches: 53,
-        functions: 65,
-        lines: 67,
+        statements: 76,
+        branches: 62,
+        functions: 71,
+        lines: 77,
       },
     },
   },
