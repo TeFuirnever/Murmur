@@ -60,12 +60,13 @@ export default defineConfig({
       //   ✅ v1.1.0: 65% statements (hooks + settings + panels + UI components)
       //   ✅ v1.2.0: 70% statements (App.tsx + misc components + SettingsSidebar)
       //   ✅ v1.3.0: 79% statements (useRecording + model-status + App expanded)
-      //   - v1.4.0: 80%+ (align with industry 80%)
+      //   ✅ v1.4.0: 80% lines (AIConfig expanded + sonner + unskipped tests)
+      //   Next: push statements to 80%+ (entry files need E2E)
       thresholds: {
-        statements: 76,
-        branches: 62,
-        functions: 71,
-        lines: 77,
+        statements: 77,
+        branches: 64,
+        functions: 73,
+        lines: 78,
       },
     },
   },
