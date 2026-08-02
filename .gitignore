@@ -126,6 +126,7 @@ dist-main/
 .gstack/
 .codegraph/
 .zcode/
+graphify-out/
 playwright-report/
 test-results/
 backups/
