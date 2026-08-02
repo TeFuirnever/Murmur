@@ -68,6 +68,18 @@ Instructions for AI agents working. All content in English.
 4. Verify tests pass (the new test should flip from red to green).
 5. State potential risks + test recommendations.
 
+## Cross-Platform Support
+
+Murmur targets **Windows** and **macOS** (Apple Silicon). Code must work on both platforms. Known platform-specific concerns:
+
+- **Python paths**: macOS uses `python/bin/python3.11` (embedded); Windows falls back to system Python via `pythonEnvironment.ts` → `findPythonExecutable()`. The `prepare-embedded-python.js` script only supports macOS downloads.
+- **Process management**: `gracefulShutdown()` uses `taskkill /T /F /PID` on Windows, `proc.kill("SIGKILL")` on Unix — see `src/helpers/funasrServer.ts`.
+- **Path validation**: `audioPathValidator.ts` allows all `C:\` drive paths on Windows; UNC paths (`\\server\share`) are rejected early to avoid network timeouts. macOS uses realpath + `/Volumes/` prefix checks.
+- **Native modules**: `better-sqlite3` needs Electron ABI. On Windows CI, `electron-builder install-app-deps` can't fork `pnpm.mjs` — use `--ignore-scripts` + `npx @electron/rebuild` instead.
+- **CI build**: `.github/workflows/build.yml` runs `build-win` on `windows-latest` and `build-mac` on `macos-latest`. The embedded Python step is `continue-on-error` on Windows.
+
+When adding platform-specific code, use `process.platform === "win32"` checks. Add tests with `it.skipIf(process.platform === "win32")` for Unix-only behavior.
+
 ### Subagents & Lessons
 
 - Use subagents when they materially improve correctness, speed, or parallelism on bounded work.
