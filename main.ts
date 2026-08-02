@@ -142,7 +142,7 @@ const windowManager = new WindowManager();
 const databaseManager = new DatabaseManager();
 const clipboardManager = new ClipboardManager(logger); // Pass logger instance
 const funasrManager = new FunASRManager(logger); // Pass logger instance
-const trayManager = new TrayManager();
+const trayManager = new TrayManager(logger);
 const hotkeyManager = new HotkeyManager();
 
 // Initialize database

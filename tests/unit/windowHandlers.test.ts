@@ -53,6 +53,7 @@ type MockFn = ReturnType<typeof vi.fn>;
 interface MockWindow {
   hide: MockFn;
   show: MockFn;
+  focus: MockFn;
   minimize: MockFn;
   maximize: MockFn;
   unmaximize: MockFn;
@@ -76,6 +77,7 @@ interface MockWindowManager {
   showSettingsWindow: MockFn;
   closeSettingsWindow: MockFn;
   hideSettingsWindow: MockFn;
+  restoreMainWindow: MockFn;
   // [20260726_Tier3_WindowHandlersMigrate] Mutated per-test by the macOS
   // compat case to simulate OS-initiated unmaximize.
   _preMaximizeBounds?: Bounds | null;
@@ -95,6 +97,7 @@ describe("windowHandlers", () => {
     const mainWindow: MockWindow = {
       hide: vi.fn(),
       show: vi.fn(),
+      focus: vi.fn(),
       minimize: vi.fn(),
       maximize: vi.fn(),
       unmaximize: vi.fn(),
@@ -125,6 +128,7 @@ describe("windowHandlers", () => {
         showSettingsWindow: vi.fn(),
         closeSettingsWindow: vi.fn(),
         hideSettingsWindow: vi.fn(),
+        restoreMainWindow: vi.fn(),
       },
     };
 
@@ -151,9 +155,10 @@ describe("windowHandlers", () => {
     expect(result).toBe(true);
   });
 
-  it("show-window shows the main window", () => {
+  it("show-window shows and focuses the main window", () => {
     const result = ipcMain._handlers["show-window"]!();
     expect(managers.windowManager.mainWindow.show).toHaveBeenCalled();
+    expect(managers.windowManager.mainWindow.focus).toHaveBeenCalled();
     expect(result).toBe(true);
   });
 
@@ -259,7 +264,9 @@ describe("windowHandlers", () => {
     expect(result).toBe(true);
   });
 
-  it("set-always-on-top sets the flag on all windows", () => {
+  // [ADR-015] SET_TOP now only applies to mainWindow — settings/history
+  // windows have their alwaysOnTop managed by the show/close lifecycle.
+  it("set-always-on-top sets the flag only on main window", () => {
     const result = ipcMain._handlers["set-always-on-top"]!({}, true);
     expect(managers.windowManager.setDefaultAlwaysOnTop).toHaveBeenCalledWith(
       true,
@@ -267,12 +274,19 @@ describe("windowHandlers", () => {
     expect(
       managers.windowManager.mainWindow.setAlwaysOnTop,
     ).toHaveBeenCalledWith(true);
-    expect(
-      managers.windowManager.historyWindow.setAlwaysOnTop,
-    ).toHaveBeenCalledWith(true);
-    expect(
-      managers.windowManager.settingsWindow.setAlwaysOnTop,
-    ).toHaveBeenCalledWith(true);
     expect(result).toEqual({ success: true });
+  });
+
+  // [ADR-015] Hiding the settings window must restore focus to main window
+  it("hide-settings-window calls restoreMainWindow", () => {
+    ipcMain._handlers["hide-settings-window"]!();
+    expect(managers.windowManager.hideSettingsWindow).toHaveBeenCalled();
+    expect(managers.windowManager.restoreMainWindow).toHaveBeenCalled();
+  });
+
+  it("hide-history-window calls restoreMainWindow", () => {
+    ipcMain._handlers["hide-history-window"]!();
+    expect(managers.windowManager.hideHistoryWindow).toHaveBeenCalled();
+    expect(managers.windowManager.restoreMainWindow).toHaveBeenCalled();
   });
 });

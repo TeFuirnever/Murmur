@@ -151,7 +151,9 @@ export function useSettings() {
   }, [t]);
 
   // --- 保存设置 ---
-  const saveSettings = useCallback(async () => {
+  // [ADR-015] Returns boolean so callers can show inline success feedback
+  // (savedFlash) only on actual success, not on the catch path.
+  const saveSettings = useCallback(async (): Promise<boolean> => {
     try {
       setSaving(true);
       if (window.electronAPI) {
@@ -199,18 +201,30 @@ export function useSettings() {
         );
 
         toast.success(t("settings.saveSuccess", "设置已保存"));
+        return true;
       }
+      return false;
     } catch (error) {
       console.error("Failed to save settings:", error);
       toast.error(t("settings.saveFailed", "保存设置失败"));
+      return false;
     } finally {
       setSaving(false);
     }
   }, [settings, t]);
 
   // --- 输入变更 ---
+  // [Fix] Auto-persist each setting immediately via setSetting — industry
+  // standard for settings pages (macOS System Preferences, VS Code, iOS
+  // Settings all apply changes instantly, no Save button). Previously only
+  // the AI Config tab's Save button called saveSettings(), so General tab
+  // settings (effects_enabled, theme, auto_paste, close_behavior) were stuck
+  // in React state and lost when the settings window was destroyed (Alt+F4).
   const handleInputChange = useCallback((key: string, value: unknown) => {
     setSettings((prev) => ({ ...prev, [key]: value }));
+    if (window.electronAPI?.setSetting) {
+      window.electronAPI.setSetting(key, value);
+    }
   }, []);
 
   // --- Provider presets ---

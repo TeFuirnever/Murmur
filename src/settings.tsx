@@ -1,7 +1,9 @@
 import React, { useState } from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
-import { Toaster } from "sonner";
+// [ADR-015] Use theme-aware wrapper instead of bare sonner, and position at
+// bottom-center so the toast never overlaps form content or action buttons.
+import { Toaster } from "./components/ui/sonner";
 import { useTranslation } from "react-i18next";
 import { Loader2, X } from "lucide-react";
 import { assertElectronAPI } from "./bootstrap/assertElectronAPI.js";
@@ -170,7 +172,7 @@ if (document.getElementById("settings-root") && assertElectronAPI()) {
   root.render(
     <React.Fragment>
       <SettingsPage />
-      <Toaster position="top-right" />
+      <Toaster position="bottom-center" />
     </React.Fragment>,
   );
 }
