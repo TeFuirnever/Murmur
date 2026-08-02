@@ -4,13 +4,14 @@ interface Props {
   t: Record<string, string>;
 }
 const { lang, t } = Astro.props;
-const otherLang = lang === 'en' ? '/zh/' : '/';
+const base = import.meta.env.BASE_URL;
+const otherLang = lang === 'en' ? `${base}/zh/` : `${base}/`;
 const otherLabel = t.lang_switch;
 ---
 
 <header class="fixed top-0 left-0 right-0 z-50 transition-all duration-300" id="main-header">
   <nav class="max-w-[980px] mx-auto px-6 h-12 flex items-center justify-between">
-    <a href={lang === 'en' ? '/' : '/zh/'} class="flex items-center gap-2 text-text no-underline">
+    <a href={lang === 'en' ? `${base}/` : `${base}/zh/`} class="flex items-center gap-2 text-text no-underline">
       <img src="/Murmur/favicon.svg" alt="Murmur" class="w-5 h-5 opacity-90" />
       <span class="text-sm font-semibold tracking-tight font-display">{t.nav_download}</span>
     </a>
