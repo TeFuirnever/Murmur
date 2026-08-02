@@ -1,6 +1,6 @@
 # ADR 015: 窗口生命周期与设置页面 UX 全面改造
 
-**状态**: 待批准（pending approval）
+**状态**: 已采纳（Accepted）— PR #136 已合并，website 已部署
 **日期**: 2026-08-02
 **关联**: ralplan 共识规划（Architect=ITERATE→已修订, Critic=ITERATE→已修订, Tracer=8/10 确认）
 
