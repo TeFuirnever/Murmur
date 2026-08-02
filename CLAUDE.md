@@ -45,12 +45,12 @@ Instructions for AI agents working. All content in English.
 - Use the active planning workflow for non-trivial tasks, architectural decisions, or work that spans multiple moving parts.
 - If new evidence invalidates the current approach, stop and re-plan instead of forcing the original path through.
 - Treat these areas as high-risk and apply stronger planning, review, and verification:
-  - `main.js` and `preload.js` boundaries (Electron IPC bridge)
-  - `src/helpers/ipc-contracts.js` and IPC channel changes
+  - `main.ts` and `preload.ts` boundaries (Electron IPC bridge)
+  - `src/helpers/ipc-contracts.ts` and IPC channel changes
   - `src/helpers/ipc/` handler modules (domain-scoped IPC handlers)
-  - `src/helpers/funasrManager.js` and its sub-modules (Python subprocess lifecycle)
-  - `src/helpers/windowManager.js` (sandbox, CSP, window creation)
-  - `src/helpers/database.js` (safeStorage encryption, schema)
+  - `src/helpers/funasrManager.ts` and its sub-modules (Python subprocess lifecycle)
+  - `src/helpers/windowManager.ts` (sandbox, CSP, window creation)
+  - `src/helpers/database.ts` (safeStorage encryption, schema)
   - packaging/release and electron-builder configuration
 
 ### Change Discipline
@@ -80,21 +80,23 @@ Instructions for AI agents working. All content in English.
 - No empty `catch` — log, rethrow, or handle errors intentionally.
 - Error handling: always handle real error paths (main process, IPC, network); skip defensive code only for states that truly cannot occur.
 - No magic numbers or hardcoded config.
-- Use existing IPC contract constants from `src/helpers/ipc-contracts.js` — zero hardcoded channel strings.
+- Use existing IPC contract constants from `src/helpers/ipc-contracts.ts` — zero hardcoded channel strings.
 - ESLint with 0 warnings, 0 errors.
 
 ### Prohibited
 
 1. No modifying FunASR Python subprocess lifecycle without test coverage.
 2. No silent error swallowing in main process.
-3. No hardcoded IPC channel strings — use `ipc-contracts.js` constants.
-4. No new IPC handler files without registering in `src/helpers/ipc/index.js`.
+3. No hardcoded IPC channel strings — use `ipc-contracts.ts` constants.
+4. No new IPC handler files without registering in `src/helpers/ipc/index.ts`.
+5. No adding settings without touching **all 4** places: `SettingsState` + `DEFAULT_SETTINGS` + `loadSettings` builder + `saveSettings` body in `useSettings.ts`, AND the key in `ALLOWED_SETTING_KEYS` (`settingsHandlers.ts`). Missing any one silently breaks persistence.
+6. No importing `ogl`/`motion` eagerly — they must stay lazy-loaded via `React.lazy` in `EffectsLayer.tsx` only. CI (`check-effects-isolation.js`) verifies they don't leak into entry chunks.
 
 ## Verification
 
 ### Delivery Gates
 
-- **All commits MUST pass `pnpm ci:check` before push.** This mirrors CI and runs: format check, lint, license check, test with coverage, build:preload, build:renderer.
+- **All commits MUST pass `pnpm ci:check` before push.** This mirrors CI and runs: format check, lint, license check, test with coverage, build:preload, build:renderer, effects chunk isolation check.
 - **Quick check:** `pnpm lint` + `pnpm test` for rapid iteration during development.
 - **Bug fix:** reproduce the bug, add a failing test **first**, then fix and verify; no implementation-only fixes, no fix-then-backfill tests.
 - **High-risk** (session flow, IPC, security, privacy, release packaging): include a risk statement and fresh verification evidence.
@@ -119,8 +121,8 @@ Instructions for AI agents working. All content in English.
 
 - Project overview & tech stack → `README.md`
 - Architecture & data flow → `CONTRIBUTING.md` (架构概览 section)
-- IPC contracts → `src/helpers/ipc-contracts.js`
-- AI prompt templates → `src/helpers/aiPrompts.js`
+- IPC contracts → `src/helpers/ipc-contracts.ts` (single source of truth, `as const` channels)
+- AI prompt templates → `src/helpers/aiPrompts.ts`
 - Security measures → `SECURITY.md`
 - CI gate check → `scripts/ci-check.js` and `/ci-gate` skill
 
@@ -144,11 +146,13 @@ Domain context: see `docs/agents/domain.md`.
 
 - Mode: local-stdio
 - Engine: pglite
+- Embedding model: ollama:nomic-embed-text (768d, local Ollama at localhost:11434) — verified 2026-07-28; bge-m3 no longer in local ollama list
 - Config file: ~/.gbrain/config.json (mode 0600)
-- Setup date: 2026-05-21
+- Setup date: 2026-05-21 (embedding reconfigured 2026-06-15)
 - MCP registered: yes (user scope)
 - Artifacts sync: off
 - Current repo policy: read-write
+- Note: ollama recipe patched at ~/gbrain/src/core/ai/recipes/ollama.ts (added bge-m3 + dims_options); re-apply after gbrain upgrade
 
 ## GBrain Search Guidance (configured by /sync-gbrain)
 
@@ -178,3 +182,23 @@ file globs. The brain auto-syncs incrementally on every gstack skill start.
 Run `/sync-gbrain` to force-refresh, `/sync-gbrain --full` for full reindex.
 
 <!-- gstack-gbrain-search-guidance:end -->
+
+## Skill routing
+
+When the user's request matches an available skill, invoke it via the Skill tool. When in doubt, invoke the skill.
+
+Key routing rules:
+
+- Product ideas/brainstorming → invoke /office-hours
+- Strategy/scope → invoke /plan-ceo-review
+- Architecture → invoke /plan-eng-review
+- Design system/plan review → invoke /design-consultation or /plan-design-review
+- Full review pipeline → invoke /autoplan
+- Bugs/errors → invoke /investigate
+- QA/testing site behavior → invoke /qa or /qa-only
+- Code review/diff check → invoke /review
+- Visual polish → invoke /design-review
+- Ship/deploy/PR → invoke /ship or /land-and-deploy
+- Save progress → invoke /context-save
+- Resume context → invoke /context-restore
+- Author a backlog-ready spec/issue → invoke /spec

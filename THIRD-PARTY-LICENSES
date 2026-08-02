@@ -3,6 +3,7 @@ THIRD-PARTY-LICENSES
 
 This file lists the licenses of dependencies used by Murmur.
 Generated: 2026-05-20
+Updated: 2026-07-29 (added ogl, motion for visual effects)
 
 ---
 @electron/notarize@3.1.0
@@ -343,3 +344,15 @@ License: MIT
 Repository: https://github.com/vitest-dev/vitest
 Publisher: Anthony Fu
 
+
+---
+ogl@1.0.11
+License: Unlicense
+Repository: https://github.com/oframe/ogl
+Publisher: oframe
+
+---
+motion@12.42.2
+License: MIT
+Repository: https://github.com/motiondivision/motion
+Publisher: Matt Perry

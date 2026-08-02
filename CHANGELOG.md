@@ -7,6 +7,105 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `postinstall` 用系统 Node 重编 better-sqlite3 导致 ABI 不匹配(`NODE_MODULE_VERSION 137` vs Electron 36 需要的 `135`),`pnpm run dev` 加载原生模块即崩且错误被 `concurrently` 吞掉、终端无输出。删除有害的 `pnpm rebuild better-sqlite3`,改由 `electron-builder install-app-deps` 统一用 Electron ABI 编译。
+
+## [1.1.0] - 2026-07-31
+
+> [20260731_Changelog_BackfillV110] 补录 v1.1.0。本范围内的 PR（#119/#120/#122-#126）已并入 main，但发版动作（CHANGELOG 条目 + git tag + GitHub Release）此前未同步执行。本条目为补录。
+> [20260731_Changelog_BackfillV110] END
+
+### Added
+
+- **Fox 吉祥物 rebrand + react-bits 视觉特效**（PR #119, commit `a6a8d48`）：应用图标从通用蓝绿螺旋改为可爱手绘狐狸（Duolingo/LINE Friends 风格），统一 app icon / favicon / og-image / theme-color（薰衣草紫 #c4b5fd）；狐在中国文化中象征机敏专注，契合"Murmur 轻语"的中文语音输入定位。同时引入 react-bits 视觉特效组件
+- React 组件集成测试基础设施：jsdom + React Testing Library 环境，覆盖 5 个核心组件（PR #123, commit `8d48eae`）
+- 65 个新组件/hook 单元测试，前端覆盖率从无覆盖提升到 55%（PR #124, commit `ce23981`）
+- 77 个新组件/hook 单元测试，前端覆盖率 55% → 65%（PR #125, commit `3ad10c6`）
+- 17 个 App/杂项组件测试，前端覆盖率 65% → 70%（PR #126, commit `c41aeca`）
+- 58 个 useRecording/model-status/App 扩展测试，覆盖率 70% → 79%（PR #128, commit `0cb65ed`）
+- 36 个 AIConfigSection/sonner 扩展测试，**lines 覆盖率突破 80%**（PR #130, commit `6c2170e`）
+
+### Changed
+
+- **vitest coverage 范围扩展**：从仅 `helpers/utils/bootstrap`（~40 文件）扩展到全 `src/**`（~86 文件），对齐行业最佳实践（commit `c5087ff`, PR #122）。此前 95% 覆盖率数字基于窄范围统计口径，扩展后真实整体覆盖率回落至 ~46%，由此启动了 65% → 70% → 80% 的追赶路线图
+- **coverage 阈值抬升**：`vitest.config.ts` thresholds 最终提升到 `statements: 77 / branches: 64 / functions: 73 / lines: 78`，锁定 80% lines 业界标准
+- **测试总数**：783 → 1184（+401），全 src/ 覆盖率：79.6% statements / **80.3% lines** / 76.2% functions / 67.1% branches
+
+### Fixed
+
+- **dev/prod 加载同构**（commit `2e93278`, P2.1）：dev:main 改用 esbuild bundle（`build:main && electron .`），dev/e2e/prod 加载同一 artifact（`dist-main/main.js`）。根除 tsx-direct 路径导致的 silent-hang 温床（electron 不透传命令行 `--import`，致 `main.ts` 永不加载）。详见 `docs/research/electron-dev-startup-hardening.md` §P2.1
+- **dev 启动链路加固**（commit `b917fbf`）：修复 postinstall ABI 覆盖、tsx loader silent hang（改 `NODE_OPTIONS=--import tsx`）；新增 dev:main 运行时 smoke（断言 canary，抓 silent-hang）、better-sqlite3 ABI preflight、CI test 前 rebuild ABI
+- effects 隔离检查对 CSS media query 的误报（commit `163f9bc`, PR #120）
+
+### Notes
+
+- 本版本包含一个面向用户的视觉变更（Fox rebrand + 视觉特效）+ 多项内部工程改进（测试覆盖率 80% 业界标准）
+- 完整覆盖率路线图记录在 `docs/strategic-plan-gap-analysis.md`（历史快照）与 `CONTRIBUTING.md` CI Gates 段
+
+## [1.0.3] - 2026-07-27
+
+### Added
+
+- [20260725_Autopilot_T1.4] Backend TypeScript migration (ADR-010, big-bang completed 2026-07-24): all 39 backend `.js` files atomically migrated to `.ts`. ESM `import` source, esbuild bundles to `dist-main/main.js` + `dist-preload/preload.js` (CJS for Electron sandbox). `__dirname` → `app.getAppPath()` (13 sites).
+- E2E boot health smoke gate (7 tests covering Phase A-E of boot sequence) per `docs/research/e2e-functional-verification-strategy.md` §4.1
+- E2E launch diagnosis instrumentation (env dump, bundle check, stderr/stdout listeners)
+- Module identity regression test guard (prevents future cache-leak risk from `vi.resetModules` removal)
+- Dependabot remediation plan (`docs/research/dependabot-remediation-plan.md`, 30 alerts triaged)
+- TypeScript migration tech debt audit (`docs/research/ts-migration-tech-debt-audit.md`, 7 dimensions)
+- ADR-013: ManagersBag cast seam documentation
+- ADR-014: e2e CI macOS Electron launch investigation (8 CI iterations, root cause isolated to runtime not install)
+- AI prompt few-shot examples for platform modes (xiaohongshu, zhihu, douyin, dianping) — ADR-012 Issue #4c resolved
+- Promotion content: community post templates and video scripts
+- Promotion infographics: competitor comparison matrix and bento-grid features overview
+- Windows `bindings` runtime dependency fix (credit: @Deeeemooo, PR #50)
+- ASR benchmark scripts comparing Paraformer-large vs SenseVoice vs Fun-ASR-Nano
+
+### Changed
+
+- **Complete test migration to TypeScript**: 54 unit test files + 13 e2e suites + 4 e2e helpers all migrated from `.js` to `.ts` (100% TypeScript tests)
+- **Deleted `_tsresolve.setup.js`**: 118-line Node module monkey-patch removed; all 96 `require()` calls converted to ESM `import` across test files
+- **Typecheck gate strengthened**: `tsconfig.test.json` now has ZERO per-file exclusions (was 7); all 64 strict-mode errors in previously-excluded files fixed
+- **`no-require-imports` lint rule** re-enabled for `tests/unit/**` (Tier 3.3)
+- **Root config files migrated**: `vitest.config.js` → `.ts`, `postcss.config.js` → `.ts`, `playwright.config.js` → `.ts`
+- **database.ts typed Row helpers**: `getRow<T>()` + `getCount()` eliminate 7 structural casts for better-sqlite3 queries
+- Settings page refactored: 1195-line monolith split into 7 focused modules with full i18n coverage (154 keys, zero hardcoded Chinese)
+- Dynamic transcription timeout based on file size (replaces hardcoded 5-minute limit)
+- OpenRouter provider preset added with free-tier models
+- `ProviderPreset` type unified: `type ProviderPreset = AIProviderPreset`
+- Preload bridge: `export const preloadApi: ElectronAPI` drift detector + `makeListener<T>()` helper (10 listeners refactored)
+- `electronAPI.d.ts`: `any` → `unknown` at 2 sites; `OperationResult`, `ProcessingUpdateData`, `FileTranscriptionProgressData` type extracts
+
+### Fixed
+
+- CRITICAL: `auto_paste` option value mismatch (`'clipboard'` → `'clipboard_only'`) causing wrong paste behavior
+- Security: `tar` bumped from `^7.4.3` to `^7.5.19` (resolves 1 critical + 2 medium CVE)
+- Restored lost functionality: `cancelUpdateDownload` button, `testResult.usage` display, live `setAlwaysOnTop` side-effect, `localStorage` language persistence
+- Removed 21 dead TS re-export stubs that provided zero type safety
+- `main.ts`: `startApp()` now properly awaited in `whenReady` callback; `app.dock.show()` guarded on CI
+- Removed 3 dead legacy e2e test files (`tests/e2e/legacy/`)
+- Swept stale `.js` references across 8+ docs/ADRs to reflect `.ts` migration
+- AI prompt few-shot examples for platform modes (xiaohongshu, zhihu, douyin, dianping) — ADR-012 Issue #4c resolved
+- Promotion content: community post templates (即刻/V2EX/少数派) and video scripts (B站/抖音)
+- Promotion infographics: competitor comparison matrix and bento-grid features overview (HTML+Playwright)
+- Windows `bindings` runtime dependency fix (credit: @Deeeemooo, PR #50)
+- ASR benchmark scripts comparing Paraformer-large vs SenseVoice vs Fun-ASR-Nano
+
+### Changed
+
+- Settings page refactored: 1195-line monolith split into 7 focused modules with full i18n coverage (154 keys, zero hardcoded Chinese)
+- Dynamic transcription timeout based on file size (replaces hardcoded 5-minute limit) — ADR-012 Issue #1 resolved
+- OpenRouter provider preset added with free-tier models
+- esbuild `--resolve-extensions=.js,.ts` to handle dual .ts/.js backend files during bundling (no longer needed post-big-bang; kept defensively)
+- Provider registration guide text moved from providerPresets.js to i18n locale files
+- `ProviderPreset` type unified: `type ProviderPreset = AIProviderPreset` (single source of truth in types/ipc.ts)
+
+### Fixed
+
+- CRITICAL: `auto_paste` option value mismatch (`'clipboard'` → `'clipboard_only'`) causing wrong paste behavior
+- Restored lost functionality: `cancelUpdateDownload` button, `testResult.usage` display, live `setAlwaysOnTop` side-effect, `localStorage` language persistence
+- Removed 21 dead TS re-export stubs that provided zero type safety (code review finding)
+
 ## [1.0.2] - 2026-06-07
 
 ### Added
@@ -57,7 +156,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Semi-auto update with SHA256 verification, progress UI, and system notification
 - TypeScript strict mode: `strictNullChecks`, `noImplicitAny`, `noUncheckedIndexedAccess` across entire frontend
 - Full TypeScript migration: all hooks, components, and pages migrated to TS/TSX
-- AI provider presets: 8 providers (OpenAI, DeepSeek, Qwen, GLM, SiliconFlow, Groq, Ollama, LM Studio) with auto-fill
+- AI provider presets: 11 providers (OpenAI, DeepSeek, Qwen, GLM, SiliconFlow, Groq, Moonshot, MiniMax, OpenRouter, Ollama, LM Studio) with auto-fill and registration links
+- Quick Start guide: one-click registration links for providers with free tiers (DeepSeek, SiliconFlow recommended)
 - Local model auto-detection: probes Ollama (11434) and LM Studio (1234) with 2s timeout
 - Custom AI prompt templates with user-defined system/user prompts
 - Quick experience mode: per-model download progress, optional punc model for faster startup

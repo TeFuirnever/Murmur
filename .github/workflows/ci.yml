@@ -27,6 +27,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Build main bundle
+        run: pnpm run build:main
+
       - name: Build preload bundle
         run: pnpm run build:preload
 
@@ -38,6 +41,13 @@ jobs:
 
       - name: Typecheck
         run: pnpm typecheck
+
+      # [20260725_CodeReview_CiSync] Mirror scripts/ci-check.js stage 1:
+      # typecheck:tests runs tsc against tsconfig.test.json which covers
+      # tests/**. The local gate runs both; CI must too or the test type
+      # safety gate is informational only. See ts-migration-audit-and-evolution.md §5.0 Tier 2.2.
+      - name: Typecheck tests
+        run: pnpm typecheck:tests
 
       - name: Security audit
         run: pnpm audit --audit-level moderate
@@ -52,11 +62,67 @@ jobs:
         with:
           fail-on-severity: high
 
+      # [20260728_AbiSplit] Install leaves better-sqlite3 at the Electron ABI
+      # (postinstall = electron-builder install-app-deps, for dev/e2e). Unit
+      # tests run under the system Node from actions/setup-node, which needs
+      # the system ABI. Rebuild to system Node here so `pnpm test` (and its
+      # pretest probe scripts/check-native-abi.js) pass. e2e steps below are
+      # non-blocking and tolerate the mismatch. Companion to commit 5f7f005.
+      - name: Rebuild better-sqlite3 for system Node (unit-test ABI)
+        run: pnpm rebuild better-sqlite3
+
       - name: Test with coverage
         run: pnpm test -- --coverage
 
       - name: Build renderer
         run: pnpm run build:renderer
+
+      # [20260729_Gate_EffectsIsolationCI] Verify ogl/motion are lazy-loaded
+      # (absent from entry chunks). Mirrors ci-check.js stage3b. Without this,
+      # a regression that pulls ogl/motion into an eager import would only be
+      # caught locally, not in CI.
+      - name: Effects chunk isolation check
+        run: node scripts/check-effects-isolation.js
+
+      # [20260725_E2E_LaunchDiagnosis] Diagnostic step: launches ONLY the
+      # Electron app with full stderr/stdout/console capture (see
+      # tests/e2e/helpers/electron-launch.js attachDiagnosticListeners).
+      # Grep "[e2e-launch]" in this step's output to find:
+      #   - env snapshot (NODE_ENV, RUNNER_OS, CSC_IDENTITY_AUTO_DISCOVERY)
+      #   - bundle existence check (dist-main/main.js etc.)
+      #   - main process console.log/error
+      #   - raw stdout/stderr (ELECTRON_ENABLE_LOGGING=1 forces Electron
+      #     to emit GPU/code-signing/init errors here)
+      #   - process exit code/signal
+      #   - window event timing
+      #
+      # This step is non-blocking. Its purpose is to surface WHY every
+      # e2e test times out at firstWindow() on CI macOS. See spec §7
+      # Stage 0 "2026-07-25 update" for context.
+      - name: E2E launch diagnosis (non-blocking)
+        run: pnpm test:e2e:diag
+        continue-on-error: true
+
+      # [20260725_E2E_BootHealthGate] Gate 3 (boot health) — runs the new
+      # 7-test boot smoke suite per e2e-functional-verification-strategy.md
+      # §4.1 / §7 Stage 1.
+      #
+      # STATUS: NON-BLOCKING until validated on real macOS (architect
+      # review condition). The suite was authored against spec but could
+      # not be run in the dev sandbox (firstWindow 30s timeout — env-wide,
+      # 01-lifecycle fails identically). KNOWN_RENDERER_NOISE allowlist
+      # at tests/e2e/suites/00-boot-health.test.js:43-45 is unvalidated.
+      #
+      # PROMOTION PLAN:
+      #   1. Watch this step on the next 2-3 PRs (capture real output).
+      #   2. If green 3x consecutive, flip to blocking by removing
+      #      continue-on-error below AND add `retries: 1` per architect
+      #      recommendation (CI macOS firstWindow flakiness — see spec §7
+      #      Stage 0 acceptance at line 518-519).
+      #   3. Expand KNOWN_RENDERER_NOISE based on observed console output.
+      - name: E2E boot health (non-blocking — pending validation)
+        run: pnpm test:e2e:boot
+        continue-on-error: true
 
       - name: E2E tests
         run: pnpm test:e2e

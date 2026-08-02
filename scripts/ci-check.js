@@ -154,14 +154,25 @@ async function main() {
   }
 
   // Stage 1: parallel fast checks
+  // [20260725_Autopilot_T2.2] Add typecheck:tests — runs tsc against
+  // tsconfig.test.json which covers tests/**. Catches type errors in .ts
+  // and .tsx test files that pnpm test (vitest transform) does not.
   const stage1 = await Promise.all([
     run("pnpm format:check", "format:check"),
     run("pnpm lint", "lint"),
     run("pnpm license:check", "license:check"),
+    run("pnpm typecheck", "typecheck"),
+    run("pnpm typecheck:tests", "typecheck:tests"),
   ]);
   stage1.forEach(printResult);
+  // [20260725_Autopilot_T2.2] END
 
-  // Stage 2: build preload then test
+  // [20260724_TS_BigBang_BuildPipeline] Add build:main to ci-check so the
+  // main bundle is validated locally, matching CI workflows.
+  // Stage 2: build main + preload then test
+  const stage2main = run("pnpm run build:main", "build:main");
+  printResult(stage2main);
+  // [20260724_TS_BigBang_BuildPipeline] END
   const stage2a = run("pnpm run build:preload", "build:preload");
   printResult(stage2a);
   const stage2b = run("pnpm test -- --coverage", "test + coverage");
@@ -171,7 +182,15 @@ async function main() {
   const stage3 = run("pnpm run build:renderer", "build:renderer");
   printResult(stage3);
 
-  const results = [...stage1, stage2a, stage2b, stage3];
+  // [20260729_Feat_EffectsChunkIsolation] Verify ogl/motion are lazy-loaded,
+  // not bundled into entry chunks. Run after renderer build.
+  const stage3b = run(
+    "node scripts/check-effects-isolation.js",
+    "effects chunk isolation",
+  );
+  printResult(stage3b);
+
+  const results = [...stage1, stage2main, stage2a, stage2b, stage3, stage3b];
 
   // Security audit (non-blocking)
   const audit = run("pnpm audit --audit-level moderate", "security audit");

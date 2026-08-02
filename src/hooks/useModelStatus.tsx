@@ -1,4 +1,7 @@
 import * as React from "react";
+// [20260725_CodeReview_OperationResult] Replaces inline `{ success; error? }`
+// on the ModelStatusContextValue.downloadModels field.
+import type { OperationResult } from "../types/ipc";
 
 interface ModelProgressEntry {
   progress: number;
@@ -20,7 +23,7 @@ interface ModelStatus {
 
 interface ModelStatusContextValue extends ModelStatus {
   checkModelStatus: () => Promise<void>;
-  downloadModels: () => Promise<{ success: boolean; error?: string }>;
+  downloadModels: () => Promise<OperationResult>;
   getDownloadProgress: () => Promise<
     import("../types/ipc").DownloadProgress | { success: boolean }
   >;
@@ -283,8 +286,21 @@ export function ModelStatusProvider({
   React.useEffect(() => {
     if (window.electronAPI && window.electronAPI.onModelDownloadProgress) {
       const unsubscribe = window.electronAPI.onModelDownloadProgress(
+        // [20260725_CodeReview_S1] `event` is the IPC IpcRendererEvent (typed
+        // unknown because the .d.ts no longer leaks `any`); only `progress`
+        // is the payload. We keep the `?? event` fallback because pre-T2.3
+        // the handler sometimes received the payload as the first arg
+        // (legacy sender). Narrow once via an inline type that matches what
+        // the runtime sender actually emits (richer than the d.ts
+        // DownloadProgress — which Tier 2.3 finalize should reconcile).
         (event, progress) => {
-          const p = progress ?? event;
+          const p = (progress ?? event) as {
+            progress?: number;
+            overall_progress?: number;
+            status?: string;
+            model?: string;
+            stage?: string;
+          };
           const modelKey = p.model || p.stage;
           setModelStatus((prev) => {
             const mp = { ...prev.modelProgress };
@@ -315,13 +331,21 @@ export function ModelStatusProvider({
   React.useEffect(() => {
     if (window.electronAPI && window.electronAPI.onProcessingUpdate) {
       const unsubscribe = window.electronAPI.onProcessingUpdate(
+        // [20260725_CodeReview_S1] Same narrowing as onModelDownloadProgress:
+        // narrow once via the d.ts-declared shape (inline in electronAPI.d.ts
+        // until Tier 2.3 finalize extracts it to types/ipc.ts).
         (event, data) => {
-          const d = data ?? event;
+          const d = (data ?? event) as {
+            type?: string;
+            isLoading?: boolean;
+            isReady?: boolean;
+            progress?: number;
+          };
           if (d.type === "model_initialization") {
             setModelStatus((prev) => ({
               ...prev,
-              isLoading: d.isLoading,
-              isReady: d.isReady,
+              isLoading: d.isLoading ?? prev.isLoading,
+              isReady: d.isReady ?? prev.isReady,
               progress: d.progress || prev.progress,
               stage: d.isReady ? "ready" : "loading",
             }));

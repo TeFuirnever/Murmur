@@ -16,3 +16,14 @@ Murmur bundles the following key components:
 - Electron (MIT) — https://github.com/electron/electron
 - React (MIT) — https://github.com/facebook/react
 - better-sqlite3 (MIT) — https://github.com/WiseLibs/better-sqlite3
+
+This product includes vendored source from react-bits (MIT + Commons Clause):
+  - Backgrounds/Aurora (src/components/effects/Aurora.tsx)
+  - TextAnimations/BlurText (src/components/effects/BlurText.tsx)
+  Copyright (c) 2026 David Haz — https://github.com/DavidHDev/react-bits
+  Embedded "as part of an application" per the license; not redistributed as a
+  standalone library.
+
+Additional npm dependencies for visual effects:
+- ogl (Unlicense) — https://github.com/oframe/ogl
+- motion (MIT) — https://github.com/motiondivision/motion
