@@ -123,14 +123,29 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
-        run: pnpm install
+      # [20260802_Fix_WinCiPnpmPostinstall] electron-builder's postinstall
+      # (install-app-deps) detects pnpm via lockfile and forks pnpm.mjs,
+      # which Windows cannot exec ("%1 is not a valid Win32 application").
+      # Fix: (1) hoisted node_modules for flat layout, (2) --ignore-scripts
+      # to skip the broken postinstall, (3) @electron/rebuild to rebuild
+      # native modules for Electron ABI without calling pnpm.
+      - name: Configure hoisted node_modules for Windows CI
+        shell: bash
+        run: echo "node-linker=hoisted" > .npmrc
+
+      - name: Install dependencies (skip postinstall)
+        run: pnpm install --ignore-scripts
 
       - name: Rebuild native modules for Electron
-        run: npx electron-builder install-app-deps
+        run: npx @electron/rebuild
+      # [20260802_Fix_WinCiPnpmPostinstall] END
 
+      # [20260802_Fix_WinEmbeddedPython] prepare-embedded-python.js only
+      # supports macOS (darwin) downloads. On Windows CI, skip embedded
+      # Python — the app falls back to system Python via pythonEnvironment.ts.
       - name: Prepare embedded Python
         run: pnpm run prepare:python:embedded
+        continue-on-error: true
 
       - name: Build main bundle
         run: pnpm run build:main

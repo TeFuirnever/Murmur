@@ -14,6 +14,21 @@ class EmbeddedPythonBuilder {
   }
 
   async build() {
+    // [20260802_Fix_WinEmbeddedPython] Only macOS (darwin) is supported.
+    // The download URL hardcodes -apple-darwin and the archive uses
+    // python/bin/python3.11 structure. Windows builds need different URLs
+    // (pc-windows-msvc-shared) and binary layout (python/python.exe).
+    // On non-macOS, skip — the app uses system Python via
+    // pythonEnvironment.ts findPythonExecutable fallback.
+    if (process.platform !== "darwin") {
+      console.log(
+        `ℹ️ Embedded Python skipped on ${process.platform} (darwin only).`,
+      );
+      console.log("   The app will use system Python instead.");
+      return;
+    }
+    // [20260802_Fix_WinEmbeddedPython] END
+
     console.log("🐍 开始准备嵌入式Python环境...");
 
     try {
