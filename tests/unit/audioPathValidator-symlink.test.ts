@@ -29,6 +29,9 @@ describe("audioPathValidator — symlink escape prevention", () => {
     // "/private/var/tmp" — a different subtree. On Linux/CI the path may
     // already be canonical; the test still passes because realpath resolves
     // both sides consistently.
+    // /var/tmp is Unix-only. On Windows the test is skipped (see it.skipIf
+    // below) — symlinks require elevated permissions and /var/tmp is absent.
+    if (process.platform === "win32") return;
     outsideTmp = fs.mkdtempSync("/var/tmp/murmur-outside-");
     const targetFile = path.join(outsideTmp, "secret.wav");
     fs.writeFileSync(targetFile, "secret");
@@ -51,28 +54,31 @@ describe("audioPathValidator — symlink escape prevention", () => {
     }
   });
 
-  it("rejects symlink that escapes allowed directories", () => {
-    // Sanity: the fixture's realpath really is outside the allowed set on
-    // this host. If a CI environment mounts /var/tmp inside the same real
-    // root as os.tmpdir(), this test cannot exercise escape semantics and we
-    // skip rather than give a false negative.
-    const realPath = fs.realpathSync(symlinkPath);
-    const tmpdir = fs.realpathSync(os.tmpdir());
-    const homedir = fs.realpathSync(os.homedir());
-    const realPathAllowed =
-      realPath.startsWith(homedir) ||
-      realPath.startsWith(tmpdir) ||
-      realPath.startsWith("/Volumes/") ||
-      /^[A-Za-z]:\\/.test(realPath);
-    if (realPathAllowed) {
-      // Host environment collapses the escape; nothing meaningful to assert.
-      return;
-    }
+  it.skipIf(process.platform === "win32")(
+    "rejects symlink that escapes allowed directories",
+    () => {
+      // Sanity: the fixture's realpath really is outside the allowed set on
+      // this host. If a CI environment mounts /var/tmp inside the same real
+      // root as os.tmpdir(), this test cannot exercise escape semantics and we
+      // skip rather than give a false negative.
+      const realPath = fs.realpathSync(symlinkPath);
+      const tmpdir = fs.realpathSync(os.tmpdir());
+      const homedir = fs.realpathSync(os.homedir());
+      const realPathAllowed =
+        realPath.startsWith(homedir) ||
+        realPath.startsWith(tmpdir) ||
+        realPath.startsWith("/Volumes/") ||
+        /^[A-Za-z]:\\/.test(realPath);
+      if (realPathAllowed) {
+        // Host environment collapses the escape; nothing meaningful to assert.
+        return;
+      }
 
-    const { validateAudioPath } = audioPathValidator;
-    const result = validateAudioPath(symlinkPath);
+      const { validateAudioPath } = audioPathValidator;
+      const result = validateAudioPath(symlinkPath);
 
-    // The symlink's real path escapes the allowed set — must be rejected.
-    expect(result.valid).toBe(false);
-  });
+      // The symlink's real path escapes the allowed set — must be rejected.
+      expect(result.valid).toBe(false);
+    },
+  );
 });
