@@ -140,9 +140,9 @@ jobs:
         run: npx @electron/rebuild
       # [20260802_Fix_WinCiPnpmPostinstall] END
 
-      # [20260802_Fix_WinEmbeddedPython] prepare-embedded-python.js only
-      # supports macOS (darwin) downloads. On Windows CI, skip embedded
-      # Python — the app falls back to system Python via pythonEnvironment.ts.
+      # [20260802_Fix_WinEmbeddedPython] prepare-embedded-python.js now
+      # supports Windows (-pc-windows-msvc-shared). Keep continue-on-error
+      # because torch/funasr pip install may exceed CI time/disk limits.
       - name: Prepare embedded Python
         run: pnpm run prepare:python:embedded
         continue-on-error: true
