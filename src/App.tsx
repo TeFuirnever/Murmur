@@ -383,17 +383,9 @@ export default function App() {
     }
   }, [isRecording, syncRecordingState]);
 
-  // 监听键盘事件
-  useEffect(() => {
-    const handleKeyPress = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        handleClose();
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyPress);
-    return () => document.removeEventListener("keydown", handleKeyPress);
-  }, []);
+  // [ADR-015] Removed global Escape→hideWindow listener. Escape in a text
+  // field should clear input, not hide the entire window. The close button
+  // (default: hide) and tray icon remain as hide paths.
 
   // 错误处理
   useEffect(() => {

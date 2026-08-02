@@ -75,17 +75,26 @@ class WindowManager {
         width: 520,
         height: 640,
         frame: false,
-        transparent: true,
+        // [ADR-015] Removed transparent:true — Tracer confirmed body/#root CSS
+        // backgrounds are opaque, so transparency was unused. transparent +
+        // skipTaskbar:false is a known-broken combination on Windows.
         alwaysOnTop: this._alwaysOnTop,
         resizable: true,
         minWidth: 400,
         minHeight: 500,
-        skipTaskbar: true,
+        // [ADR-015] Removed skipTaskbar:true — the app must show a taskbar
+        // icon so users can find and restore the window.
+        icon: this.getMainWindowIconPath(),
         movable: true,
         webPreferences: {
           nodeIntegration: false,
           contextIsolation: true,
           sandbox: true,
+          // [ADR-015] Disable background throttling so renderer timers (AI
+          // optimization setTimeout, model status polling) are not throttled
+          // when the main window is hidden. Without this, a 100ms delay
+          // becomes ~1s and transcription results can be lost.
+          backgroundThrottling: false,
           // [20260724_TS_BigBang_DirnameFix] Use app.getAppPath() instead of
           // __dirname so the path survives esbuild bundling.
           preload: path.join(app.getAppPath(), "dist-preload", "preload.js"),
@@ -169,6 +178,8 @@ class WindowManager {
 
     this.historyWindow.on("closed", () => {
       this.historyWindow = null;
+      // [ADR-015] Restore focus to main window so the app doesn't "disappear"
+      this.restoreMainWindow();
     });
 
     return this.historyWindow;
@@ -210,16 +221,22 @@ class WindowManager {
 
     this.settingsWindow.on("closed", () => {
       this.settingsWindow = null;
+      // [ADR-015] Restore focus to main window so the app doesn't "disappear"
+      this.restoreMainWindow();
     });
 
     return this.settingsWindow;
   }
 
   showHistoryWindow(): void {
+    // [ADR-015] Temporarily disable main window alwaysOnTop so the history
+    // window is not covered by the floating panel. Restored on close.
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.setAlwaysOnTop(false);
+    }
     const show = () => {
       this.historyWindow!.show();
       this.historyWindow!.focus();
-      this.historyWindow!.setAlwaysOnTop(this._alwaysOnTop);
     };
     if (this.historyWindow) {
       show();
@@ -241,10 +258,14 @@ class WindowManager {
   }
 
   showSettingsWindow(): void {
+    // [ADR-015] Temporarily disable main window alwaysOnTop so the settings
+    // window is not covered by the floating panel. Restored on close.
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.setAlwaysOnTop(false);
+    }
     const show = () => {
       this.settingsWindow!.show();
       this.settingsWindow!.focus();
-      this.settingsWindow!.setAlwaysOnTop(this._alwaysOnTop);
     };
     if (this.settingsWindow) {
       show();
@@ -263,6 +284,27 @@ class WindowManager {
     if (this.settingsWindow) {
       this.settingsWindow.close();
     }
+  }
+
+  // [ADR-015] Restore main window visibility, focus, and alwaysOnTop state.
+  // Called when a child window (settings/history) closes or hides, so the app
+  // doesn't appear to "disappear" after the child window is gone.
+  restoreMainWindow(): void {
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.setAlwaysOnTop(this._alwaysOnTop);
+      this.mainWindow.show();
+      this.mainWindow.focus();
+    }
+  }
+
+  // [ADR-015] Dev/prod icon path resolution — mirrors tray.ts:getTrayIconPath()
+  // pattern. In production, assets live under process.resourcesPath (asar).
+  private getMainWindowIconPath(): string {
+    const isDev = process.env.NODE_ENV === "development";
+    if (isDev) {
+      return path.join(app.getAppPath(), "assets", "icon.png");
+    }
+    return path.join(process.resourcesPath, "assets", "icon.png");
   }
 
   closeAllWindows(): void {

@@ -21,6 +21,7 @@ interface WindowManager {
   showSettingsWindow(): void;
   closeSettingsWindow(): void;
   hideSettingsWindow(): void;
+  restoreMainWindow(): void;
 }
 
 interface Managers {
@@ -40,6 +41,9 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
   ipcMain.handle(C.WINDOW.SHOW, () => {
     if (windowManager.mainWindow) {
       windowManager.mainWindow.show();
+      // [ADR-015] focus() is required — show() alone does not bring the
+      // window to the foreground on Windows.
+      windowManager.mainWindow.focus();
     }
     return true;
   });
@@ -88,12 +92,10 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
 
   ipcMain.handle(C.WINDOW.SET_TOP, (_event, enabled: boolean) => {
     windowManager.setDefaultAlwaysOnTop(enabled);
-    for (const win of [
-      windowManager.mainWindow,
-      windowManager.historyWindow,
-      windowManager.settingsWindow,
-    ]) {
-      if (win) win.setAlwaysOnTop(enabled);
+    // [ADR-015] Only apply to mainWindow — settings/history windows have
+    // their alwaysOnTop managed by the show/close lifecycle in WindowManager.
+    if (windowManager.mainWindow) {
+      windowManager.mainWindow.setAlwaysOnTop(enabled);
     }
     return { success: true };
   });
@@ -110,6 +112,8 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
 
   ipcMain.handle(C.WINDOW.HIDE_HISTORY, () => {
     windowManager.hideHistoryWindow();
+    // [ADR-015] Restore focus to main window after hiding history
+    windowManager.restoreMainWindow();
     return true;
   });
 
@@ -125,6 +129,8 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
 
   ipcMain.handle(C.WINDOW.HIDE_SETTINGS, () => {
     windowManager.hideSettingsWindow();
+    // [ADR-015] Restore focus to main window after hiding settings
+    windowManager.restoreMainWindow();
     return true;
   });
 

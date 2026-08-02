@@ -1,6 +1,6 @@
 // [20260713_Fix_NoHardcodedChinese] All user-visible strings now go through
 // t() — no hardcoded Chinese remains in JSX.
-import type React from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Eye,
@@ -12,6 +12,7 @@ import {
   Save,
   ExternalLink,
   Sparkles,
+  Check,
 } from "lucide-react";
 import type { AICheckStatusResult } from "../../types/ipc";
 import type { SettingsState, ProviderPreset } from "../useSettings";
@@ -41,7 +42,7 @@ interface AIConfigSectionProps {
   // of an inline subset to prevent type drift when fields are added.
   testResult: AICheckStatusResult | null;
   testAIConfiguration: () => void;
-  saveSettings: () => void;
+  saveSettings: () => Promise<boolean>;
   saving: boolean;
   showQuickStart: boolean;
 }
@@ -65,6 +66,28 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
   showQuickStart,
 }) => {
   const { t } = useTranslation();
+  // [ADR-015] savedFlash: briefly show "✓ 已保存" on the save button after
+  // a successful save. Only triggers when saveSettings returns true.
+  const [savedFlash, setSavedFlash] = useState(false);
+  // [CodeReview] Track timeout so it can be cleared on unmount to prevent
+  // React "state update on unmounted component" warning.
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleSave = useCallback(async () => {
+    const ok = await saveSettings();
+    if (ok) {
+      setSavedFlash(true);
+      if (flashTimer.current) clearTimeout(flashTimer.current);
+      flashTimer.current = setTimeout(() => setSavedFlash(false), 1500);
+    }
+  }, [saveSettings]);
+
+  // [CodeReview] Cleanup: clear any pending flash timer on unmount.
+  useEffect(() => {
+    return () => {
+      if (flashTimer.current) clearTimeout(flashTimer.current);
+    };
+  }, []);
 
   return (
     <div className="space-y-5">
@@ -497,20 +520,26 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
         </button>
         <button
           type="button"
-          onClick={saveSettings}
+          onClick={handleSave}
           aria-label={t("settings.save", "保存设置")}
           disabled={saving}
-          className="flex items-center space-x-2 px-4 py-1.5 text-sm bg-[#0071e3] hover:bg-[#0077ed] text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className={`flex items-center space-x-2 px-4 py-1.5 text-sm text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+            savedFlash ? "bg-[#34c759]" : "bg-[#0071e3] hover:bg-[#0077ed]"
+          }`}
         >
           {saving ? (
             <Loader2 className="w-3 h-3 animate-spin" />
+          ) : savedFlash ? (
+            <Check className="w-3 h-3" />
           ) : (
             <Save className="w-3 h-3" />
           )}
           <span>
             {saving
               ? t("settings.saving", "保存中...")
-              : t("settings.save", "保存设置")}
+              : savedFlash
+                ? t("settings.saved", "已保存")
+                : t("settings.save", "保存设置")}
           </span>
         </button>
       </div>

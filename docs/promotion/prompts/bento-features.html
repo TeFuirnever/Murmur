@@ -1,199 +1,235 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<title>Murmur Features</title>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
-    background: #F5F5F7;
-    padding: 40px 48px;
-    width: 1280px;
-    height: 720px;
-  }
-  .container {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    grid-template-rows: auto 1fr 1fr auto;
-    gap: 14px;
-    height: 100%;
-  }
-  .header {
-    grid-column: 1 / -1;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 4px;
-  }
-  .title {
-    font-size: 30px;
-    font-weight: 700;
-    color: #1D1D1F;
-    letter-spacing: -0.5px;
-  }
-  .subtitle {
-    font-size: 14px;
-    color: #86868B;
-  }
-  .badge {
-    background: #0071e3;
-    color: #FFFFFF;
-    padding: 6px 14px;
-    border-radius: 16px;
-    font-size: 12px;
-    font-weight: 600;
-  }
-  .card {
-    background: #FFFFFF;
-    border-radius: 16px;
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-    transition: transform 0.2s;
-  }
-  .card .icon {
-    font-size: 28px;
-    margin-bottom: 8px;
-  }
-  .card .name {
-    font-size: 16px;
-    font-weight: 600;
-    color: #1D1D1F;
-    margin-bottom: 4px;
-  }
-  .card .name-en {
-    font-size: 11px;
-    color: #AEAEB2;
-    font-weight: 400;
-    margin-bottom: 8px;
-  }
-  .card .desc {
-    font-size: 12px;
-    color: #86868B;
-    line-height: 1.5;
-  }
-  /* Featured card (large) */
-  .card-large {
-    grid-column: span 2;
-    grid-row: span 1;
-    background: linear-gradient(135deg, #0071e3 0%, #0091ff 100%);
-    color: #FFFFFF;
-  }
-  .card-large .name, .card-large .name-en { color: #FFFFFF; }
-  .card-large .name-en { color: rgba(255,255,255,0.7); }
-  .card-large .desc { color: rgba(255,255,255,0.85); font-size: 13px; }
-  .card-large .icon { font-size: 36px; }
-  .card-large .name { font-size: 20px; }
+  <head>
+    <meta charset="UTF-8" />
+    <title>Murmur Features</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue",
+          sans-serif;
+        background: #f5f5f7;
+        padding: 40px 48px;
+        width: 1280px;
+        height: 720px;
+      }
+      .container {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        grid-template-rows: auto 1fr 1fr auto;
+        gap: 14px;
+        height: 100%;
+      }
+      .header {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 4px;
+      }
+      .title {
+        font-size: 30px;
+        font-weight: 700;
+        color: #1d1d1f;
+        letter-spacing: -0.5px;
+      }
+      .subtitle {
+        font-size: 14px;
+        color: #86868b;
+      }
+      .badge {
+        background: #0071e3;
+        color: #ffffff;
+        padding: 6px 14px;
+        border-radius: 16px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .card {
+        background: #ffffff;
+        border-radius: 16px;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+        transition: transform 0.2s;
+      }
+      .card .icon {
+        font-size: 28px;
+        margin-bottom: 8px;
+      }
+      .card .name {
+        font-size: 16px;
+        font-weight: 600;
+        color: #1d1d1f;
+        margin-bottom: 4px;
+      }
+      .card .name-en {
+        font-size: 11px;
+        color: #aeaeb2;
+        font-weight: 400;
+        margin-bottom: 8px;
+      }
+      .card .desc {
+        font-size: 12px;
+        color: #86868b;
+        line-height: 1.5;
+      }
+      /* Featured card (large) */
+      .card-large {
+        grid-column: span 2;
+        grid-row: span 1;
+        background: linear-gradient(135deg, #0071e3 0%, #0091ff 100%);
+        color: #ffffff;
+      }
+      .card-large .name,
+      .card-large .name-en {
+        color: #ffffff;
+      }
+      .card-large .name-en {
+        color: rgba(255, 255, 255, 0.7);
+      }
+      .card-large .desc {
+        color: rgba(255, 255, 255, 0.85);
+        font-size: 13px;
+      }
+      .card-large .icon {
+        font-size: 36px;
+      }
+      .card-large .name {
+        font-size: 20px;
+      }
 
-  /* Second featured */
-  .card-medium-accent {
-    grid-column: span 2;
-    background: #FFFFFF;
-    border: 2px solid #0071e3;
-  }
-  .card-medium-accent .name { color: #0071e3; }
+      /* Second featured */
+      .card-medium-accent {
+        grid-column: span 2;
+        background: #ffffff;
+        border: 2px solid #0071e3;
+      }
+      .card-medium-accent .name {
+        color: #0071e3;
+      }
 
-  .footer {
-    grid-column: 1 / -1;
-    text-align: center;
-    font-size: 12px;
-    color: #86868B;
-    margin-top: 4px;
-  }
-  .footer a { color: #0071e3; text-decoration: none; font-weight: 500; }
-</style>
-</head>
-<body>
-<div class="container">
-  <div class="header">
-    <div>
-      <div class="title">Murmur 功能特性</div>
-      <div class="subtitle">Open Source · Local · AI Voice Input</div>
+      .footer {
+        grid-column: 1 / -1;
+        text-align: center;
+        font-size: 12px;
+        color: #86868b;
+        margin-top: 4px;
+      }
+      .footer a {
+        color: #0071e3;
+        text-decoration: none;
+        font-weight: 500;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <div>
+          <div class="title">Murmur 功能特性</div>
+          <div class="subtitle">Open Source · Local · AI Voice Input</div>
+        </div>
+        <div class="badge">Apache 2.0 · 开源免费</div>
+      </div>
+
+      <!-- Row 1: 2 large featured cards -->
+      <div class="card card-large">
+        <div>
+          <div class="icon">🎤</div>
+          <div class="name">高精度中文识别</div>
+          <div class="name-en">Accurate Chinese Recognition</div>
+        </div>
+        <div class="desc">
+          FunASR Paraformer-large 模型，专为中国用户优化<br />中文精度优于
+          Whisper，本地推理
+        </div>
+      </div>
+
+      <div class="card card-medium-accent">
+        <div>
+          <div class="icon">🔒</div>
+          <div class="name">完全本地运行</div>
+          <div class="name-en">Fully Local · Zero Upload</div>
+        </div>
+        <div class="desc">
+          所有音频处理在本地完成<br />数据不离开你的电脑，隐私无忧
+        </div>
+      </div>
+
+      <!-- Row 2: 4 medium cards -->
+      <div class="card">
+        <div class="icon">🤖</div>
+        <div>
+          <div class="name">AI 智能润色</div>
+          <div class="name-en">AI Refinement</div>
+        </div>
+        <div class="desc">自动去除口头禅<br />修正语法，整理段落</div>
+      </div>
+
+      <div class="card">
+        <div class="icon">🌐</div>
+        <div>
+          <div class="name">11+ AI 模型</div>
+          <div class="name-en">Model Variety</div>
+        </div>
+        <div class="desc">
+          DeepSeek · 通义 · 智谱<br />Groq · Ollama · LM Studio
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="icon">⌨️</div>
+        <div>
+          <div class="name">全局热键</div>
+          <div class="name-en">Global Hotkey</div>
+        </div>
+        <div class="desc">⌘⇧Space 一键录音<br />说完自动粘贴到光标</div>
+      </div>
+
+      <div class="card">
+        <div class="icon">📁</div>
+        <div>
+          <div class="name">音频文件转录</div>
+          <div class="name-en">File Transcription</div>
+        </div>
+        <div class="desc">wav/mp3/m4a/flac<br />导出 SRT/MD/DOCX</div>
+      </div>
+
+      <!-- Row 3: 2 wide cards -->
+      <div class="card" style="grid-column: span 2">
+        <div class="icon">💾</div>
+        <div>
+          <div class="name">转录历史 · 全文搜索</div>
+          <div class="name-en">History · FTS5 Full-Text Search</div>
+        </div>
+        <div class="desc">
+          SQLite + safeStorage 加密存储，FTS5 中文全文搜索，652 测试 95% 覆盖率
+        </div>
+      </div>
+
+      <div class="card" style="grid-column: span 2">
+        <div class="icon">🌍</div>
+        <div>
+          <div class="name">双语支持 · 无障碍</div>
+          <div class="name-en">i18n · Accessibility</div>
+        </div>
+        <div class="desc">
+          中文 / English 完整国际化，ARIA 标签 + 键盘导航，macOS + Windows
+        </div>
+      </div>
+
+      <div class="footer">
+        <a href="#">github.com/TeFuirnever/Murmur</a> · brew install --cask
+        murmur · winget install TeFuirnever.Murmur
+      </div>
     </div>
-    <div class="badge">Apache 2.0 · 开源免费</div>
-  </div>
-
-  <!-- Row 1: 2 large featured cards -->
-  <div class="card card-large">
-    <div>
-      <div class="icon">🎤</div>
-      <div class="name">高精度中文识别</div>
-      <div class="name-en">Accurate Chinese Recognition</div>
-    </div>
-    <div class="desc">FunASR Paraformer-large 模型，专为中国用户优化<br>中文精度优于 Whisper，本地推理</div>
-  </div>
-
-  <div class="card card-medium-accent">
-    <div>
-      <div class="icon">🔒</div>
-      <div class="name">完全本地运行</div>
-      <div class="name-en">Fully Local · Zero Upload</div>
-    </div>
-    <div class="desc">所有音频处理在本地完成<br>数据不离开你的电脑，隐私无忧</div>
-  </div>
-
-  <!-- Row 2: 4 medium cards -->
-  <div class="card">
-    <div class="icon">🤖</div>
-    <div>
-      <div class="name">AI 智能润色</div>
-      <div class="name-en">AI Refinement</div>
-    </div>
-    <div class="desc">自动去除口头禅<br>修正语法，整理段落</div>
-  </div>
-
-  <div class="card">
-    <div class="icon">🌐</div>
-    <div>
-      <div class="name">11+ AI 模型</div>
-      <div class="name-en">Model Variety</div>
-    </div>
-    <div class="desc">DeepSeek · 通义 · 智谱<br>Groq · Ollama · LM Studio</div>
-  </div>
-
-  <div class="card">
-    <div class="icon">⌨️</div>
-    <div>
-      <div class="name">全局热键</div>
-      <div class="name-en">Global Hotkey</div>
-    </div>
-    <div class="desc">⌘⇧Space 一键录音<br>说完自动粘贴到光标</div>
-  </div>
-
-  <div class="card">
-    <div class="icon">📁</div>
-    <div>
-      <div class="name">音频文件转录</div>
-      <div class="name-en">File Transcription</div>
-    </div>
-    <div class="desc">wav/mp3/m4a/flac<br>导出 SRT/MD/DOCX</div>
-  </div>
-
-  <!-- Row 3: 2 wide cards -->
-  <div class="card" style="grid-column: span 2;">
-    <div class="icon">💾</div>
-    <div>
-      <div class="name">转录历史 · 全文搜索</div>
-      <div class="name-en">History · FTS5 Full-Text Search</div>
-    </div>
-    <div class="desc">SQLite + safeStorage 加密存储，FTS5 中文全文搜索，652 测试 95% 覆盖率</div>
-  </div>
-
-  <div class="card" style="grid-column: span 2;">
-    <div class="icon">🌍</div>
-    <div>
-      <div class="name">双语支持 · 无障碍</div>
-      <div class="name-en">i18n · Accessibility</div>
-    </div>
-    <div class="desc">中文 / English 完整国际化，ARIA 标签 + 键盘导航，macOS + Windows</div>
-  </div>
-
-  <div class="footer">
-    <a href="#">github.com/TeFuirnever/Murmur</a> · brew install --cask murmur · winget install TeFuirnever.Murmur
-  </div>
-</div>
-</body>
+  </body>
 </html>

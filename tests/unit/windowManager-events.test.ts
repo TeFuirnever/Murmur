@@ -71,6 +71,7 @@ interface BrowserWindowInstance {
   maximize: ReturnType<typeof vi.fn>;
   isMaximized: ReturnType<typeof vi.fn>;
   isDestroyed: ReturnType<typeof vi.fn>;
+  setAlwaysOnTop: ReturnType<typeof vi.fn>;
 }
 
 // [20260726_Tier32_WindowManagerEvents] event-name -> listener. The
@@ -110,6 +111,7 @@ describe("windowManager — real module execution with mocked electron", () => {
       this.loadFile = vi.fn(() => Promise.resolve());
       this.focus = vi.fn();
       this.show = vi.fn();
+      this.setAlwaysOnTop = vi.fn();
       this.maximize = vi.fn();
       this.isMaximized = vi.fn(() => false);
       this.isDestroyed = vi.fn(() => false);
@@ -211,43 +213,84 @@ describe("windowManager — real module execution with mocked electron", () => {
     );
   });
 
-  it("showHistoryWindow uses current alwaysOnTop value", async () => {
+  // [ADR-015] showSettingsWindow now disables main window alwaysOnTop
+  // temporarily so settings is not covered by the floating panel.
+  it("showSettingsWindow disables main window alwaysOnTop", async () => {
     const WindowManager = await loadWindowManager();
     const wm = new WindowManager();
-    wm.setDefaultAlwaysOnTop(false);
     process.env.NODE_ENV = "development";
-    await wm.createHistoryWindow();
-
-    const setAlwaysOnTopSpy = vi.fn();
-    // [20260726_Tier32_WindowManagerEvents] historyWindow is a public field
-    // typed as Electron.BrowserWindow | null; non-null after
-    // createHistoryWindow resolved. Assign the spy via a structural cast so
-    // the source's readonly-ish surface accepts the override.
-    (
-      wm.historyWindow as unknown as {
-        setAlwaysOnTop: typeof setAlwaysOnTopSpy;
-      }
-    ).setAlwaysOnTop = setAlwaysOnTopSpy;
-
-    wm.showHistoryWindow();
-    expect(setAlwaysOnTopSpy).toHaveBeenCalledWith(false);
-  });
-
-  it("showSettingsWindow uses current alwaysOnTop value", async () => {
-    const WindowManager = await loadWindowManager();
-    const wm = new WindowManager();
-    wm.setDefaultAlwaysOnTop(false);
-    process.env.NODE_ENV = "development";
+    await wm.createMainWindow();
     await wm.createSettingsWindow();
 
-    const setAlwaysOnTopSpy = vi.fn();
-    (
-      wm.settingsWindow as unknown as {
-        setAlwaysOnTop: typeof setAlwaysOnTopSpy;
-      }
-    ).setAlwaysOnTop = setAlwaysOnTopSpy;
-
     wm.showSettingsWindow();
-    expect(setAlwaysOnTopSpy).toHaveBeenCalledWith(false);
+    expect(wm.mainWindow!.setAlwaysOnTop).toHaveBeenCalledWith(false);
+  });
+
+  // [ADR-015] showHistoryWindow also disables main window alwaysOnTop.
+  it("showHistoryWindow disables main window alwaysOnTop", async () => {
+    const WindowManager = await loadWindowManager();
+    const wm = new WindowManager();
+    process.env.NODE_ENV = "development";
+    await wm.createMainWindow();
+    await wm.createHistoryWindow();
+
+    wm.showHistoryWindow();
+    expect(wm.mainWindow!.setAlwaysOnTop).toHaveBeenCalledWith(false);
+  });
+
+  // [ADR-015] backgroundThrottling must be false so renderer timers are not
+  // throttled when the main window is hidden — otherwise AI optimization
+  // setTimeout(100ms) stalls to ~1s and transcription results can be lost.
+  it("main window has backgroundThrottling: false in webPreferences", async () => {
+    const WindowManager = await loadWindowManager();
+    const wm = new WindowManager();
+    process.env.NODE_ENV = "development";
+    await wm.createMainWindow();
+
+    expect(MockBrowserWindow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        webPreferences: expect.objectContaining({
+          backgroundThrottling: false,
+        }),
+      }),
+    );
+  });
+
+  // [ADR-015] Closing the settings window must restore focus to the main
+  // window so the app doesn't appear to "disappear".
+  it("settings window closed handler restores main window focus", async () => {
+    const WindowManager = await loadWindowManager();
+    const wm = new WindowManager();
+    process.env.NODE_ENV = "development";
+    await wm.createMainWindow();
+    await wm.createSettingsWindow();
+
+    // Simulate settings window close
+    expect(typeof onHandlers.closed).toBe("function");
+    onHandlers.closed!();
+
+    expect(wm.settingsWindow).toBeNull();
+    expect(wm.mainWindow!.show).toHaveBeenCalled();
+    expect(wm.mainWindow!.focus).toHaveBeenCalled();
+    // [CodeReview] restoreMainWindow must also restore alwaysOnTop
+    expect(wm.mainWindow!.setAlwaysOnTop).toHaveBeenCalled();
+  });
+
+  // [ADR-015] Same for history window.
+  it("history window closed handler restores main window focus", async () => {
+    const WindowManager = await loadWindowManager();
+    const wm = new WindowManager();
+    process.env.NODE_ENV = "development";
+    await wm.createMainWindow();
+    await wm.createHistoryWindow();
+
+    expect(typeof onHandlers.closed).toBe("function");
+    onHandlers.closed!();
+
+    expect(wm.historyWindow).toBeNull();
+    expect(wm.mainWindow!.show).toHaveBeenCalled();
+    expect(wm.mainWindow!.focus).toHaveBeenCalled();
+    // [CodeReview] restoreMainWindow must also restore alwaysOnTop
+    expect(wm.mainWindow!.setAlwaysOnTop).toHaveBeenCalled();
   });
 });
