@@ -34,6 +34,12 @@ function validateAudioPath(filePath: string): AudioPathResult {
   if (!allowedExts.includes(ext)) {
     return { valid: false, error: "不支持的音频格式: " + ext };
   }
+  // UNC paths (\\server\share\...) are never under the allowed roots.
+  // Reject before any fs.* call — realpathSync on non-existent UNC hosts
+  // triggers multi-second network timeouts (Windows).
+  if (process.platform === "win32" && filePath.startsWith("\\\\")) {
+    return { valid: false, error: "路径不在允许范围内" };
+  }
   const resolved = path.resolve(filePath);
   // [20260725_Fix_SymlinkEscape] path.resolve() does NOT resolve symlinks,
   // so an attacker could plant a symlink inside an allowed directory that

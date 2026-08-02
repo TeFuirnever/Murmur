@@ -206,19 +206,22 @@ describe("FunASRServer process lifecycle", () => {
       expect(s.modelsInitialized).toBe(false);
     });
 
-    it("forces kill after timeout on non-Windows", async () => {
-      vi.useFakeTimers();
-      const s = srv(server);
-      const fakeProc = new FakeChildProcess();
-      s.serverProcess = fakeProc;
-      s.serverReady = true;
-      const shutdownPromise = server.gracefulShutdown();
-      // Advance past the 5s timeout — proc.kill("SIGKILL") triggers 'close'.
-      vi.advanceTimersByTime(5000);
-      await shutdownPromise;
-      expect(fakeProc.killed).toBe(true);
-      expect(s.serverProcess).toBeNull();
-    });
+    it.skipIf(process.platform === "win32")(
+      "forces kill after timeout on non-Windows",
+      async () => {
+        vi.useFakeTimers();
+        const s = srv(server);
+        const fakeProc = new FakeChildProcess();
+        s.serverProcess = fakeProc;
+        s.serverReady = true;
+        const shutdownPromise = server.gracefulShutdown();
+        // Advance past the 5s timeout — proc.kill("SIGKILL") triggers 'close'.
+        vi.advanceTimersByTime(5000);
+        await shutdownPromise;
+        expect(fakeProc.killed).toBe(true);
+        expect(s.serverProcess).toBeNull();
+      },
+    );
   });
 
   describe("_startFunASRServer — early return paths", () => {

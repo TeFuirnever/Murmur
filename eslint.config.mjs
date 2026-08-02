@@ -17,6 +17,7 @@ export default tseslint.config(
       ".venv/",
       "python/",
       ".omc/",
+      "website/.astro/",
     ],
   },
 
