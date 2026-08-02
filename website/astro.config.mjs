@@ -8,6 +8,13 @@ export default defineConfig({
   integrations: [sitemap()],
   vite: {
     plugins: [tailwindcss()],
+    // [Fix] Explicitly empty PostCSS config prevents Vite from walking up
+    // to the repo root postcss.config.ts (which references @tailwindcss/postcss,
+    // not installed in website/node_modules). Tailwind v4 is handled by the
+    // Vite plugin above — PostCSS is not needed.
+    css: {
+      postcss: {},
+    },
   },
   i18n: {
     defaultLocale: "en",

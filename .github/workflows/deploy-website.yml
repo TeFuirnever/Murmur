@@ -3,7 +3,7 @@ name: Deploy Website
 on:
   push:
     branches: [main]
-    paths: ['website/**']
+    paths: ["website/**"]
   workflow_dispatch:
 
 permissions:
@@ -21,7 +21,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'npm'
+          cache: "npm"
           cache-dependency-path: website/package-lock.json
 
       - name: Install dependencies
