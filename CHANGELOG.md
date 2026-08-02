@@ -7,7 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-08-02
+
 ### Fixed
+
+- **UNC 路径网络超时**（PR #133）：`audioPathValidator` 对 `\\server\share\...` 格式的 UNC 路径执行 `fs.realpathSync` 时，逐级 walk-up 触发 DNS 查找，非-existent 主机导致 13 秒以上挂起。修复：在扩展名校验后立即拒绝 UNC 路径，跳过所有 fs 调用。
+- ESLint 忽略 `website/.astro/` 自动生成的 `.d.ts` 文件（Astro 产物，不应 lint）
+- Unix-only 测试（symlink escape / SIGKILL kill）在 Windows 上用 `it.skipIf` 跳过
+
+### Changed
+
+- `postinstall` 用系统 Node 重编 better-sqlite3 导致 ABI 不匹配(`NODE_MODULE_VERSION 137` vs Electron 36 需要的 `135`),`pnpm run dev` 加载原生模块即崩且错误被 `concurrently` 吞掉、终端无输出。删除有害的 `pnpm rebuild better-sqlite3`,改由 `electron-builder install-app-deps` 统一用 Electron ABI 编译。
 
 - `postinstall` 用系统 Node 重编 better-sqlite3 导致 ABI 不匹配(`NODE_MODULE_VERSION 137` vs Electron 36 需要的 `135`),`pnpm run dev` 加载原生模块即崩且错误被 `concurrently` 吞掉、终端无输出。删除有害的 `pnpm rebuild better-sqlite3`,改由 `electron-builder install-app-deps` 统一用 Electron ABI 编译。
 
