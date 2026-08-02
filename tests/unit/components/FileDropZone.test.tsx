@@ -16,9 +16,14 @@ describe("FileDropZone", () => {
       />,
     );
 
-    const dropZone = screen.getByText("点击选择音频文件或拖拽到此处").closest("div")!;
+    const dropZone = screen
+      .getByText("点击选择音频文件或拖拽到此处")
+      .closest("div")!;
     const file = new File(["audio"], "test.wav", { type: "audio/wav" });
-    Object.defineProperty(file, "path", { value: "/fake/test.wav", writable: false });
+    Object.defineProperty(file, "path", {
+      value: "/fake/test.wav",
+      writable: false,
+    });
 
     fireEvent.drop(dropZone, {
       dataTransfer: { files: [file] },
@@ -39,7 +44,9 @@ describe("FileDropZone", () => {
       />,
     );
 
-    const dropZone = screen.getByText("点击选择音频文件或拖拽到此处").closest("div")!;
+    const dropZone = screen
+      .getByText("点击选择音频文件或拖拽到此处")
+      .closest("div")!;
     const file = new File(["audio"], "test.wav", { type: "audio/wav" });
     // File in browser has no .path property — simulates non-Electron env
 

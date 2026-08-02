@@ -54,6 +54,7 @@ dev:main 改用 `build:main && electron .`，dev/e2e/prod 加载同一 artifact�
 ### P1.1 — canary 提升为 E2E 强断言 ⏸ 受阻（2026-07-28 试过）
 
 目标：electron-launch.ts 缓冲 main 输出，firstWindow 后断言 `[main:canary]`。试过发现两个阻塞：
+
 1. **canary 时序**：canary（`main.ts:12`）在 electron 启动早期触发，而 `mainOutputBuf` 在 `electron.launch()` 返回后才 attach → 错过早期 canary，gate 可能断言不到。需重想捕获方式（main 写文件 / gate 用晚期信号）。
 2. **e2e 环境**：worktree firstWindow timeout（主 repo 同 e2e diag 过、worktree 不通，疑 embedded python/资源差异）；CI e2e 也 non-blocking（ADR-014 firstWindow 至今未解决）。
 

@@ -210,13 +210,11 @@ describe("useModelStatus hook", () => {
 
   it("reports an error stage when checkModelFiles returns success:false", async () => {
     const stub = makeElectronAPIStub({
-      checkModelFiles: vi
-        .fn()
-        .mockResolvedValue({
-          success: false,
-          models_downloaded: false,
-          missing_models: [],
-        }),
+      checkModelFiles: vi.fn().mockResolvedValue({
+        success: false,
+        models_downloaded: false,
+        missing_models: [],
+      }),
     });
     (globalThis.window as TestWindow).electronAPI = stub;
 

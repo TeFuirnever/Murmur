@@ -384,9 +384,9 @@ are untested.
 ### 2.1 MAX_FILE_SIZE (500MB) rejection in VALIDATE_FILE
 
 **File**: `src/helpers/ipc/transcriptionHandlers.ts:117-141` (line 127-129)
-**Current coverage**: not tested — the existing VALIDATE_FILE test only covers
+**Current coverage**: not tested — the existing VALIDATE*FILE test only covers
 "unsupported extension" and "non-existent file".
-**Trigger**: `fs.statSync` returns a size > 500 _ 1024 _ 1024.
+**Trigger**: `fs.statSync` returns a size > 500 * 1024 \_ 1024.
 **Expected behavior**: returns `{ success: false, error: "文件超过500MB限制" }`
 without invoking the FunASR server.
 **Test case**:
