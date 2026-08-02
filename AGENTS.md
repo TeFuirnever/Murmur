@@ -1,12 +1,13 @@
-<!-- Generated: 2026-04-13 | Updated: 2026-05-30 -->
+<!-- Generated: 2026-04-13 | Updated: 2026-08-02 -->
 
 # AGENTS.md
 
-Instructions for AI agent. All content in English.
+Instructions for AI agents working on Murmur. All content in English.
 
 > **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 >
 > Architecture reference: `docs/`
+> Project-specific constraints: `CLAUDE.md`
 
 ---
 
@@ -31,7 +32,7 @@ Before implementing:
 - No abstractions for single-use code.
 - No "flexibility" or "configurability" that wasn't requested.
 - No error handling for impossible scenarios.
-- If you write 200 lines and it could be 50, rewrite it.
+- If you write 200 lines and it could be 50, rewrite.
 
 Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
 
@@ -76,7 +77,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 ### Core Principles
 
 - **Verify Before Claiming Done** — evidence over assumptions.
-- **Trace Before Fix** — when debugging performance issues (especially "entire client is slow"), trace the FULL execution path from user trigger to observable symptom, step by step. Do not propose architectural solutions based on assumptions. Check the simplest explanation first. Lesson from PR#599.
+- **Trace Before Fix** — when debugging, trace the FULL execution path from trigger to symptom. Check the simplest explanation first.
 - **Know When to Stop** — if blocked for more than 2 attempts, or requirements remain ambiguous after clarification, escalate instead of guessing.
 
 ## MUST DO
@@ -86,7 +87,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 3. **Bug fixes: test first, then fix.** Write a regression test that reproduces the bug and fails. Confirm the failure. Fix the code. Verify the test passes. No bug fix without a regression test.
 4. For non-trivial work, define verifiable success criteria before implementation (see _Goal-Driven Execution_ above).
 5. After submitting code: state potential risks + test recommendations.
-6. All user-visible text MUST go through i18n; no hardcoded strings (see _i18n_ section for details).
+6. All user-visible text MUST go through i18n (`src/i18n/locales/`); no hardcoded UI strings.
 
 ## Workflow
 
@@ -95,36 +96,63 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 - Use active planning for non-trivial tasks, architectural decisions, or work spanning multiple areas.
 - If new evidence invalidates the current approach, stop and re-plan.
 - **High-risk areas** — apply stronger planning, review, and verification:
-  - `electron/main/` and preload boundaries
-  - `packages/ipc-contracts/` and IPC channel changes
-  - `packages/gateway/`, `packages/bastion/`, and MCP/security flows
-  - Session flow, auth, privacy, and packaging/release behavior
+  - `main.ts` and `preload.ts` boundaries (Electron IPC bridge)
+  - `src/helpers/ipc-contracts.ts` and IPC channel changes
+  - `src/helpers/ipc/` handler modules (domain-scoped IPC handlers)
+  - `src/helpers/funasrManager.ts` and sub-modules (Python subprocess lifecycle)
+  - `src/helpers/funasrServer.ts` (platform-specific process kill: `taskkill` vs `SIGKILL`)
+  - `src/helpers/windowManager.ts` (sandbox, CSP, window creation)
+  - `src/helpers/database.ts` (safeStorage encryption, schema)
+  - `src/helpers/audioPathValidator.ts` (cross-platform path validation)
+  - Packaging/release and electron-builder configuration
   - User-visible text and i18n resources
+
+### Cross-Platform Awareness
+
+Murmur targets **Windows** and **macOS**. See `CLAUDE.md` → _Cross-Platform Support_ for the full list of platform-specific concerns. Key rules:
+
+- Use `process.platform === "win32"` for platform checks, not `os.platform()` or feature detection.
+- Windows paths use backslashes; UNC paths (`\\server\share`) are rejected by `audioPathValidator`.
+- Native modules (`better-sqlite3`) need Electron ABI — on Windows CI, use `--ignore-scripts` + `@electron/rebuild`.
+- Embedded Python (`prepare-embedded-python.js`) supports both macOS (`-apple-darwin`) and Windows (`-pc-windows-msvc-shared`) downloads.
+- Add `it.skipIf(process.platform === "win32")` for Unix-only test behavior.
 
 ### Bug Fixes
 
 1. Reproduce the issue, then follow MUST DO #3 (test-first workflow).
 2. State potential risks + test recommendations (MUST DO #5).
-3. **DTS / declaration fixes:** when modifying `.d.ts` or shared type schemas, write a type-contract test (schema validation, runtime parse, or compile-time assertion) first. Confirm it fails with the current broken declaration, fix, then verify the test passes.
+3. **Type declaration fixes:** when modifying `.d.ts` or shared type schemas, write a type-contract test first. Confirm it fails with the current broken declaration, fix, then verify the test passes.
 
 ## Code Rules
 
-### TypeScript
+### JavaScript / TypeScript / React
 
 - No `any`, `as any`, `@ts-ignore`, `@ts-expect-error`.
 - Prefer type inference; add explicit annotations when intent is unclear.
 - No empty `catch` — log, rethrow, or handle errors intentionally.
 - Error handling: always handle real error paths (main process, IPC, network); skip defensive code only for states that truly cannot occur.
 - No magic numbers or hardcoded config.
+- Use existing IPC contract constants from `src/helpers/ipc-contracts.ts` — zero hardcoded channel strings.
+- ESLint with 0 warnings, 0 errors.
+
+### Prohibited
+
+1. No modifying FunASR Python subprocess lifecycle without test coverage.
+2. No silent error swallowing in main process.
+3. No hardcoded IPC channel strings — use `ipc-contracts.ts` constants.
+4. No new IPC handler files without registering in `src/helpers/ipc/index.ts`.
+5. No adding settings without touching **all 4** places: `SettingsState` + `DEFAULT_SETTINGS` + `loadSettings` builder + `saveSettings` body in `useSettings.ts`, AND the key in `ALLOWED_SETTING_KEYS` (`settingsHandlers.ts`).
+6. No importing `ogl`/`motion` eagerly — they must stay lazy-loaded via `React.lazy` in `EffectsLayer.tsx` only.
 
 ## Verification
 
 ### Delivery Gates
 
-- **Build gate:** `./build.sh` MUST pass (exit code 0) before any commit is considered ready for merge. This is the single source of truth for project health — it runs lint, typecheck, tests, and packaging in one shot.
-- **Basic:** `pnpm lint` + `pnpm typecheck` + `pnpm test` + `pnpm test:i18n`
-- **Bug fix:** follow MUST DO #3 (test-first workflow).
+- **All commits MUST pass `pnpm ci:check` before push.** This runs: format check, lint, license check, test with coverage, build:preload, build:renderer, effects chunk isolation check.
+- **Quick check:** `pnpm lint` + `pnpm test` for rapid iteration during development.
+- **Bug fix:** reproduce the bug, add a failing test **first**, then fix and verify.
 - **High-risk** (session flow, IPC, security, privacy, release packaging): include a risk statement and fresh verification evidence.
+- **Gate failure:** run `node scripts/ci-check.js --json` to diagnose; use `--fix` for auto-fixable issues.
 
 ### Commit Format
 

@@ -72,7 +72,7 @@ Instructions for AI agents working. All content in English.
 
 Murmur targets **Windows** and **macOS** (Apple Silicon). Code must work on both platforms. Known platform-specific concerns:
 
-- **Python paths**: macOS uses `python/bin/python3.11` (embedded); Windows falls back to system Python via `pythonEnvironment.ts` → `findPythonExecutable()`. The `prepare-embedded-python.js` script only supports macOS downloads.
+- **Python paths**: macOS uses `python/bin/python3.11` (embedded); Windows uses `python/python.exe` (embedded). The `prepare-embedded-python.js` script supports both platforms via platform-aware getters (`pythonBin`, `sitePackagesPath`, `downloadPlatform`).
 - **Process management**: `gracefulShutdown()` uses `taskkill /T /F /PID` on Windows, `proc.kill("SIGKILL")` on Unix — see `src/helpers/funasrServer.ts`.
 - **Path validation**: `audioPathValidator.ts` allows all `C:\` drive paths on Windows; UNC paths (`\\server\share`) are rejected early to avoid network timeouts. macOS uses realpath + `/Volumes/` prefix checks.
 - **Native modules**: `better-sqlite3` needs Electron ABI. On Windows CI, `electron-builder install-app-deps` can't fork `pnpm.mjs` — use `--ignore-scripts` + `npx @electron/rebuild` instead.
