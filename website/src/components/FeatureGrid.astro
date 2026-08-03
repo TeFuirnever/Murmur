@@ -62,9 +62,16 @@ const features = [
 
 <div class="section-divider max-w-[980px] mx-auto"></div>
 
-<!-- Core Features -->
+<!-- Core Features — Bento grid -->
+<!-- [20260803_Feature_WebsiteRedesign] Features upgraded to a Bento grid.
+     DOM order equals visual reading order (no `order` reordering) so
+     screen-reader flow stays correct. The first tile spans col-span-2
+     row-span-2 (the hero feature). On mobile everything collapses to a
+     single column with spans reset. All tiles retain .reveal-up / .card-lift
+     / .glass so scroll-reveal + hover-lift + the e2e class-count assertions
+     still hold. -->
 <section id="features" class="py-28 sm:py-36 px-6">
-  <div class="max-w-[980px] mx-auto">
+  <div class="max-w-[1140px] mx-auto">
     <p class="reveal-up text-xs font-medium tracking-[0.2em] uppercase text-text-tertiary text-center mb-4">
       {t.section_features}
     </p>
@@ -72,18 +79,41 @@ const features = [
       {t.features_title}
     </h2>
 
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <!-- [20260803_Feature_WebsiteRedesign] Fixed row height (auto-rows) so the
+         2x2 hero tile reads as a large square rather than two stacked short
+         rows (minmax(0,1fr) collapsed to content height, making the span-2
+         tile visually smaller than intended). 200px rows × 2 + gap = a real
+         large tile; smaller cards center their content. -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:auto-rows-[200px]">
+    <!-- [20260803_Feature_WebsiteRedesign] END -->
       {features.map((feat, i) => (
-        <div class={`reveal-up delay-${i + 2} glass card-lift rounded-2xl p-6`}>
-          <div class="w-9 h-9 rounded-lg bg-accent/10 flex items-center justify-center mb-4">
-            <svg class="w-4.5 h-4.5 text-accent" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+        <div
+          class={[
+            'reveal-up glass card-lift bento-card glow-ring p-6 flex flex-col',
+            `delay-${Math.min(i + 2, 8)}`,
+            // Hero tile: 2x2 on large screens; every tile is a single cell on mobile.
+            i === 0 ? 'lg:col-span-2 lg:row-span-2 p-8' : '',
+          ].join(' ')}
+        >
+          <div class={[
+            'rounded-lg bg-accent/10 flex items-center justify-center mb-4',
+            i === 0 ? 'w-12 h-12' : 'w-9 h-9'
+          ].join(' ')}>
+            <svg class={i === 0 ? 'w-6 h-6 text-accent' : 'w-4.5 h-4.5 text-accent'} fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
               <path d={iconPaths[feat.icon]} />
             </svg>
           </div>
-          <h3 class="text-[15px] font-semibold font-display tracking-tight mb-1.5">{feat.title}</h3>
-          <p class="text-[13px] text-text-secondary leading-relaxed">{feat.desc}</p>
+          <h3 class={[
+            'font-semibold font-display tracking-tight mb-1.5',
+            i === 0 ? 'text-2xl mb-3' : 'text-[15px]'
+          ].join(' ')}>{feat.title}</h3>
+          <p class={[
+            'text-text-secondary leading-relaxed',
+            i === 0 ? 'text-base' : 'text-[13px]'
+          ].join(' ')}>{feat.desc}</p>
         </div>
       ))}
     </div>
   </div>
 </section>
+<!-- [20260803_Feature_WebsiteRedesign] END -->

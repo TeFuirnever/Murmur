@@ -1,30 +1,71 @@
 @import "tailwindcss";
 
 /* ─── Design Tokens ─── */
+/* [20260803_Feature_WebsiteRedesign] Color token VALUES updated to the
+   fox-mascot brand palette (lavender → amber → pink). Token NAMES are
+   preserved so existing Tailwind utilities (bg-accent, text-text-secondary,
+   bg-surface, border-border, etc.) keep resolving — Tailwind v4 silently
+   drops utilities whose token was renamed, so DO NOT rename or remove any
+   token. Reference: ui-ux-pro-max design-system (dark mode + brand). */
 @theme {
-  --color-primary: #6366f1;
-  --color-primary-light: #818cf8;
-  --color-bg: #000000;
-  --color-bg-elevated: #111111;
-  --color-surface: #1c1c1e;
-  --color-surface-glass: rgba(28, 28, 30, 0.72);
-  --color-border: rgba(255, 255, 255, 0.08);
-  --color-border-hover: rgba(255, 255, 255, 0.15);
-  --color-text: #f5f5f7;
-  --color-text-secondary: #a1a1a6;
-  --color-text-tertiary: #6e6e73;
-  --color-accent: #6366f1;
-  --color-accent-secondary: #a855f7;
-  --color-success: #30d158;
+  --color-primary: #a78bfa;
+  --color-primary-light: #c4b5fd;
+  --color-bg: #0f0a1f;
+  --color-bg-elevated: #1a1430;
+  --color-surface: #1f1735;
+  --color-surface-glass: rgba(31, 23, 53, 0.72);
+  --color-border: rgba(196, 181, 253, 0.1);
+  --color-border-hover: rgba(196, 181, 253, 0.2);
+  --color-text: #f5f3ff;
+  --color-text-secondary: #c4b5fd;
+  --color-text-tertiary: #a8a3c7;
+  --color-accent: #a78bfa;
+  --color-accent-secondary: #fb923c;
+  --color-success: #34d399;
 
+  /* Inter leads as a progressive enhancement (used if installed locally);
+     system PingFang SC / Noto Sans SC provide CJK glyphs. NO Google Fonts
+     fetch — it is unreliable in mainland China and this product targets
+     Chinese users. */
   --font-display:
-    "SF Pro Display", -apple-system, "PingFang SC", "Noto Sans SC",
+    "Inter", "SF Pro Display", -apple-system, "PingFang SC", "Noto Sans SC",
     "Helvetica Neue", sans-serif;
   --font-body:
-    "SF Pro Text", -apple-system, "PingFang SC", "Noto Sans SC",
+    "Inter", "SF Pro Text", -apple-system, "PingFang SC", "Noto Sans SC",
     "Helvetica Neue", sans-serif;
   --font-mono: "SF Mono", "Fira Code", ui-monospace, monospace;
 }
+/* [20260803_Feature_WebsiteRedesign] END */
+
+/* [20260803_Feature_WebsiteRedesign] Fox accent colors declared as plain
+   :root variables (NOT in @theme) so they do not generate unused utility
+   classes. Used via var() in component CSS and inline styles.
+   The -<NN> suffixed tokens are alpha variants (NN = opacity percent) so
+   component inline styles don't hardcode rgba() duplicates of the base
+   hex — changing the brand color now means changing one line here.
+   Each token's rgba MUST match its base hex: lavender=167,139,250;
+   amber=251,146,60; pink=244,114,182. */
+:root {
+  --fox-lavender: #a78bfa;
+  --fox-amber: #fb923c;
+  --fox-pink: #f472b6;
+
+  --fox-lavender-04: rgba(167, 139, 250, 0.04);
+  --fox-lavender-12: rgba(167, 139, 250, 0.12);
+  --fox-lavender-15: rgba(167, 139, 250, 0.15);
+  --fox-lavender-60: rgba(167, 139, 250, 0.6);
+
+  --fox-amber-08: rgba(251, 146, 60, 0.08);
+  --fox-amber-15: rgba(251, 146, 60, 0.15);
+  --fox-amber-60: rgba(251, 146, 60, 0.6);
+
+  --fox-pink-06: rgba(244, 114, 182, 0.06);
+  --fox-pink-60: rgba(244, 114, 182, 0.6);
+
+  /* Subtle border tone derived from lavender (used by ComparisonTable pill). */
+  --fox-border-30: rgba(196, 181, 253, 0.3);
+}
+/* [20260803_Feature_WebsiteRedesign] END */
 
 /* ─── Base ─── */
 html {
@@ -41,25 +82,50 @@ body {
   margin: 0;
 }
 
+/* [20260803_Feature_WebsiteRedesign] selection tint aligned to lavender. */
 ::selection {
-  background: rgba(99, 101, 241, 0.3);
+  background: rgba(167, 139, 250, 0.3);
   color: var(--color-text);
 }
+/* [20260803_Feature_WebsiteRedesign] END */
 
-/* ─── Gradient Text (Apple signature) ─── */
+/* ─── Gradient Text ─── */
+/* [20260803_Feature_WebsiteRedesign] Brand gradient: lavender → amber → pink. */
 .gradient-text {
-  background: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%);
+  background: linear-gradient(135deg, #a78bfa 0%, #fb923c 50%, #f472b6 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
+/* [20260803_Feature_WebsiteRedesign] END */
 
 .gradient-text-subtle {
-  background: linear-gradient(135deg, #f5f5f7 0%, #a1a1a6 100%);
+  background: linear-gradient(135deg, #f5f3ff 0%, #c4b5fd 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
+
+/* [20260803_Feature_WebsiteRedesign] Two-tone fox gradient for secondary
+   headings. Solid-color fallback below for engines without background-clip. */
+.gradient-text-fox {
+  background: linear-gradient(135deg, #a78bfa 0%, #fb923c 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+/* Safety fallback: if background-clip:text is unsupported, show solid text so
+   headings never become invisible (a11y — Hero h1 etc.). */
+@supports not (background-clip: text) {
+  .gradient-text,
+  .gradient-text-subtle,
+  .gradient-text-fox {
+    background: none;
+    -webkit-text-fill-color: currentColor;
+    color: var(--color-text);
+  }
+}
+/* [20260803_Feature_WebsiteRedesign] END */
 
 /* ─── Glass Card ─── */
 .glass {
@@ -78,6 +144,7 @@ body {
   position: relative;
   overflow: hidden;
 }
+/* [20260803_Feature_WebsiteRedesign] aurora tints switched to fox palette. */
 .hero-bg::before {
   content: "";
   position: absolute;
@@ -88,22 +155,23 @@ body {
   background:
     radial-gradient(
       ellipse 80% 50% at 50% 0%,
-      rgba(99, 101, 241, 0.15) 0%,
+      rgba(167, 139, 250, 0.15) 0%,
       transparent 60%
     ),
     radial-gradient(
       ellipse 60% 40% at 80% 20%,
-      rgba(168, 85, 247, 0.08) 0%,
+      rgba(251, 146, 60, 0.08) 0%,
       transparent 50%
     ),
     radial-gradient(
       ellipse 60% 40% at 20% 30%,
-      rgba(236, 72, 153, 0.05) 0%,
+      rgba(244, 114, 182, 0.05) 0%,
       transparent 50%
     );
   pointer-events: none;
   z-index: 0;
 }
+/* [20260803_Feature_WebsiteRedesign] END */
 
 /* ─── Orb Glow ─── */
 .orb {
@@ -194,6 +262,179 @@ body {
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
 }
 
+/* [20260803_Feature_WebsiteRedesign] Glow ring — a hover-only accent border
+   (not a continuous animation, to keep perf/a11y cost low). Used on Bento
+   cards, the comparison Murmur column, and AI-model pills. */
+.glow-ring {
+  position: relative;
+}
+.glow-ring::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, var(--fox-lavender), var(--fox-amber));
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+.glow-ring:hover::after {
+  opacity: 1;
+}
+/* [20260803_Feature_WebsiteRedesign] END */
+
+/* [20260803_Feature_WebsiteRedesign] Bento card base. Shared padding/glass
+   for the Bento features grid; .col-span / .row-span are applied per-tile in
+   markup. DOM order equals visual reading order (no `order` reordering) so
+   screen-reader flow stays correct. */
+.bento-card {
+  border-radius: 1rem;
+}
+/* [20260803_Feature_WebsiteRedesign] END */
+
+/* [20260803_Feature_WebsiteRedesign] StatsStrip — static 4-cell trust grid.
+   No marquee/scroll (avoids screen-reader repetition + reduced-motion gap). */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+@media (min-width: 768px) {
+  .stat-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.stat-number {
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+/* [20260803_Feature_WebsiteRedesign] END */
+
+/* [20260803_Feature_WebsiteRedesign] Hero visual — pure CSS/SVG app-window
+   mock with an animated voice waveform. No JS, no <img> (a11y-safe: empty
+   decorative container, marked aria-hidden in the component). Waveform bars
+   animate via CSS keyframes (transform scaleY) — GPU-friendly and covered by
+   the prefers-reduced-motion block at the end of this file. */
+.hero-visual {
+  position: relative;
+  border-radius: 1rem;
+  overflow: hidden;
+}
+.app-window {
+  border-radius: 1rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-glass);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  overflow: hidden;
+}
+.app-window-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+}
+.app-window-dot {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 9999px;
+}
+.waveform {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  height: 4rem;
+}
+.waveform-bar {
+  width: 3px;
+  background: linear-gradient(var(--fox-lavender), var(--fox-amber));
+  border-radius: 9999px;
+  transform-origin: center;
+  animation: waveform 1.2s ease-in-out infinite;
+}
+.waveform-bar:nth-child(1) {
+  animation-delay: -0s;
+  height: 40%;
+}
+.waveform-bar:nth-child(2) {
+  animation-delay: -0.2s;
+  height: 70%;
+}
+.waveform-bar:nth-child(3) {
+  animation-delay: -0.4s;
+  height: 90%;
+}
+.waveform-bar:nth-child(4) {
+  animation-delay: -0.1s;
+  height: 60%;
+}
+.waveform-bar:nth-child(5) {
+  animation-delay: -0.3s;
+  height: 95%;
+}
+.waveform-bar:nth-child(6) {
+  animation-delay: -0.5s;
+  height: 75%;
+}
+.waveform-bar:nth-child(7) {
+  animation-delay: -0.2s;
+  height: 55%;
+}
+.waveform-bar:nth-child(8) {
+  animation-delay: -0.4s;
+  height: 85%;
+}
+.waveform-bar:nth-child(9) {
+  animation-delay: -0.1s;
+  height: 45%;
+}
+@keyframes waveform {
+  0%,
+  100% {
+    transform: scaleY(0.4);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+/* Typing transcript line with a blinking cursor (raw vs polished text is
+   toggled in the component via CSS animation on the two text spans). */
+.typing-line {
+  min-height: 1.5rem;
+  overflow: hidden;
+}
+.typing-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: var(--fox-amber);
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: blink 1s step-end infinite;
+}
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+/* [20260803_Feature_WebsiteRedesign] END */
+
 /* ─── FAQ Accordion ─── */
 details summary {
   cursor: pointer;
@@ -251,8 +492,15 @@ details[open] .faq-answer {
 }
 .btn-primary:hover {
   transform: scale(1.02);
-  box-shadow: 0 4px 24px rgba(245, 245, 247, 0.2);
+  box-shadow: 0 4px 24px rgba(245, 243, 255, 0.2);
 }
+/* [20260803_Feature_WebsiteRedesign] visible focus ring for keyboard nav. */
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible {
+  outline: 2px solid var(--fox-amber);
+  outline-offset: 2px;
+}
+/* [20260803_Feature_WebsiteRedesign] END */
 
 .btn-secondary {
   display: inline-flex;
@@ -296,7 +544,10 @@ details[open] .faq-answer {
     --color-border-hover: rgba(0, 0, 0, 0.15);
     --color-text: #1d1d1f;
     --color-text-secondary: #6e6e73;
-    --color-text-tertiary: #86868b;
+    /* [20260803_Feature_WebsiteRedesign] fix: #86868b was 3.51:1 on #fbfbfd
+       (AA fail). #6e6e73 is 6.08:1 (AA pass). */
+    --color-text-tertiary: #6e6e73;
+    /* [20260803_Feature_WebsiteRedesign] END */
   }
   .gradient-text-subtle {
     background: linear-gradient(135deg, #1d1d1f 0%, #6e6e73 100%);
@@ -308,12 +559,12 @@ details[open] .faq-answer {
     background:
       radial-gradient(
         ellipse 80% 50% at 50% 0%,
-        rgba(99, 101, 241, 0.08) 0%,
+        rgba(167, 139, 250, 0.08) 0%,
         transparent 60%
       ),
       radial-gradient(
         ellipse 60% 40% at 80% 20%,
-        rgba(168, 85, 247, 0.04) 0%,
+        rgba(251, 146, 60, 0.04) 0%,
         transparent 50%
       );
   }
@@ -329,3 +580,37 @@ details[open] .faq-answer {
     border-color: var(--color-border);
   }
 }
+
+/* [20260803_Feature_WebsiteRedesign] Reduced-motion safety net. Covers BOTH
+   new animations (waveform, blink) and pre-existing ones (.orb float, reveal
+   transitions). Revealed elements are forced visible so JS-disabled or
+   reduced-motion users never see permanently hidden content. This also fixes
+   a pre-existing bug: the site previously had zero reduced-motion handling. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .reveal-up,
+  .reveal-scale {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+  /* [20260803_Feature_WebsiteRedesign] Each animated selector gets its own
+     `animation-name: none` rule. Tailwind v4 / LightningCSS was dropping
+     `.orb` from a grouped `animation: none !important` during minification,
+     which silently re-enabled the float animation for reduced-motion users.
+     Splitting the selectors and targeting animation-name specifically
+     survives the build and is verified by the e2e reduced-motion test. */
+  .orb {
+    animation-name: none !important;
+  }
+  .waveform-bar {
+    animation-name: none !important;
+  }
+  .typing-cursor {
+    animation-name: none !important;
+  }
+  /* [20260803_Feature_WebsiteRedesign] END */
+}
+/* [20260803_Feature_WebsiteRedesign] END */

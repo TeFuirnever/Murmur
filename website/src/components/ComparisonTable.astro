@@ -31,7 +31,9 @@ const headers = [t.comparison_macos, t.comparison_iflytek, t.comparison_whisper]
           <tr class="border-b border-border">
             <th class="text-left pb-4 pr-4 text-text-tertiary font-medium text-xs tracking-wide uppercase"></th>
             <th class="pb-4 px-3 text-center">
-              <span class="pill bg-accent/10 text-accent font-semibold">{t.comparison_murmur}</span>
+              <!-- [20260803_Feature_WebsiteRedesign] Murmur column highlighted with a fox-gradient pill; colors via --fox-* tokens. -->
+              <span class="pill font-semibold glow-ring" style="background: linear-gradient(135deg, var(--fox-lavender-15), var(--fox-amber-15)); color: var(--color-accent); border: 1px solid var(--fox-border-30);">{t.comparison_murmur}</span>
+              <!-- [20260803_Feature_WebsiteRedesign] END -->
             </th>
             {headers.map((h) => (
               <th class="pb-4 px-3 text-center text-text-tertiary font-medium text-xs whitespace-nowrap">{h}</th>
@@ -42,7 +44,9 @@ const headers = [t.comparison_macos, t.comparison_iflytek, t.comparison_whisper]
           {rows.map((row, ri) => (
             <tr class="border-b border-border/50">
               <td class="py-4 pr-4 font-medium text-text-secondary whitespace-nowrap">{t[row.key]}</td>
-              <td class="py-4 px-3 text-center font-semibold">
+              <!-- [20260803_Feature_WebsiteRedesign] Murmur value cell gets a subtle gradient backdrop via --fox-lavender-04. -->
+              <td class="py-4 px-3 text-center font-semibold" style="background: linear-gradient(180deg, var(--fox-lavender-04), transparent);">
+              <!-- [20260803_Feature_WebsiteRedesign] END -->
                 {row.murmur === true
                   ? <span class="text-success text-base">✓</span>
                   : <span>{row.murmur}</span>

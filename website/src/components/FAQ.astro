@@ -30,7 +30,9 @@ const faqItems = [
         <details class={`reveal-up delay-${Math.min(i + 2, 6)} border-b border-border group`}>
           <summary class="flex items-center justify-between py-5 gap-4">
             <span class="text-[15px] font-medium font-display tracking-tight">{item.q}</span>
-            <span class="faq-icon text-text-tertiary text-xl flex-shrink-0 leading-none">+</span>
+            <!-- [20260803_Feature_WebsiteRedesign] FAQ toggle gets a circular accent background. -->
+            <span class="faq-icon flex-shrink-0 leading-none w-7 h-7 rounded-full bg-accent/10 text-accent flex items-center justify-center text-lg">+</span>
+            <!-- [20260803_Feature_WebsiteRedesign] END -->
           </summary>
           <p class="faq-answer text-sm text-text-secondary leading-relaxed pb-5">{item.a}</p>
         </details>

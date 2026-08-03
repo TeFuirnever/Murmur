@@ -103,5 +103,11 @@
   "section_getting_started": "快速开始",
   "section_comparison": "对比",
   "section_providers": "AI 模型",
-  "section_faq": "常见问题"
+  "section_faq": "常见问题",
+  "stats_models": "11+ AI 模型",
+  "stats_local": "100% 本地",
+  "stats_formats": "5 种导出格式",
+  "stats_license": "Apache-2.0 开源",
+  "hero_visual_speaking": "嗯...就是说这个功能吧...",
+  "hero_visual_polished": "该功能的工作原理如下。"
 }
