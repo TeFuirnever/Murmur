@@ -39,11 +39,31 @@
 
 /* [20260803_Feature_WebsiteRedesign] Fox accent colors declared as plain
    :root variables (NOT in @theme) so they do not generate unused utility
-   classes. Used only via var() inside component CSS. */
+   classes. Used via var() in component CSS and inline styles.
+   The -<NN> suffixed tokens are alpha variants (NN = opacity percent) so
+   component inline styles don't hardcode rgba() duplicates of the base
+   hex — changing the brand color now means changing one line here.
+   Each token's rgba MUST match its base hex: lavender=167,139,250;
+   amber=251,146,60; pink=244,114,182. */
 :root {
   --fox-lavender: #a78bfa;
   --fox-amber: #fb923c;
   --fox-pink: #f472b6;
+
+  --fox-lavender-04: rgba(167, 139, 250, 0.04);
+  --fox-lavender-12: rgba(167, 139, 250, 0.12);
+  --fox-lavender-15: rgba(167, 139, 250, 0.15);
+  --fox-lavender-60: rgba(167, 139, 250, 0.6);
+
+  --fox-amber-08: rgba(251, 146, 60, 0.08);
+  --fox-amber-15: rgba(251, 146, 60, 0.15);
+  --fox-amber-60: rgba(251, 146, 60, 0.6);
+
+  --fox-pink-06: rgba(244, 114, 182, 0.06);
+  --fox-pink-60: rgba(244, 114, 182, 0.6);
+
+  /* Subtle border tone derived from lavender (used by ComparisonTable pill). */
+  --fox-border-30: rgba(196, 181, 253, 0.3);
 }
 /* [20260803_Feature_WebsiteRedesign] END */
 

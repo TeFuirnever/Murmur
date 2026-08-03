@@ -48,7 +48,18 @@ const server = createServer(async (req, res) => {
     let rel = normalize(urlPath).replace(/^(\.\.[/\\])+/, "");
     if (rel === "/" || rel === "") rel = "/index.html";
     // Directory request → try index.html inside it.
-    const abs = join(new URL(ROOT).pathname, rel);
+    const rootPath = new URL(ROOT).pathname;
+    const abs = join(rootPath, rel);
+    // [20260803_Feature_WebsiteRedesign] Belt-and-suspenders: even if
+    // normalize()/join() semantics change across Node versions or platforms,
+    // reject any resolved path that escapes ROOT. The leading regex above
+    // already blocked tested payloads, but this final guard makes the
+    // invariant explicit rather than incidental.
+    const withSep = rootPath.endsWith("/") ? rootPath : rootPath + "/";
+    if (abs !== rootPath && !abs.startsWith(withSep)) {
+      throw new Error("path escapes root");
+    }
+    // [20260803_Feature_WebsiteRedesign] END
     let target = abs;
     try {
       const s = await stat(abs);

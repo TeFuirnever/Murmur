@@ -16,10 +16,11 @@ const { t } = Astro.props;
 ---
 
 <section class="hero-bg min-h-screen flex items-center justify-center pt-12 pb-20 sm:pb-28 px-6 relative">
-  <!-- [20260803_Feature_WebsiteRedesign] orb colors switched to fox palette. -->
-  <div class="orb" style="width:400px;height:400px;top:10%;left:8%;background:rgba(167,139,250,0.12);animation-delay:-5s;"></div>
-  <div class="orb" style="width:300px;height:300px;top:25%;right:12%;background:rgba(251,146,60,0.08);animation-delay:-12s;"></div>
-  <div class="orb" style="width:200px;height:200px;bottom:15%;left:42%;background:rgba(244,114,182,0.06);animation-delay:-8s;"></div>
+  <!-- [20260803_Feature_WebsiteRedesign] orb colors use the --fox-*-<alpha>
+       tokens so brand-color changes propagate from global.css. -->
+  <div class="orb" style="width:400px;height:400px;top:10%;left:8%;background:var(--fox-lavender-12);animation-delay:-5s;"></div>
+  <div class="orb" style="width:300px;height:300px;top:25%;right:12%;background:var(--fox-amber-08);animation-delay:-12s;"></div>
+  <div class="orb" style="width:200px;height:200px;bottom:15%;left:42%;background:var(--fox-pink-06);animation-delay:-8s;"></div>
   <!-- [20260803_Feature_WebsiteRedesign] END -->
 
   <div class="max-w-[1140px] w-full mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-10 items-center relative z-10">
@@ -75,9 +76,11 @@ const { t } = Astro.props;
       <div class="app-window">
         <!-- Title bar -->
         <div class="app-window-bar">
-          <span class="app-window-dot" style="background: rgba(167,139,250,0.6);"></span>
-          <span class="app-window-dot" style="background: rgba(251,146,60,0.6);"></span>
-          <span class="app-window-dot" style="background: rgba(244,114,182,0.6);"></span>
+          <!-- [20260803_Feature_WebsiteRedesign] window dots use --fox-*-60 tokens. -->
+          <span class="app-window-dot" style="background: var(--fox-lavender-60);"></span>
+          <span class="app-window-dot" style="background: var(--fox-amber-60);"></span>
+          <span class="app-window-dot" style="background: var(--fox-pink-60);"></span>
+          <!-- [20260803_Feature_WebsiteRedesign] END -->
           <span class="ml-2 text-xs font-mono text-text-tertiary">Murmur</span>
         </div>
         <!-- Content -->
