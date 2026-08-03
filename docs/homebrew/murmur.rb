@@ -1,5 +1,9 @@
 # Homebrew Cask formula for Murmur
-# Install: brew install --cask murmur
+# [20260803_InstallHonesty] STATUS: DRAFT — NOT YET PUBLISHED.
+# This cask has not been submitted to Homebrew/homebrew-cask, so
+# `brew install --cask murmur` currently FAILS. Before submitting:
+#   1. Update `version` to the latest release tag.
+#   2. Fill `sha256` with the real DMG checksum (see checksums-sha256.txt in the release).
 # Submit to: https://github.com/Homebrew/homebrew-cask
 
 cask "murmur" do
