@@ -64,8 +64,14 @@ const { t } = Astro.props;
       </div>
     </div>
 
-    <!-- Right column: CSS/SVG animation card (decorative, a11y-hidden) -->
-    <div class="reveal-up delay-3 hero-visual" aria-hidden="true">
+    <!-- [20260803_Feature_WebsiteRedesign] a11y: the card is a decorative
+         demo, but it carries meaningful text (raw vs polished transcript).
+         Expose it as a labelled region so screen readers summarize the demo
+         intent instead of either skipping it (aria-hidden on the whole block)
+         or reading every decorative label. The pure-decoration waveform below
+         is aria-hidden individually. -->
+    <div class="reveal-up delay-3 hero-visual" role="img" aria-label={t.hero_visual_speaking + ' → ' + t.hero_visual_polished}>
+    <!-- [20260803_Feature_WebsiteRedesign] END -->
       <div class="app-window">
         <!-- Title bar -->
         <div class="app-window-bar">

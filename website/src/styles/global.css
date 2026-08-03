@@ -576,10 +576,21 @@ details[open] .faq-answer {
     transform: none !important;
     transition: none !important;
   }
-  .orb,
-  .waveform-bar,
-  .typing-cursor {
-    animation: none !important;
+  /* [20260803_Feature_WebsiteRedesign] Each animated selector gets its own
+     `animation-name: none` rule. Tailwind v4 / LightningCSS was dropping
+     `.orb` from a grouped `animation: none !important` during minification,
+     which silently re-enabled the float animation for reduced-motion users.
+     Splitting the selectors and targeting animation-name specifically
+     survives the build and is verified by the e2e reduced-motion test. */
+  .orb {
+    animation-name: none !important;
   }
+  .waveform-bar {
+    animation-name: none !important;
+  }
+  .typing-cursor {
+    animation-name: none !important;
+  }
+  /* [20260803_Feature_WebsiteRedesign] END */
 }
 /* [20260803_Feature_WebsiteRedesign] END */

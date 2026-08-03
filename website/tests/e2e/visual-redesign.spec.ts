@@ -72,17 +72,24 @@ test.describe("Visual redesign", () => {
     expect(h1Text).toContain("Open Source");
   });
 
-  test("Hero animation card is aria-hidden and has no img", async ({
+  // [20260803_Feature_WebsiteRedesign] Updated: the Hero card now exposes the
+  // raw→polished demo as a labelled region (role="img" + aria-label) instead of
+  // hiding the whole block, so the meaningful transcript text is reachable.
+  // Asserts: it has an accessible name (aria-label) and contains no <img>.
+  test("Hero animation card has an accessible label and no img", async ({
     page,
   }) => {
     await page.goto("/");
     const heroVisual = page.locator(".hero-visual");
     await expect(heroVisual).toHaveCount(1);
-    await expect(heroVisual).toHaveAttribute("aria-hidden", "true");
-    // No <img> inside the decorative animation card.
+    await expect(heroVisual).toHaveAttribute("role", "img");
+    const label = await heroVisual.getAttribute("aria-label");
+    expect(label && label.trim().length > 0).toBe(true);
+    // No <img> inside the CSS/SVG animation card.
     const imgCount = await heroVisual.locator("img").count();
     expect(imgCount).toBe(0);
   });
+  // [20260803_Feature_WebsiteRedesign] END
 
   test("reduced-motion disables orb animation", async ({ browser }) => {
     const context = await browser.newContext({
@@ -99,6 +106,33 @@ test.describe("Visual redesign", () => {
       return cs.animationName || cs.getPropertyValue("animation-name");
     });
     expect(animationName).toBe("none");
+    // [20260803_Feature_WebsiteRedesign] Also guard the NEW animations added by
+    // this redesign (waveform + typing cursor) — these are the ones most likely
+    // to be dropped from the reduced-motion block in a future edit without anyone
+    // noticing. If the minifier or a future change strips them, this fails.
+    const waveName = await page
+      .locator(".waveform-bar")
+      .first()
+      .evaluate((el) => {
+        const cs = window.getComputedStyle(el);
+        return cs.animationName || cs.getPropertyValue("animation-name");
+      });
+    expect(
+      waveName,
+      "waveform-bar animation should stop under reduced-motion",
+    ).toBe("none");
+    const cursorName = await page
+      .locator(".typing-cursor")
+      .first()
+      .evaluate((el) => {
+        const cs = window.getComputedStyle(el);
+        return cs.animationName || cs.getPropertyValue("animation-name");
+      });
+    expect(
+      cursorName,
+      "typing-cursor animation should stop under reduced-motion",
+    ).toBe("none");
+    // [20260803_Feature_WebsiteRedesign] END
     await context.close();
   });
 });

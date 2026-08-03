@@ -79,7 +79,13 @@ const features = [
       {t.features_title}
     </h2>
 
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 auto-rows-[minmax(0,1fr)]">
+    <!-- [20260803_Feature_WebsiteRedesign] Fixed row height (auto-rows) so the
+         2x2 hero tile reads as a large square rather than two stacked short
+         rows (minmax(0,1fr) collapsed to content height, making the span-2
+         tile visually smaller than intended). 200px rows × 2 + gap = a real
+         large tile; smaller cards center their content. -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:auto-rows-[200px]">
+    <!-- [20260803_Feature_WebsiteRedesign] END -->
       {features.map((feat, i) => (
         <div
           class={[

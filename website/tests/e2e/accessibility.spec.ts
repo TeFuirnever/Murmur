@@ -79,71 +79,83 @@ test.describe("Accessibility", () => {
   // the test instead of passing silently. Uses the WCAG 2.1 relative-luminance
   // formula; asserts body text >= 4.5:1 and secondary text >= 4.5:1 (AA for
   // normal text). Runs in dark color scheme (the site default).
-  test("primary and secondary text meet WCAG AA contrast against background", async ({
-    page,
-  }) => {
-    await page.goto("/");
-    await page.emulateMedia({ colorScheme: "dark" });
+  // [20260803_Feature_WebsiteRedesign] Real WCAG contrast check, run against
+  // BOTH color schemes. Dark is the site default; light must also pass because
+  // the redesign ships a light-mode token set (and fixed light tertiary from
+  // 3.51:1 to 6.08:1). Without the light iteration, a future palette change
+  // that breaks light-mode contrast would pass silently.
+  for (const scheme of ["dark", "light"] as const) {
+    test(`primary and secondary text meet WCAG AA contrast (${scheme})`, async ({
+      page,
+    }) => {
+      await page.goto("/");
+      await page.emulateMedia({ colorScheme: scheme });
 
-    // Single self-contained evaluate: resolve fg/bg per element, compute ratio.
-    const ratios = await page.evaluate(() => {
-      const resolveBg = (el: Element): string => {
-        let node: Element | null = el;
-        while (node) {
-          const bg = window.getComputedStyle(node).backgroundColor;
-          if (bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent")
-            return bg;
-          node = node.parentElement;
-        }
-        return window.getComputedStyle(document.body).backgroundColor;
-      };
-      const parseRgb = (rgb: string): [number, number, number] | null => {
-        const m = rgb.match(/rgba?\(([^)]+)\)/);
-        if (!m) return null;
-        const parts = m[1].split(",").map((s) => parseFloat(s.trim()));
-        if (parts.length < 3) return null;
-        return [parts[0], parts[1], parts[2]];
-      };
-      const luminance = (rgb: [number, number, number]): number => {
-        const lin = (c: number) => {
-          const s = c / 255;
-          return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+      // Single self-contained evaluate: resolve fg/bg per element, compute ratio.
+      const ratios = await page.evaluate(() => {
+        const resolveBg = (el: Element): string => {
+          let node: Element | null = el;
+          while (node) {
+            const bg = window.getComputedStyle(node).backgroundColor;
+            if (bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent")
+              return bg;
+            node = node.parentElement;
+          }
+          return window.getComputedStyle(document.body).backgroundColor;
         };
-        const [r, g, b] = rgb.map(lin);
-        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-      };
-      const ratioOf = (el: Element): number | null => {
-        const fg = window.getComputedStyle(el).color;
-        const bg = resolveBg(el);
-        const f = parseRgb(fg);
-        const b = parseRgb(bg);
-        if (!f || !b) return null;
-        const l1 = luminance(f);
-        const l2 = luminance(b);
-        return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
-      };
+        const parseRgb = (rgb: string): [number, number, number] | null => {
+          const m = rgb.match(/rgba?\(([^)]+)\)/);
+          if (!m) return null;
+          const parts = m[1].split(",").map((s) => parseFloat(s.trim()));
+          if (parts.length < 3) return null;
+          return [parts[0], parts[1], parts[2]];
+        };
+        const luminance = (rgb: [number, number, number]): number => {
+          const lin = (c: number) => {
+            const s = c / 255;
+            return s <= 0.03928
+              ? s / 12.92
+              : Math.pow((s + 0.055) / 1.055, 2.4);
+          };
+          const [r, g, b] = rgb.map(lin);
+          return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        };
+        const ratioOf = (el: Element): number | null => {
+          const fg = window.getComputedStyle(el).color;
+          const bg = resolveBg(el);
+          const f = parseRgb(fg);
+          const b = parseRgb(bg);
+          if (!f || !b) return null;
+          const l1 = luminance(f);
+          const l2 = luminance(b);
+          return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+        };
 
-      const bodyEl = document.body;
-      const secEl = document.querySelector(".text-text-secondary");
-      return {
-        body: bodyEl ? ratioOf(bodyEl) : null,
-        secondary: secEl ? ratioOf(secEl) : null,
-      };
+        const bodyEl = document.body;
+        const secEl = document.querySelector(".text-text-secondary");
+        return {
+          body: bodyEl ? ratioOf(bodyEl) : null,
+          secondary: secEl ? ratioOf(secEl) : null,
+        };
+      });
+
+      expect(
+        ratios.body,
+        `${scheme}: body text contrast not computable`,
+      ).not.toBeNull();
+      expect(
+        ratios.body!,
+        `${scheme}: body text contrast ${ratios.body}:1 < 4.5 (AA)`,
+      ).toBeGreaterThanOrEqual(4.5);
+      expect(
+        ratios.secondary,
+        `${scheme}: secondary text contrast not computable`,
+      ).not.toBeNull();
+      expect(
+        ratios.secondary!,
+        `${scheme}: secondary text contrast ${ratios.secondary}:1 < 4.5 (AA)`,
+      ).toBeGreaterThanOrEqual(4.5);
     });
-
-    expect(ratios.body, `body text contrast not computable`).not.toBeNull();
-    expect(
-      ratios.body!,
-      `body text contrast ${ratios.body}:1 < 4.5 (AA)`,
-    ).toBeGreaterThanOrEqual(4.5);
-    expect(
-      ratios.secondary,
-      `secondary text contrast not computable`,
-    ).not.toBeNull();
-    expect(
-      ratios.secondary!,
-      `secondary text contrast ${ratios.secondary}:1 < 4.5 (AA)`,
-    ).toBeGreaterThanOrEqual(4.5);
-  });
+  }
   // [20260803_Feature_WebsiteRedesign] END
 });
