@@ -1,0 +1,34 @@
+---
+// [20260803_Feature_WebsiteRedesign] StatsStrip — static 4-cell trust grid.
+// Static (no marquee/scroll) to avoid screen-reader text repetition and to
+// keep reduced-motion behavior simple. All values are README-sourced:
+//   - stats_models:    README line 67 ("11+ AI 模型可选")
+//   - stats_local:     README "完全本地" / "Fully Local" (multiple mentions)
+//   - stats_formats:   README line 39 (TXT/SRT/VTT/Markdown/DOCX = 5)
+//   - stats_license:   LICENSE (Apache-2.0)
+// Receives the i18n object `t` as a prop, matching the other components.
+// [20260803_Feature_WebsiteRedesign] END
+interface Props {
+  t: Record<string, string>;
+}
+const { t } = Astro.props;
+
+const stats = [
+  t.stats_models,
+  t.stats_local,
+  t.stats_formats,
+  t.stats_license,
+];
+---
+
+<section aria-label="stats" class="py-12 sm:py-16 px-6">
+  <div class="max-w-[980px] mx-auto">
+    <div class="reveal-up stat-grid">
+      {stats.map((value, i) => (
+        <div class={`reveal-scale delay-${Math.min(i + 2, 6)} text-center glass card-lift rounded-2xl p-6`}>
+          <p class="stat-number gradient-text-fox">{value}</p>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>

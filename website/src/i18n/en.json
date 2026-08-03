@@ -103,5 +103,11 @@
   "section_getting_started": "Getting Started",
   "section_comparison": "Comparison",
   "section_providers": "AI Providers",
-  "section_faq": "FAQ"
+  "section_faq": "FAQ",
+  "stats_models": "11+ AI Models",
+  "stats_local": "100% Local",
+  "stats_formats": "5 Export Formats",
+  "stats_license": "Apache-2.0 OSS",
+  "hero_visual_speaking": "um... so basically the feature works like...",
+  "hero_visual_polished": "The feature works as follows."
 }
