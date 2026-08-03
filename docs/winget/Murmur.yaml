@@ -1,4 +1,10 @@
 # Winget manifest for Murmur
+# [20260803_InstallHonesty] STATUS: DRAFT — NOT YET PUBLISHED.
+# This manifest has not been submitted to microsoft/winget-pkgs, so
+# `winget install TeFuirnever.Murmur` currently FAILS. Before submitting:
+#   1. Update PackageVersion to the latest release tag.
+#   2. Fix InstallerUrl to the real asset name (Murmur.Setup.<version>.exe).
+#   3. Fill InstallerSha256 from checksums-sha256.txt in the release.
 # Submit to: https://github.com/microsoft/winget-pkgs
 
 PackageIdentifier: TeFuirnever.Murmur

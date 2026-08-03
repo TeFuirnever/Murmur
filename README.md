@@ -82,15 +82,17 @@
 
 ## 🚀 安装
 
-```bash
-# macOS (Homebrew)
-brew install --cask murmur
+<!-- [20260803_InstallHonesty] Homebrew/Winget 发布计划进行中（见 docs/homebrew、docs/winget），
+     但尚未提交到上游仓库，目前仅 GitHub Releases 可用。避免展示会报错的安装命令。 -->
 
-# Windows (Winget)
-winget install TeFuirnever.Murmur
-```
+从 [Releases](https://github.com/TeFuirnever/Murmur/releases/latest) 下载最新安装包：
 
-或从 [Releases](https://github.com/TeFuirnever/Murmur/releases) 下载安装包。
+- **macOS**：`Murmur-<version>-arm64.dmg`
+- **Windows**：`Murmur.Setup.<version>.exe`
+
+> **包管理器（规划中）**：Homebrew（`brew install --cask murmur`）和 Winget（`winget install TeFuirnever.Murmur`）即将支持，cask/manifest 定义见 `docs/homebrew/`、`docs/winget/`，尚未提交到上游。
+
+<!-- [20260803_InstallHonesty] END -->
 
 > **首次安装提示**
 >
@@ -269,15 +271,17 @@ Speak to type, convert audio to text, AI auto-polish. Powered by FunASR, all on 
 
 ## Install
 
-```bash
-# macOS (Homebrew)
-brew install --cask murmur
+<!-- [20260803_InstallHonesty] Homebrew/Winget are planned (see docs/homebrew, docs/winget)
+     but not yet submitted upstream — only GitHub Releases works today. -->
 
-# Windows (Winget)
-winget install TeFuirnever.Murmur
-```
+Download the latest build from [Releases](https://github.com/TeFuirnever/Murmur/releases/latest):
 
-Or download from [Releases](https://github.com/TeFuirnever/Murmur/releases).
+- **macOS**: `Murmur-<version>-arm64.dmg`
+- **Windows**: `Murmur.Setup.<version>.exe`
+
+> **Package managers (planned):** Homebrew (`brew install --cask murmur`) and Winget (`winget install TeFuirnever.Murmur`) are coming soon — cask/manifest definitions live in `docs/homebrew/` and `docs/winget/` but are not yet submitted upstream.
+
+<!-- [20260803_InstallHonesty] END -->
 
 ## Quick Start
 

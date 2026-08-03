@@ -54,15 +54,19 @@ const { t } = Astro.props;
         </a>
       </div>
 
-      <!-- Install snippets -->
-      <div class="reveal-up delay-4 flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3">
-        <code class="pill bg-surface text-text-tertiary font-mono text-xs">
-          $ {t.hero_brew}
-        </code>
-        <code class="pill bg-surface text-text-tertiary font-mono text-xs">
-          $ {t.hero_winget}
-        </code>
+      <!-- [20260803_InstallHonesty] Real download links instead of fake brew/winget
+           commands. Homebrew/Winget are planned (docs/homebrew, docs/winget) but
+           NOT yet published to those registries — only GitHub Releases works today. -->
+      <div class="reveal-up delay-4 flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3 mb-4">
+        <a href="https://github.com/TeFuirnever/Murmur/releases/latest" class="pill bg-surface hover:border-border-hover transition-colors font-mono text-xs flex items-center gap-2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          macOS .dmg / Windows .exe
+        </a>
       </div>
+      <p class="reveal-up delay-4 text-[11px] text-text-tertiary text-center lg:text-left">
+        {t.hero_brew} · {t.hero_winget}
+      </p>
+      <!-- [20260803_InstallHonesty] END -->
     </div>
 
     <!-- [20260803_Feature_WebsiteRedesign] a11y: the card is a decorative
