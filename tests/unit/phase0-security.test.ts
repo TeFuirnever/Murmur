@@ -146,7 +146,6 @@ describe("Phase 0: Ghost dependencies removed from package.json", () => {
     "es-errors",
     "es-object-atoms",
     "es-set-tostringtag",
-    "file-uri-to-path",
     "get-intrinsic",
     "math-intrinsics",
     "mime-db",
@@ -162,6 +161,10 @@ describe("Phase 0: Ghost dependencies removed from package.json", () => {
 describe("Phase 0: Native sqlite runtime dependencies", () => {
   it("should keep bindings as a direct production dependency", () => {
     expect(pkg.dependencies).toHaveProperty("bindings");
+  });
+
+  it("should keep the bindings helper as a direct production dependency", () => {
+    expect(pkg.dependencies).toHaveProperty("file-uri-to-path", "1.0.0");
   });
 });
 // [20260612_Fix_BindingsPackaging] END
