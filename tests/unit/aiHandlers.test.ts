@@ -212,6 +212,10 @@ describe("aiHandlers", () => {
       expect(body.max_tokens).toBe(4000);
     });
 
+    // [20260815_Fix_AiMaxTokensDefault] Default raised 2000 → 8192: reasoning
+    // models (deepseek-v4-flash etc.) count thinking tokens against
+    // max_tokens; 2000 let reasoning alone exhaust the budget and return
+    // empty content (see 20260815_Fix_AiEmptyContent).
     it("uses default temperature and max_tokens when not configured", async () => {
       const db = {
         getSetting: vi.fn(async (key: string) => {
@@ -235,7 +239,7 @@ describe("aiHandlers", () => {
         (fetchMock.mock.calls[0]![1] as { body: string }).body,
       );
       expect(body.temperature).toBe(0.3);
-      expect(body.max_tokens).toBe(2000);
+      expect(body.max_tokens).toBe(8192);
     });
 
     it("returns error on HTTP 401 response", async () => {
@@ -271,6 +275,50 @@ describe("aiHandlers", () => {
       const result = await processTextWithAI("test", "optimize", db, logger);
       expect(result.success).toBe(false);
       expect(result.error).toContain("格式错误");
+    });
+
+    // [20260815_Fix_AiEmptyContent] Regression: reasoning models (e.g.
+    // deepseek-v4-flash) can spend the entire max_tokens budget on reasoning
+    // (finish_reason "length"), returning HTTP 200 with an EMPTY message.content.
+    // Production logs 2026-08-15: outputLength 0, reasoning_tokens 2000 ==
+    // completion_tokens 2000 == max_tokens. This must NOT be reported as
+    // success — the UI would then show a generic failure with no cause.
+    it("returns actionable error when reasoning exhausts max_tokens and content is empty", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+
+      mockFetch({
+        choices: [
+          {
+            message: { content: "" },
+            finish_reason: "length",
+          },
+        ],
+        usage: {
+          completion_tokens: 2000,
+          completion_tokens_details: { reasoning_tokens: 2000 },
+        },
+      });
+
+      const result = await processTextWithAI("test", "optimize", db, logger);
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("max_tokens");
+    });
+
+    // [20260815_Fix_AiEmptyContent] Same guard applies when content is
+    // undefined or whitespace, or finish_reason is absent but output is empty.
+    it("returns error when content is whitespace only", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+
+      mockFetch({
+        choices: [{ message: { content: "   \n  " } }],
+        usage: { completion_tokens: 10 },
+      });
+
+      const result = await processTextWithAI("test", "optimize", db, logger);
+      expect(result.success).toBe(false);
+      expect(result.error).toBeTruthy();
     });
   });
 

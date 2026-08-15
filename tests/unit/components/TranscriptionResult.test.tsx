@@ -209,4 +209,29 @@ describe("TranscriptionResult", () => {
     });
     clearElectronAPI();
   });
+
+  // [20260815_Fix_AiEmptyContent] Regression: when processText resolves with
+  // { success: false, error: "..." } the UI must surface the main-process
+  // error, not the generic "AI处理失败，请重试". Previously result.error was
+  // discarded, hiding the real cause (e.g. max_tokens exhausted by reasoning).
+  it("shows main-process error message when processText resolves with failure", async () => {
+    stubElectronAPI({
+      processText: vi
+        .fn()
+        .mockResolvedValue({
+          success: false,
+          error: "AI输出为空，请调大 max_tokens",
+        }),
+    });
+    render(<TranscriptionResult text="hello" />);
+    await waitFor(() => {
+      expect(screen.getByText("应用")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("应用"));
+    await waitFor(() => {
+      expect(screen.getByText("AI输出为空，请调大 max_tokens")).toBeTruthy();
+      expect(screen.queryByText("AI处理失败，请重试")).toBeNull();
+    });
+    clearElectronAPI();
+  });
 });

@@ -122,11 +122,14 @@ export default function TranscriptionResult({
               120000,
             ),
           ),
-        ])) as { success?: boolean; text?: string };
+        ])) as { success?: boolean; text?: string; error?: string };
         if (result?.success && result?.text) {
           setOptimizedText(result.text);
         } else {
-          setOptimizeError("AI处理失败，请重试");
+          // [20260815_Fix_AiEmptyContent] Surface the main-process error
+          // (e.g. max_tokens exhausted by model reasoning) instead of a
+          // generic message that hides the actionable cause.
+          setOptimizeError(result?.error || "AI处理失败，请重试");
         }
       } else if (onAIOptimize) {
         const result = await onAIOptimize(text);
