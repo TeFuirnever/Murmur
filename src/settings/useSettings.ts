@@ -59,7 +59,10 @@ const DEFAULT_SETTINGS: SettingsState = {
   ai_base_url: "https://api.openai.com/v1",
   ai_model: "gpt-3.5-turbo",
   ai_temperature: 0.3,
-  ai_max_tokens: 2000,
+  // [20260815_Fix_AiMaxTokensDefault] 8192 (was 2000): reasoning models count
+  // thinking tokens against max_tokens; 2000 let reasoning alone exhaust the
+  // budget and return empty content (see 20260815_Fix_AiEmptyContent).
+  ai_max_tokens: 8192,
   enable_ai_optimization: true,
   window_always_on_top: true,
   auto_paste: "paste",
@@ -123,7 +126,7 @@ export function useSettings() {
           ai_temperature:
             parseFloat(allSettings.ai_temperature as string) || 0.3,
           ai_max_tokens:
-            parseInt(allSettings.ai_max_tokens as string, 10) || 2000,
+            parseInt(allSettings.ai_max_tokens as string, 10) || 8192,
           enable_ai_optimization: allSettings.enable_ai_optimization !== false,
           window_always_on_top: allSettings.window_always_on_top !== false,
           auto_paste: (allSettings.auto_paste || "paste") as string,

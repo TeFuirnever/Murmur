@@ -280,12 +280,13 @@ describe("[20260729_Test_AIConfigExpanded] AIConfigSection uncovered branches", 
     });
     render(<AIConfigSection {...props} />);
 
-    // The max-tokens slider has min="500", max="4096", step="256".
+    // [20260815_Fix_AiMaxTokensDefault] The max-tokens slider has
+    // min="1024", max="16384", step="256".
     const sliders = screen.getAllByRole("slider");
     const maxTokensSlider = sliders.find(
       (s) =>
-        (s as HTMLInputElement).getAttribute("min") === "500" &&
-        (s as HTMLInputElement).getAttribute("max") === "4096",
+        (s as HTMLInputElement).getAttribute("min") === "1024" &&
+        (s as HTMLInputElement).getAttribute("max") === "16384",
     ) as HTMLInputElement;
     expect(maxTokensSlider).toBeDefined();
 

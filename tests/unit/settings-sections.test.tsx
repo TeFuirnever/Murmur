@@ -495,8 +495,10 @@ describe("[20260729_Test_SettingsSections] AIConfigSection", () => {
       (s) => (s as HTMLInputElement).value === "1500",
     ) as HTMLInputElement;
     expect(maxTokensSlider).toBeDefined();
-    expect(maxTokensSlider).toHaveAttribute("min", "500");
-    expect(maxTokensSlider).toHaveAttribute("max", "4096");
+    // [20260815_Fix_AiMaxTokensDefault] Bounds raised 500–4096 → 1024–16384
+    // (reasoning models need headroom for thinking tokens).
+    expect(maxTokensSlider).toHaveAttribute("min", "1024");
+    expect(maxTokensSlider).toHaveAttribute("max", "16384");
     expect(maxTokensSlider).toHaveAttribute("step", "256");
   });
 

@@ -406,10 +406,15 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
               {settings.ai_max_tokens}
             </span>
           </div>
+          {/* [20260815_Fix_AiMaxTokensDefault] Range 1024–16384 (was 500–4096):
+              reasoning models count thinking tokens against max_tokens, so
+              the old ceiling starved them; 16384 matches what the 150s
+              request timeout can realistically deliver. Min 1024 keeps every
+              value (incl. default 8192) on the 256-step notch grid. */}
           <input
             type="range"
-            min="500"
-            max="4096"
+            min="1024"
+            max="16384"
             step="256"
             value={settings.ai_max_tokens}
             onChange={(e) =>
@@ -418,8 +423,8 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
             className="w-full h-1.5 bg-[#d2d2d7] dark:bg-[#3a3a3c] rounded-full appearance-none cursor-pointer accent-[#0071e3]"
           />
           <div className="flex justify-between text-[10px] text-[#86868b]">
-            <span>500</span>
-            <span>4096</span>
+            <span>1024</span>
+            <span>16384</span>
           </div>
         </div>
       </div>

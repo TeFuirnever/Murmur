@@ -194,11 +194,14 @@ export async function processTextWithAI(
       parseFloat(
         (await databaseManager.getSetting("ai_temperature")) as string,
       ) || 0.3;
+    // [20260815_Fix_AiMaxTokensDefault] 8192 fallback matches the renderer
+    // DEFAULT_SETTINGS — reasoning models count thinking tokens against
+    // max_tokens; the old 2000 could be exhausted by reasoning alone.
     const maxTokens =
       parseInt(
         (await databaseManager.getSetting("ai_max_tokens")) as string,
         10,
-      ) || 2000;
+      ) || 8192;
 
     if (!validateAIBaseUrl(baseUrl, { allowLocalhost: isLocal })) {
       return {
@@ -292,7 +295,10 @@ export async function processTextWithAI(
     }
 
     const data = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
+      choices?: Array<{
+        message?: { content?: string };
+        finish_reason?: string;
+      }>;
       usage?: unknown;
     };
 
@@ -303,9 +309,32 @@ export async function processTextWithAI(
     });
 
     if (data.choices && data.choices.length > 0) {
+      // [20260815_Fix_AiEmptyContent] Reasoning models (e.g. deepseek-v4-flash)
+      // can spend the entire max_tokens budget on reasoning before emitting
+      // any content: HTTP 200, choices present, message.content empty,
+      // finish_reason "length" (production logs 2026-08-15: reasoning_tokens
+      // 2000 == completion_tokens == max_tokens). Returning success with empty
+      // text made the UI show a generic "AI处理失败，请重试" with no cause.
+      const content = data.choices[0]?.message?.content?.trim() || "";
+      if (!content) {
+        const usage = data.usage as { completion_tokens?: number } | undefined;
+        const tokenCapHit =
+          data.choices[0]?.finish_reason === "length" ||
+          (usage?.completion_tokens !== undefined &&
+            usage.completion_tokens >= maxTokens);
+        const error = tokenCapHit
+          ? `AI输出为空：模型推理占满了 max_tokens（${maxTokens}）预算，请在设置中调大「AI 配置 → 最大输出长度」或换用非推理模型`
+          : "AI返回了空内容，请重试或更换模型";
+        logger.error?.("AI返回空内容:", {
+          finish_reason: data.choices[0]?.finish_reason,
+          usage: data.usage,
+          maxTokens,
+        });
+        return { success: false, error };
+      }
       const result: AIResult = {
         success: true,
-        text: data.choices[0]?.message?.content?.trim() || "",
+        text: content,
         usage: data.usage,
         model: model,
       };

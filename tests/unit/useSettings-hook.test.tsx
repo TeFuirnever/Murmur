@@ -152,4 +152,20 @@ describe("useSettings hook", () => {
     const api = (globalThis.window as TestWindow).electronAPI!;
     expect(api.setSetting).toHaveBeenCalledWith("effects_enabled", false);
   });
+
+  // [20260815_Fix_AiMaxTokensDefault] When no ai_max_tokens is persisted,
+  // loadSettings must fall back to 8192 (not the old 2000): reasoning models
+  // count thinking tokens against max_tokens and 2000 let reasoning alone
+  // exhaust the budget (empty-content failures, see 20260815_Fix_AiEmptyContent).
+  it("falls back to ai_max_tokens 8192 when no value is persisted", async () => {
+    const api = (globalThis.window as TestWindow).electronAPI!;
+    (api.getAllSettings as ReturnType<typeof vi.fn>).mockResolvedValue({});
+
+    const { result } = renderHook(() => useSettings());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+    expect(result.current.settings.ai_max_tokens).toBe(8192);
+  });
 });
