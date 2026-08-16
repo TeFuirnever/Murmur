@@ -148,7 +148,7 @@ Murmur targets **Windows** and **macOS**. See `CLAUDE.md` → _Cross-Platform Su
 
 ### Delivery Gates
 
-- **All commits MUST pass `pnpm ci:check` before push.** This runs: format check, lint, license check, typecheck, typecheck:tests, test with coverage, build:main, build:preload, build:renderer.
+- **All commits MUST pass `pnpm ci:check` before push.** This runs: format check, lint, license check, typecheck, typecheck:tests, test with coverage, build:main, build:preload, build:renderer, dev smoke (`pnpm run dev` boots and the vite dev server answers).
 - **Quick check:** `pnpm lint` + `pnpm test` for rapid iteration during development.
 - **Bug fix:** reproduce the bug, add a failing test **first**, then fix and verify.
 - **High-risk** (session flow, IPC, security, privacy, release packaging): include a risk statement and fresh verification evidence.

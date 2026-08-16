@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Lean pass: ~4,500 net lines of dead code, unused dependencies, and duplicate logic removed; `pnpm audit` now reports against the official registry (99 → 2 advisories, both without upstream fixes).
 - Toolchain: Electron 36 → 39.8.10, electron-builder 24 → 26, better-sqlite3 11 → 12 (Electron 39 ABI).
+- Minimalism pass (2026-08-16): the dead F2 double-click IPC chain, the web-modal SettingsPanel fallback, and seven unused environment config getters were removed; the settings window now loads `settings.html` in dev and production alike.
+- Test coverage pushed to **96.6% statements / 92.8% branches / 94.5% functions / 97.1% lines** (1,406 unit tests) with vitest thresholds raised to 96/92/94/96.
+- `pnpm ci:check` now runs a **dev smoke gate** (10 checks): it boots `pnpm run dev` and verifies the vite dev server answers, catching native-ABI and startup regressions the static gates miss. The gate leaves better-sqlite3 in the electron-ABI state `pnpm run dev` expects.
 
 ## [1.2.0] - 2026-08-02
 

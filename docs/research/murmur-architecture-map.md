@@ -406,11 +406,11 @@ Path: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/src/helpers/logManager.ts`
 
 Path: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/src/helpers/environment.ts`
 
-**What it does:** Loads `.env` from `process.cwd()` via a minimal built-in parser (dotenv dependency removed in the 2026-08 lean pass; shell env wins over file values). Provides typed config getters reading `process.env` with defaults: `getAIConfig` (placeholder — real config via settings), `getAudioConfig` (16000/1/wav), `getFunASRConfig`, `getAppConfig` (hotkey default `CommandOrControl+Shift+Space`), `getDatabaseConfig`, `getProxyConfig`, `getPerformanceConfig`. Platform `getDataDirectory()` (macOS `~/Library/Application Support/Murmur`, Windows `%APPDATA%\Murmur`, Linux `~/.config/Murmur`). `ensureDataDirectory`/`getLogDirectory`/`getCacheDirectory`/`getModelsDirectory` create dirs. `validateEnvironment()` (Node 18+ check). `exportConfig()` aggregates all. `getSystemInfo()` (os module).
+**What it does:** Loads `.env` from `process.cwd()` via a minimal built-in parser (dotenv dependency removed in the 2026-08 lean pass; shell env wins over file values). Platform `getDataDirectory()` (macOS `~/Library/Application Support/Murmur`, Windows `%APPDATA%\Murmur`, Linux `~/.config/Murmur`) + `ensureDataDirectory()` creates it. (The seven typed config getters, `getSystemInfo`, `validateEnvironment`, `exportConfig`, and the per-purpose directory helpers were removed in the 2026-08-16 minimalism pass — zero callers; logManager has its own getSystemInfo/getLogDirectory.)
 
 **Dependencies:** `path`, `fs`, `os`. **No direct electron dependency** (uses `process.env`/`os`).
 
-**Public interface:** all getters above + `loadEnvironmentVariables()`, `isDevelopment()`, `isProduction()`, `validateEnvironment()`, `exportConfig()`.
+**Public interface:** `loadEnvironmentVariables()`, `getDataDirectory()`, `ensureDataDirectory()`.
 
 **Testing seam:** Coverage-excluded but **fully unit-testable** — no Electron, only `os`/`fs`/`process.env`. Set env vars + temp dirs. Platform branching testable by stubbing `process.platform`.
 
@@ -824,10 +824,10 @@ Path: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/src/helpers/detectLocalModels
 ### 6.1 Structure
 
 - `src/main.tsx` — React 19 entry. `ErrorBoundary` class component, `initializeApp()` (theme apply from setting + system listener, drag/drop prevention, contextmenu prevention in prod, global error handlers → `electronAPI.log`), `assertElectronAPI()` guard (renders fallback if preload missing), mounts `ModelStatusProvider > App + Toaster`.
-- `src/App.tsx` — main UI (27KB). URL `?page=settings` routes to lazy `SettingsPage`. Recording mode / file-import mode toggle. Uses hooks: `useHotkey`, `useWindowDrag`, `useRecording` (with `determineProcessingMode`), `useModelStatus`. Caches settings in `settingsRef`. Paste debounce (1s same-text).
+- `src/App.tsx` — main UI (27KB). Recording mode / file-import mode toggle. Uses hooks: `useHotkey`, `useWindowDrag`, `useRecording` (with `determineProcessingMode`), `useModelStatus`. Caches settings in `settingsRef`. Paste debounce (1s same-text). (The `?page=settings` lazy route and the web-modal SettingsPanel fallback were removed in the 2026-08-16 minimalism pass — the settings window is its own entry in dev and production.)
 - `src/history.tsx`, `src/settings.tsx` — separate window entry points (history.html, settings.html). `SettingsSidebar`, `useSettings`, sections: `AIConfigSection`, `AboutSection`, `GeneralSection`, `PermissionsSection`.
 - `src/hooks/` — `useRecording`, `useHotkey`, `useFileTranscription`, `useWindowDrag`, `usePermissions`, `useModelStatus`.
-- `src/components/` — UI components (SettingsPanel, FileImport, TranscriptionResult, VoiceWaveIndicator, ExportPanel, etc.) + `ui/` shadcn primitives (button, card, tabs, input, dialog, etc.).
+- `src/components/` — UI components (FileImport, TranscriptionResult, VoiceWaveIndicator, ExportPanel, etc.) + `ui/` primitives (button, loading-dots, model-status-indicator, permission-card, sonner). (SettingsPanel, the dead shadcn card/input/label/tabs/status-light/history-modal set, and the LoadingIndicator duplicate were removed in the 2026-08 lean passes.)
 - `src/i18n/` — i18next localization.
 - `src/bootstrap/assertElectronAPI.ts` — runtime preload assertion.
 - `src/types/ipc.ts` — shared IPC type definitions.
