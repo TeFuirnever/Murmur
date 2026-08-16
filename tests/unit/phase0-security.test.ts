@@ -135,7 +135,9 @@ describe("Phase 0: Ghost dependencies removed from package.json", () => {
     "es-errors",
     "es-object-atoms",
     "es-set-tostringtag",
-    "file-uri-to-path",
+    // [20260816_Fix_WinBindingsHelper] removed from ghost deps: it is now a
+    // deliberate direct production dependency (issue #157 Windows packaging
+    // fix) so electron-builder ships bindings' runtime helper in app.asar.
     "get-intrinsic",
     "math-intrinsics",
     "mime-db",
@@ -151,6 +153,13 @@ describe("Phase 0: Ghost dependencies removed from package.json", () => {
 describe("Phase 0: Native sqlite runtime dependencies", () => {
   it("should keep bindings as a direct production dependency", () => {
     expect(pkg.dependencies).toHaveProperty("bindings");
+  });
+
+  // [20260816_Fix_WinBindingsHelper] bindings' top-level require of this
+  // helper crashed packaged Windows installs (issue #157); pin it as a
+  // direct dependency so electron-builder always packages it.
+  it("should keep the bindings helper as a direct production dependency", () => {
+    expect(pkg.dependencies).toHaveProperty("file-uri-to-path", "1.0.0");
   });
 });
 // [20260612_Fix_BindingsPackaging] END
