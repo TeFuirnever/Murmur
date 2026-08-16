@@ -119,6 +119,41 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: false
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # [20260816_Gate_PackagedBootSmoke] Install the DMG we just built and
+      # boot the real app. Asserts on the boot log: window created, startup
+      # complete, and the renderer→preload→IPC bridge alive (hotkey
+      # registration is sent BY the renderer, so it can only appear when the
+      # preload works). This is the gate that would have caught both the
+      # node-ABI sqlite binary (v1.3.0 mac) and the missing preload script
+      # (all releases ≤ v1.3.1) — "build green" is not "artifact works".
+      - name: Smoke test packaged app (boot + preload bridge)
+        run: |
+          set -euo pipefail
+          DMG=$(ls dist/*.dmg | head -1)
+          hdiutil attach "$DMG" -nobrowse -quiet
+          VOL=$(ls /Volumes | grep -i murmur | head -1)
+          rm -rf /tmp/murmur-smoke && mkdir -p /tmp/murmur-smoke
+          cp -R "/Volumes/$VOL/Murmur.app" /tmp/murmur-smoke/
+          hdiutil detach "/Volumes/$VOL" -quiet || true
+          rm -f "$HOME/Library/Application Support/Murmur/logs/app.log"
+          /tmp/murmur-smoke/Murmur.app/Contents/MacOS/Murmur > /tmp/murmur-smoke/stdout.log 2>&1 &
+          APP_PID=$!
+          sleep 60
+          LOG="$HOME/Library/Application Support/Murmur/logs/app.log"
+          test -f "$LOG" || { echo "::error::app.log never appeared"; cat /tmp/murmur-smoke/stdout.log | tail -20; exit 1; }
+          for milestone in "主窗口创建成功" "应用启动完成" "注册成功"; do
+            grep -q "$milestone" "$LOG" || { echo "::error::boot milestone missing: $milestone"; tail -20 "$LOG"; exit 1; }
+          done
+          if grep -qE "NODE_MODULE_VERSION|Uncaught Exception|preload 脚本加载失败" "$LOG"; then
+            echo "::error::fatal errors in packaged app boot log"
+            grep -E "NODE_MODULE_VERSION|Uncaught Exception|preload" "$LOG" | head -5
+            exit 1
+          fi
+          kill "$APP_PID" 2>/dev/null || true
+          sleep 3
+          pkill -f "murmur-smoke/Murmur.app" 2>/dev/null || true
+          echo "packaged app smoke passed: boot milestones + preload bridge verified"
+      # [20260816_Gate_PackagedBootSmoke] END
       - name: Generate SHA256 checksums
         run: |
           cd dist
@@ -213,6 +248,39 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: false
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # [20260816_Gate_PackagedBootSmoke] Windows counterpart of the mac
+      # smoke: silently install the EXE we just built (/S, per-user install
+      # to %LOCALAPPDATA%\Programs\murmur), launch it, and assert the same
+      # boot-log milestones (window created, startup complete, renderer IPC
+      # via hotkey registration) plus absence of fatal boot errors. Would
+      # have caught the v1.2.0 file-uri-to-path crash (#157) before release.
+      - name: Smoke test packaged installer (boot + preload bridge)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = (Get-ChildItem dist -Filter "Murmur.Setup*.exe" | Select-Object -First 1).FullName
+          if (-not $installer) { throw "installer exe not found in dist/" }
+          Write-Host "Installing $installer silently"
+          Start-Process -FilePath $installer -ArgumentList '/S' -Wait
+          $appExe = Join-Path $env:LOCALAPPDATA 'Programs\murmur\Murmur.exe'
+          if (-not (Test-Path $appExe)) { throw "installed app not found at $appExe" }
+          $logDir = Join-Path $env:APPDATA 'Murmur\logs'
+          Remove-Item (Join-Path $logDir 'app.log') -ErrorAction SilentlyContinue
+          Start-Process -FilePath $appExe
+          Start-Sleep -Seconds 90
+          $log = Join-Path $logDir 'app.log'
+          if (-not (Test-Path $log)) { throw "app.log not found at $log" }
+          $content = Get-Content $log -Raw -Encoding UTF8
+          foreach ($milestone in @('主窗口创建成功','应用启动完成','注册成功')) {
+            if ($content -notlike "*$milestone*") { throw "boot milestone missing: $milestone" }
+          }
+          foreach ($fatal in @('NODE_MODULE_VERSION','Uncaught Exception','preload 脚本加载失败')) {
+            if ($content -like "*$fatal*") { throw "fatal error in packaged boot log: $fatal" }
+          }
+          if (-not (Get-Process -Name 'Murmur' -ErrorAction SilentlyContinue)) { throw 'Murmur process is not running' }
+          Stop-Process -Name 'Murmur' -Force -ErrorAction SilentlyContinue
+          Write-Host 'packaged installer smoke passed: boot milestones + preload bridge verified'
+      # [20260816_Gate_PackagedBootSmoke] END
       - name: Generate SHA256 checksums
         shell: pwsh
         run: |

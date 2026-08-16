@@ -127,6 +127,17 @@ chore: 升级 Electron 到 v36
 11. <!-- [20260816_Refactor_RemoveEffects] gate removed with the effects feature -->
 12. **E2E tests** — `pnpm test:e2e`（非阻塞，验证中）
 
+### Release Gates（Build Installers 流水线，tag `v*` 触发）
+
+打包产物在发布前必须通过以下门禁（2026-08-16 v1.3.2 前后陆续引入，此前流水线产出的安装包全部不可用）：
+
+1. **Native ABI gate** — 打包前必须在 Electron 运行时（`ELECTRON_RUN_AS_NODE`）下用 better-sqlite3 真实打开内存库（拦截系统 Node ABI 的 sqlite 二进制，v1.3.0 macOS 事故）
+2. **Preload presence gate** — `dist-preload/preload.js` 不存在则拒绝打包（electron-builder files 通配会静默跳过缺失文件，v1.3.1 及更早全部缺 preload）
+3. **Packaged boot smoke（mac）** — 挂载刚构建的 DMG、真实启动 app，断言启动日志含"主窗口创建成功/应用启动完成/热键注册成功"（热键注册来自渲染进程 IPC，可证明 preload 桥端到端工作）且无致命错误
+4. **Packaged boot smoke（win）** — 静默安装（`/S`）刚构建的 EXE 后同样断言
+
+经验教训：**构建全绿 ≠ 产物可用**。发布流水线的验收对象是"安装后的 app"，不是"dist/ 里有文件"。
+
 ### 本地门禁
 
 提交前在本地运行完整检查（和 CI 一致）：
