@@ -49,6 +49,9 @@ importers:
       docx:
         specifier: ^9.6.1
         version: 9.6.1
+      file-uri-to-path:
+        specifier: 1.0.0
+        version: 1.0.0
       i18next:
         specifier: ^26.2.0
         version: 26.2.0(typescript@6.0.3)

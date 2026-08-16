@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-08-16
+
+### Fixed
+
+- **Windows 安装包启动崩溃**（Issue #157）：打包后的 Windows 应用启动即报 `Cannot find module 'file-uri-to-path'`、GUI 无法打开 —— pnpm 依赖布局下 electron-builder 把 `bindings` 打进了 app.asar 却漏掉其运行时依赖。已将 `file-uri-to-path@1.0.0` 声明为直接生产依赖并加回归测试锁定（修复方案来自 @LauraGPT 的 PR #158，因 lockfile 冲突在 main 上重放）。v1.2.0 的 Windows 用户请升级本版本。
+- **AI 润色失败只显示通用错误**（PR #164）：真实失败原因（如推理模型把全部 `max_tokens` 预算耗在 reasoning tokens 上导致正文为空）在上报前被丢弃，用户只能看到"AI处理失败"。现在真实错误会透传到界面，`max_tokens` 默认值同时调大。
+- **窗口生命周期 UX 整改**（PR #136）：隐藏窗口不再卡死 AI 定时器（关闭 backgroundThrottling）、任务栏重新显示应用图标、子窗口关闭后焦点回到主窗口、文本输入中按 Escape 不再隐藏窗口；设置项改为即时自动保存，Toast 移到底部居中不再遮挡表单。
+
 ### Removed
 
 - Visual-effects feature (History-window animated background, its settings toggle, and the `motion`/`ogl` dependencies) — a default-off decorative layer.
