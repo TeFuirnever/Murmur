@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-08-16
+
+### Fixed
+
+- **所有历史安装包缺少 preload 脚本**（v1.0.0 → v1.3.1 均受影响）：Build Installers 流水线的 build-mac/build-win 两个 job 从未执行 `build:preload`，打出的 app.asar 里没有 `dist-preload/preload.js`。安装后主进程能启动、窗口能创建，但渲染进程拿不到 Electron API，界面弹出「Electron API 不可用 / preload 脚本加载失败，主功能均无法工作」，全部功能不可用。此前无人报告的原因：v1.2.0 的 Windows 包在更早的启动阶段就崩溃（#157），mac 用户基数小。修复：两个构建 job 补上 `build:preload`，并新增打包门禁 —— `dist-preload/preload.js` 不存在则拒绝打包（electron-builder 的 files 通配会静默跳过缺失文件，这正是问题长期潜伏的机制）。**请所有用户升级到 v1.3.2；v1.3.1 及更早版本均不可用。**
+
 ## [1.3.1] - 2026-08-16
 
 ### Fixed
