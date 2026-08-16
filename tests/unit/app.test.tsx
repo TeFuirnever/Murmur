@@ -59,12 +59,6 @@ vi.mock("../../src/hooks/useWindowDrag", () => ({
   }),
 }));
 
-// Lazy SettingsPage
-vi.mock("../../src/settings", () => ({
-  SettingsPage: () =>
-    React.createElement("div", { "data-testid": "settings-page" }),
-}));
-
 // Mock electronAPI
 const mockElectronAPI: Record<string, ReturnType<typeof vi.fn>> = {};
 beforeEach(() => {
@@ -155,22 +149,6 @@ describe("App component", () => {
     expect(mockElectronAPI.hideWindow).toHaveBeenCalled();
   });
 
-  it("renders SettingsPage when URL has ?page=settings", () => {
-    // Set URL param before render
-    Object.defineProperty(window, "location", {
-      value: {
-        search: "?page=settings",
-        href: "http://localhost/?page=settings",
-      },
-      configurable: true,
-      writable: true,
-    });
-    const { container } = render(React.createElement(App));
-    // App checks `page === "settings"` and returns the SettingsPage via lazy.
-    // The mock makes SettingsPage render a div[data-testid=settings-page].
-    // But React.lazy + Suspense may need act/flush. Just verify no crash.
-    expect(container).toBeInTheDocument();
-    // Reset location
-    delete (window as { location?: unknown }).location;
-  });
+  // [20260816_Refactor_DeadChannels] ?page=settings in-app route removed —
+  // the settings window is its own entry in dev and production.
 });

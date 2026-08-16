@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 
-const { execSync } = require("child_process");
+const { execSync, spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
@@ -54,6 +54,109 @@ function run(cmd, label) {
       output: (e.stdout || "") + (e.stderr || ""),
     };
   }
+}
+
+// [20260816_DevSmokeGate] pnpm run dev gate: launches the dev stack
+// (electron-rebuild + build:preload + concurrently: vite dev server + electron
+// main) in the background and waits for the renderer to be reachable on the
+// vite port, or for the main process to emit a fatal error. The gate exists
+// because the app booted with a stale better-sqlite3 ABI and crashed at
+// startup — a state no build/test gate catches.
+// Ports mirror src/vite.config.js server.port; VITE_DEV_PORT overrides.
+const DEV_VITE_PORT = process.env.VITE_DEV_PORT || "5173";
+const DEV_READY_TIMEOUT_MS = 120_000;
+
+async function runDevSmoke() {
+  const start = performance.now();
+  // [20260816_DevSmokeGate] The unit-test phase runs better-sqlite3 under the
+  // system node ABI (pretest asserts it). pnpm run dev needs the ELECTRON ABI,
+  // so rebuild for electron first — exactly what `pnpm dev`'s predev hook does.
+  try {
+    execSync("npx electron-rebuild -f -w better-sqlite3", {
+      cwd: ROOT,
+      stdio: ["ignore", "ignore", "pipe"],
+      timeout: 120_000,
+    });
+  } catch (e) {
+    return {
+      step: "dev smoke (pnpm run dev)",
+      ok: false,
+      duration: "0.0",
+      output:
+        "electron-rebuild failed:\n" + String((e.stderr || "").slice(0, 400)),
+    };
+  }
+
+  const child = spawn("pnpm", ["run", "dev"], {
+    cwd: ROOT,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let output = "";
+  let fatal = null;
+  const onData = (buf) => {
+    const text = buf.toString();
+    output += text;
+    // A main-process crash (e.g. better-sqlite3 ABI mismatch) aborts the run
+    // early so the gate fails fast instead of waiting out the timeout.
+    if (/SQLite 原生模块版本不匹配|NODE_MODULE_VERSION/.test(text)) {
+      fatal = text.slice(0, 300);
+    }
+  };
+  child.stdout.on("data", onData);
+  child.stderr.on("data", onData);
+
+  const deadline = Date.now() + DEV_READY_TIMEOUT_MS;
+  let result;
+  while (Date.now() < deadline) {
+    if (fatal) break;
+    try {
+      const res = await fetch(`http://localhost:${DEV_VITE_PORT}/`);
+      if (res.ok) {
+        const dur = ((performance.now() - start) / 1000).toFixed(1);
+        result = {
+          step: "dev smoke (pnpm run dev)",
+          ok: true,
+          duration: dur,
+          output:
+            "dev server reached on :" +
+            DEV_VITE_PORT +
+            "\n" +
+            output.slice(-800),
+        };
+        break;
+      }
+    } catch {
+      // Port not up yet — keep polling.
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  child.kill("SIGTERM");
+  // Give concurrently a moment to tear down.
+  await new Promise((r) => setTimeout(r, 1500));
+  if (!result) {
+    const dur = ((performance.now() - start) / 1000).toFixed(1);
+    result = {
+      step: "dev smoke (pnpm run dev)",
+      ok: false,
+      duration: dur,
+      output:
+        (fatal || "dev server did not become ready within the timeout") +
+        "\n" +
+        output.slice(-1200),
+    };
+  }
+  // [20260816_DevSmokeGate] Restore the system-node ABI so the next `pnpm
+  // test` / ci-check run starts from the state pretest asserts.
+  try {
+    execSync("pnpm rebuild better-sqlite3", {
+      cwd: ROOT,
+      stdio: ["ignore", "ignore", "pipe"],
+      timeout: 120_000,
+    });
+  } catch {
+    // Non-fatal: the next run's pretest surfaces the mismatch clearly.
+  }
+  return result;
 }
 
 function extractFailHint(result) {
@@ -185,7 +288,14 @@ async function main() {
   // [20260816_Refactor_RemoveEffects] The effects chunk isolation gate was
   // removed with the visual-effects feature (ogl/motion deps deleted).
 
-  const results = [...stage1, stage2main, stage2a, stage2b, stage3];
+  // [20260816_DevSmokeGate] pnpm run dev gate: verifies the dev stack boots
+  // end-to-end (electron-rebuild ABI, preload build, vite dev server, main
+  // process) and the renderer becomes reachable — a regression the static
+  // gates cannot see.
+  const stageDev = await runDevSmoke();
+  printResult(stageDev);
+
+  const results = [...stage1, stage2main, stage2a, stage2b, stage3, stageDev];
 
   // Security audit (non-blocking)
   // [20260816_Fix_AuditRegistry] The local install registry (npmmirror.com)

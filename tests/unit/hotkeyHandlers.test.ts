@@ -15,12 +15,8 @@
 // [20260726_TypeGate_HotkeyHandlers] END
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock electron — hotkeyHandlers imports BrowserWindow for the F2 path
-vi.mock("electron", () => ({
-  BrowserWindow: {
-    getAllWindows: vi.fn(() => []),
-  },
-}));
+// [20260816_Refactor_DeadChannels] electron mock removed — hotkeyHandlers
+// no longer imports electron after the F2 broadcast path was deleted.
 
 // [20260726_TypeGate_HotkeyHandlers] Structural shape for handler return
 // values read in assertions. Handlers are typed (...args: unknown[]) => unknown.
@@ -59,7 +55,6 @@ describe("hotkeyHandlers", () => {
       registerHotkey: vi.fn(() => true),
       unregisterHotkey: vi.fn(() => true),
       getRegisteredHotkeys: vi.fn(() => ["CommandOrControl+Shift+Space"]),
-      registerF2DoubleClick: vi.fn(() => true),
       setRecordingState: vi.fn(),
       getRecordingState: vi.fn(() => false),
     };
@@ -91,15 +86,13 @@ describe("hotkeyHandlers", () => {
   }
 
   describe("register() — channel registration completeness", () => {
-    it("registers all 7 hotkey channels", async () => {
+    it("registers all 5 hotkey channels", async () => {
       const C = await setup();
 
       const expectedChannels = [
         C.HOTKEY.REGISTER,
         C.HOTKEY.UNREGISTER,
         C.HOTKEY.GET_CURRENT,
-        C.HOTKEY.REGISTER_F2,
-        C.HOTKEY.UNREGISTER_F2,
         C.HOTKEY.SET_STATE,
         C.HOTKEY.GET_STATE,
       ];
@@ -107,7 +100,7 @@ describe("hotkeyHandlers", () => {
       for (const channel of expectedChannels) {
         expect(registeredHandlers.has(channel)).toBe(true);
       }
-      expect(registeredHandlers.size).toBeGreaterThanOrEqual(7);
+      expect(registeredHandlers.size).toBeGreaterThanOrEqual(5);
     });
 
     it("does not register duplicate channels", async () => {
@@ -122,8 +115,6 @@ describe("hotkeyHandlers", () => {
       expect(registeredHandlers.has("register-hotkey")).toBe(true);
       expect(registeredHandlers.has("unregister-hotkey")).toBe(true);
       expect(registeredHandlers.has("get-current-hotkey")).toBe(true);
-      expect(registeredHandlers.has("register-f2-hotkey")).toBe(true);
-      expect(registeredHandlers.has("unregister-f2-hotkey")).toBe(true);
       expect(registeredHandlers.has("set-recording-state")).toBe(true);
       expect(registeredHandlers.has("get-recording-state")).toBe(true);
       // Sanity: contract symbols match literal strings
@@ -229,69 +220,14 @@ describe("hotkeyHandlers", () => {
       expect(result).toBe("CommandOrControl+Shift+Space");
     });
 
-    it("filters out the F2 key and returns the main hotkey", async () => {
-      const C = await setup();
-      const handler = registeredHandlers.get(C.HOTKEY.GET_CURRENT)!;
-      // [20260726_TypeGate_HotkeyHandlers] mockHotkeyManager indexed access is
-      // possibly-undefined; the method is populated in beforeEach so assert.
-      mockHotkeyManager.getRegisteredHotkeys!.mockReturnValueOnce([
-        "F2",
-        "CommandOrControl+Shift+Space",
-      ]);
+    // [20260816_Refactor_DeadChannels] F2-filter case removed — F2 can no
+    // longer be registered, so GET_CURRENT returns the first hotkey as-is.
 
-      const result = (await handler(mockEvent)) as string;
-      expect(result).toBe("CommandOrControl+Shift+Space");
-    });
+    // [20260816_Refactor_DeadChannels] REGISTER_F2/UNREGISTER_F2 handler
+    // describes removed with the zero-renderer-caller F2 chain.
   });
-
-  describe("HOTKEY.REGISTER_F2 handler", () => {
-    it("calls hotkeyManager.registerF2DoubleClick on first registration", async () => {
-      const C = await setup();
-      const handler = registeredHandlers.get(C.HOTKEY.REGISTER_F2)!;
-
-      const result = (await handler(mockEvent)) as HandlerResult;
-      expect(result.success).toBe(true);
-      expect(mockHotkeyManager.registerF2DoubleClick).toHaveBeenCalledWith(
-        expect.any(Function),
-      );
-    });
-
-    it("skips registerF2DoubleClick on a second sender (already registered)", async () => {
-      const C = await setup();
-      const handler = registeredHandlers.get(C.HOTKEY.REGISTER_F2)!;
-
-      await handler(mockEvent);
-      // [20260726_TypeGate_HotkeyHandlers] mockHotkeyManager indexed access is
-      // possibly-undefined; the method is populated in beforeEach so assert.
-      mockHotkeyManager.registerF2DoubleClick!.mockClear();
-
-      // Second sender — different id
-      const secondEvent = { sender: { id: 2, on: vi.fn() } };
-      const result = (await handler(secondEvent)) as HandlerResult;
-      expect(result.success).toBe(true);
-      expect(mockHotkeyManager.registerF2DoubleClick).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("HOTKEY.UNREGISTER_F2 handler", () => {
-    it("returns success when sender had previously registered F2", async () => {
-      const C = await setup();
-      const registerHandler = registeredHandlers.get(C.HOTKEY.REGISTER_F2)!;
-      const unregisterHandler = registeredHandlers.get(C.HOTKEY.UNREGISTER_F2)!;
-
-      await registerHandler(mockEvent);
-      const result = (await unregisterHandler(mockEvent)) as HandlerResult;
-      expect(result.success).toBe(true);
-    });
-
-    it("returns failure when sender had not registered F2", async () => {
-      const C = await setup();
-      const handler = registeredHandlers.get(C.HOTKEY.UNREGISTER_F2)!;
-
-      const result = (await handler(mockEvent)) as HandlerResult;
-      expect(result.success).toBe(false);
-    });
-  });
+  // (Closer restored: the scripted F2 deletion had consumed GET_CURRENT's
+  // closing brace and mis-nested the describes below.)
 
   describe("HOTKEY.SET_STATE handler", () => {
     it("calls hotkeyManager.setRecordingState with the boolean", async () => {

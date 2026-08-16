@@ -85,8 +85,6 @@ export const HOTKEY = {
   REGISTER: "register-hotkey",
   UNREGISTER: "unregister-hotkey",
   GET_CURRENT: "get-current-hotkey",
-  REGISTER_F2: "register-f2-hotkey",
-  UNREGISTER_F2: "unregister-f2-hotkey",
   SET_STATE: "set-recording-state",
   GET_STATE: "get-recording-state",
 } as const;
@@ -117,7 +115,6 @@ export const SYSTEM = {
 
 export const EVENTS = {
   HOTKEY_TRIGGERED: "hotkey-triggered",
-  F2_DOUBLE_CLICK: "f2-double-click",
   WINDOW_MAXIMIZE_CHANGE: "window-maximize-change",
   TRANSCRIPTION_UPDATE: "transcription-update",
   PROCESSING_UPDATE: "processing-update",

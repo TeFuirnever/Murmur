@@ -7,7 +7,7 @@
 //   - the "开始新录音" button resets recording state after a result
 //   - handleCopyText is invoked via the TranscriptionResult copy button
 // Mocks mirror app.test.tsx (useRecording / useModelStatus / useHotkey /
-// useWindowDrag / SettingsPage / electronAPI), but useModule-scoped mutable
+// useWindowDrag / electronAPI), but useModule-scoped mutable
 // state so individual tests can flip modelStatus to "ready" and inject a
 // transcription result through the useRecording onTranscriptionComplete hook.
 import "../setup/react";
@@ -100,11 +100,6 @@ vi.mock("../../src/hooks/useWindowDrag", () => ({
     handleMouseUp: vi.fn(),
     handleClick: () => true,
   }),
-}));
-
-vi.mock("../../src/settings", () => ({
-  SettingsPage: () =>
-    React.createElement("div", { "data-testid": "settings-page" }),
 }));
 
 // Mock electronAPI (same shape as app.test.tsx). copyText is the handler

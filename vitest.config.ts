@@ -58,12 +58,17 @@ export default defineConfig({
       //   ✅ v1.2.0: 70% statements (App.tsx + misc components + SettingsSidebar)
       //   ✅ v1.3.0: 79% statements (useRecording + model-status + App expanded)
       //   ✅ v1.4.0: 80% lines (AIConfig expanded + sonner + unskipped tests)
-      //   Next: push statements to 80%+ (entry files need E2E)
+      //   ✅ 2026-08-16 branch push: three parallel executors extended the
+      //      suites with ~200 further cases (funasrServer health/crash/taskkill
+      //      branches, useRecording MediaRecorder error chain, App condition
+      //      matrix, database/validator/formatter/installer guards, four hooks'
+      //      error paths). Final actuals: 96.6 S / 92.8 B / 94.5 F / 97.1 L —
+      //      thresholds sit just below as the regression floor.
       thresholds: {
-        statements: 77,
-        branches: 64,
-        functions: 73,
-        lines: 78,
+        statements: 96,
+        branches: 92,
+        functions: 94,
+        lines: 96,
       },
     },
   },

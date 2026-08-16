@@ -2,7 +2,7 @@ import * as React from "react";
 
 /**
  * 热键管理Hook
- * 处理全局快捷键功能，包括F2双击功能
+ * 处理全局快捷键功能
  */
 export const useHotkey = () => {
   const [hotkey, setHotkey] = React.useState("CommandOrControl+Shift+Space");
@@ -104,7 +104,6 @@ export const useHotkey = () => {
       .replace("Shift", "⇧")
       .replace("Alt", "⌥")
       .replace("Space", "空格")
-      .replace("F2", "F2")
       .replace("+", " + ");
   };
 

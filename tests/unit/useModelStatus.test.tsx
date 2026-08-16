@@ -323,3 +323,229 @@ describe("useModelStatus hook", () => {
     );
   });
 });
+
+// [20260816_Test_UseModelStatusExpanded] Error branches, event-listener
+// callbacks, and the download failure paths that were previously uncovered.
+describe("useModelStatus hook — errors, listeners, downloads", () => {
+  let originalAPI: ElectronAPI | undefined;
+
+  beforeEach(() => {
+    originalAPI = (globalThis.window as TestWindow).electronAPI;
+  });
+
+  afterEach(() => {
+    const win = globalThis.window as TestWindow;
+    if (originalAPI === undefined) delete win.electronAPI;
+    else win.electronAPI = originalAPI;
+    vi.restoreAllMocks();
+  });
+
+  it("reports the error stage when the bridge is missing entirely", async () => {
+    delete (globalThis.window as TestWindow).electronAPI;
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { result } = renderProviderHook();
+    await waitFor(() => {
+      expect(result.current.stage).toBe("error");
+    });
+    expect(result.current.error).toContain("Electron API");
+    errSpy.mockRestore();
+  });
+
+  it("reports the error stage when checkModelFiles throws", async () => {
+    (globalThis.window as TestWindow).electronAPI = makeElectronAPIStub({
+      checkModelFiles: vi.fn().mockRejectedValue(new Error("fs broken")),
+    });
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { result } = renderProviderHook();
+    await waitFor(() => {
+      expect(result.current.stage).toBe("error");
+    });
+    errSpy.mockRestore();
+  });
+
+  it("reports the error stage when the server check throws", async () => {
+    (globalThis.window as TestWindow).electronAPI = makeElectronAPIStub({
+      checkFunASRStatus: vi.fn().mockRejectedValue(new Error("net down")),
+    });
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { result } = renderProviderHook();
+    await waitFor(() => {
+      expect(result.current.stage).toBe("error");
+    });
+    errSpy.mockRestore();
+  });
+
+  it("lands on the error stage when files exist but the server is not ready", async () => {
+    (globalThis.window as TestWindow).electronAPI = makeElectronAPIStub({
+      checkFunASRStatus: vi.fn().mockResolvedValue({
+        ...SERVER_INITIALIZING,
+        initializing: false,
+        models_initialized: false,
+        success: true,
+      }),
+    });
+    const { result } = renderProviderHook();
+    await waitFor(() => {
+      expect(result.current.stage).toBe("error");
+    });
+    expect(result.current.error).toBeTruthy();
+  });
+
+  it("forwards download-progress events into stage/modelProgress state", async () => {
+    let progressCb: ((...args: unknown[]) => void) | undefined;
+    (globalThis.window as TestWindow).electronAPI = makeElectronAPIStub({
+      onModelDownloadProgress: vi.fn((cb) => {
+        progressCb = cb;
+        return NOOP_UNSUB;
+      }),
+    });
+    const { result } = renderProviderHook();
+    await waitFor(() => expect(result.current.stage).toBe("ready"));
+
+    act(() => {
+      progressCb?.(undefined, {
+        model: "asr",
+        stage: "downloading",
+        progress: 40,
+        overall_progress: 33,
+      });
+    });
+    expect(result.current.stage).toBe("downloading");
+    expect(result.current.downloadProgress).toBe(33);
+    expect(result.current.modelProgress.asr?.progress).toBe(40);
+    expect(result.current.modelProgress.asr?.status).toBe("downloading");
+
+    act(() => {
+      progressCb?.(undefined, {
+        model: "vad",
+        stage: "completed",
+        progress: 100,
+        overall_progress: 60,
+      });
+    });
+    expect(result.current.modelProgress.vad?.status).toBe("completed");
+  });
+
+  it("ignores download-progress events for unknown model keys", async () => {
+    let progressCb: ((...args: unknown[]) => void) | undefined;
+    (globalThis.window as TestWindow).electronAPI = makeElectronAPIStub({
+      onModelDownloadProgress: vi.fn((cb) => {
+        progressCb = cb;
+        return NOOP_UNSUB;
+      }),
+    });
+    const { result } = renderProviderHook();
+    await waitFor(() => expect(result.current.stage).toBe("ready"));
+
+    act(() => {
+      progressCb?.(undefined, { model: "unknown", progress: 10 });
+    });
+    expect(result.current.modelProgress.unknown).toBeUndefined();
+    expect(result.current.stage).toBe("downloading"); // stage still flips
+  });
+
+  it("applies model_initialization processing updates", async () => {
+    let processingCb: ((...args: unknown[]) => void) | undefined;
+    (globalThis.window as TestWindow).electronAPI = makeElectronAPIStub({
+      onProcessingUpdate: vi.fn((cb) => {
+        processingCb = cb;
+        return NOOP_UNSUB;
+      }),
+    });
+    const { result } = renderProviderHook();
+    await waitFor(() => expect(result.current.stage).toBe("ready"));
+
+    act(() => {
+      processingCb?.(undefined, {
+        type: "model_initialization",
+        isLoading: true,
+        isReady: false,
+        progress: 20,
+      });
+    });
+    expect(result.current.stage).toBe("loading");
+    expect(result.current.progress).toBe(20);
+
+    act(() => {
+      processingCb?.(undefined, {
+        type: "model_initialization",
+        isReady: true,
+      });
+    });
+    expect(result.current.stage).toBe("ready");
+  });
+
+  it("re-checks model status when settings change", async () => {
+    const checkFunASRStatus = vi.fn().mockResolvedValue(SERVER_READY);
+    let settingsCb: (() => void) | undefined;
+    (globalThis.window as TestWindow).electronAPI = makeElectronAPIStub({
+      checkFunASRStatus,
+      onSettingsUpdate: vi.fn((cb) => {
+        settingsCb = cb;
+        return NOOP_UNSUB;
+      }),
+    });
+    const { result } = renderProviderHook();
+    await waitFor(() => expect(result.current.stage).toBe("ready"));
+    const before = checkFunASRStatus.mock.calls.length;
+
+    act(() => {
+      settingsCb?.();
+    });
+    await waitFor(() => {
+      expect(checkFunASRStatus.mock.calls.length).toBeGreaterThan(before);
+    });
+  });
+
+  it("surfaces a failed downloadModels result as the error stage", async () => {
+    (globalThis.window as TestWindow).electronAPI = makeElectronAPIStub({
+      downloadModels: vi.fn().mockResolvedValue({
+        success: false,
+        error: "disk full",
+      }),
+    });
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { result } = renderProviderHook();
+    await waitFor(() => expect(result.current.stage).toBe("ready"));
+
+    await act(async () => {
+      await result.current.downloadModels();
+    });
+    expect(result.current.stage).toBe("error");
+    expect(result.current.error).toContain("disk full");
+    errSpy.mockRestore();
+  });
+
+  it("surfaces a FunASR restart failure after a successful download", async () => {
+    (globalThis.window as TestWindow).electronAPI = makeElectronAPIStub({
+      downloadModels: vi.fn().mockResolvedValue({ success: true }),
+      restartFunasrServer: vi.fn().mockRejectedValue(new Error("spawn fail")),
+    });
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const { result } = renderProviderHook();
+    await waitFor(() => expect(result.current.stage).toBe("ready"));
+
+    await act(async () => {
+      await result.current.downloadModels();
+    });
+    expect(result.current.stage).toBe("error");
+    expect(result.current.error).toContain("重启服务器失败");
+    errSpy.mockRestore();
+    logSpy.mockRestore();
+  });
+
+  it("returns a failed result when downloadModels is called without the bridge", async () => {
+    delete (globalThis.window as TestWindow).electronAPI;
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { result } = renderProviderHook();
+    await waitFor(() => expect(result.current.stage).toBe("error"));
+
+    let outcome: { success: boolean; error?: string } | undefined;
+    await act(async () => {
+      outcome = await result.current.downloadModels();
+    });
+    expect(outcome?.success).toBe(false);
+    errSpy.mockRestore();
+  });
+});

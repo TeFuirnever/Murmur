@@ -206,7 +206,6 @@ function createMockManagers() {
       registerHotkey: vi.fn(() => true),
       unregisterHotkey: vi.fn(() => true),
       getRegisteredHotkeys: vi.fn(() => []),
-      registerF2DoubleClick: vi.fn(() => true),
       setRecordingState: vi.fn(),
       getRecordingState: vi.fn(() => false),
     },
@@ -297,6 +296,10 @@ describe("IPC contract completeness", () => {
     expect(twoWayValues).not.toContain("get-available-models");
     expect(twoWayValues).not.toContain("get-current-model");
     expect(twoWayValues).not.toContain("switch-model");
+    // [20260816_Refactor_DeadChannels] third wave: the dead F2 chain.
+    expect(twoWayValues).not.toContain("register-f2-hotkey");
+    expect(twoWayValues).not.toContain("unregister-f2-hotkey");
+    expect(eventValues).not.toContain("f2-double-click");
   });
 
   it("registers a handler for every two-way channel value in ipc-contracts", async () => {

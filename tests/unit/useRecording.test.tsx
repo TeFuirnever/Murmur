@@ -75,11 +75,20 @@ interface FakeRecorderErrorEvent {
   error?: Error;
 }
 class FakeMediaRecorder {
+  // [20260816_Test_BranchPush] Instance registry so tests can reach the
+  // recorder created inside the hook (held in a ref) to fire onerror /
+  // ondataavailable manually for branch-arc coverage.
+  static instances: FakeMediaRecorder[] = [];
+
   ondataavailable: ((event: FakeRecorderEvent) => void) | null = null;
   onstop: (() => void) | null = null;
   onerror: ((event: FakeRecorderErrorEvent) => void) | null = null;
   state: "inactive" | "recording" = "inactive";
   private stopped = false;
+
+  constructor() {
+    FakeMediaRecorder.instances.push(this);
+  }
 
   start(_timeslice?: number): void {
     this.state = "recording";
@@ -802,4 +811,794 @@ afterEach(() => {
     (window as unknown as { AudioContext: typeof AudioContext }).AudioContext =
       ORIGINAL_AUDIO_CONTEXT;
   }
+});
+
+// ─── [20260816_Test_BranchPush] Branch-arc coverage ────────────────────────
+// Targets the uncovered branch arcs reported by coverage: the web-env mock
+// path, the optimization-timeout lifecycle (armed → cleared / cancelled /
+// timed out), AI failure shapes (success:false, missing text, throws),
+// missing log bridge, recorder onerror / zero-size ondataavailable
+// callbacks, missing transcription fields, and cancelRecording races.
+describe("[20260816_Test_BranchPush] useRecording — branch arcs", () => {
+  type RecordingHookResult = ReturnType<typeof useRecording>;
+
+  // Starts and stops one recording so the synchronous onstop callback opens
+  // the async processAudio pipeline.
+  async function startAndStop(result: {
+    current: RecordingHookResult;
+  }): Promise<void> {
+    await act(async () => {
+      await result.current.startRecording();
+    });
+    await act(async () => {
+      result.current.stopRecording();
+    });
+  }
+
+  beforeEach(async () => {
+    // [20260816_Test_BranchPush] Earlier tests in this file drain their
+    // optimization timeout via waitFor(isOptimizing === false), which can
+    // pass before the 100ms timer has even armed. Any such stale timer would
+    // fire into THIS test's electronAPI (the callback resolves
+    // window.electronAPI late). Sleep once up front so leftover callbacks
+    // complete against the previous test's API instead of polluting ours.
+    await new Promise((resolve) => {
+      setTimeout(resolve, 150);
+    });
+    Object.defineProperty(navigator, "mediaDevices", {
+      value: { getUserMedia: vi.fn().mockResolvedValue(makeFakeStream()) },
+      configurable: true,
+    });
+    (
+      window as unknown as { MediaRecorder: typeof MediaRecorder }
+    ).MediaRecorder = FakeMediaRecorder as unknown as typeof MediaRecorder;
+    (window as unknown as { AudioContext: typeof AudioContext }).AudioContext =
+      FakeAudioContext as unknown as typeof AudioContext;
+    setModelReady(true);
+  });
+
+  afterEach(() => {
+    FakeMediaRecorder.instances.length = 0;
+    vi.clearAllMocks();
+    vi.useRealTimers();
+  });
+
+  it("returns the web mock result when electronAPI is absent", async () => {
+    setElectronAPI(undefined);
+    const onTranscriptionComplete = vi.fn();
+    const { result } = renderHook(() =>
+      useRecording({ onTranscriptionComplete }),
+    );
+
+    await startAndStop(result);
+
+    await waitFor(() =>
+      expect(onTranscriptionComplete).toHaveBeenCalledTimes(1),
+    );
+    expect(onTranscriptionComplete.mock.calls[0]![0]).toMatchObject({
+      success: true,
+      text: "模拟识别结果。",
+      confidence: 0.95,
+      duration: 3.5,
+    });
+    expect(result.current.error).toBeNull();
+    await waitFor(() => expect(result.current.isProcessing).toBe(false));
+  });
+
+  it("clears an armed optimization timeout when a new recording starts", async () => {
+    const saveTranscription = vi.fn().mockResolvedValue({ success: true });
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "重启清超时",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue("off"),
+      saveTranscription,
+      log: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { result } = renderHook(() => useRecording());
+    await startAndStop(result);
+    // The 100ms optimization timeout is now armed (isOptimizing === true).
+    await waitFor(() => expect(result.current.isOptimizing).toBe(true));
+
+    await act(async () => {
+      await result.current.startRecording();
+    });
+    expect(result.current.isRecording).toBe(true);
+
+    // The cleared timeout never fires, so nothing is saved.
+    await act(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 250);
+      });
+    });
+    expect(saveTranscription).not.toHaveBeenCalled();
+
+    // End the second recording; the cancelled flag neutralizes its own
+    // optimization timeout after the test ends.
+    act(() => {
+      result.current.cancelRecording();
+    });
+  });
+
+  it("skips zero-size data chunks from ondataavailable", async () => {
+    // Local recorder variant whose only data event carries an empty Blob, so
+    // the size>0 guard runs on its false arc while the pipeline continues.
+    class EmptyChunkRecorder {
+      ondataavailable: ((event: { data: Blob }) => void) | null = null;
+      onstop: (() => void) | null = null;
+      onerror: ((event: { error?: Error }) => void) | null = null;
+      start(_timeslice?: number): void {}
+      stop(): void {
+        this.ondataavailable?.({ data: new Blob([]) });
+        this.onstop?.();
+      }
+    }
+    (
+      window as unknown as { MediaRecorder: typeof MediaRecorder }
+    ).MediaRecorder = EmptyChunkRecorder as unknown as typeof MediaRecorder;
+
+    const onTranscriptionComplete = vi.fn();
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "空块测试",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue("off"),
+      saveTranscription: vi.fn().mockResolvedValue({ success: true }),
+      log: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { result } = renderHook(() =>
+      useRecording({ onTranscriptionComplete }),
+    );
+    await startAndStop(result);
+
+    // The empty chunk was skipped but processing still completes cleanly.
+    await waitFor(() =>
+      expect(onTranscriptionComplete).toHaveBeenCalledTimes(1),
+    );
+    expect(result.current.error).toBeNull();
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+  });
+
+  it("surfaces the recorder error message and stops the stream tracks", async () => {
+    const stopFn = vi.fn();
+    const track = { stop: stopFn } as unknown as MediaStreamTrack;
+    const stream = { getTracks: () => [track] } as unknown as MediaStream;
+    Object.defineProperty(navigator, "mediaDevices", {
+      value: { getUserMedia: vi.fn().mockResolvedValue(stream) },
+      configurable: true,
+    });
+    setElectronAPI({ log: vi.fn().mockResolvedValue(undefined) });
+
+    const { result } = renderHook(() => useRecording());
+    await act(async () => {
+      await result.current.startRecording();
+    });
+
+    const recorder = FakeMediaRecorder.instances.at(-1)!;
+    act(() => {
+      recorder.onerror?.({ error: new Error("麦克风中断") });
+    });
+
+    expect(result.current.error).toBe("录音错误: 麦克风中断");
+    expect(result.current.isRecording).toBe(false);
+    expect(result.current.isProcessing).toBe(false);
+    // The onerror handler stopped the live stream tracks exactly once.
+    expect(stopFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses the unknown-error fallback and skips track cleanup after cancel", async () => {
+    const stopFn = vi.fn();
+    const track = { stop: stopFn } as unknown as MediaStreamTrack;
+    const stream = { getTracks: () => [track] } as unknown as MediaStream;
+    Object.defineProperty(navigator, "mediaDevices", {
+      value: { getUserMedia: vi.fn().mockResolvedValue(stream) },
+      configurable: true,
+    });
+    setElectronAPI(undefined);
+
+    const { result } = renderHook(() => useRecording());
+    await act(async () => {
+      await result.current.startRecording();
+    });
+    // Cancel first: this stops the tracks and clears streamRef while the
+    // recorder instance (and its onerror handler) survives.
+    await act(async () => {
+      result.current.cancelRecording();
+    });
+    expect(stopFn).toHaveBeenCalledTimes(1);
+
+    const recorder = FakeMediaRecorder.instances.at(-1)!;
+    act(() => {
+      recorder.onerror?.({}); // event without an error field
+    });
+
+    expect(result.current.error).toBe("录音错误: 未知错误");
+    // streamRef was already null, so onerror must not stop tracks again.
+    expect(stopFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("defaults missing transcription fields when saving", async () => {
+    const saveTranscription = vi.fn().mockResolvedValue({ success: true });
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({ success: true }),
+      getSetting: vi.fn().mockResolvedValue("off"),
+      saveTranscription,
+      log: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { result } = renderHook(() => useRecording());
+    await startAndStop(result);
+
+    await waitFor(() => expect(saveTranscription).toHaveBeenCalledTimes(1));
+    const saved = saveTranscription.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
+    expect(saved.raw_text).toBe("");
+    expect(saved.text).toBe("");
+    expect(saved.confidence).toBe(0);
+    expect(saved.duration).toBe(0);
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+  });
+
+  it("uses the generic failure message when transcription fails without an error", async () => {
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({ success: false }),
+      log: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { result } = renderHook(() => useRecording());
+    await startAndStop(result);
+
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+    expect(result.current.error).toContain("语音识别失败");
+    expect(result.current.isProcessing).toBe(false);
+  });
+
+  it("invokes onAIOptimizationComplete with the raw text when AI is off", async () => {
+    const onAIOptimizationComplete = vi.fn();
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "关闭优化",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue("off"),
+      saveTranscription: vi.fn().mockResolvedValue({ success: true }),
+      log: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { result } = renderHook(() =>
+      useRecording({ onAIOptimizationComplete }),
+    );
+    await startAndStop(result);
+
+    await waitFor(() =>
+      expect(onAIOptimizationComplete).toHaveBeenCalledTimes(1),
+    );
+    expect(onAIOptimizationComplete.mock.calls[0]![0]).toMatchObject({
+      text: "关闭优化",
+      enhanced_by_ai: false,
+    });
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+  });
+
+  it("migrates enable_ai_optimization=true to auto mode and runs the optimizer", async () => {
+    const getSetting = vi.fn().mockImplementation((key: string) => {
+      if (key === "default_mode") return Promise.resolve(null);
+      // Legacy enable_ai_optimization flag: true migrates to "auto".
+      return Promise.resolve(true);
+    });
+    const processText = vi
+      .fn()
+      .mockResolvedValue({ success: true, text: "迁移优化结果" });
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "迁移原文",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting,
+      processText,
+      saveTranscription: vi.fn().mockResolvedValue({ success: true }),
+      log: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { result } = renderHook(() => useRecording());
+    await startAndStop(result);
+
+    await waitFor(() => expect(processText).toHaveBeenCalledTimes(1));
+    expect(processText).toHaveBeenCalledWith("迁移原文", "optimize");
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+  });
+
+  it("derives the mode automatically when default_mode is undefined", async () => {
+    // undefined (not null) skips the migration branch and is not "off", so
+    // the hook falls back to determineProcessingMode for the mode.
+    const processText = vi
+      .fn()
+      .mockResolvedValue({ success: true, text: "模式推导结果" });
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "短文本",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue(undefined),
+      processText,
+      saveTranscription: vi.fn().mockResolvedValue({ success: true }),
+      log: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { result } = renderHook(() => useRecording());
+    await startAndStop(result);
+
+    await waitFor(() => expect(processText).toHaveBeenCalledTimes(1));
+    expect(processText).toHaveBeenCalledWith("短文本", "optimize");
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+  });
+
+  it("logs an AI failure and falls back to the raw text", async () => {
+    const log = vi.fn().mockResolvedValue(undefined);
+    const processText = vi
+      .fn()
+      .mockResolvedValue({ success: false, error: "上游500" });
+    const onAIOptimizationComplete = vi.fn();
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "失败原文",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue("auto"),
+      processText,
+      saveTranscription: vi.fn().mockResolvedValue({ success: true }),
+      log,
+    });
+
+    const { result } = renderHook(() =>
+      useRecording({ onAIOptimizationComplete }),
+    );
+    await startAndStop(result);
+
+    await waitFor(() =>
+      expect(log).toHaveBeenCalledWith(
+        "error",
+        "AI文本优化失败:",
+        expect.objectContaining({ success: false }),
+      ),
+    );
+    await waitFor(() =>
+      expect(onAIOptimizationComplete).toHaveBeenCalledTimes(1),
+    );
+    expect(onAIOptimizationComplete.mock.calls[0]![0]).toMatchObject({
+      text: "失败原文",
+      enhanced_by_ai: false,
+    });
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+  });
+
+  it("keeps the raw text when the optimized text is identical", async () => {
+    const saveTranscription = vi.fn().mockResolvedValue({ success: true });
+    const onAIOptimizationComplete = vi.fn();
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "完全相同",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue("auto"),
+      processText: vi.fn().mockResolvedValue({
+        success: true,
+        text: "完全相同",
+      }),
+      saveTranscription,
+      log: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { result } = renderHook(() =>
+      useRecording({ onAIOptimizationComplete }),
+    );
+    await startAndStop(result);
+
+    await waitFor(() => expect(saveTranscription).toHaveBeenCalledTimes(1));
+    const saved = saveTranscription.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
+    // processed_text is recorded but must not replace the main text.
+    expect(saved.processed_text).toBe("完全相同");
+    expect(saved.text).toBe("完全相同");
+    await waitFor(() =>
+      expect(onAIOptimizationComplete).toHaveBeenCalledTimes(1),
+    );
+    expect(onAIOptimizationComplete.mock.calls[0]![0]).toMatchObject({
+      text: "完全相同",
+      enhanced_by_ai: false,
+    });
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+  });
+
+  it("handles an AI success result that carries no text", async () => {
+    const log = vi.fn().mockResolvedValue(undefined);
+    const onAIOptimizationComplete = vi.fn();
+    const saveTranscription = vi.fn().mockResolvedValue({ success: true });
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "无文本结果",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue("auto"),
+      processText: vi.fn().mockResolvedValue({ success: true }),
+      saveTranscription,
+      log,
+    });
+
+    const { result } = renderHook(() =>
+      useRecording({ onAIOptimizationComplete }),
+    );
+    await startAndStop(result);
+
+    // The success log coerces the missing text to "" before substring.
+    await waitFor(() =>
+      expect(log).toHaveBeenCalledWith("info", "AI文本优化成功", "..."),
+    );
+    await waitFor(() => expect(saveTranscription).toHaveBeenCalledTimes(1));
+    const saved = saveTranscription.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
+    expect(saved.processed_text).toBeUndefined();
+    expect(saved.text).toBe("无文本结果");
+    await waitFor(() =>
+      expect(onAIOptimizationComplete).toHaveBeenCalledTimes(1),
+    );
+    expect(onAIOptimizationComplete.mock.calls[0]![0]).toMatchObject({
+      text: "无文本结果",
+      enhanced_by_ai: false,
+    });
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+  });
+
+  it("logs a thrown AI error and still saves the raw transcription", async () => {
+    const log = vi.fn().mockResolvedValue(undefined);
+    const saveTranscription = vi.fn().mockResolvedValue({ success: true });
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "异常原文",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue("auto"),
+      processText: vi.fn().mockRejectedValue(new Error("模型崩溃")),
+      saveTranscription,
+      log,
+    });
+
+    const { result } = renderHook(() => useRecording());
+    await startAndStop(result);
+
+    await waitFor(() =>
+      expect(log).toHaveBeenCalledWith(
+        "error",
+        "AI文本优化捕获到错误:",
+        expect.any(Error),
+      ),
+    );
+    await waitFor(() => expect(saveTranscription).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+  });
+
+  it("runs the optimization pipeline without a log bridge method", async () => {
+    const saveTranscription = vi.fn().mockResolvedValue({ success: true });
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "无日志原文",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue("auto"),
+      processText: vi.fn().mockResolvedValue({
+        success: true,
+        text: "无日志优化",
+      }),
+      saveTranscription,
+      // No `log` key on purpose: every log guard must short-circuit.
+    });
+
+    const { result } = renderHook(() => useRecording());
+    await startAndStop(result);
+
+    await waitFor(() => expect(saveTranscription).toHaveBeenCalledTimes(1));
+    const saved = saveTranscription.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
+    expect(saved.processed_text).toBe("无日志优化");
+    expect(saved.text).toBe("无日志优化");
+    expect(result.current.error).toBeNull();
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+  });
+
+  it("tolerates a missing log method when the AI step fails", async () => {
+    const onAIOptimizationComplete = vi.fn();
+    const saveTranscription = vi.fn().mockResolvedValue({ success: true });
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "静默失败原文",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue("auto"),
+      processText: vi.fn().mockResolvedValue({ success: false }),
+      saveTranscription,
+    });
+
+    const { result } = renderHook(() =>
+      useRecording({ onAIOptimizationComplete }),
+    );
+    await startAndStop(result);
+
+    await waitFor(() => expect(saveTranscription).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(onAIOptimizationComplete).toHaveBeenCalledTimes(1),
+    );
+    expect(onAIOptimizationComplete.mock.calls[0]![0]).toMatchObject({
+      text: "静默失败原文",
+      enhanced_by_ai: false,
+    });
+    expect(result.current.error).toBeNull();
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+  });
+
+  it("tolerates a missing log method when processText throws", async () => {
+    const saveTranscription = vi.fn().mockResolvedValue({ success: true });
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "静默异常原文",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue("auto"),
+      processText: vi.fn().mockRejectedValue(new Error("静默失败")),
+      saveTranscription,
+    });
+
+    const { result } = renderHook(() => useRecording());
+    await startAndStop(result);
+
+    await waitFor(() => expect(saveTranscription).toHaveBeenCalledTimes(1));
+    expect(result.current.error).toBeNull();
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+  });
+
+  it("skips saving when the bridge disappears while settings are loading", async () => {
+    let resolveSettings: (value: unknown) => void = () => {};
+    const getSetting = vi.fn(
+      (_key: string) =>
+        new Promise<unknown>((resolve) => {
+          resolveSettings = resolve;
+        }),
+    );
+    const saveTranscription = vi.fn().mockResolvedValue({ success: true });
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "桥接消失",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting,
+      saveTranscription,
+      log: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { result } = renderHook(() => useRecording());
+    await startAndStop(result);
+    // Wait until the 100ms callback has invoked getSetting (bridge alive).
+    await waitFor(() => expect(getSetting).toHaveBeenCalled());
+
+    setElectronAPI(undefined);
+    act(() => {
+      resolveSettings("off");
+    });
+
+    // The save block is guarded by a falsy electronAPI and is skipped.
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+    expect(saveTranscription).not.toHaveBeenCalled();
+    expect(result.current.error).toBeNull();
+  });
+
+  it("surfaces a processing error when the bridge disappears before the timeout fires", async () => {
+    const saveTranscription = vi.fn().mockResolvedValue({ success: true });
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "超时前消失",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue("off"),
+      saveTranscription,
+      log: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { result } = renderHook(() => useRecording());
+    await startAndStop(result);
+    await waitFor(() => expect(result.current.isOptimizing).toBe(true));
+
+    setElectronAPI(undefined);
+    await waitFor(() => expect(result.current.error).toContain("转录处理失败"));
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+    expect(saveTranscription).not.toHaveBeenCalled();
+  });
+
+  it("clears an armed optimization timeout when cancelRecording runs during optimization", async () => {
+    const saveTranscription = vi.fn().mockResolvedValue({ success: true });
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "取消清超时",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue("off"),
+      saveTranscription,
+      log: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { result } = renderHook(() => useRecording());
+    await startAndStop(result);
+    await waitFor(() => expect(result.current.isOptimizing).toBe(true));
+
+    act(() => {
+      result.current.cancelRecording();
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 250);
+      });
+    });
+    expect(saveTranscription).not.toHaveBeenCalled();
+  });
+
+  it("skips the optimization callback when recording is cancelled mid-processing", async () => {
+    const saveTranscription = vi.fn().mockResolvedValue({ success: true });
+    const onAIOptimizationComplete = vi.fn();
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "处理中取消",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue("off"),
+      saveTranscription,
+      log: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { result } = renderHook(() =>
+      useRecording({ onAIOptimizationComplete }),
+    );
+    await act(async () => {
+      await result.current.startRecording();
+    });
+    await act(async () => {
+      result.current.stopRecording();
+      // Cancel synchronously after stop: cancelledRef flips before the async
+      // onstop pipeline schedules its optimization timeout.
+      result.current.cancelRecording();
+    });
+
+    await waitFor(() => expect(result.current.isOptimizing).toBe(true));
+    await act(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 250);
+      });
+    });
+    expect(saveTranscription).not.toHaveBeenCalled();
+    expect(onAIOptimizationComplete).not.toHaveBeenCalled();
+    // The cancelled callback returned before its finally block, so the
+    // optimizing flag stays latched at true.
+    expect(result.current.isOptimizing).toBe(true);
+  });
+
+  it("is a no-op when cancelling with no active session", () => {
+    setElectronAPI({});
+    const { result } = renderHook(() => useRecording());
+    act(() => {
+      result.current.cancelRecording();
+    });
+    expect(result.current.isRecording).toBe(false);
+    expect(result.current.isProcessing).toBe(false);
+    expect(result.current.error).toBeNull();
+    expect(result.current.audioData).toBeNull();
+  });
+
+  it("falls back to the raw text when the AI optimization times out", async () => {
+    // Capture the real timer before swapping: the armed 100ms callback must
+    // still fire on the real clock while the nested 60s race timeout runs on
+    // fake timers so the test does not wait a minute.
+    const realSetTimeout = globalThis.setTimeout.bind(globalThis);
+    const log = vi.fn().mockResolvedValue(undefined);
+    const processText = vi.fn(() => new Promise(() => undefined)); // never settles
+    const saveTranscription = vi.fn().mockResolvedValue({ success: true });
+    const onAIOptimizationComplete = vi.fn();
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "超时原文",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue("auto"),
+      processText: processText as unknown as (
+        text: string,
+        mode: string,
+        timeout?: number,
+      ) => Promise<import("../../src/types/ipc").AIProcessResult>,
+      saveTranscription,
+      log,
+    });
+
+    const { result } = renderHook(() =>
+      useRecording({ onAIOptimizationComplete }),
+    );
+    await startAndStop(result);
+    await waitFor(() => expect(result.current.isOptimizing).toBe(true));
+
+    vi.useFakeTimers();
+    try {
+      // Let the real 100ms callback run so the race timer becomes fake.
+      await act(async () => {
+        await new Promise<void>((resolve) => {
+          realSetTimeout(() => resolve(undefined), 150);
+        });
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60000);
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(log).toHaveBeenCalledWith(
+      "error",
+      "AI文本优化捕获到错误:",
+      expect.any(Error),
+    );
+    expect(saveTranscription).toHaveBeenCalledTimes(1);
+    const saved = saveTranscription.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
+    expect(saved.processed_text).toBeUndefined();
+    expect(saved.text).toBe("超时原文");
+    expect(onAIOptimizationComplete).toHaveBeenCalledTimes(1);
+    expect(onAIOptimizationComplete.mock.calls[0]![0]).toMatchObject({
+      text: "超时原文",
+      enhanced_by_ai: false,
+    });
+    expect(result.current.isOptimizing).toBe(false);
+  });
 });

@@ -152,7 +152,6 @@ databaseManager.setFileConfigPath(path.join(dataDirectory, "murmur.json"));
 
 // Initialize IPC handlers with all managers
 registerIPCHandlers(ipcMain, {
-  environmentManager,
   databaseManager,
   clipboardManager,
   funasrManager,
@@ -346,9 +345,10 @@ app.on("will-quit", async (e) => {
   app.exit();
 });
 
-// Export managers for use by other modules
+// [20260816_Refactor_MinimalEnvironment] environmentManager removed from
+// the export block and the handlers bag — zero consumers (kept as a local
+// for .env loading + ensureDataDirectory).
 export {
-  environmentManager,
   windowManager,
   databaseManager,
   clipboardManager,
