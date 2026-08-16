@@ -158,9 +158,14 @@ jobs:
       # [20260816_Fix_MacCiNodeAbi] Same ABI gate as build-mac: prove the
       # native sqlite module opens a database under the bundled Electron
       # before packaging, so a wrong-ABI binary can never reach an installer.
+      # This job installs with --ignore-scripts, so electron's own postinstall
+      # never extracted its binary — run it here first. The zip is already in
+      # the @electron/get cache warmed by @electron/rebuild, so it only
+      # extracts (no second download).
       - name: Verify native sqlite ABI under Electron (packaging gate)
         shell: bash
         run: |
+          node node_modules/electron/install.js
           ELECTRON_RUN_AS_NODE=1 npx electron -e "const D=require('better-sqlite3'); new D(':memory:').prepare('select 1 as ok').get(); console.log('native ABI gate passed')"
       # [20260816_Fix_MacCiNodeAbi] END
       # [20260802_Fix_WinEmbeddedPython] prepare-embedded-python.js now
