@@ -58,6 +58,17 @@ describe("[20260815_Refactor_DepsLean] runtime dependencies", () => {
     expect(pkg.dependencies).toHaveProperty("bindings");
   });
 
+  // [20260816_Fix_WinCiElectronRebuild] Windows CI (build.yml) runs
+  // `npx @electron/rebuild` after `pnpm install --ignore-scripts` with a
+  // hoisted node_modules. electron-builder 26 pulled it in transitively, but
+  // pnpm only links .bin shims for DIRECT dependencies, so npx found the
+  // package locally without an `electron-rebuild` shim and failed with
+  // "'electron-rebuild' is not recognized". Declaring it directly keeps the
+  // shim present and the Windows native-ABI rebuild deterministic.
+  it("declares @electron/rebuild as a devDependency (Windows CI rebuild shim)", () => {
+    expect(pkg.devDependencies).toHaveProperty("@electron/rebuild");
+  });
+
   it.each(REMOVED_RUNTIME_DEPS)("%s is not a production dependency", (name) => {
     expect(pkg.dependencies).not.toHaveProperty(name);
   });
