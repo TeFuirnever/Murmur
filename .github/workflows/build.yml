@@ -258,8 +258,17 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $installer = (Get-ChildItem dist -Filter "Murmur.Setup*.exe" | Select-Object -First 1).FullName
-          if (-not $installer) { throw "installer exe not found in dist/" }
+          # [20260816_Gate_PackagedBootSmoke] electron-builder's NSIS artifact
+          # name varies across versions (spaces vs dots); discover the exe
+          # instead of assuming, and print the dist listing for diagnostics.
+          $exes = @(Get-ChildItem -Path dist -Filter *.exe -File -Recurse)
+          Write-Host "exe files under dist/: $($exes.FullName -join ', ')"
+          if ($exes.Count -eq 0) {
+            Get-ChildItem -Path dist -Recurse -Depth 1 | ForEach-Object { Write-Host "dist entry: $($_.FullName)" }
+            throw "no exe found under dist/"
+          }
+          $installer = ($exes | Where-Object { $_.Name -like '*etup*' } | Select-Object -First 1).FullName
+          if (-not $installer) { $installer = $exes[0].FullName }
           Write-Host "Installing $installer silently"
           Start-Process -FilePath $installer -ArgumentList '/S' -Wait
           $appExe = Join-Path $env:LOCALAPPDATA 'Programs\murmur\Murmur.exe'
