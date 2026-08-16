@@ -71,9 +71,24 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      # [20260816_Fix_MacCiNodeAbi] The old `npx electron-builder
+      # install-app-deps` step silently no-opped on CI (~0.2s "finished"):
+      # pnpm's onlyBuiltDependencies allowlist let better-sqlite3's own
+      # install script download a system-Node prebuild (ABI 137), and the
+      # unforced rebuild never replaced it — the shipped v1.3.0 macOS dmg
+      # crashed at launch under Electron 39 (ABI 140). -f forces a real
+      # Electron-ABI rebuild every time.
       - name: Rebuild native modules for Electron
-        run: npx electron-builder install-app-deps
+        run: npx @electron/rebuild -f -w better-sqlite3
 
+      # [20260816_Fix_MacCiNodeAbi] Gate: the native module must actually
+      # open a database under the bundled Electron runtime before we are
+      # allowed to package. ELECTRON_RUN_AS_NODE runs Electron's own Node
+      # (ABI 140); a node-ABI binary exits non-zero here.
+      - name: Verify native sqlite ABI under Electron (packaging gate)
+        run: |
+          ELECTRON_RUN_AS_NODE=1 npx electron -e "const D=require('better-sqlite3'); new D(':memory:').prepare('select 1 as ok').get(); console.log('native ABI gate passed')"
+      # [20260816_Fix_MacCiNodeAbi] END
       - name: Prepare embedded Python
         run: pnpm run prepare:python:embedded
 
@@ -137,9 +152,17 @@ jobs:
         run: pnpm install --ignore-scripts
 
       - name: Rebuild native modules for Electron
-        run: npx @electron/rebuild
+        run: npx @electron/rebuild -f -w better-sqlite3
       # [20260802_Fix_WinCiPnpmPostinstall] END
 
+      # [20260816_Fix_MacCiNodeAbi] Same ABI gate as build-mac: prove the
+      # native sqlite module opens a database under the bundled Electron
+      # before packaging, so a wrong-ABI binary can never reach an installer.
+      - name: Verify native sqlite ABI under Electron (packaging gate)
+        shell: bash
+        run: |
+          ELECTRON_RUN_AS_NODE=1 npx electron -e "const D=require('better-sqlite3'); new D(':memory:').prepare('select 1 as ok').get(); console.log('native ABI gate passed')"
+      # [20260816_Fix_MacCiNodeAbi] END
       # [20260802_Fix_WinEmbeddedPython] prepare-embedded-python.js now
       # supports Windows (-pc-windows-msvc-shared). Keep continue-on-error
       # because torch/funasr pip install may exceed CI time/disk limits.
