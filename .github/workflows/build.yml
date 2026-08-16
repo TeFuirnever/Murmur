@@ -95,6 +95,21 @@ jobs:
       - name: Build main bundle
         run: pnpm run build:main
 
+      # [20260816_Fix_PackagedPreload] The build jobs never ran build:preload,
+      # so every installer this workflow ever produced (v1.0.0 → v1.3.1) shipped
+      # without dist-preload/preload.js — the packaged app boots, then the
+      # renderer shows "Electron API 不可用 / preload 脚本加载失败" and no feature
+      # works. main.ts loads the preload from app.getAppPath()/dist-preload.
+      - name: Build preload bundle
+        run: pnpm run build:preload
+
+      # [20260816_Fix_PackagedPreload] Gate: refuse to package unless the
+      # preload bundle exists (electron-builder's files glob silently skips
+      # missing entries, which is how this shipped broken for so long).
+      - name: Verify preload bundle exists (packaging gate)
+        run: test -f dist-preload/preload.js
+      # [20260816_Fix_PackagedPreload] END
+
       - name: Build renderer
         run: pnpm run build:renderer
 
@@ -177,6 +192,17 @@ jobs:
 
       - name: Build main bundle
         run: pnpm run build:main
+
+      # [20260816_Fix_PackagedPreload] Same as build-mac: the preload bundle
+      # must be built and present before packaging, or the installed app
+      # shows "Electron API 不可用" and nothing works.
+      - name: Build preload bundle
+        run: pnpm run build:preload
+
+      - name: Verify preload bundle exists (packaging gate)
+        shell: bash
+        run: test -f dist-preload/preload.js
+      # [20260816_Fix_PackagedPreload] END
 
       - name: Build renderer
         run: pnpm run build:renderer
