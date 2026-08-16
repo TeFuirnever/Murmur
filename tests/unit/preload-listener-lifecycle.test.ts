@@ -120,7 +120,6 @@ describe("preload listener lifecycle", () => {
   // that handler, and does not touch other channels.
   const SINGLE_PAYLOAD_LISTENERS = [
     { method: "onWindowMaximizeChange", channel: "window-maximize-change" },
-    { method: "onToggleDictation", channel: "toggle-dictation" },
     { method: "onHotkeyTriggered", channel: "hotkey-triggered" },
     { method: "onTranscriptionUpdate", channel: "transcription-update" },
     { method: "onError", channel: "error" },

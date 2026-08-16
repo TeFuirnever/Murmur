@@ -182,18 +182,24 @@ async function main() {
   const stage3 = run("pnpm run build:renderer", "build:renderer");
   printResult(stage3);
 
-  // [20260729_Feat_EffectsChunkIsolation] Verify ogl/motion are lazy-loaded,
-  // not bundled into entry chunks. Run after renderer build.
-  const stage3b = run(
-    "node scripts/check-effects-isolation.js",
-    "effects chunk isolation",
-  );
-  printResult(stage3b);
+  // [20260816_Refactor_RemoveEffects] The effects chunk isolation gate was
+  // removed with the visual-effects feature (ogl/motion deps deleted).
 
-  const results = [...stage1, stage2main, stage2a, stage2b, stage3, stage3b];
+  const results = [...stage1, stage2main, stage2a, stage2b, stage3];
 
   // Security audit (non-blocking)
-  const audit = run("pnpm audit --audit-level moderate", "security audit");
+  // [20260816_Fix_AuditRegistry] The local install registry (npmmirror.com)
+  // does not implement the npm audit endpoint, which made every audit run
+  // fail with ERR_PNPM_AUDIT_ENDPOINT_NOT_EXISTS and show a misleading
+  // "found issues" warning. Audit against the official registry explicitly;
+  // MURMUR_AUDIT_REGISTRY overrides it (e.g. for an internal mirror that
+  // does implement the endpoint).
+  const auditRegistry =
+    process.env.MURMUR_AUDIT_REGISTRY || "https://registry.npmjs.org";
+  const audit = run(
+    `pnpm audit --audit-level moderate --registry=${auditRegistry}`,
+    "security audit",
+  );
   if (!audit.ok) {
     warnings.push("Security audit found issues (non-blocking)");
     if (!QUIET && !JSON_OUT) {

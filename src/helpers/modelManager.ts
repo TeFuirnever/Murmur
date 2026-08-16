@@ -32,16 +32,9 @@ interface ModelCheckResult {
   cache_path: string;
 }
 
-interface DownloadProgress {
-  progress: number;
-  stage: string;
-  downloaded: number;
-  total: number;
-  models?: Record<
-    string,
-    { downloaded: number; total: number; percentage: number }
-  >;
-}
+// [20260815_Refactor_DeadIpc] The DownloadProgress interface was removed with
+// getDownloadProgress(); the MODEL_DOWNLOAD_PROGRESS payload shape lives in
+// types/ipc.ts for the renderer side.
 
 type ProgressCallback = (progress: Record<string, unknown>) => void;
 
@@ -256,50 +249,9 @@ class ModelManager {
     }
   }
 
-  async getDownloadProgress(): Promise<DownloadProgress> {
-    const cachePath = this.getModelCachePath();
-    if (!fs.existsSync(cachePath)) {
-      return { progress: 0, stage: "waiting", downloaded: 0, total: 0 };
-    }
-
-    const totalExpected = Object.values(this.modelConfigs).reduce(
-      (sum, config) => sum + config.expected_size,
-      0,
-    );
-
-    let totalDownloaded = 0;
-    const modelProgress: Record<
-      string,
-      { downloaded: number; total: number; percentage: number }
-    > = {};
-
-    for (const [modelType, config] of Object.entries(this.modelConfigs)) {
-      const modelFile = path.join(cachePath, config.cache_path);
-      if (fs.existsSync(modelFile)) {
-        const stats = fs.statSync(modelFile);
-        totalDownloaded += stats.size;
-        modelProgress[modelType] = {
-          downloaded: stats.size,
-          total: config.expected_size,
-          percentage: Math.min(100, (stats.size / config.expected_size) * 100),
-        };
-      } else {
-        modelProgress[modelType] = {
-          downloaded: 0,
-          total: config.expected_size,
-          percentage: 0,
-        };
-      }
-    }
-
-    return {
-      progress: (totalDownloaded / totalExpected) * 100,
-      stage: totalDownloaded > 0 ? "downloading" : "waiting",
-      downloaded: totalDownloaded,
-      total: totalExpected,
-      models: modelProgress,
-    };
-  }
+  // [20260815_Refactor_DeadIpc] getDownloadProgress removed — the renderer
+  // consumes download progress exclusively via the MODEL_DOWNLOAD_PROGRESS
+  // push event; this pull-based method had zero end-to-end callers.
 
   getDownloadScriptPath(): string {
     if (process.env.NODE_ENV === "development") {

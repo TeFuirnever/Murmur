@@ -97,15 +97,6 @@
       "ai_temperature": "Creativity (Temperature)",
       "ai_max_tokens": "Max Output Length"
     },
-    "effects": {
-      "enableEffects": "Enable visual effects",
-      "enableEffectsDesc": "Show animated background in History window (requires WebGL support)",
-      "toggleOnToast": "✨ Effects enabled — save in Settings to persist",
-      "toggleOffToast": "Effects disabled (this session) — save in Settings to persist",
-      "toggleOn": "✨ Enable effects",
-      "toggleOff": "Disable effects",
-      "toggleAriaLabel": "Toggle visual effects"
-    },
     "recognition": {
       "autoPaste": "Action after speech recognition",
       "autoPasteDesc": "Text handling after speech recognition completes",

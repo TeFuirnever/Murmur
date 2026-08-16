@@ -16,6 +16,10 @@ import {
 } from "lucide-react";
 import type { AICheckStatusResult } from "../../types/ipc";
 import type { SettingsState, ProviderPreset } from "../useSettings";
+// [20260815_Refactor_ModelListDedup] The <option> list below renders from the
+// single PREDEFINED_MODELS/MODEL_LABELS source of truth in useSettings.ts
+// instead of a second hardcoded copy that could silently drift.
+import { PREDEFINED_MODELS, MODEL_LABELS } from "../useSettings";
 
 interface AIConfigSectionProps {
   settings: SettingsState;
@@ -325,14 +329,13 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
               onChange={(e) => onInputChange("ai_model", e.target.value)}
               className="w-full px-3 py-2 text-sm border border-[#d2d2d7] dark:border-[#3a3a3c] rounded-lg focus:ring-2 focus:ring-[#0071e3] focus:border-transparent bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7]"
             >
-              <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-              <option value="gpt-4">GPT-4</option>
-              <option value="gpt-4-turbo">GPT-4 Turbo</option>
-              <option value="gpt-4o">GPT-4o</option>
-              <option value="gpt-4o-mini">GPT-4o Mini</option>
-              <option value="qwen3-30b-a3b-instruct-2507">
-                {t("settings.ai.qwenRecommended", "Qwen3-30B (推荐)")}
-              </option>
+              {PREDEFINED_MODELS.map((model) => (
+                <option key={model} value={model}>
+                  {model.startsWith("qwen")
+                    ? t("settings.ai.qwenRecommended", "Qwen3-30B (推荐)")
+                    : MODEL_LABELS[model]}
+                </option>
+              ))}
             </select>
           )}
           <div className="flex items-center space-x-2">

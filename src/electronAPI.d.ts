@@ -10,14 +10,10 @@ import type {
   ExportResult,
   ExportAllResult,
   AIReviewResult,
-  TranscriptionStats,
   FunASRStatusResult,
   FunASRInstallResult,
   ModelCheckResult,
   DownloadProgress,
-  ModelInfo,
-  SettingsImportResult,
-  SettingsExportResult,
   UpdateCheckResult,
   UpdateDownloadResult,
   UpdateProgressData,
@@ -44,9 +40,6 @@ export interface ElectronAPI {
   closeApp: () => Promise<void>;
   setAlwaysOnTop: (enabled: boolean) => Promise<void>;
 
-  // Dictation
-  onToggleDictation: (callback: (isRecording: boolean) => void) => () => void;
-
   // FunASR
   transcribeAudio: (
     audioData: ArrayBuffer | Blob,
@@ -62,14 +55,9 @@ export interface ElectronAPI {
 
   // Model management
   checkModelFiles: () => Promise<ModelCheckResult>;
-  getDownloadProgress: () => Promise<DownloadProgress>;
   downloadModels: (
     callback?: (progress: DownloadProgress) => void,
   ) => Promise<ModelCheckResult>;
-  downloadModel: (modelName: string) => Promise<OperationResult>;
-  getAvailableModels: () => Promise<ModelInfo[]>;
-  getCurrentModel: () => Promise<string>;
-  switchModel: (modelName: string) => Promise<OperationResult>;
   onModelDownloadProgress: (
     callback: (eventOrProgress: unknown, progress?: DownloadProgress) => void,
   ) => () => void;
@@ -92,8 +80,6 @@ export interface ElectronAPI {
   // Clipboard
   pasteText: (text: string) => Promise<void>;
   copyText: (text: string) => Promise<void>;
-  readClipboard: () => Promise<string>;
-  writeClipboard: (text: string) => Promise<void>;
 
   // Transcription
   saveTranscription: (data: {
@@ -104,7 +90,6 @@ export interface ElectronAPI {
     duration?: number;
     audio_format?: string;
   }) => Promise<TranscriptionSaveResult>;
-  getTranscription: (id: number) => Promise<TranscriptionRecord | null>;
   getTranscriptions: (
     limit: number,
     offset: number,
@@ -121,21 +106,13 @@ export interface ElectronAPI {
     error?: string;
   }>;
   clearAllTranscriptions: () => Promise<OperationResult>;
-  searchTranscriptions: (
-    query: string,
-    limit?: number,
-  ) => Promise<TranscriptionRecord[]>;
-  getTranscriptionStats: () => Promise<TranscriptionStats>;
 
   // Settings
   getSetting: (key: string, defaultValue?: unknown) => Promise<unknown>;
   setSetting: (key: string, value: unknown) => Promise<void>;
   getAllSettings: () => Promise<Record<string, unknown>>;
-  getSettings: () => Promise<Record<string, unknown>>;
   saveSetting: (key: string, value: unknown) => Promise<void>;
   resetSettings: () => Promise<void>;
-  importSettings: () => Promise<SettingsImportResult>;
-  exportSettings: () => Promise<SettingsExportResult>;
 
   // Hotkey
   registerHotkey: (hotkey: string) => Promise<HotkeyRegistrationResult>;
@@ -257,6 +234,11 @@ export interface DebugInfo {
 }
 
 declare global {
+  // [20260816_Refactor_DeadChannels] Removed bindings + orphaned types:
+  // downloadModel/getAvailableModels/getCurrentModel/switchModel,
+  // getTranscription/getTranscriptionStats, getSettings(legacy),
+  // importSettings/exportSettings, and the TranscriptionStats/ModelInfo/
+  // SettingsImportResult/SettingsExportResult interfaces in types/ipc.ts.
   interface Window {
     electronAPI: ElectronAPI;
     constants: AppConstants;

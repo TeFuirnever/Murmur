@@ -81,7 +81,6 @@ beforeEach(() => {
     openSettingsWindow: vi.fn(),
     openHistoryWindow: vi.fn(),
     onHotkeyTriggered: vi.fn(() => () => {}),
-    onToggleDictation: vi.fn(() => () => {}),
     onWindowMaximizeChange: vi.fn(() => () => {}),
     onSettingsUpdate: vi.fn(() => () => {}),
     processText: vi.fn(),

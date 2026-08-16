@@ -28,7 +28,6 @@ const BASE_SETTINGS: SettingsState = {
   auto_paste: "paste",
   close_behavior: "hide",
   theme: "system",
-  effects_enabled: false,
 };
 
 function renderSection(settings: SettingsState = BASE_SETTINGS) {

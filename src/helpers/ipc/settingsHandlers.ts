@@ -1,13 +1,5 @@
 // [20260724_TS_BigBang_SettingsHandlers] Migrated from .js to .ts (ADR-010).
-import fs from "fs";
-import { dialog } from "electron";
 import * as C from "../ipc-contracts";
-
-interface Logger {
-  info?(message: string, ...args: unknown[]): void;
-  warn?(message: string, ...args: unknown[]): void;
-  error?(message: string, ...args: unknown[]): void;
-}
 
 interface DatabaseManager {
   getSetting(key: string, defaultValue?: unknown): unknown;
@@ -23,7 +15,6 @@ interface WindowManager {
 
 interface Managers {
   databaseManager: DatabaseManager;
-  logger: Logger;
   windowManager: WindowManager;
 }
 
@@ -44,8 +35,8 @@ const ALLOWED_SETTING_KEYS = new Set<string>([
   "minimize_to_tray",
   "show_notifications",
   "model_download_path",
-  // [20260729_Feat_EffectsToggle] Visual-effects setting (History window).
-  "effects_enabled",
+  // [20260816_Refactor_RemoveEffects] effects_enabled removed from this
+  // allowlist with the visual-effects feature.
 ]);
 
 const MAX_VALUE_LENGTH = 10000;
@@ -69,7 +60,9 @@ export function validateSetting(key: unknown, value: unknown): boolean {
 }
 
 export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
-  const { databaseManager, logger, windowManager } = managers;
+  // [20260816_Refactor_DeadChannels] logger dropped from the destructure —
+  // its only consumers were the removed IMPORT/EXPORT handlers.
+  const { databaseManager, windowManager } = managers;
 
   const broadcastSettingsUpdate = (key: string | null) => {
     const mw = windowManager?.mainWindow;
@@ -99,9 +92,9 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
     return maskApiKey(databaseManager.getAllSettings());
   });
 
-  ipcMain.handle(C.SETTINGS.GET_LEGACY, () => {
-    return maskApiKey(databaseManager.getAllSettings());
-  });
+  // [20260816_Refactor_DeadChannels] The GET_LEGACY alias and the IMPORT/
+  // EXPORT handlers (dialog-backed but with no UI entry point anywhere) were
+  // removed with their contract constants.
 
   ipcMain.handle(C.SETTINGS.SAVE, (_event, key: string, value: unknown) => {
     if (!validateSetting(key, value)) {
@@ -116,63 +109,6 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
     const result = databaseManager.resetSettings();
     broadcastSettingsUpdate(null);
     return result;
-  });
-
-  ipcMain.handle(C.SETTINGS.IMPORT, async () => {
-    try {
-      const result = await dialog.showOpenDialog({
-        title: "导入设置",
-        filters: [{ name: "JSON", extensions: ["json"] }],
-        properties: ["openFile"],
-      });
-
-      if (result.canceled || result.filePaths.length === 0) {
-        return { success: false, canceled: true };
-      }
-
-      const filePath = result.filePaths[0];
-      if (!filePath) {
-        return { success: false, error: "未选择文件" };
-      }
-      const content = fs.readFileSync(filePath, "utf-8");
-      const settings = JSON.parse(content) as Record<string, unknown>;
-
-      let imported = 0;
-      for (const [key, value] of Object.entries(settings)) {
-        if (!validateSetting(key, value)) continue;
-        databaseManager.setSetting(key, value);
-        imported++;
-      }
-      broadcastSettingsUpdate(null);
-
-      return { success: true, count: imported };
-    } catch (error) {
-      logger.error?.("导入设置失败:", error);
-      return { success: false, error: (error as Error).message };
-    }
-  });
-
-  ipcMain.handle(C.SETTINGS.EXPORT, async () => {
-    try {
-      const settings = databaseManager.getAllSettings();
-      const content = JSON.stringify(settings, null, 2);
-
-      const result = await dialog.showSaveDialog({
-        title: "导出设置",
-        defaultPath: "murmur-settings.json",
-        filters: [{ name: "JSON", extensions: ["json"] }],
-      });
-
-      if (result.canceled || !result.filePath) {
-        return { success: false, canceled: true };
-      }
-
-      fs.writeFileSync(result.filePath, content, "utf-8");
-      return { success: true, path: result.filePath };
-    } catch (error) {
-      logger.error?.("导出设置失败:", error);
-      return { success: false, error: (error as Error).message };
-    }
   });
 }
 // [20260724_TS_BigBang_SettingsHandlers] END

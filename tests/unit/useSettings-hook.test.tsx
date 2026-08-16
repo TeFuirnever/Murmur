@@ -2,8 +2,9 @@
 // hook. Unlike the node-environment unit tests, this file MUST run under
 // jsdom because the hook uses React state/effects and window.matchMedia,
 // both of which require a DOM. We render the hook via @testing-library/react's
-// renderHook and assert the load -> change -> save lifecycle for the
-// effects_enabled setting (the recently-added visual-effects toggle).
+// renderHook and assert the load -> change -> save lifecycle for the theme
+// setting. ([20260816_Refactor_RemoveEffects] the old effects_enabled carrier
+// was removed with the visual-effects feature.)
 // @vitest-environment jsdom
 import "../setup/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -37,8 +38,9 @@ vi.mock("sonner", () => ({
 }));
 
 // [20260729_Test_UseSettingsHook] Full settings object returned by the
-// (mocked) preload bridge. effects_enabled: true is the value the load test
-// asserts the hook read correctly.
+// (mocked) preload bridge. theme: "dark" is the value the load test asserts
+// the hook read correctly. ([20260816_Refactor_RemoveEffects] the old
+// effects_enabled carrier was removed with the visual-effects feature.)
 const MOCK_SETTINGS = {
   ai_api_key: "sk-test",
   ai_base_url: "https://api.openai.com/v1",
@@ -49,8 +51,7 @@ const MOCK_SETTINGS = {
   window_always_on_top: true,
   auto_paste: "paste",
   close_behavior: "hide",
-  theme: "system",
-  effects_enabled: true,
+  theme: "dark",
 };
 
 // [20260729_Test_UseSettingsHook] Window shape this test manipulates: the
@@ -106,7 +107,7 @@ describe("useSettings hook", () => {
     vi.restoreAllMocks();
   });
 
-  it("loads settings on mount and reads effects_enabled === true", async () => {
+  it("loads settings on mount and reads theme === dark", async () => {
     const { result } = renderHook(() => useSettings());
 
     // loadSettings runs in a mount effect; wait for it to flush.
@@ -116,11 +117,10 @@ describe("useSettings hook", () => {
 
     const api = (globalThis.window as TestWindow).electronAPI!;
     expect(api.getAllSettings).toHaveBeenCalledTimes(1);
-    // loadSettings sets effects_enabled only when the DB value === true.
-    expect(result.current.settings.effects_enabled).toBe(true);
+    expect(result.current.settings.theme).toBe("dark");
   });
 
-  it("updates settings state when handleInputChange toggles effects_enabled off", async () => {
+  it("updates settings state when handleInputChange toggles theme", async () => {
     const { result } = renderHook(() => useSettings());
 
     await waitFor(() => {
@@ -128,13 +128,13 @@ describe("useSettings hook", () => {
     });
 
     act(() => {
-      result.current.handleInputChange("effects_enabled", false);
+      result.current.handleInputChange("theme", "light");
     });
 
-    expect(result.current.settings.effects_enabled).toBe(false);
+    expect(result.current.settings.theme).toBe("light");
   });
 
-  it("persists effects_enabled via setSetting when saveSettings runs", async () => {
+  it("persists theme via setSetting when saveSettings runs", async () => {
     const { result } = renderHook(() => useSettings());
 
     await waitFor(() => {
@@ -142,7 +142,7 @@ describe("useSettings hook", () => {
     });
 
     act(() => {
-      result.current.handleInputChange("effects_enabled", false);
+      result.current.handleInputChange("theme", "light");
     });
 
     await act(async () => {
@@ -150,7 +150,7 @@ describe("useSettings hook", () => {
     });
 
     const api = (globalThis.window as TestWindow).electronAPI!;
-    expect(api.setSetting).toHaveBeenCalledWith("effects_enabled", false);
+    expect(api.setSetting).toHaveBeenCalledWith("theme", "light");
   });
 
   // [20260815_Fix_AiMaxTokensDefault] When no ai_max_tokens is persisted,

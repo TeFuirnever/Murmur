@@ -86,11 +86,8 @@ describe("settingsHandlers", () => {
     expect(ipcMain._handlers["get-setting"]).toBeDefined();
     expect(ipcMain._handlers["set-setting"]).toBeDefined();
     expect(ipcMain._handlers["get-all-settings"]).toBeDefined();
-    expect(ipcMain._handlers["get-settings"]).toBeDefined();
     expect(ipcMain._handlers["save-setting"]).toBeDefined();
     expect(ipcMain._handlers["reset-settings"]).toBeDefined();
-    expect(ipcMain._handlers["import-settings"]).toBeDefined();
-    expect(ipcMain._handlers["export-settings"]).toBeDefined();
   });
 
   it("get-setting delegates to databaseManager", () => {
@@ -117,10 +114,7 @@ describe("settingsHandlers", () => {
     expect(result.ai_base_url).toBe("https://api.openai.com/v1");
   });
 
-  it("get-settings (legacy) also masks API key", () => {
-    const result = ipcMain._handlers["get-settings"]!();
-    expect(result.ai_api_key).toBe("****5678");
-  });
+  // [20260816_Refactor_DeadChannels] legacy get-settings masking test removed.
 
   it("save-setting delegates to databaseManager.setSetting", () => {
     ipcMain._handlers["save-setting"]!({}, "auto_paste", "clipboard_only");

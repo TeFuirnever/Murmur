@@ -39,10 +39,7 @@ const mockModelStatus = {
   missingModels: [] as string[],
   stage: "need_download",
   modelProgress: {} as Record<string, unknown>,
-  checkModelStatus: vi.fn(),
   downloadModels: vi.fn(),
-  getDownloadProgress: vi.fn(),
-  checkModelFiles: vi.fn(),
 };
 vi.mock("../../src/hooks/useModelStatus", () => ({
   useModelStatus: () => mockModelStatus,

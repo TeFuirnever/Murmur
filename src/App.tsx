@@ -12,7 +12,6 @@ import { ModelDownloadProgress } from "./components/ui/model-status-indicator";
 import FileImport from "./components/FileImport";
 import TranscriptionResult from "./components/TranscriptionResult";
 import { SoundWaveIcon } from "./components/SoundWaveIcon";
-import { LoadingIndicator } from "./components/LoadingIndicator";
 import { VoiceWaveIndicator } from "./components/VoiceWaveIndicator";
 import { Tooltip } from "./components/Tooltip";
 
@@ -20,6 +19,32 @@ import { Tooltip } from "./components/Tooltip";
 const SettingsPage = React.lazy(() =>
   import("./settings").then((module) => ({ default: module.SettingsPage })),
 );
+
+// [20260815_Refactor_StageTextDedup] The modelStatus.stage -> user text
+// decision tree used to be copy-pasted in getMicButtonProps (tooltip) and the
+// status paragraph. This helper carries the branches whose text is identical
+// everywhere; the toast block and the paragraph keep their intentionally
+// different (emoji / long-form) variants.
+type StageStatusSource = {
+  stage: string;
+  error: string | null;
+  downloadProgress: number;
+};
+
+const getStageStatusText = (status: StageStatusSource): string => {
+  switch (status.stage) {
+    case "need_download":
+      return "请先下载AI模型文件";
+    case "downloading":
+      return `模型下载中... ${status.downloadProgress || 0}%`;
+    case "loading":
+      return "模型加载中，请稍候...";
+    case "error":
+      return `模型错误: ${status.error}`;
+    default:
+      return "模型未就绪，请稍候...";
+  }
+};
 
 export default function App() {
   // 检查URL参数来决定渲染哪个页面
@@ -29,7 +54,6 @@ export default function App() {
   const [isHovered, setIsHovered] = useState(false);
   const [originalText, setOriginalText] = useState("");
   const [processedText, setProcessedText] = useState("");
-  const [, setShowTextArea] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [appMode, setAppMode] = useState("recording"); // recording | file-import
   const [savedRecordingId, setSavedRecordingId] = useState<number | null>(null);
@@ -121,7 +145,6 @@ export default function App() {
       ) {
         // 立即显示FunASR识别的原始文本
         setOriginalText(transcriptionResult.text as string);
-        setShowTextArea(true);
 
         // 清空之前的处理结果，等待AI优化
         setProcessedText("");
@@ -202,7 +225,6 @@ export default function App() {
     setProcessedText("");
     setSavedRecordingId(null);
     setRecordingDuration(0);
-    setShowTextArea(false);
   }, []);
 
   // 处理模型下载
@@ -359,19 +381,15 @@ export default function App() {
   // 监听全局热键触发事件
   useEffect(() => {
     if (window.electronAPI) {
-      // 监听传统热键触发
+      // [20260815_Refactor_DeadIpc] The legacy toggle-dictation listener was
+      // removed — no code path ever emits that event (hotkeys go through
+      // onHotkeyTriggered above).
       const unsubscribeHotkey = window.electronAPI.onHotkeyTriggered(() => {
-        toggleRecording();
-      });
-
-      // 监听旧的toggle事件（保持兼容性）
-      const unsubscribeToggle = window.electronAPI.onToggleDictation(() => {
         toggleRecording();
       });
 
       return () => {
         if (unsubscribeHotkey) unsubscribeHotkey();
-        if (unsubscribeToggle) unsubscribeToggle();
       };
     }
   }, [toggleRecording, isRecording, isRecordingProcessing]);
@@ -418,16 +436,7 @@ export default function App() {
     if (!modelStatus.isReady) {
       return {
         className: `${baseClasses} bg-[#e8e8ed] dark:bg-[#2c2c2e] cursor-not-allowed opacity-50`,
-        tooltip:
-          modelStatus.stage === "need_download"
-            ? "请先下载AI模型文件"
-            : modelStatus.stage === "downloading"
-              ? `模型下载中... ${modelStatus.downloadProgress || 0}%`
-              : modelStatus.stage === "loading"
-                ? "模型加载中，请稍候..."
-                : modelStatus.stage === "error"
-                  ? `模型错误: ${modelStatus.error}`
-                  : "模型未就绪，请稍候...",
+        tooltip: getStageStatusText(modelStatus),
         disabled: true,
       };
     }
@@ -643,12 +652,13 @@ export default function App() {
                   className={`${micProps.className} non-draggable shadow-lg`}
                   disabled={micProps.disabled}
                 >
-                  {/* 动态内容基于状态 */}
-                  {modelStatus.stage === "downloading" ? (
-                    <LoadingIndicator size={20} />
-                  ) : modelStatus.stage === "loading" ||
-                    !modelStatus.isReady ? (
-                    <LoadingIndicator size={20} />
+                  {/* [20260815_Refactor_LoadingDotsCss] downloading/loading/
+                      not-ready branches previously rendered two identical
+                      LoadingIndicator trees; merged into one LoadingDots. */}
+                  {modelStatus.stage === "downloading" ||
+                  modelStatus.stage === "loading" ||
+                  !modelStatus.isReady ? (
+                    <LoadingDots />
                   ) : micState === "idle" ? (
                     <SoundWaveIcon size={20} isActive={false} />
                   ) : micState === "hover" ? (
@@ -658,7 +668,7 @@ export default function App() {
                   ) : micState === "processing" ? (
                     <VoiceWaveIndicator isListening={true} />
                   ) : micState === "optimizing" ? (
-                    <LoadingIndicator size={20} />
+                    <LoadingDots />
                   ) : null}
 
                   {/* 移除所有状态指示环，保持简洁 */}
@@ -666,25 +676,25 @@ export default function App() {
               </Tooltip>
 
               <p className="mt-4 text-content text-[#1d1d1f]/80 dark:text-[#f5f5f7]/80">
+                {/* [20260815_Refactor_StageTextDedup] need_download/downloading
+                    keep their long-form paragraph variants; the remaining
+                    not-ready stages share getStageStatusText with the
+                    tooltip above. */}
                 {modelStatus.stage === "need_download"
                   ? "需要下载AI模型文件才能开始使用"
                   : modelStatus.stage === "downloading"
                     ? modelStatus.downloadProgress > 0
                       ? `正在下载模型文件... ${modelStatus.downloadProgress}%`
                       : "正在准备下载模型文件..."
-                    : modelStatus.stage === "loading"
-                      ? "模型加载中，请稍候..."
-                      : modelStatus.stage === "error"
-                        ? `模型错误: ${modelStatus.error}`
-                        : !modelStatus.isReady
-                          ? "模型未就绪，请稍候..."
-                          : micState === "recording"
-                            ? "正在录音，再次点击停止"
-                            : micState === "processing"
-                              ? "正在识别语音..."
-                              : micState === "optimizing"
-                                ? "AI正在优化文本，请稍候..."
-                                : `点击麦克风或按 ${hotkey} 开始录音`}
+                    : !modelStatus.isReady
+                      ? getStageStatusText(modelStatus)
+                      : micState === "recording"
+                        ? "正在录音，再次点击停止"
+                        : micState === "processing"
+                          ? "正在识别语音..."
+                          : micState === "optimizing"
+                            ? "AI正在优化文本，请稍候..."
+                            : `点击麦克风或按 ${hotkey} 开始录音`}
               </p>
               {modelStatus.stage === "need_download" && (
                 <div className="mt-3 text-xs text-[#86868b] dark:text-[#98989d] space-y-1">
@@ -701,7 +711,7 @@ export default function App() {
               modelStatus.stage === "downloading") && (
               <div className="mb-6">
                 <ModelDownloadProgress
-                  modelStatus={modelStatus as any}
+                  modelStatus={modelStatus}
                   onDownload={handleDownloadModels}
                 />
               </div>

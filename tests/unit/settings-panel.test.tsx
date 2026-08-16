@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// [20260729_Test_SettingsPanel_EffectsLayer] React component integration tests
+// [20260729_Test_SettingsPanel] React component integration tests
 // for SettingsPanel. Exercises user-visible behavior via RTL (Testing Trophy):
 // rendering of sections, the close-button callback wiring, and the AI-mode
 // select persistence via window.electronAPI. No implementation details are
@@ -46,7 +46,7 @@ function setElectronAPI(api: Partial<ElectronAPI> | undefined): void {
   (globalThis.window as TestWindow).electronAPI = api;
 }
 
-describe("[20260729_Test_SettingsPanel_EffectsLayer] SettingsPanel", () => {
+describe("[20260729_Test_SettingsPanel] SettingsPanel", () => {
   let originalAPI: TestWindow["electronAPI"];
 
   beforeEach(() => {

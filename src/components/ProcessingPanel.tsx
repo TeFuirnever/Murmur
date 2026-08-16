@@ -58,7 +58,10 @@ export default function ProcessingPanel({
         >
           {isProcessing ? (
             <>
-              <LoadingDots />
+              {/* [20260815_Refactor_LoadingDotsCss] White dots: this Button is
+                  the bg-primary variant; the merged default gray is invisible
+                  on it in light mode. */}
+              <LoadingDots dotClassName="bg-white" />
               处理中
             </>
           ) : (

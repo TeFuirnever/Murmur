@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- Visual-effects feature (History-window animated background, its settings toggle, and the `motion`/`ogl` dependencies) — a default-off decorative layer.
+- Placeholder model-management IPC channels and dead settings/transcription channels with no UI callers.
+
+### Changed
+
+- Lean pass: ~4,500 net lines of dead code, unused dependencies, and duplicate logic removed; `pnpm audit` now reports against the official registry (99 → 2 advisories, both without upstream fixes).
+- Toolchain: Electron 36 → 39.8.10, electron-builder 24 → 26, better-sqlite3 11 → 12 (Electron 39 ABI).
+
 ## [1.2.0] - 2026-08-02
 
 ### Fixed

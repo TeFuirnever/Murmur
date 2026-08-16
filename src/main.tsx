@@ -6,6 +6,9 @@ import "./i18n";
 import { Toaster } from "./components/ui/sonner";
 import { assertElectronAPI } from "./bootstrap/assertElectronAPI.js";
 import { ModelStatusProvider } from "./hooks/useModelStatus";
+// [20260815_Refactor_ApplyThemeDedup] Shared theme applier (previously a
+// verbatim local copy of the function exported from useSettings).
+import { applyTheme } from "./settings/useSettings";
 
 // 检查是否在Electron环境中
 const isElectron = () => {
@@ -158,19 +161,8 @@ function initializeApp() {
   document.documentElement.lang = "zh-CN";
 
   // 主题：优先使用用户保存的设置，否则跟随系统
-  const applyTheme = (theme: string) => {
-    const root = document.documentElement;
-    if (theme === "dark") {
-      root.classList.add("dark");
-    } else if (theme === "light") {
-      root.classList.remove("dark");
-    } else {
-      const prefersDark = window.matchMedia(
-        "(prefers-color-scheme: dark)",
-      ).matches;
-      root.classList.toggle("dark", prefersDark);
-    }
-  };
+  // [20260815_Refactor_ApplyThemeDedup] applyTheme is imported above; the
+  // previous verbatim local copy was removed.
 
   // 立即应用系统主题，防止闪烁
   applyTheme("system");

@@ -131,14 +131,6 @@ export interface AIReviewResult {
   error?: string;
 }
 
-export interface TranscriptionStats {
-  total: number;
-  totalDuration: number;
-  avgConfidence: number;
-  firstDate?: string;
-  lastDate?: string;
-}
-
 // ─── FunASR ───
 
 export interface FunASRStatusResult {
@@ -169,28 +161,7 @@ export interface DownloadProgress {
   overall_progress?: number;
 }
 
-export interface ModelInfo {
-  name: string;
-  description: string;
-  size: string;
-  downloaded: boolean;
-}
-
 // ─── Settings ───
-
-export interface SettingsImportResult {
-  success: boolean;
-  count?: number;
-  error?: string;
-  canceled?: boolean;
-}
-
-export interface SettingsExportResult {
-  success: boolean;
-  path?: string;
-  error?: string;
-  canceled?: boolean;
-}
 
 // ─── Environment ───
 

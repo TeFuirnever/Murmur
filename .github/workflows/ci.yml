@@ -77,12 +77,9 @@ jobs:
       - name: Build renderer
         run: pnpm run build:renderer
 
-      # [20260729_Gate_EffectsIsolationCI] Verify ogl/motion are lazy-loaded
-      # (absent from entry chunks). Mirrors ci-check.js stage3b. Without this,
-      # a regression that pulls ogl/motion into an eager import would only be
-      # caught locally, not in CI.
-      - name: Effects chunk isolation check
-        run: node scripts/check-effects-isolation.js
+      # [20260816_Refactor_RemoveEffects] The effects chunk isolation step was
+      # removed with the visual-effects feature (ogl/motion deps deleted); it
+      # mirrors the equally-removed ci-check.js stage3b.
 
       # [20260725_E2E_LaunchDiagnosis] Diagnostic step: launches ONLY the
       # Electron app with full stderr/stdout/console capture (see

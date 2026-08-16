@@ -80,16 +80,9 @@ describe("DatabaseManager", () => {
     });
   });
 
-  describe("searchTranscriptions", () => {
-    it("finds transcriptions matching query", () => {
-      db.saveTranscription({ text: "hello world" });
-      db.saveTranscription({ text: "goodbye world" });
-      db.saveTranscription({ text: "nothing here" });
-
-      const results = db.searchTranscriptions("world");
-      expect(results).toHaveLength(2);
-    });
-  });
+  // [20260815_Refactor_DeadIpc] searchTranscriptions describe removed with
+  // the dead FTS search pipeline (zero renderer callers; history filters
+  // client-side).
 
   describe("settings CRUD", () => {
     it("set and get a setting", () => {
@@ -156,19 +149,6 @@ describe("DatabaseManager", () => {
     });
   });
 
-  describe("backup", () => {
-    it("returns false when db not initialized", () => {
-      const freshDb = new DatabaseManager();
-      const result = freshDb.backup(path.join(tmpDir, "nobackup.db"));
-      expect(result).toBe(false);
-    });
-
-    it("returns true or handles backup on initialized db", () => {
-      db.saveTranscription({ text: "backup test" });
-      const backupPath = path.join(tmpDir, "backup.db");
-      const result = db.backup(backupPath);
-      // better-sqlite3 backup may succeed or fail depending on env
-      expect(typeof result).toBe("boolean");
-    });
-  });
+  // [20260815_Refactor_DeadIpc] backup describe removed with the zero-caller
+  // DatabaseManager.backup method.
 });

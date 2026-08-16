@@ -105,7 +105,6 @@ vi.mock("../../src/helpers/exportFormatters", () => ({
 vi.mock("../../src/helpers/aiPrompts", () => ({
   buildPrompt: vi.fn(() => ({ system: "sys", user: "user" })),
   loadCustomTemplates: vi.fn(() => []),
-  DEFAULT_PIPELINE: ["optimize"],
 }));
 
 vi.mock("../../src/helpers/providerPresets", () => ({
@@ -165,7 +164,6 @@ function createMockManagers() {
       installFunASR: vi.fn(async () => ({ success: true })),
       restartServer: vi.fn(async () => ({ success: true })),
       checkModelFiles: vi.fn(async () => ({ models_downloaded: true })),
-      getDownloadProgress: vi.fn(async () => ({ progress: 0 })),
       downloadModels: vi.fn(async () => ({ success: true })),
       // transcription
       transcribeAudio: vi.fn(async () => ({ success: true, text: "" })),
@@ -188,8 +186,6 @@ function createMockManagers() {
       getTranscriptionById: vi.fn(() => null),
       getTranscriptions: vi.fn(() => []),
       deleteTranscription: vi.fn(() => ({ changes: 1 })),
-      searchTranscriptions: vi.fn(() => []),
-      getTranscriptionStats: vi.fn(() => ({ total: 0 })),
       clearAllTranscriptions: vi.fn(() => true),
       syncToFileConfig: vi.fn(),
     },
@@ -217,8 +213,6 @@ function createMockManagers() {
     clipboardManager: {
       copyText: vi.fn(async () => ({ success: true })),
       pasteText: vi.fn(async () => ({ success: true })),
-      readClipboard: vi.fn(async () => ""),
-      writeClipboard: vi.fn(async () => ({ success: true })),
       checkAccessibilityPermissions: vi.fn(async () => true),
       openSystemSettings: vi.fn(),
     },
@@ -268,6 +262,42 @@ describe("IPC contract completeness", () => {
     };
     return ipcMain;
   }
+
+  // [20260815_Refactor_DeadIpc] Negative lock: these channels were removed
+  // end-to-end (zero renderer callers); a re-added constant without its full
+  // chain would otherwise only surface as a missing-handler error.
+  it("does not re-declare the removed dead channels", async () => {
+    const C = await import("../../src/helpers/ipc-contracts");
+    const twoWayValues: string[] = [
+      C.FUNASR,
+      C.MODELS,
+      C.TRANSCRIPTION,
+      C.AI,
+      C.SETTINGS,
+      C.WINDOW,
+      C.HOTKEY,
+      C.CLIPBOARD,
+      C.UPDATE,
+      C.SYSTEM,
+    ].flatMap((group) => Object.values(group));
+    const eventValues: string[] = Object.values(C.EVENTS);
+
+    expect(twoWayValues).not.toContain("search-transcriptions");
+    expect(twoWayValues).not.toContain("get-download-progress");
+    expect(twoWayValues).not.toContain("read-clipboard");
+    expect(twoWayValues).not.toContain("write-clipboard");
+    expect(eventValues).not.toContain("toggle-dictation");
+    // [20260816_Refactor_DeadChannels] second removal wave locked the same way.
+    expect(twoWayValues).not.toContain("get-transcription");
+    expect(twoWayValues).not.toContain("get-transcription-stats");
+    expect(twoWayValues).not.toContain("get-settings");
+    expect(twoWayValues).not.toContain("import-settings");
+    expect(twoWayValues).not.toContain("export-settings");
+    expect(twoWayValues).not.toContain("download-model");
+    expect(twoWayValues).not.toContain("get-available-models");
+    expect(twoWayValues).not.toContain("get-current-model");
+    expect(twoWayValues).not.toContain("switch-model");
+  });
 
   it("registers a handler for every two-way channel value in ipc-contracts", async () => {
     const C = await import("../../src/helpers/ipc-contracts");

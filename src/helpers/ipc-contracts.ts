@@ -15,14 +15,19 @@ export const FUNASR = {
   RESTART: "restart-funasr-server",
 } as const;
 
+// [20260815_Refactor_DeadIpc] Removed dead channels (zero renderer callers):
+// MODELS.PROGRESS (UI uses the MODEL_DOWNLOAD_PROGRESS push event),
+// TRANSCRIPTION.SEARCH (history page filters client-side),
+// CLIPBOARD.READ/WRITE, EVENTS.TOGGLE_DICTATION (never emitted).
+
+// [20260816_Refactor_DeadChannels] Removed with their zero-renderer-caller
+// handlers: MODELS.AVAILABLE/CURRENT/SWITCH/DOWNLOAD_MODEL (hardcoded
+// placeholder responses — fake feature), TRANSCRIPTION.GET/STATS, and
+// SETTINGS.GET_LEGACY/IMPORT/EXPORT (no UI entry points).
+
 export const MODELS = {
   CHECK: "check-model-files",
   DOWNLOAD: "download-models",
-  PROGRESS: "get-download-progress",
-  DOWNLOAD_MODEL: "download-model",
-  AVAILABLE: "get-available-models",
-  CURRENT: "get-current-model",
-  SWITCH: "switch-model",
 } as const;
 
 export const TRANSCRIPTION = {
@@ -32,11 +37,8 @@ export const TRANSCRIPTION = {
   TRANSCRIBE_FILE: "transcribe-file",
   CANCEL: "cancel-file-transcription",
   SAVE: "save-transcription",
-  GET: "get-transcription",
   GET_ALL: "get-transcriptions",
   DELETE: "delete-transcription",
-  SEARCH: "search-transcriptions",
-  STATS: "get-transcription-stats",
   CLEAR: "clear-all-transcriptions",
   EXPORT: "export-transcription",
   EXPORT_ALL: "export-transcriptions",
@@ -56,11 +58,8 @@ export const SETTINGS = {
   GET: "get-setting",
   SET: "set-setting",
   GET_ALL: "get-all-settings",
-  GET_LEGACY: "get-settings",
   SAVE: "save-setting",
   RESET: "reset-settings",
-  IMPORT: "import-settings",
-  EXPORT: "export-settings",
 } as const;
 
 export const WINDOW = {
@@ -95,8 +94,6 @@ export const HOTKEY = {
 export const CLIPBOARD = {
   PASTE: "paste-text",
   COPY: "copy-text",
-  READ: "read-clipboard",
-  WRITE: "write-clipboard",
 } as const;
 
 export const UPDATE = {
@@ -119,7 +116,6 @@ export const SYSTEM = {
 } as const;
 
 export const EVENTS = {
-  TOGGLE_DICTATION: "toggle-dictation",
   HOTKEY_TRIGGERED: "hotkey-triggered",
   F2_DOUBLE_CLICK: "f2-double-click",
   WINDOW_MAXIMIZE_CHANGE: "window-maximize-change",

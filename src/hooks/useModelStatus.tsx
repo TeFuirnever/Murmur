@@ -21,13 +21,13 @@ interface ModelStatus {
   modelProgress: Record<string, ModelProgressEntry>;
 }
 
+// [20260815_Refactor_DeadIpc] Context surface trimmed to what consumers
+// actually use: the derived status fields plus downloadModels. The old
+// getDownloadProgress (dead pull chain — progress arrives via the
+// MODEL_DOWNLOAD_PROGRESS push event) and the provider-internal
+// checkModelStatus/checkModelFiles were removed from the exposed value.
 interface ModelStatusContextValue extends ModelStatus {
-  checkModelStatus: () => Promise<void>;
   downloadModels: () => Promise<OperationResult>;
-  getDownloadProgress: () => Promise<
-    import("../types/ipc").DownloadProgress | { success: boolean }
-  >;
-  checkModelFiles: () => Promise<import("../types/ipc").ModelCheckResult>;
 }
 
 const ModelStatusContext = React.createContext<ModelStatusContextValue | null>(
@@ -248,19 +248,6 @@ export function ModelStatusProvider({
     }
   }, [checkModelStatus]);
 
-  const getDownloadProgress = React.useCallback(async () => {
-    try {
-      if (window.electronAPI) {
-        const progress = await window.electronAPI.getDownloadProgress();
-        return progress;
-      }
-      return { success: false };
-    } catch (error) {
-      console.error("获取下载进度失败:", error);
-      return { success: false };
-    }
-  }, []);
-
   React.useEffect(() => {
     if (isSettingsPage()) {
       console.log("设置页面，跳过模型状态检查");
@@ -274,10 +261,12 @@ export function ModelStatusProvider({
       return;
     }
 
+    // [20260815_Refactor_DeadIpc] The interval callback used to re-check the
+    // same isReady/isDownloading conditions already guarded by this effect's
+    // dependency array — the deps re-create the interval on change, so the
+    // inner re-check was unreachable-in-practice redundancy.
     const interval = setInterval(() => {
-      if (!modelStatus.isReady && !modelStatus.isDownloading) {
-        checkModelStatus();
-      }
+      checkModelStatus();
     }, 3000);
 
     return () => clearInterval(interval);
@@ -367,10 +356,7 @@ export function ModelStatusProvider({
 
   const value = {
     ...modelStatus,
-    checkModelStatus,
     downloadModels,
-    getDownloadProgress,
-    checkModelFiles,
   };
 
   return (
