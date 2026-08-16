@@ -55,12 +55,6 @@ function getRow<T>(
 ): T | undefined {
   return stmt.get(...params) as T | undefined;
 }
-
-/** Cast a better-sqlite3 count query result. Convenience for `{ cnt: number }`. */
-function getCount(stmt: Database.Statement, ...params: Primitive[]): number {
-  const row = stmt.get(...params) as { cnt: number } | undefined;
-  return row?.cnt ?? 0;
-}
 // [20260726_TechDebt_TypedRows] END
 
 class DatabaseManager {
@@ -206,57 +200,9 @@ class DatabaseManager {
       ON transcriptions(created_at DESC)
     `);
 
-    this._createFtsIndex();
-  }
-
-  private _createFtsIndex(): void {
-    try {
-      this.db!.exec(`
-        CREATE VIRTUAL TABLE IF NOT EXISTS transcriptions_fts
-        USING fts5(text, raw_text, processed_text, content=transcriptions, content_rowid=id, tokenize="trigram")
-      `);
-
-      this.db!.exec(`
-        CREATE TRIGGER IF NOT EXISTS transcriptions_ai AFTER INSERT ON transcriptions BEGIN
-          INSERT INTO transcriptions_fts(rowid, text, raw_text, processed_text)
-          VALUES (new.id, new.text, new.raw_text, new.processed_text);
-        END
-      `);
-
-      this.db!.exec(`
-        CREATE TRIGGER IF NOT EXISTS transcriptions_ad AFTER DELETE ON transcriptions BEGIN
-          INSERT INTO transcriptions_fts(transcriptions_fts, rowid, text, raw_text, processed_text)
-          VALUES ('delete', old.id, old.text, old.raw_text, old.processed_text);
-        END
-      `);
-
-      this.db!.exec(`
-        CREATE TRIGGER IF NOT EXISTS transcriptions_au AFTER UPDATE ON transcriptions BEGIN
-          INSERT INTO transcriptions_fts(transcriptions_fts, rowid, text, raw_text, processed_text)
-          VALUES ('delete', old.id, old.text, old.raw_text, old.processed_text);
-          INSERT INTO transcriptions_fts(rowid, text, raw_text, processed_text)
-          VALUES (new.id, new.text, new.raw_text, new.processed_text);
-        END
-      `);
-
-      // Rebuild only if FTS index is empty (first creation after migration)
-      // [20260726_TechDebt_TypedRows] Using getCount helper instead of cast
-      const ftsCount = getCount(
-        this.db!.prepare("SELECT count(*) AS cnt FROM transcriptions_fts"),
-      );
-      if (ftsCount === 0) {
-        const baseCount = getCount(
-          this.db!.prepare("SELECT count(*) AS cnt FROM transcriptions"),
-        );
-        if (baseCount > 0) {
-          this.db!.exec(
-            "INSERT INTO transcriptions_fts(transcriptions_fts) VALUES ('rebuild')",
-          );
-        }
-      }
-    } catch (_e) {
-      // FTS5 not available — searchTranscriptions will use LIKE fallback
-    }
+    // [20260815_Refactor_DeadIpc] The FTS5 virtual table + sync triggers were
+    // removed with the dead server-side search pipeline: the renderer never
+    // called searchTranscriptions (the history page filters client-side).
   }
 
   private _migrateSchema(): void {
@@ -369,36 +315,10 @@ class DatabaseManager {
     return stmt.get(id) as TranscriptionRecord | undefined;
   }
 
-  getTranscriptionWithSegments(
-    id: number,
-  ): TranscriptionRecord | null | undefined {
-    try {
-      const row = this.db!.prepare(
-        "SELECT * FROM transcriptions WHERE id = ?",
-      ).get(id) as TranscriptionRecord | undefined;
-      if (row && row.segments) {
-        try {
-          row.parsedSegments = JSON.parse(row.segments);
-        } catch (e) {
-          this.logger?.warn &&
-            this.logger.warn("segments JSON解析失败", {
-              id,
-              error: (e as Error).message,
-            });
-          row.parsedSegments = [];
-        }
-      } else if (row) {
-        row.parsedSegments = [];
-      }
-      // [20260724_TS_BigBang_DbFix] Preserve original .js behavior: return
-      // `row` directly (undefined when not found), NOT `row || null`. Two
-      // database-coverage tests assert .toBeUndefined() for missing ids.
-      return row;
-    } catch (error) {
-      this.logger?.error && this.logger.error("获取转录详情失败", error);
-      return null;
-    }
-  }
+  // [20260815_Refactor_DeadIpc] getTranscriptionWithSegments removed — the
+  // live path (transcriptionHandlers) reads via getTranscriptionById and
+  // parses the segments JSON itself. searchTranscriptions/_searchLike and
+  // backup were removed the same day (zero production callers).
 
   deleteTranscription(id: number): Database.RunResult {
     const stmt = this.db!.prepare("DELETE FROM transcriptions WHERE id = ?");
@@ -410,67 +330,9 @@ class DatabaseManager {
     return stmt.run();
   }
 
-  searchTranscriptions(query: string, limit = 50): TranscriptionRecord[] {
-    // Short queries (< 3 chars) use LIKE — trigram tokenizer needs 3+ chars
-    if (query.length < 3) {
-      return this._searchLike(query, limit);
-    }
-
-    try {
-      const safeQuery = '"' + query.replace(/"/g, '""') + '"';
-      const stmt = this.db!.prepare(`
-        SELECT t.* FROM transcriptions t
-        JOIN transcriptions_fts f ON t.id = f.rowid
-        WHERE transcriptions_fts MATCH ?
-        ORDER BY rank
-        LIMIT ?
-      `);
-      return stmt.all(safeQuery, limit) as TranscriptionRecord[];
-    } catch (_e) {
-      return this._searchLike(query, limit);
-    }
-  }
-
-  private _searchLike(query: string, limit: number): TranscriptionRecord[] {
-    const stmt = this.db!.prepare(`
-      SELECT * FROM transcriptions
-      WHERE text LIKE ? ESCAPE '\\' OR raw_text LIKE ? ESCAPE '\\' OR processed_text LIKE ? ESCAPE '\\'
-      ORDER BY created_at DESC
-      LIMIT ?
-    `);
-    const escaped = query
-      .replace(/\\/g, "\\\\")
-      .replace(/%/g, "\\%")
-      .replace(/_/g, "\\_");
-    const searchTerm = `%${escaped}%`;
-    return stmt.all(
-      searchTerm,
-      searchTerm,
-      searchTerm,
-      limit,
-    ) as TranscriptionRecord[];
-  }
-
-  getTranscriptionStats(): { total: number; today: number; week: number } {
-    const totalStmt = this.db!.prepare(
-      "SELECT COUNT(*) as total FROM transcriptions",
-    );
-    const todayStmt = this.db!.prepare(`
-      SELECT COUNT(*) as today FROM transcriptions
-      WHERE date(created_at) = date('now')
-    `);
-    const weekStmt = this.db!.prepare(`
-      SELECT COUNT(*) as week FROM transcriptions
-      WHERE created_at >= date('now', '-7 days')
-    `);
-
-    // [20260726_TechDebt_TypedRows] Using getRow helper instead of 3 casts
-    return {
-      total: getRow<{ total: number }>(totalStmt)?.total ?? 0,
-      today: getRow<{ today: number }>(todayStmt)?.today ?? 0,
-      week: getRow<{ week: number }>(weekStmt)?.week ?? 0,
-    };
-  }
+  // [20260816_Refactor_DeadChannels] getTranscriptionStats removed with the
+  // zero-caller TRANSCRIPTION.STATS channel (the history page counts its
+  // client-side filtered list).
 
   setSetting(key: string, value: unknown): Database.RunResult {
     const stmt = this.db!.prepare(`
@@ -544,25 +406,6 @@ class DatabaseManager {
     }
     saveFileConfig(this._fileConfigPath, filtered);
     this._fileConfigCache = loadFileConfig(this._fileConfigPath);
-  }
-
-  backup(backupPath: string): boolean {
-    if (!this.db) return false;
-
-    try {
-      const result = this.db.backup(backupPath);
-      result?.catch?.((error: Error) => {
-        if (this.logger && this.logger.error) {
-          this.logger.error("数据库备份失败:", error);
-        }
-      });
-      return true;
-    } catch (error) {
-      if (this.logger && this.logger.error) {
-        this.logger.error("数据库备份失败:", error);
-      }
-      return false;
-    }
   }
 
   close(): void {

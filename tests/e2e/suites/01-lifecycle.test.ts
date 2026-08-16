@@ -46,6 +46,8 @@ test.describe("Suite 1: Application Lifecycle", () => {
     );
 
     // Must-have methods for the app to function
+    // [20260815_Refactor_DeadIpc] readClipboard/writeClipboard removed with
+    // their zero-renderer-caller IPC channels.
     const requiredMethods = [
       "getSystemInfo",
       "checkPermissions",
@@ -54,8 +56,6 @@ test.describe("Suite 1: Application Lifecycle", () => {
       "getAllSettings",
       "pasteText",
       "copyText",
-      "readClipboard",
-      "writeClipboard",
       "getAppVersion",
     ];
 

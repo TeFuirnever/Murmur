@@ -54,31 +54,6 @@ test.describe("Suite 7: Settings Persistence", () => {
     expect(providerNames).toContain("deepseek");
   });
 
-  test("7.4 — Export and import settings roundtrip", async () => {
-    // Set a unique value
-    await window.evaluate(() =>
-      window.electronAPI.setSetting("theme", "light"),
-    );
-
-    // Export
-    const exported = await window.evaluate(() =>
-      window.electronAPI.exportSettings(),
-    );
-    expect(exported).toBeDefined();
-
-    // Change the value
-    await window.evaluate(() => window.electronAPI.setSetting("theme", "dark"));
-
-    // Import back
-    await window.evaluate(
-      (s) => window.electronAPI.importSettings(s),
-      exported,
-    );
-
-    // Verify original value restored
-    const value = await window.evaluate(() =>
-      window.electronAPI.getSetting("theme"),
-    );
-    expect(value).toBe("light");
-  });
+  // [20260816_Refactor_DeadChannels] The settings import/export e2e test was
+  // removed with its zero-UI-entry IPC channels.
 });

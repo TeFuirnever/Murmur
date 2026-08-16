@@ -159,6 +159,100 @@ export function validateAIBaseUrl(
   }
 }
 
+// [20260815_Refactor_AiFetchDedup] processTextWithAI and checkAIStatus used
+// to hand-roll the same sequence: auth headers, AbortController + timeout,
+// fetch, AbortError→TIMEOUT mapping, and non-OK error-body parsing. The three
+// helpers below carry that shared plumbing so the callers only keep their
+// genuinely different parts (request shape, response interpretation, and the
+// user-facing error text).
+// [20260815_Refactor_AiFetchDedup] END
+
+function isLocalBaseUrl(baseUrl: string): boolean {
+  try {
+    return isLocalhost(new URL(baseUrl).hostname);
+  } catch {
+    return false;
+  }
+}
+
+interface ChatCompletionMessage {
+  role: string;
+  content: string;
+}
+
+interface ChatCompletionRequest {
+  model: string;
+  messages: ChatCompletionMessage[];
+  temperature?: number;
+  max_tokens?: number;
+  stream?: boolean;
+}
+
+async function postChatCompletion(
+  baseUrl: string,
+  apiKey: string | undefined,
+  body: ChatCompletionRequest,
+  timeoutMs: number,
+  timeoutMessage: string,
+): Promise<Response> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (apiKey) {
+    headers.Authorization = `Bearer ${apiKey}`;
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (fetchError) {
+    clearTimeout(timeoutId);
+    if ((fetchError as Error).name === "AbortError") {
+      throw Object.assign(new Error(timeoutMessage), { code: "TIMEOUT" });
+    }
+    throw fetchError;
+  }
+  clearTimeout(timeoutId);
+  return response;
+}
+
+/**
+ * Extract the human-readable message from an OpenAI-style error body.
+ * Returns "" when the body has no usable message; the caller supplies its
+ * own status-code fallback text.
+ */
+function extractAIErrorMessage(
+  response: Response,
+  errorText: string,
+  logger?: Logger,
+): string {
+  let errorData: { error?: { message?: string } | string } = {
+    error: response.statusText,
+  };
+  try {
+    errorData = JSON.parse(errorText);
+  } catch {
+    logger?.warn?.(
+      "AI错误响应非JSON格式:",
+      (errorText || "").substring(0, 200),
+    );
+    errorData = { error: errorText || response.statusText };
+  }
+  return (
+    (typeof errorData.error === "object"
+      ? errorData.error?.message
+      : errorData.error) || ""
+  );
+}
+
 export async function processTextWithAI(
   text: string,
   mode: string,
@@ -173,12 +267,7 @@ export async function processTextWithAI(
     const baseUrl =
       ((await databaseManager.getSetting("ai_base_url")) as string) ||
       "https://api.openai.com/v1";
-    let isLocal = false;
-    try {
-      isLocal = isLocalhost(new URL(baseUrl).hostname);
-    } catch {
-      isLocal = false;
-    }
+    const isLocal = isLocalBaseUrl(baseUrl);
 
     if (!apiKey && !isLocal) {
       return {
@@ -239,58 +328,21 @@ export async function processTextWithAI(
       inputLength: text.length,
     });
 
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
-    if (apiKey) {
-      headers.Authorization = `Bearer ${apiKey}`;
-    }
-
     const timeoutMs =
       (options.timeout as number) || (isLocal ? 180_000 : 150_000);
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-    let response: Response;
-    try {
-      response = await fetch(`${baseUrl}/chat/completions`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(requestData),
-        signal: controller.signal,
-      });
-    } catch (fetchError) {
-      clearTimeout(timeoutId);
-      if ((fetchError as Error).name === "AbortError") {
-        throw Object.assign(
-          new Error(
-            `AI请求超时（${Math.round(timeoutMs / 1000)}秒），请尝试缩短文本或检查网络`,
-          ),
-          { code: "TIMEOUT" },
-        );
-      }
-      throw fetchError;
-    }
-    clearTimeout(timeoutId);
+    const response = await postChatCompletion(
+      baseUrl,
+      apiKey,
+      requestData,
+      timeoutMs,
+      `AI请求超时（${Math.round(timeoutMs / 1000)}秒），请尝试缩短文本或检查网络`,
+    );
 
     if (!response.ok) {
       const errorText = await response.text();
-      let errorData: { error?: { message?: string } | string } = {
-        error: response.statusText,
-      };
-      try {
-        errorData = JSON.parse(errorText);
-      } catch {
-        logger.warn?.(
-          "AI错误响应非JSON格式:",
-          (errorText || "").substring(0, 200),
-        );
-        errorData = { error: errorText || response.statusText };
-      }
       throw new Error(
-        (typeof errorData.error === "object"
-          ? errorData.error?.message
-          : errorData.error) || `AI服务请求失败 (${response.status})`,
+        extractAIErrorMessage(response, errorText, logger) ||
+          `AI服务请求失败 (${response.status})`,
       );
     }
 
@@ -357,13 +409,13 @@ export async function processTextWithAI(
     let errorMessage = "文本处理失败";
     if (err.code === "TIMEOUT" || err.name === "AbortError") {
       errorMessage = err.message || "请求超时，请检查网络连接";
-    } else if (err.code === "ECONNABORTED") {
-      errorMessage = "请求超时，请检查网络连接";
     } else if (err.code === "ENOTFOUND") {
       errorMessage = "无法连接到AI服务器，请检查网络";
     } else {
       errorMessage = err.message || "未知错误";
     }
+    // [20260815_Refactor_AiFetchDedup] The ECONNABORTED branch was an axios
+    // error code this fetch-based code path can never produce.
 
     return { success: false, error: errorMessage };
   }
@@ -412,12 +464,7 @@ export async function checkAIStatus(
       logger.info?.("使用已保存配置:", { baseUrl, model });
     }
 
-    let isLocal = false;
-    try {
-      isLocal = isLocalhost(new URL(baseUrl).hostname);
-    } catch {
-      isLocal = false;
-    }
+    const isLocal = isLocalBaseUrl(baseUrl);
 
     if (!apiKey && !isLocal) {
       logger.warn?.("AI测试失败: 未配置API密钥");
@@ -449,34 +496,13 @@ export async function checkAIStatus(
 
     logger.info?.("发送AI测试请求:", requestData);
 
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
-    if (apiKey) {
-      headers.Authorization = `Bearer ${apiKey}`;
-    }
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15_000);
-
-    let response: Response;
-    try {
-      response = await fetch(`${baseUrl}/chat/completions`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(requestData),
-        signal: controller.signal,
-      });
-    } catch (fetchError) {
-      clearTimeout(timeoutId);
-      if ((fetchError as Error).name === "AbortError") {
-        throw Object.assign(new Error("请求超时，请检查网络连接"), {
-          code: "TIMEOUT",
-        });
-      }
-      throw fetchError;
-    }
-    clearTimeout(timeoutId);
+    const response = await postChatCompletion(
+      baseUrl,
+      apiKey,
+      requestData,
+      15_000,
+      "请求超时，请检查网络连接",
+    );
 
     logger.info?.("AI API响应状态:", response.status);
 
@@ -484,19 +510,8 @@ export async function checkAIStatus(
       const errorText = await response.text();
       logger.error?.("AI API错误响应:", errorText);
 
-      let errorData: { error?: { message?: string } | string } = {
-        error: response.statusText,
-      };
-      try {
-        errorData = JSON.parse(errorText);
-      } catch {
-        errorData = { error: errorText || response.statusText };
-      }
-
       let errorMessage =
-        (typeof errorData.error === "object"
-          ? errorData.error?.message
-          : errorData.error) || `HTTP ${response.status}`;
+        extractAIErrorMessage(response, errorText) || `HTTP ${response.status}`;
       if (response.status === 401) errorMessage = "API密钥无效或已过期";
       else if (response.status === 403) errorMessage = "API密钥权限不足";
       else if (response.status === 429) errorMessage = "API调用频率超限";

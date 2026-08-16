@@ -102,13 +102,13 @@ When adding platform-specific code, use `process.platform === "win32"` checks. A
 3. No hardcoded IPC channel strings — use `ipc-contracts.ts` constants.
 4. No new IPC handler files without registering in `src/helpers/ipc/index.ts`.
 5. No adding settings without touching **all 4** places: `SettingsState` + `DEFAULT_SETTINGS` + `loadSettings` builder + `saveSettings` body in `useSettings.ts`, AND the key in `ALLOWED_SETTING_KEYS` (`settingsHandlers.ts`). Missing any one silently breaks persistence.
-6. No importing `ogl`/`motion` eagerly — they must stay lazy-loaded via `React.lazy` in `EffectsLayer.tsx` only. CI (`check-effects-isolation.js`) verifies they don't leak into entry chunks.
+6. <!-- [20260816_Refactor_RemoveEffects] Rule removed with the visual-effects feature: ogl/motion no longer exist in the dependency tree. -->
 
 ## Verification
 
 ### Delivery Gates
 
-- **All commits MUST pass `pnpm ci:check` before push.** This mirrors CI and runs: format check, lint, license check, test with coverage, build:preload, build:renderer, effects chunk isolation check.
+- **All commits MUST pass `pnpm ci:check` before push.** This mirrors CI and runs: format check, lint, license check, typecheck, typecheck:tests, test with coverage, build:main, build:preload, build:renderer.
 - **Quick check:** `pnpm lint` + `pnpm test` for rapid iteration during development.
 - **Bug fix:** reproduce the bug, add a failing test **first**, then fix and verify; no implementation-only fixes, no fix-then-backfill tests.
 - **High-risk** (session flow, IPC, security, privacy, release packaging): include a risk statement and fresh verification evidence.

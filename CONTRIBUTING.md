@@ -124,7 +124,7 @@ chore: 升级 Electron 到 v36
 8. **Build main** — `pnpm run build:main`
 9. **Build preload** — `pnpm run build:preload`
 10. **Build renderer** — `pnpm run build:renderer`
-11. **Effects chunk isolation** — `node scripts/check-effects-isolation.js`（验证 ogl/motion 没泄漏到 entry chunk）
+11. <!-- [20260816_Refactor_RemoveEffects] gate removed with the effects feature -->
 12. **E2E tests** — `pnpm test:e2e`（非阻塞，验证中）
 
 ### 本地门禁
@@ -132,7 +132,7 @@ chore: 升级 Electron 到 v36
 提交前在本地运行完整检查（和 CI 一致）：
 
 ```bash
-pnpm ci:check          # 完整门禁（format + lint + typecheck + test + coverage + build + isolation）
+pnpm ci:check          # 完整门禁（format + lint + typecheck + test + coverage + build）
 pnpm ci:check --e2e    # 含 e2e（慢）
 pnpm lint && pnpm test # 快速迭代
 ```

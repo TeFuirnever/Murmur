@@ -57,10 +57,6 @@ export const preloadApi: ElectronAPI = {
   setAlwaysOnTop: (enabled: boolean) =>
     ipcRenderer.invoke(C.WINDOW.SET_TOP, enabled),
 
-  // Recording
-  onToggleDictation: (callback: (isRecording: boolean) => void) =>
-    makeListener<boolean>(C.EVENTS.TOGGLE_DICTATION, callback),
-
   // FunASR speech recognition
   transcribeAudio: (audioData: unknown) =>
     ipcRenderer.invoke(C.TRANSCRIPTION.AUDIO, audioData),
@@ -70,7 +66,6 @@ export const preloadApi: ElectronAPI = {
 
   // Model file management
   checkModelFiles: () => ipcRenderer.invoke(C.MODELS.CHECK),
-  getDownloadProgress: () => ipcRenderer.invoke(C.MODELS.PROGRESS),
   downloadModels: () => ipcRenderer.invoke(C.MODELS.DOWNLOAD),
 
   // AI text processing
@@ -85,25 +80,21 @@ export const preloadApi: ElectronAPI = {
   // Clipboard operations
   pasteText: (text: string) => ipcRenderer.invoke(C.CLIPBOARD.PASTE, text),
   copyText: (text: string) => ipcRenderer.invoke(C.CLIPBOARD.COPY, text),
-  readClipboard: () => ipcRenderer.invoke(C.CLIPBOARD.READ),
-  writeClipboard: (text: string) => ipcRenderer.invoke(C.CLIPBOARD.WRITE, text),
 
   // Database operations
   saveTranscription: (data: unknown) =>
     ipcRenderer.invoke(C.TRANSCRIPTION.SAVE, data),
   getTranscriptions: (limit: number, offset: number) =>
     ipcRenderer.invoke(C.TRANSCRIPTION.GET_ALL, limit, offset),
-  getTranscription: (id: number) => ipcRenderer.invoke(C.TRANSCRIPTION.GET, id),
-  searchTranscriptions: (query: string, limit?: number) =>
-    ipcRenderer.invoke(C.TRANSCRIPTION.SEARCH, query, limit),
-  getTranscriptionStats: () => ipcRenderer.invoke(C.TRANSCRIPTION.STATS),
   deleteTranscription: (id: number) =>
     ipcRenderer.invoke(C.TRANSCRIPTION.DELETE, id),
   clearAllTranscriptions: () => ipcRenderer.invoke(C.TRANSCRIPTION.CLEAR),
   diarizeAudio: (id: number) => ipcRenderer.invoke(C.TRANSCRIPTION.DIARIZE, id),
 
   // Settings management
-  getSettings: () => ipcRenderer.invoke(C.SETTINGS.GET_LEGACY),
+  // [20260816_Refactor_DeadChannels] getTranscription/getTranscriptionStats/
+  // getSettings(legacy)/importSettings/exportSettings bindings removed with
+  // their zero-caller channels.
   getAllSettings: () => ipcRenderer.invoke(C.SETTINGS.GET_ALL),
   getSetting: (key: string, defaultValue?: unknown) =>
     ipcRenderer.invoke(C.SETTINGS.GET, key, defaultValue),
@@ -140,8 +131,6 @@ export const preloadApi: ElectronAPI = {
   // File operations
   exportTranscriptions: (format: string) =>
     ipcRenderer.invoke(C.TRANSCRIPTION.EXPORT_ALL, format),
-  importSettings: () => ipcRenderer.invoke(C.SETTINGS.IMPORT),
-  exportSettings: () => ipcRenderer.invoke(C.SETTINGS.EXPORT),
 
   // System info
   getSystemInfo: () => ipcRenderer.invoke(C.SYSTEM.INFO),
@@ -211,12 +200,9 @@ export const preloadApi: ElectronAPI = {
   hideSettingsWindow: () => ipcRenderer.invoke(C.WINDOW.HIDE_SETTINGS),
 
   // Model management
-  downloadModel: (modelName: string) =>
-    ipcRenderer.invoke(C.MODELS.DOWNLOAD_MODEL, modelName),
-  getAvailableModels: () => ipcRenderer.invoke(C.MODELS.AVAILABLE),
-  getCurrentModel: () => ipcRenderer.invoke(C.MODELS.CURRENT),
-  switchModel: (modelName: string) =>
-    ipcRenderer.invoke(C.MODELS.SWITCH, modelName),
+  // [20260816_Refactor_DeadChannels] downloadModel/getAvailableModels/
+  // getCurrentModel/switchModel bindings removed — hardcoded placeholder
+  // handlers with zero renderer callers. downloadModels above is the real path.
 
   // Model download progress listener
   onModelDownloadProgress: (

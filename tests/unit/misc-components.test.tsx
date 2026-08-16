@@ -15,7 +15,6 @@ import "../setup/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 
 // [20260729_Test_MiscComponents] Mock react-i18next faithfully for the
 // component tests below. useTranslation returns a t() that resolves against
@@ -52,12 +51,9 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent,
-} from "../../src/components/ui/tabs";
+// [20260815_Refactor_DeadUI] Tabs primitives removed with their dead component
+// (src/components/ui/tabs.tsx had zero runtime importers). This file keeps the
+// i18n initializer and SettingsSidebar suites.
 import {
   SettingsSidebar,
   type SettingsSection,
@@ -102,91 +98,7 @@ describe("[20260729_Test_MiscComponents] i18n/index.ts", () => {
 });
 
 // ---------------------------------------------------------------------------
-// [20260729_Test_MiscComponents] components/ui/tabs.tsx
-// ---------------------------------------------------------------------------
-describe("[20260729_Test_MiscComponents] Tabs primitives", () => {
-  it("renders Tabs, TabsList, TabsTrigger and TabsContent", () => {
-    const { container } = render(
-      <Tabs defaultValue="a">
-        <TabsList data-testid="list">
-          <TabsTrigger value="a">trigger a</TabsTrigger>
-          <TabsTrigger value="b">trigger b</TabsTrigger>
-        </TabsList>
-        <TabsContent value="a">content a</TabsContent>
-        <TabsContent value="b">content b</TabsContent>
-      </Tabs>,
-    );
-
-    // The active trigger is a tab with aria-selected; Radix sets it from
-    // defaultValue="a".
-    const triggerA = screen.getByRole("tab", { name: "trigger a" });
-    const triggerB = screen.getByRole("tab", { name: "trigger b" });
-    expect(triggerA).toBeInTheDocument();
-    expect(triggerB).toBeInTheDocument();
-    expect(triggerA).toHaveAttribute("aria-selected", "true");
-
-    // TabsList forwards className; verify the base class merged through.
-    const list = screen.getByTestId("list");
-    expect(list.className).toContain("rounded-md");
-
-    // Both content panels exist in the DOM. Radix marks the active one with
-    // data-state="active" and the inactive with data-state="inactive" plus a
-    // `hidden` attribute (which excludes it from getByRole queries), so query
-    // the raw DOM by role attribute instead of relying on the ARIA role helper.
-    const panels = container.querySelectorAll("[role=tabpanel]");
-    expect(panels.length).toBe(2);
-    const states = Array.from(panels).map((p) => p.getAttribute("data-state"));
-    expect(states).toContain("active");
-    expect(states).toContain("inactive");
-  });
-
-  it("merges additional className on TabsTrigger", () => {
-    render(
-      <Tabs defaultValue="a">
-        <TabsList>
-          <TabsTrigger value="a" className="my-trigger" data-testid="t">
-            a
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value="a">body</TabsContent>
-      </Tabs>,
-    );
-
-    const trigger = screen.getByTestId("t");
-    // Base focus-visible ring class merged with the custom class.
-    expect(trigger.className).toContain("focus-visible:ring-2");
-    expect(trigger.className).toContain("my-trigger");
-  });
-
-  it("switches active tab on click", async () => {
-    const user = userEvent.setup();
-    render(
-      <Tabs defaultValue="a">
-        <TabsList>
-          <TabsTrigger value="a">a</TabsTrigger>
-          <TabsTrigger value="b">b</TabsTrigger>
-        </TabsList>
-        <TabsContent value="a">content a</TabsContent>
-        <TabsContent value="b">content b</TabsContent>
-      </Tabs>,
-    );
-
-    // Radix Tabs toggles selection on pointer-up; userEvent simulates the full
-    // pointer interaction (where a bare fireEvent.click does not).
-    await user.click(screen.getByRole("tab", { name: "b" }));
-    expect(screen.getByRole("tab", { name: "b" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    expect(screen.getByRole("tab", { name: "a" })).toHaveAttribute(
-      "aria-selected",
-      "false",
-    );
-  });
-});
-
-// ---------------------------------------------------------------------------
-// [20260729_Test_MiscComponents] settings/SettingsSidebar.tsx
+// [20260815_Refactor_DeadUI] settings/SettingsSidebar.tsx
 // ---------------------------------------------------------------------------
 describe("[20260729_Test_MiscComponents] SettingsSidebar", () => {
   it("renders all four sections with their labels", () => {

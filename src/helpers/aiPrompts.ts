@@ -472,9 +472,10 @@ export function buildPrompt(
     },
   };
 
-  // modes is a literal object with all keys defined; fall back to optimize.
-  const result = modes[mode] ?? modes.optimize;
-  return result ?? modes.summarize!;
+  // [20260815_Refactor_AiPromptsDeadCode] modes is a literal object with all
+  // keys defined; the old `?? modes.summarize!` fallback was unreachable and
+  // DEFAULT_PIPELINE (a pipeline feature that never shipped, zero production
+  // importers) was removed with its test mocks. The non-null assertion only
+  // satisfies noUncheckedIndexedAccess — modes.optimize is a literal key.
+  return modes[mode] ?? modes.optimize!;
 }
-
-export const DEFAULT_PIPELINE = ["optimize"];

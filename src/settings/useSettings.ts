@@ -22,10 +22,8 @@ export interface SettingsState {
   auto_paste: string;
   close_behavior: string;
   theme: string;
-  // [20260729_Feat_EffectsToggle] Visual-effects toggle (History window).
-  // Defaults to false — effects are opt-in to protect low-end machines where
-  // WebGL falls back to SwiftShader (software rendering, high CPU).
-  effects_enabled: boolean;
+  // [20260816_Refactor_RemoveEffects] effects_enabled was removed with the
+  // visual-effects feature (ogl/motion deps deleted the same day).
 }
 
 // [20260712_Fix_ProviderPresetType] Use the canonical AIProviderPreset
@@ -50,6 +48,19 @@ export const PREDEFINED_MODELS = [
 
 export const DEFAULT_MODEL = "gpt-3.5-turbo";
 
+// [20260815_Refactor_ModelListDedup] Display labels for PREDEFINED_MODELS.
+// AIConfigSection used to hardcode the same models a second time as <option>
+// tags — two copies that silently drift. The qwen3 entry is localized at the
+// usage site (settings.ai.qwenRecommended), so its label here is a fallback.
+export const MODEL_LABELS: Record<string, string> = {
+  "gpt-3.5-turbo": "GPT-3.5 Turbo",
+  "gpt-4": "GPT-4",
+  "gpt-4-turbo": "GPT-4 Turbo",
+  "gpt-4o": "GPT-4o",
+  "gpt-4o-mini": "GPT-4o Mini",
+  "qwen3-30b-a3b-instruct-2507": "Qwen3-30B",
+};
+
 export function isMaskedKey(key: string): boolean {
   return key.startsWith("****");
 }
@@ -57,7 +68,7 @@ export function isMaskedKey(key: string): boolean {
 const DEFAULT_SETTINGS: SettingsState = {
   ai_api_key: "",
   ai_base_url: "https://api.openai.com/v1",
-  ai_model: "gpt-3.5-turbo",
+  ai_model: DEFAULT_MODEL,
   ai_temperature: 0.3,
   // [20260815_Fix_AiMaxTokensDefault] 8192 (was 2000): reasoning models count
   // thinking tokens against max_tokens; 2000 let reasoning alone exhaust the
@@ -68,7 +79,6 @@ const DEFAULT_SETTINGS: SettingsState = {
   auto_paste: "paste",
   close_behavior: "hide",
   theme: "system",
-  effects_enabled: false,
 };
 
 export function applyTheme(theme: string): void {
@@ -132,9 +142,6 @@ export function useSettings() {
           auto_paste: (allSettings.auto_paste || "paste") as string,
           close_behavior: (allSettings.close_behavior || "hide") as string,
           theme: (allSettings.theme || "system") as string,
-          // [20260729_Feat_EffectsToggle] Explicit === true so existing users
-          // (who have no effects_enabled row yet) default to off.
-          effects_enabled: allSettings.effects_enabled === true,
         };
         setSettings((prev) => ({ ...prev, ...loadedSettings }));
         applyTheme(loadedSettings.theme);
@@ -156,6 +163,12 @@ export function useSettings() {
   // --- 保存设置 ---
   // [ADR-015] Returns boolean so callers can show inline success feedback
   // (savedFlash) only on actual success, not on the catch path.
+  // [20260815_Refactor_SaveSettingsLoop] The 11 hand-listed setSetting calls
+  // (each with a per-key comment) became a loop over the settings object:
+  // handleInputChange already auto-persists every change, so this bulk save
+  // only exists as the explicit Save-button reconciliation pass — a loop
+  // keeps future settings keys included automatically instead of needing a
+  // mandatory new line (the old effects_enabled reviewer finding).
   const saveSettings = useCallback(async (): Promise<boolean> => {
     try {
       setSaving(true);
@@ -166,43 +179,14 @@ export function useSettings() {
             settings.ai_api_key,
           );
         }
-        await window.electronAPI.setSetting(
-          "ai_base_url",
-          settings.ai_base_url,
-        );
-        await window.electronAPI.setSetting("ai_model", settings.ai_model);
-        await window.electronAPI.setSetting(
-          "ai_temperature",
-          settings.ai_temperature,
-        );
-        await window.electronAPI.setSetting(
-          "ai_max_tokens",
-          settings.ai_max_tokens,
-        );
-        await window.electronAPI.setSetting(
-          "enable_ai_optimization",
-          settings.enable_ai_optimization,
-        );
-        await window.electronAPI.setSetting(
-          "window_always_on_top",
-          settings.window_always_on_top,
-        );
-        await window.electronAPI.setSetting("auto_paste", settings.auto_paste);
-        await window.electronAPI.setSetting(
-          "close_behavior",
-          settings.close_behavior,
-        );
-        await window.electronAPI.setSetting("theme", settings.theme);
+        for (const key of Object.keys(settings)) {
+          if (key === "ai_api_key") continue;
+          await window.electronAPI.setSetting(
+            key,
+            settings[key as keyof SettingsState],
+          );
+        }
         applyTheme(settings.theme);
-        // [20260729_Feat_EffectsToggle] Persist the effects toggle. This line
-        // is mandatory — saveSettings hardcodes each key individually, so
-        // omitting it silently drops the setting on save (UI shows "saved"
-        // but the DB never receives the value). See reviewer M3 finding.
-        await window.electronAPI.setSetting(
-          "effects_enabled",
-          settings.effects_enabled,
-        );
-
         toast.success(t("settings.saveSuccess", "设置已保存"));
         return true;
       }
@@ -315,7 +299,7 @@ export function useSettings() {
           ai_api_key: settings.ai_api_key.trim(),
           ai_base_url:
             settings.ai_base_url.trim() || "https://api.openai.com/v1",
-          ai_model: settings.ai_model.trim() || "gpt-3.5-turbo",
+          ai_model: settings.ai_model.trim() || DEFAULT_MODEL,
         };
 
         const result = await window.electronAPI.checkAIStatus(testConfig);

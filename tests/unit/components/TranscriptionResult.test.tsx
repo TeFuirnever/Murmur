@@ -216,12 +216,10 @@ describe("TranscriptionResult", () => {
   // discarded, hiding the real cause (e.g. max_tokens exhausted by reasoning).
   it("shows main-process error message when processText resolves with failure", async () => {
     stubElectronAPI({
-      processText: vi
-        .fn()
-        .mockResolvedValue({
-          success: false,
-          error: "AI输出为空，请调大 max_tokens",
-        }),
+      processText: vi.fn().mockResolvedValue({
+        success: false,
+        error: "AI输出为空，请调大 max_tokens",
+      }),
     });
     render(<TranscriptionResult text="hello" />);
     await waitFor(() => {

@@ -67,9 +67,8 @@ function makeElectronAPIStub(
     checkFunASRStatus: vi.fn().mockResolvedValue(SERVER_READY),
     downloadModels: vi.fn().mockResolvedValue({ success: true }),
     restartFunasrServer: vi.fn().mockResolvedValue({ success: true }),
-    getDownloadProgress: vi
-      .fn()
-      .mockResolvedValue({ progress: 0, status: "idle" }),
+    // [20260815_Refactor_DeadIpc] getDownloadProgress stub removed with the
+    // dead pull channel (progress arrives via onModelDownloadProgress).
     onModelDownloadProgress: vi.fn().mockReturnValue(NOOP_UNSUB),
     onProcessingUpdate: vi.fn().mockReturnValue(NOOP_UNSUB),
     onSettingsUpdate: vi.fn().mockReturnValue(NOOP_UNSUB),
@@ -291,79 +290,10 @@ describe("useModelStatus hook", () => {
     expect(result.current.stage).toBe("error");
   });
 
-  it("getDownloadProgress forwards to the IPC method", async () => {
-    const getDownloadProgress = vi
-      .fn()
-      .mockResolvedValue({ progress: 42, status: "downloading" });
-    const stub = makeElectronAPIStub({
-      checkModelFiles: vi.fn().mockResolvedValue(MODEL_FILES_READY),
-      checkFunASRStatus: vi.fn().mockResolvedValue(SERVER_READY),
-      getDownloadProgress,
-    });
-    (globalThis.window as TestWindow).electronAPI = stub;
-
-    const { result } = renderProviderHook();
-    await waitFor(() => {
-      expect(result.current.stage).toBe("ready");
-    });
-
-    let progress: Record<string, unknown> = {};
-    await act(async () => {
-      progress = (await result.current.getDownloadProgress?.()) as Record<
-        string,
-        unknown
-      >;
-    });
-
-    expect(getDownloadProgress).toHaveBeenCalledTimes(1);
-    expect(progress.progress).toBe(42);
-    expect(progress.status).toBe("downloading");
-  });
-
-  it("checkModelFiles context method proxies the IPC result", async () => {
-    const checkModelFiles = vi.fn().mockResolvedValue(MODEL_FILES_MISSING);
-    const stub = makeElectronAPIStub({
-      checkModelFiles,
-      checkFunASRStatus: vi.fn().mockResolvedValue(SERVER_READY),
-    });
-    (globalThis.window as TestWindow).electronAPI = stub;
-
-    const { result } = renderProviderHook();
-    await waitFor(() => {
-      expect(result.current.stage).toBe("need_download");
-    });
-
-    let files: ModelCheckResult = MODEL_FILES_READY;
-    await act(async () => {
-      files = await result.current.checkModelFiles();
-    });
-
-    expect(checkModelFiles).toHaveBeenCalled();
-    expect(files.models_downloaded).toBe(false);
-    expect(files.missing_models).toEqual(["asr", "vad"]);
-  });
-
-  it("checkModelStatus re-runs both IPC checks when invoked again", async () => {
-    const checkModelFiles = vi.fn().mockResolvedValue(MODEL_FILES_READY);
-    const checkFunASRStatus = vi.fn().mockResolvedValue(SERVER_READY);
-    const stub = makeElectronAPIStub({ checkModelFiles, checkFunASRStatus });
-    (globalThis.window as TestWindow).electronAPI = stub;
-
-    const { result } = renderProviderHook();
-    await waitFor(() => {
-      expect(result.current.stage).toBe("ready");
-    });
-
-    const filesBefore = checkModelFiles.mock.calls.length;
-    const serverBefore = checkFunASRStatus.mock.calls.length;
-
-    await act(async () => {
-      await result.current.checkModelStatus();
-    });
-
-    expect(checkModelFiles.mock.calls.length).toBe(filesBefore + 1);
-    expect(checkFunASRStatus.mock.calls.length).toBe(serverBefore + 1);
-  });
+  // [20260815_Refactor_DeadIpc] The checkModelFiles/checkModelStatus context
+  // proxy tests were removed with the dead context surface — both methods are
+  // provider-internal (called by its effects); consumers read the derived
+  // stage fields. The IPC stubs themselves remain covered by the stage tests.
 
   it("registers the model-download, processing-update and settings-update listeners on mount", async () => {
     const onModelDownloadProgress = vi.fn().mockReturnValue(NOOP_UNSUB);

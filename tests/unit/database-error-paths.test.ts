@@ -1,9 +1,10 @@
 // [20260725_TDD_DbErrorPaths] TDD tests for src/helpers/database.ts error
 // paths. database.ts had the worst branch coverage in the project (67.18%).
 // These tests target the previously-uncovered branches:
-//   - getTranscriptionWithSegments segments JSON parse failure (lines 346-347)
-//     and the null-segments else branch (line 357)
 //   - getSetting decryption fallback path (line 458 -> : defaultValue)
+//
+// [20260815_Refactor_DeadIpc] The getTranscriptionWithSegments describe was
+// removed with the zero-production-caller method.
 //
 // Setup mirrors the existing database.test.js / database-coverage.test.js
 // pattern: temp dir, initialize, close + cleanup.
@@ -70,67 +71,6 @@ describe("DatabaseManager - error paths (TDD)", () => {
   afterEach(() => {
     db.close();
     fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  // ---------- getTranscriptionWithSegments ----------
-
-  describe("getTranscriptionWithSegments", () => {
-    it("1. returns parsedSegments on valid JSON segments", () => {
-      const segments = JSON.stringify([
-        { start_ms: 0, end_ms: 100, text: "hello" },
-        { start_ms: 100, end_ms: 200, text: "world" },
-      ]);
-      const { lastInsertRowid } = db.saveTranscription({
-        text: "hi",
-        segments,
-      });
-
-      const row = db.getTranscriptionWithSegments(Number(lastInsertRowid));
-
-      expect(row).toBeDefined();
-      expect(row!.parsedSegments).toEqual([
-        { start_ms: 0, end_ms: 100, text: "hello" },
-        { start_ms: 100, end_ms: 200, text: "world" },
-      ]);
-    });
-
-    it("2. returns [] on corrupt segments JSON (catch block, lines 346-347)", () => {
-      const { lastInsertRowid } = db.saveTranscription({ text: "bad segs" });
-      // Inject corrupt JSON directly into the segments column so JSON.parse
-      // throws inside getTranscriptionWithSegments.
-      (
-        db as unknown as {
-          db: { prepare: (sql: string) => { run: (...a: unknown[]) => void } };
-        }
-      ).db
-        .prepare("UPDATE transcriptions SET segments = ? WHERE id = ?")
-        .run("not-valid-json", Number(lastInsertRowid));
-
-      const row = db.getTranscriptionWithSegments(Number(lastInsertRowid));
-
-      // Catch block (line 355): parsedSegments reset to [].
-      expect(row!.parsedSegments).toEqual([]);
-      // Logger.warn invoked with the parse failure.
-      expect(logger.warn).toHaveBeenCalled();
-    });
-
-    it("3. returns [] when segments is null (else branch, line 357)", () => {
-      // saveTranscription without segments -> segments column is NULL.
-      const { lastInsertRowid } = db.saveTranscription({ text: "no segs" });
-
-      const row = db.getTranscriptionWithSegments(Number(lastInsertRowid));
-
-      expect(row).toBeDefined();
-      expect(row!.segments).toBeNull();
-      // else-if branch (line 358): parsedSegments = [].
-      expect(row!.parsedSegments).toEqual([]);
-    });
-
-    it("4. returns undefined when transcription doesn't exist", () => {
-      // Per the preserved .js behavior (comment at line 360-362), a missing
-      // row returns `undefined`. `null` is reserved for the DB-error catch.
-      expect(db.getTranscriptionWithSegments(999999)).toBeUndefined();
-    });
   });
 
   // ---------- getSetting ----------

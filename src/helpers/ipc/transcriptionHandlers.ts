@@ -30,8 +30,6 @@ interface DatabaseManager {
   getTranscriptionById(id: number): TranscriptionRow | null;
   getTranscriptions(limit: number, offset: number): TranscriptionRow[];
   deleteTranscription(id: number): unknown;
-  searchTranscriptions(query: string, limit: number): unknown;
-  getTranscriptionStats(): unknown;
   clearAllTranscriptions(): unknown;
 }
 
@@ -343,23 +341,12 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
     },
   );
 
-  ipcMain.handle(C.TRANSCRIPTION.GET, (_event, id: number) => {
-    return databaseManager.getTranscriptionById(id);
-  });
+  // [20260816_Refactor_DeadChannels] The GET (single-record) and STATS
+  // handlers were removed — zero renderer callers; getTranscriptionById
+  // stays (the AI_REVIEW/DIARIZE handlers use it).
 
   ipcMain.handle(C.TRANSCRIPTION.DELETE, (_event, id: number) => {
     return databaseManager.deleteTranscription(id);
-  });
-
-  ipcMain.handle(
-    C.TRANSCRIPTION.SEARCH,
-    (_event, query: string, limit: number) => {
-      return databaseManager.searchTranscriptions(query, limit);
-    },
-  );
-
-  ipcMain.handle(C.TRANSCRIPTION.STATS, () => {
-    return databaseManager.getTranscriptionStats();
   });
 
   ipcMain.handle(C.TRANSCRIPTION.CLEAR, () => {
@@ -402,14 +389,9 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
         );
         fs.writeFileSync(result.filePath, content as Buffer);
       } else {
-        const formatter =
-          format === "srt"
-            ? exportFormatters.formatSRT
-            : format === "vtt"
-              ? exportFormatters.formatVTT
-              : format === "md"
-                ? exportFormatters.formatMD
-                : exportFormatters.formatTXT;
+        // [20260815_Refactor_FormatterLookup] getFormatInfo above already
+        // resolved the right formatter; the nested ternary re-derived it.
+        const formatter = formatInfo.formatter;
         content = (transcriptions as unknown[])
           .map((t) => formatter(t as unknown as TranscriptionForExport))
           .join("\n\n");

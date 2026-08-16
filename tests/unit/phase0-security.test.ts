@@ -38,19 +38,8 @@ describe("Phase 0: Settings import whitelist", () => {
     expect(validateSetting("close_behavior", "hide")).toBe(true);
     expect(validateSetting("window_always_on_top", true)).toBe(true);
     expect(validateSetting("enable_ai_optimization", true)).toBe(true);
-    // [20260729_Feat_EffectsToggle] effects_enabled must be whitelisted or
-    // saves silently fail (validateSetting rejects unknown keys). Regression
-    // guard against accidental removal from ALLOWED_SETTING_KEYS.
-    expect(validateSetting("effects_enabled", true)).toBe(true);
-  });
-
-  // [20260729_Feat_EffectsToggle] Guard against typos in the effects setting
-  // key name — a rename without updating the allowlist would break persistence
-  // with no signal to the user.
-  it("should reject misspelled effects setting key", () => {
-    expect(validateSetting("effects_enable", true)).toBe(false);
-    expect(validateSetting("effect_enabled", true)).toBe(false);
-    expect(validateSetting("effects_enabled_typo", true)).toBe(false);
+    // [20260816_Refactor_RemoveEffects] the effects_enabled whitelist entry
+    // and its typo guards were removed with the visual-effects feature.
   });
 
   it("should reject keys that are too long", () => {

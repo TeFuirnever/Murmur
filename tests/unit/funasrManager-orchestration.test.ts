@@ -69,7 +69,6 @@ interface ModelManagerSurface {
   modelsDownloaded: boolean | null;
   getModelCachePath: () => string;
   checkModelFiles: () => Promise<unknown>;
-  getDownloadProgress: () => Promise<unknown>;
   downloadModels: (
     cb: ((progress: Record<string, unknown>) => void) | null,
     pythonCmd: string,
@@ -107,7 +106,6 @@ interface FunASRManagerTestSurface {
   ) => Promise<unknown>;
   getModelCachePath: () => string;
   checkModelFiles: () => Promise<unknown>;
-  getDownloadProgress: () => Promise<unknown>;
   downloadModels: (
     cb: ((progress: Record<string, unknown>) => void) | null,
   ) => Promise<unknown>;
@@ -376,25 +374,6 @@ describe("funasrManager delegation methods", () => {
       .spyOn(manager.modelManager, "getModelCachePath")
       .mockReturnValue("/cache/damo");
     expect(manager.getModelCachePath()).toBe("/cache/damo");
-    expect(spy).toHaveBeenCalledTimes(1);
-  });
-
-  it("getDownloadProgress forwards to modelManager", async () => {
-    const { manager } = makeManager();
-    const spy = vi
-      .spyOn(manager.modelManager, "getDownloadProgress")
-      .mockResolvedValue({
-        progress: 50,
-        stage: "downloading",
-        downloaded: 1,
-        total: 2,
-      });
-    await expect(manager.getDownloadProgress()).resolves.toEqual({
-      progress: 50,
-      stage: "downloading",
-      downloaded: 1,
-      total: 2,
-    });
     expect(spy).toHaveBeenCalledTimes(1);
   });
 });

@@ -24,15 +24,13 @@ test.describe("Suite 6: Clipboard & Auto-Paste", () => {
   test("6.1 — Copy text to clipboard and read back", async () => {
     const testText = "E2E clipboard test " + Date.now();
 
-    // Write to clipboard
-    await window.evaluate(
-      (t) => window.electronAPI.writeClipboard(t),
-      testText,
-    );
+    // [20260815_Refactor_DeadIpc] The writeClipboard/readClipboard IPC pair
+    // was removed (zero renderer callers). Copy through the live copyText
+    // channel and verify the real system clipboard from the main process.
+    await window.evaluate((t) => window.electronAPI.copyText(t), testText);
 
-    // Read back from clipboard
-    const result = await window.evaluate(() =>
-      window.electronAPI.readClipboard(),
+    const result = await electronApp.evaluate(({ clipboard }) =>
+      clipboard.readText(),
     );
     expect(result).toBe(testText);
   });

@@ -50,17 +50,23 @@ const KNOWN_RENDERER_NOISE = [
 // "No handler registered", the entire Gate 4 journey tier is suspect.
 // Channels chosen because they are side-effect-free reads (safe to call
 // at boot). Source: e2e-functional-verification-strategy.md §2 Phase A5.
+// [20260815_Refactor_DeadIpc] read-clipboard probe removed with the dead
+// CLIPBOARD.READ channel; 9 side-effect-free probes remain.
+// [20260816_Refactor_DeadChannels] get-current-model probe removed with the
+// placeholder MODELS.CURRENT channel; 8 side-effect-free probes remain.
+// [20260816_Fix_BootProbeContext] Values are electronAPI method names; the
+// test evaluates them by name inside the browser (the old call(window) form
+// ran on the Node side, where the Playwright Page has no electronAPI — the
+// test could only ever fail).
 const BOOT_PROBES = {
-  "check-funasr-status": (w) => w.electronAPI.checkFunASRStatus(),
-  "check-model-files": (w) => w.electronAPI.checkModelFiles(),
-  "get-ai-modes": (w) => w.electronAPI.getAIModes(),
-  "get-all-settings": (w) => w.electronAPI.getAllSettings(),
-  "get-system-info": (w) => w.electronAPI.getSystemInfo(),
-  "get-app-version": (w) => w.electronAPI.getAppVersion(),
-  "is-window-maximized": (w) => w.electronAPI.isWindowMaximized(),
-  "get-current-hotkey": (w) => w.electronAPI.getCurrentHotkey(),
-  "read-clipboard": (w) => w.electronAPI.readClipboard(),
-  "get-current-model": (w) => w.electronAPI.getCurrentModel(),
+  "check-funasr-status": "checkFunASRStatus",
+  "check-model-files": "checkModelFiles",
+  "get-ai-modes": "getAIModes",
+  "get-all-settings": "getAllSettings",
+  "get-system-info": "getSystemInfo",
+  "get-app-version": "getAppVersion",
+  "is-window-maximized": "isWindowMaximized",
+  "get-current-hotkey": "getCurrentHotkey",
 };
 // [20260725_E2E_BootHealthGate] END
 
@@ -103,13 +109,31 @@ test.describe.serial("Suite 0: Boot Health (Phase A-E)", () => {
   // registerIPCHandlers (main.ts:147) is broken or a handler module threw
   // at import time. See §2 Phase A5 for the per-module breakdown.
   //
-  // Probes run from Node against window.electronAPI so a "No handler
-  // registered" rejection surfaces as a real test failure rather than
-  // being swallowed inside the renderer.
-  test("0.2 all 10 IPC handler domains respond", async () => {
-    for (const [channel, call] of Object.entries(BOOT_PROBES)) {
+  // [20260816_Refactor_DeadChannels] get-current-model probe removed with the
+  // placeholder MODELS.CURRENT channel; 8 side-effect-free probes remain.
+  // [20260816_Fix_BootProbeContext] The probes used to run as call(window) on
+  // the Node side, where the Playwright Page object has no electronAPI — the
+  // test could only ever fail. Evaluate each probe inside the browser so the
+  // IPC rejections surface as real failures rather than being swallowed.
+  test("0.2 all IPC handler domains respond", async () => {
+    for (const [channel, method] of Object.entries(BOOT_PROBES)) {
       await expect(
-        call(window),
+        window.evaluate(
+          // [20260816_Refactor_DeadChannels] get-current-model probe removed with the
+          // placeholder MODELS.CURRENT channel; 8 side-effect-free probes remain.
+          // [20260816_Fix_BootProbeContext] Runs in the browser: look the
+          // method up on the real preload bridge by name so a rejection
+          // ("No handler registered") surfaces as a test failure.
+          (m) => {
+            const api = (
+              globalThis as {
+                electronAPI: Record<string, () => Promise<unknown>>;
+              }
+            ).electronAPI;
+            return api[m]();
+          },
+          method,
+        ),
         `IPC channel "${channel}" did not resolve`,
       ).resolves.toBeDefined();
     }

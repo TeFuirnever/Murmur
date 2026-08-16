@@ -47,12 +47,12 @@ describe("clipboardHandlers", () => {
     };
 
     mockClipboardManager = {
-      // Method names mirror src/helpers/ipc/clipboardHandlers.ts:
-      // copyText, pasteText, readClipboard, writeClipboard.
+      // [20260815_Refactor_DeadIpc] Method names mirror
+      // src/helpers/ipc/clipboardHandlers.ts: copyText, pasteText. The
+      // readClipboard/writeClipboard channels were removed with their
+      // zero-renderer-caller handlers.
       copyText: vi.fn(async (text: string) => ({ success: true, text })),
       pasteText: vi.fn(async (text: string) => ({ success: true, text })),
-      readClipboard: vi.fn(async () => "clip-content"),
-      writeClipboard: vi.fn(async (text: string) => ({ success: true, text })),
     };
 
     mockManagers = {
@@ -69,20 +69,15 @@ describe("clipboardHandlers", () => {
   }
 
   describe("register() — channel registration completeness", () => {
-    it("registers all 4 clipboard channels with correct names from ipc-contracts", async () => {
+    it("registers both clipboard channels with correct names from ipc-contracts", async () => {
       const C = await setup();
 
-      const expectedChannels = [
-        C.CLIPBOARD.COPY,
-        C.CLIPBOARD.PASTE,
-        C.CLIPBOARD.READ,
-        C.CLIPBOARD.WRITE,
-      ];
+      const expectedChannels = [C.CLIPBOARD.COPY, C.CLIPBOARD.PASTE];
 
       for (const channel of expectedChannels) {
         expect(registeredHandlers.has(channel)).toBe(true);
       }
-      expect(registeredHandlers.size).toBeGreaterThanOrEqual(4);
+      expect(registeredHandlers.size).toBeGreaterThanOrEqual(2);
     });
 
     it("registers channels with the exact string names defined in ipc-contracts", async () => {
@@ -91,13 +86,9 @@ describe("clipboardHandlers", () => {
       // against silent renames that would break the preload/main bridge.
       expect(C.CLIPBOARD.COPY).toBe("copy-text");
       expect(C.CLIPBOARD.PASTE).toBe("paste-text");
-      expect(C.CLIPBOARD.READ).toBe("read-clipboard");
-      expect(C.CLIPBOARD.WRITE).toBe("write-clipboard");
 
       expect(registeredHandlers.has("copy-text")).toBe(true);
       expect(registeredHandlers.has("paste-text")).toBe(true);
-      expect(registeredHandlers.has("read-clipboard")).toBe(true);
-      expect(registeredHandlers.has("write-clipboard")).toBe(true);
     });
 
     it("does not register duplicate channels", async () => {
@@ -159,58 +150,6 @@ describe("clipboardHandlers", () => {
       const result = (await handler({}, "boom")) as HandlerResult;
       expect(result.success).toBe(false);
       expect(result.error).toContain("copy failed");
-    });
-  });
-
-  describe("CLIPBOARD.READ handler", () => {
-    it("calls clipboardManager.readClipboard and wraps result in { success, text }", async () => {
-      const C = await setup();
-      const handler = registeredHandlers.get(C.CLIPBOARD.READ)!;
-
-      const result = await handler({});
-      expect(mockClipboardManager.readClipboard).toHaveBeenCalled();
-      expect(result).toEqual({ success: true, text: "clip-content" });
-    });
-
-    it("returns error result when readClipboard throws", async () => {
-      // [20260726_TypeGate_ClipboardHandlers] mockClipboardManager indexed
-      // access is possibly-undefined; the method is populated in beforeEach.
-      mockClipboardManager.readClipboard!.mockImplementationOnce(() => {
-        throw new Error("read failed");
-      });
-      const C = await setup();
-      const handler = registeredHandlers.get(C.CLIPBOARD.READ)!;
-
-      const result = (await handler({})) as HandlerResult;
-      expect(result.success).toBe(false);
-      expect(result.error).toContain("read failed");
-    });
-  });
-
-  describe("CLIPBOARD.WRITE handler", () => {
-    it("calls clipboardManager.writeClipboard with the provided text", async () => {
-      const C = await setup();
-      const handler = registeredHandlers.get(C.CLIPBOARD.WRITE)!;
-
-      const result = await handler({}, "hello-write");
-      expect(mockClipboardManager.writeClipboard).toHaveBeenCalledWith(
-        "hello-write",
-      );
-      expect(result).toEqual({ success: true, text: "hello-write" });
-    });
-
-    it("returns error result when writeClipboard throws", async () => {
-      // [20260726_TypeGate_ClipboardHandlers] mockClipboardManager indexed
-      // access is possibly-undefined; the method is populated in beforeEach.
-      mockClipboardManager.writeClipboard!.mockImplementationOnce(() => {
-        throw new Error("write failed");
-      });
-      const C = await setup();
-      const handler = registeredHandlers.get(C.CLIPBOARD.WRITE)!;
-
-      const result = (await handler({}, "boom")) as HandlerResult;
-      expect(result.success).toBe(false);
-      expect(result.error).toContain("write failed");
     });
   });
 });

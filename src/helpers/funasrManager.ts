@@ -92,9 +92,6 @@ class FunASRManager {
   checkModelFiles(): Promise<unknown> {
     return this.modelManager.checkModelFiles();
   }
-  getDownloadProgress(): Promise<unknown> {
-    return this.modelManager.getDownloadProgress();
-  }
   async downloadModels(
     cb: ((progress: Record<string, unknown>) => void) | null,
   ): Promise<unknown> {

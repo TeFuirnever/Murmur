@@ -36,7 +36,7 @@ vi.mock("../../src/helpers/exportFormatters", () => ({
 
 vi.mock("../../src/helpers/aiPrompts", () => ({
   buildPrompt: vi.fn(() => ({ system: "sys", user: "user" })),
-  DEFAULT_PIPELINE: ["optimize"],
+  loadCustomTemplates: vi.fn(() => []),
 }));
 
 vi.mock("../../src/helpers/audioPathValidator", () => ({
@@ -88,8 +88,6 @@ describe("transcriptionHandlers", () => {
       })),
       getTranscriptions: vi.fn(() => []),
       deleteTranscription: vi.fn(() => ({ changes: 1 })),
-      searchTranscriptions: vi.fn(() => []),
-      getTranscriptionStats: vi.fn(() => ({ total: 5 })),
       clearAllTranscriptions: vi.fn(),
     };
 
@@ -125,7 +123,7 @@ describe("transcriptionHandlers", () => {
   }
 
   describe("register() — channel registration completeness", () => {
-    it("registers all 16 transcription channels", async () => {
+    it("registers all 13 transcription channels", async () => {
       const C = await setup();
 
       const expectedChannels = [
@@ -135,11 +133,8 @@ describe("transcriptionHandlers", () => {
         C.TRANSCRIPTION.TRANSCRIBE_FILE,
         C.TRANSCRIPTION.CANCEL,
         C.TRANSCRIPTION.SAVE,
-        C.TRANSCRIPTION.GET,
         C.TRANSCRIPTION.GET_ALL,
         C.TRANSCRIPTION.DELETE,
-        C.TRANSCRIPTION.SEARCH,
-        C.TRANSCRIPTION.STATS,
         C.TRANSCRIPTION.CLEAR,
         C.TRANSCRIPTION.EXPORT,
         C.TRANSCRIPTION.EXPORT_ALL,
@@ -150,7 +145,7 @@ describe("transcriptionHandlers", () => {
       for (const channel of expectedChannels) {
         expect(registeredHandlers.has(channel)).toBe(true);
       }
-      expect(registeredHandlers.size).toBeGreaterThanOrEqual(16);
+      expect(registeredHandlers.size).toBeGreaterThanOrEqual(13);
     });
 
     it("does not register duplicate channels", async () => {
@@ -277,16 +272,6 @@ describe("transcriptionHandlers", () => {
     });
   });
 
-  describe("TRANSCRIPTION.GET handler", () => {
-    it("returns transcription by id", async () => {
-      const C = await setup();
-      const handler = registeredHandlers.get(C.TRANSCRIPTION.GET)!;
-
-      const result = await handler({}, 42);
-      expect(result).toEqual({ id: 42, text: "test text", segments: "[]" });
-    });
-  });
-
   describe("TRANSCRIPTION.DELETE handler", () => {
     it("deletes transcription via databaseManager", async () => {
       const C = await setup();
@@ -308,13 +293,6 @@ describe("transcriptionHandlers", () => {
     });
   });
 
-  describe("TRANSCRIPTION.STATS handler", () => {
-    it("returns stats from databaseManager", async () => {
-      const C = await setup();
-      const handler = registeredHandlers.get(C.TRANSCRIPTION.STATS)!;
-
-      const result = await handler({});
-      expect(result).toEqual({ total: 5 });
-    });
-  });
+  // [20260816_Refactor_DeadChannels] GET(single)/STATS handler describes
+  // removed with their zero-caller channels.
 });

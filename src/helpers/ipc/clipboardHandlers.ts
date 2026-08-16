@@ -12,8 +12,6 @@ interface Logger {
 interface ClipboardManager {
   copyText(text: string): Promise<unknown>;
   pasteText(text: string): Promise<unknown>;
-  readClipboard(): Promise<string>;
-  writeClipboard(text: string): Promise<unknown>;
 }
 
 interface Managers {
@@ -38,25 +36,6 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
       return await clipboardManager.pasteText(text);
     } catch (error) {
       logger.error?.("粘贴文本失败:", error);
-      return { success: false, error: (error as Error).message };
-    }
-  });
-
-  ipcMain.handle(C.CLIPBOARD.READ, async () => {
-    try {
-      const text = await clipboardManager.readClipboard();
-      return { success: true, text };
-    } catch (error) {
-      logger.error?.("读取剪贴板失败:", error);
-      return { success: false, error: (error as Error).message };
-    }
-  });
-
-  ipcMain.handle(C.CLIPBOARD.WRITE, async (_event, text: string) => {
-    try {
-      return await clipboardManager.writeClipboard(text);
-    } catch (error) {
-      logger.error?.("写入剪贴板失败:", error);
       return { success: false, error: (error as Error).message };
     }
   });

@@ -103,6 +103,68 @@ describe("EnvironmentManager", () => {
         fs.rmSync(tmpCwd, { recursive: true, force: true });
       }
     });
+
+    // [20260815_Refactor_DotenvRemoval] dotenv's config() never overrides an
+    // existing process.env entry (override: false) — the shell environment
+    // must keep winning over .env files after the hand-rolled parser swap.
+    it("does not override variables already present in the shell environment", () => {
+      const tmpCwd = fs.mkdtempSync(path.join(os.tmpdir(), "murmur-dotenv-"));
+      fs.writeFileSync(
+        path.join(tmpCwd, ".env"),
+        "TEST_DOTENV_PRECEDENCE=from-file",
+      );
+      const origCwd = process.cwd();
+      const original = process.env.TEST_DOTENV_PRECEDENCE;
+      process.env.TEST_DOTENV_PRECEDENCE = "from-shell";
+      process.chdir(tmpCwd);
+      try {
+        new EnvironmentManager();
+        expect(process.env.TEST_DOTENV_PRECEDENCE).toBe("from-shell");
+      } finally {
+        process.chdir(origCwd);
+        if (original === undefined) {
+          delete process.env.TEST_DOTENV_PRECEDENCE;
+        } else {
+          process.env.TEST_DOTENV_PRECEDENCE = original;
+        }
+        fs.rmSync(tmpCwd, { recursive: true, force: true });
+      }
+    });
+
+    // [20260815_Refactor_DotenvRemoval] dotenv (108KB) was swapped for a
+    // minimal parser; these cases lock the semantics real .env files rely on
+    // (comments, blank lines, optional export prefix, quoted values).
+    it("parses comments, blank lines, export prefix and quoted values", () => {
+      const tmpCwd = fs.mkdtempSync(path.join(os.tmpdir(), "murmur-dotenv-"));
+      fs.writeFileSync(
+        path.join(tmpCwd, ".env"),
+        [
+          "# comment line",
+          "",
+          "export TEST_DOTENV_BARE=bare",
+          'TEST_DOTENV_QUOTED="quoted value"',
+          "TEST_DOTENV_SINGLE='single value'",
+        ].join("\n"),
+      );
+      const origCwd = process.cwd();
+      process.chdir(tmpCwd);
+      try {
+        new EnvironmentManager();
+        expect(process.env.TEST_DOTENV_BARE).toBe("bare");
+        expect(process.env.TEST_DOTENV_QUOTED).toBe("quoted value");
+        expect(process.env.TEST_DOTENV_SINGLE).toBe("single value");
+      } finally {
+        process.chdir(origCwd);
+        for (const key of [
+          "TEST_DOTENV_BARE",
+          "TEST_DOTENV_QUOTED",
+          "TEST_DOTENV_SINGLE",
+        ]) {
+          delete process.env[key];
+        }
+        fs.rmSync(tmpCwd, { recursive: true, force: true });
+      }
+    });
   });
 
   describe("getAIConfig", () => {

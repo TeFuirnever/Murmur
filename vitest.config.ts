@@ -1,5 +1,4 @@
 import { defineConfig } from "vitest/config";
-import path from "path";
 
 export default defineConfig({
   test: {
@@ -33,7 +32,6 @@ export default defineConfig({
         // Build output
         "src/dist/**",
         "src/node_modules/**",
-        "src/coverage/**",
         // Electron-dependent modules (require runtime IPC/BrowserWindow/app,
         // cannot be unit-tested in node environment)
         "src/helpers/clipboard.ts",
@@ -45,9 +43,8 @@ export default defineConfig({
         "src/helpers/windowManager.ts",
         "src/helpers/logManager.ts",
         "src/helpers/ipc/**",
-        // Vendored react-bits components (third-party source, SPDX preserved)
-        "src/components/effects/Aurora.tsx",
-        "src/components/effects/BlurText.tsx",
+        // [20260816_Refactor_RemoveEffects] the vendored Aurora/BlurText
+        // exclusion entries were removed with the effects feature.
       ],
       // [20260729_Gate_FullSrcThresholds] Full-src thresholds set slightly
       // below current actual coverage (46% stmts / 39% branches / 45% funcs /
@@ -70,16 +67,10 @@ export default defineConfig({
       },
     },
   },
+  // [20260815_Refactor_DeadUI] The "@" and "src" aliases existed only for
+  // root-relative "src/lib/utils" imports in the deleted ui/input.tsx and
+  // ui/label.tsx shadcn primitives; no remaining module uses them.
   resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-      // [20260729_Test_UIComponents] Mirror the renderer Vite config, which
-      // runs with root = src/, so bare "src/lib/utils" imports resolve. Two
-      // shadcn primitives (ui/input.tsx, ui/label.tsx) use this root-relative
-      // path; the rest of src/ uses relative paths. Without this alias those
-      // modules fail to resolve under the test runner (root = ".").
-      src: path.resolve(__dirname, "./src"),
-    },
     extensions: [".ts", ".tsx", ".js", ".jsx", ".json"],
   },
 });
