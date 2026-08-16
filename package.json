@@ -70,6 +70,7 @@
   "license": "Apache-2.0",
   "devDependencies": {
     "@electron/notarize": "^3.0.1",
+    "@electron/rebuild": "^4.2.0",
     "@eslint/js": "^9.25.0",
     "@playwright/test": "1.60.0",
     "@tailwindcss/postcss": "^4.1.13",
