@@ -145,17 +145,13 @@ async function runDevSmoke() {
         output.slice(-1200),
     };
   }
-  // [20260816_DevSmokeGate] Restore the system-node ABI so the next `pnpm
-  // test` / ci-check run starts from the state pretest asserts.
-  try {
-    execSync("pnpm rebuild better-sqlite3", {
-      cwd: ROOT,
-      stdio: ["ignore", "ignore", "pipe"],
-      timeout: 120_000,
-    });
-  } catch {
-    // Non-fatal: the next run's pretest surfaces the mismatch clearly.
-  }
+  // [20260816_DevSmokeGate] IMPORTANT: no ABI restore here. The gate must
+  // leave the native binary in the ELECTRON-ABI state that `pnpm run dev`
+  // needs — a restore-to-node step here is exactly what broke the user's
+  // next `pnpm run dev` (binary left at ABI 137 while Electron needs 140).
+  // The node-ABI/test state is the responsibility of `pnpm rebuild
+  // better-sqlite3` (or the pretest ABI check's hint), and predev already
+  // rebuilds for electron before every dev run.
   return result;
 }
 
