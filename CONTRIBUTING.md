@@ -132,7 +132,7 @@ chore: 升级 Electron 到 v36
 提交前在本地运行完整检查（和 CI 一致）：
 
 ```bash
-pnpm ci:check          # 完整门禁（format + lint + typecheck + test + coverage + build）
+pnpm ci:check          # 完整门禁（format + lint + typecheck + test + coverage + build + dev smoke）
 pnpm ci:check --e2e    # 含 e2e（慢）
 pnpm lint && pnpm test # 快速迭代
 ```
