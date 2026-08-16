@@ -94,7 +94,7 @@ Path: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/preload.ts`
 - **Export / AI review:** `exportTranscription(id, format, options)`, `exportTranscriptions(format)`, `aiReviewTranscription(id, template)`.
 - **Settings:** `getAllSettings()`, `getSetting(key, default?)`, `setSetting(key, value)`, `saveSetting(key, value)`, `resetSettings()`, `onSettingsUpdate(cb)`. <!-- [20260816_Refactor_DeadChannels] API surface synced after the lean pass (9b7ed60). -->
 
-- **Hotkey:** `registerHotkey(hotkey)`, `unregisterHotkey(hotkey)`, `getCurrentHotkey()`, `registerF2Hotkey()`, `unregisterF2Hotkey()`, `setRecordingState(bool)`, `getRecordingState()`, `onF2DoubleClick(cb)`, `onHotkeyTriggered(cb)`.
+- **Hotkey:** `registerHotkey(hotkey)`, `unregisterHotkey(hotkey)`, `getCurrentHotkey()`, `setRecordingState(bool)`, `getRecordingState()`, `onHotkeyTriggered(cb)`. (F2 surface removed in the 2026-08-16 minimalism pass — renderer only uses the classic hotkey flow.)
 - **System:** `getSystemInfo()`, `checkPermissions()`, `requestPermissions()`, `testAccessibilityPermission()`, `openSystemPermissions()`, `getAppVersion()`, `openExternal(url)`, `log(level, message)`.
 - **Update:** `checkForUpdates()`, `downloadUpdate(info)`, `cancelUpdateDownload()`, `installUpdate(filePath)`, `onUpdateDownloadProgress(cb)`, `onUpdateDownloadComplete(cb)`, `onUpdateDownloadError(cb)`.
 - **Events:** `onTranscriptionUpdate(cb)`, `onProcessingUpdate(cb)`, `onError(cb)`.
@@ -221,22 +221,21 @@ Path: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/src/helpers/tray.ts`
 
 Path: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/src/helpers/hotkeyManager.ts`
 
-**What it does:** Wraps `electron.globalShortcut`. Two modes: (1) traditional hotkey (`registerHotkey(hotkey, cb)`) with 200ms debounce per hotkey; (2) F2 double-click (`registerF2DoubleClick(cb)`) — registers F2, tracks click timestamps within 500ms window, fires callback with `{action: start|stop, currentState}` based on `isRecording`. Tracks `registeredHotkeys` Map, `lastHotkeyTrigger` Map for debounce. `setRecordingState`/`getRecordingState` for external sync.
+**What it does:** Wraps `electron.globalShortcut`. Traditional hotkey registration (`registerHotkey(hotkey, cb)`) with 200ms debounce per hotkey; tracks `registeredHotkeys` and `lastHotkeyTrigger` Maps. `setRecordingState`/`getRecordingState` for external sync. (F2 surface removed in the 2026-08-16 minimalism pass — renderer only uses the classic hotkey flow.)
 
 **Dependencies:** `electron` (globalShortcut).
 
-**Public interface:** `registerF2DoubleClick(cb)`, `handleF2Click()`, `handleF2DoubleClick()`, `registerHotkey(hotkey, cb)`, `unregisterHotkey(hotkey)`, `unregisterAllHotkeys()`, `getRegisteredHotkeys()`, `isHotkeyRegistered(hotkey)`, `setRecordingState(bool)`, `getRecordingState()`.
+**Public interface:** `registerHotkey(hotkey, cb)`, `unregisterHotkey(hotkey)`, `unregisterAllHotkeys()`, `getRegisteredHotkeys()`, `isHotkeyRegistered(hotkey)`, `setRecordingState(bool)`, `getRecordingState()`.
 
-**Testing seam:** Coverage-excluded (`globalShortcut` needs Electron). But the **debounce and double-click timing logic is pure** and could be extracted/tested. Currently not unit-tested. E2E `04-hotkey` covers F2 flow.
+**Testing seam:** Coverage-excluded (`globalShortcut` needs Electron). The debounce logic is pure and could be extracted/tested. E2E `04-hotkey` covers the hotkey flow.
 
 **Testing challenges:**
 
 - `globalShortcut.register` needs a real OS window manager; can't register system-wide hotkeys in headless CI.
-- F2 double-click timing (500ms window) is timing-sensitive.
 - Hotkey collisions with other apps.
 - Debounce correctness hard to assert without real triggers.
 
-**Critical paths:** F2 double-click detection, recording-state toggling, unregister on will-quit (done in main.ts), per-sender dedup (in `hotkeyHandlers`).
+**Critical paths:** recording-state toggling, unregister on will-quit (done in main.ts).
 
 ---
 

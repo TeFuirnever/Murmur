@@ -210,7 +210,10 @@ class WindowManager {
     const isDev = process.env.NODE_ENV === "development";
 
     if (isDev) {
-      await this.settingsWindow.loadURL("http://localhost:5173?page=settings");
+      // [20260816_Refactor_DeadChannels] Dev settings window now loads the
+      // settings.html entry directly (same pattern as historyWindow above) —
+      // the old ?page=settings route through an in-App lazy page was removed.
+      await this.settingsWindow.loadURL("http://localhost:5173/settings.html");
     } else {
       await this.settingsWindow.loadFile(
         // [20260724_TS_BigBang_DirnameFix] Renderer HTML at src/dist/

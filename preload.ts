@@ -110,19 +110,11 @@ export const preloadApi: ElectronAPI = {
   unregisterHotkey: (hotkey: string) =>
     ipcRenderer.invoke(C.HOTKEY.UNREGISTER, hotkey),
   getCurrentHotkey: () => ipcRenderer.invoke(C.HOTKEY.GET_CURRENT),
-
-  // F2 hotkey management
-  registerF2Hotkey: () => ipcRenderer.invoke(C.HOTKEY.REGISTER_F2),
-  unregisterF2Hotkey: () => ipcRenderer.invoke(C.HOTKEY.UNREGISTER_F2),
+  // [20260816_Refactor_DeadChannels] F2 register/unregister bindings removed
+  // (zero renderer callers).
   setRecordingState: (isRecording: boolean) =>
     ipcRenderer.invoke(C.HOTKEY.SET_STATE, isRecording),
   getRecordingState: () => ipcRenderer.invoke(C.HOTKEY.GET_STATE),
-
-  // F2 double-click event listener
-  onF2DoubleClick: (callback: (...args: unknown[]) => void) => {
-    ipcRenderer.on(C.EVENTS.F2_DOUBLE_CLICK, callback);
-    return () => ipcRenderer.removeListener(C.EVENTS.F2_DOUBLE_CLICK, callback);
-  },
 
   // Hotkey triggered event listener
   onHotkeyTriggered: (callback: (hotkey: string) => void) =>

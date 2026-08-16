@@ -9,7 +9,13 @@
 import "../setup/react";
 import React from "react";
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  act,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import FileImport from "../../src/components/FileImport";
 
@@ -39,6 +45,7 @@ interface MockApi {
   getAIModes: ReturnType<typeof vi.fn>;
   diarizeAudio: ReturnType<typeof vi.fn>;
   copyText: ReturnType<typeof vi.fn>;
+  aiReviewTranscription: ReturnType<typeof vi.fn>;
 }
 
 function makeElectronAPI(overrides: Partial<MockApi> = {}): MockApi {
@@ -52,6 +59,7 @@ function makeElectronAPI(overrides: Partial<MockApi> = {}): MockApi {
     getAIModes: vi.fn().mockResolvedValue([]),
     diarizeAudio: vi.fn(),
     copyText: vi.fn(),
+    aiReviewTranscription: vi.fn(),
     ...overrides,
   };
 }
@@ -269,5 +277,121 @@ describe("[20260729_Test_FileImport] FileImport", () => {
     expect(
       screen.getByRole("button", { name: "重新选择文件" }),
     ).toBeInTheDocument();
+  });
+});
+
+// [20260816_Test_FileImportExpanded] Previously uncovered branches: the
+// cancelled and transcribing views, the done-state copy path, and the
+// aiReviewTranscription-driven AI optimize flow.
+describe("[20260816_Test_FileImportExpanded] FileImport — remaining branches", () => {
+  it("renders the cancelled banner after cancelFileTranscription succeeds", async () => {
+    const api = makeElectronAPI({
+      importAudioFile: vi.fn().mockResolvedValue(VALID_SELECTION),
+      // Never resolves so the state holds at transcribing until cancel.
+      transcribeFile: vi
+        .fn()
+        .mockImplementation(() => new Promise(() => undefined)),
+      cancelFileTranscription: vi.fn().mockResolvedValue({ success: true }),
+    });
+    setElectronAPI(api);
+
+    render(<FileImport />);
+    fireEvent.click(screen.getByTestId("file-drop-zone"));
+    await screen.findByText("audio.wav");
+    fireEvent.click(screen.getByRole("button", { name: "开始转录" }));
+
+    // Cancel from the progress view.
+    const cancelBtn = await screen.findByRole("button", { name: /取消/ });
+    fireEvent.click(cancelBtn);
+    expect(await screen.findByText(/已取消/)).toBeInTheDocument();
+  });
+
+  it("renders the progress view with phase fields while transcribing", async () => {
+    let progressCb: ((...args: unknown[]) => void) | undefined;
+    const api = makeElectronAPI({
+      importAudioFile: vi.fn().mockResolvedValue(VALID_SELECTION),
+      transcribeFile: vi
+        .fn()
+        .mockImplementation(() => new Promise(() => undefined)),
+      onFileTranscriptionProgress: vi.fn((cb) => {
+        progressCb = cb as (...args: unknown[]) => void;
+        return () => undefined;
+      }),
+    });
+    setElectronAPI(api);
+
+    render(<FileImport />);
+    fireEvent.click(screen.getByTestId("file-drop-zone"));
+    await screen.findByText("audio.wav");
+    fireEvent.click(screen.getByRole("button", { name: "开始转录" }));
+
+    // The hook registers a single-argument callback (data only).
+    await screen.findByText(/正在处理|识别中/);
+    act(() => {
+      progressCb?.({ phase: "asr", message: "语音识别中" });
+    });
+    expect(await screen.findByText("语音识别中")).toBeInTheDocument();
+  });
+
+  it("routes the done-state copy through electronAPI.copyText", async () => {
+    const api = makeElectronAPI({
+      importAudioFile: vi.fn().mockResolvedValue(VALID_SELECTION),
+      transcribeFile: vi.fn().mockResolvedValue({
+        success: true,
+        text: "复制内容",
+        id: 9,
+        duration: 2,
+      }),
+      copyText: vi.fn().mockResolvedValue(undefined),
+    });
+    setElectronAPI(api);
+
+    render(<FileImport />);
+    fireEvent.click(screen.getByTestId("file-drop-zone"));
+    await screen.findByText("audio.wav");
+    fireEvent.click(screen.getByRole("button", { name: "开始转录" }));
+    expect(await screen.findByText("复制内容")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTitle("复制文本"));
+    await waitFor(() => {
+      expect(api.copyText).toHaveBeenCalledWith("复制内容");
+    });
+  });
+
+  it("runs AI review through aiReviewTranscription on optimize", async () => {
+    const api = makeElectronAPI({
+      importAudioFile: vi.fn().mockResolvedValue(VALID_SELECTION),
+      transcribeFile: vi.fn().mockResolvedValue({
+        success: true,
+        text: "待审校",
+        id: 42,
+        duration: 3,
+      }),
+      getAIModes: vi
+        .fn()
+        .mockResolvedValue([
+          { name: "optimize", label: "智能润色", description: "" },
+        ]),
+      aiReviewTranscription: vi.fn().mockResolvedValue({
+        success: true,
+        reviewText: "审校后的文本",
+      }),
+    });
+    setElectronAPI(api);
+
+    render(<FileImport />);
+    fireEvent.click(screen.getByTestId("file-drop-zone"));
+    await screen.findByText("audio.wav");
+    fireEvent.click(screen.getByRole("button", { name: "开始转录" }));
+    expect(await screen.findByText("待审校")).toBeInTheDocument();
+
+    const apply = await screen.findByRole("button", { name: "应用 AI 处理" });
+    await act(async () => {
+      fireEvent.click(apply);
+    });
+    expect(api.aiReviewTranscription).toHaveBeenCalledWith(42);
+    await waitFor(() => {
+      expect(screen.getByText("审校后的文本")).toBeInTheDocument();
+    });
   });
 });

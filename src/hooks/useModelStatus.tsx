@@ -257,7 +257,7 @@ export function ModelStatusProvider({
   }, [checkModelStatus]);
 
   React.useEffect(() => {
-    if (isSettingsPage() || modelStatus.isReady || modelStatus.isDownloading) {
+    if (modelStatus.isReady || modelStatus.isDownloading) {
       return;
     }
 

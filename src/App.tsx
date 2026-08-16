@@ -7,7 +7,6 @@ import { useWindowDrag } from "./hooks/useWindowDrag";
 import { useRecording, determineProcessingMode } from "./hooks/useRecording";
 import { useModelStatus } from "./hooks/useModelStatus";
 import { Settings, History, Minus, Square, X, Maximize2 } from "lucide-react";
-import SettingsPanel from "./components/SettingsPanel";
 import { ModelDownloadProgress } from "./components/ui/model-status-indicator";
 import FileImport from "./components/FileImport";
 import TranscriptionResult from "./components/TranscriptionResult";
@@ -15,10 +14,9 @@ import { SoundWaveIcon } from "./components/SoundWaveIcon";
 import { VoiceWaveIndicator } from "./components/VoiceWaveIndicator";
 import { Tooltip } from "./components/Tooltip";
 
-// 动态导入设置页面组件
-const SettingsPage = React.lazy(() =>
-  import("./settings").then((module) => ({ default: module.SettingsPage })),
-);
+// [20260816_Refactor_DeadChannels] The in-app lazy SettingsPage route was
+// removed — the settings window is a separate entry (settings.html) in both
+// dev and production now, so nothing renders SettingsPage inside App.
 
 // [20260815_Refactor_StageTextDedup] The modelStatus.stage -> user text
 // decision tree used to be copy-pasted in getMicButtonProps (tooltip) and the
@@ -47,14 +45,9 @@ const getStageStatusText = (status: StageStatusSource): string => {
 };
 
 export default function App() {
-  // 检查URL参数来决定渲染哪个页面
-  const urlParams = new URLSearchParams(window.location.search);
-  const page = urlParams.get("page");
-
   const [isHovered, setIsHovered] = useState(false);
   const [originalText, setOriginalText] = useState("");
   const [processedText, setProcessedText] = useState("");
-  const [showSettings, setShowSettings] = useState(false);
   const [appMode, setAppMode] = useState("recording"); // recording | file-import
   const [savedRecordingId, setSavedRecordingId] = useState<number | null>(null);
   const [recordingDuration, setRecordingDuration] = useState<number>(0);
@@ -335,8 +328,9 @@ export default function App() {
     }
   }, []);
 
-  // 缓存设置项：挂载时加载一次
-  useEffect(() => {
+  // [20260816_Refactor_MinimalApp] Two effects used to duplicate the same
+  // cache-refresh body (mount + settings-update); one helper, two callers.
+  const refreshSettingsCache = () => {
     if (!window.electronAPI?.getSetting) return;
     window.electronAPI.getSetting("auto_paste", "paste").then((v) => {
       settingsRef.current.auto_paste = v as string;
@@ -344,31 +338,25 @@ export default function App() {
     window.electronAPI.getSetting("close_behavior", "hide").then((v) => {
       settingsRef.current.close_behavior = v as string;
     });
+  };
+
+  // 缓存设置项：挂载时加载一次
+  useEffect(() => {
+    refreshSettingsCache();
   }, []);
 
   // 设置变更时刷新缓存
   useEffect(() => {
     if (!window.electronAPI?.onSettingsUpdate) return;
-    const unsub = window.electronAPI.onSettingsUpdate(() => {
-      if (!window.electronAPI?.getSetting) return;
-      window.electronAPI.getSetting("auto_paste", "paste").then((v) => {
-        settingsRef.current.auto_paste = v as string;
-      });
-      window.electronAPI.getSetting("close_behavior", "hide").then((v) => {
-        settingsRef.current.close_behavior = v as string;
-      });
-    });
+    const unsub = window.electronAPI.onSettingsUpdate(refreshSettingsCache);
     return unsub;
   }, []);
 
   // 处理打开设置
+  // [20260816_Refactor_DeadChannels] web-modal fallback removed — the app
+  // asserts the preload bridge at startup, so electronAPI always exists.
   const handleOpenSettings = () => {
-    if (window.electronAPI) {
-      window.electronAPI.openSettingsWindow();
-    } else {
-      // Web环境下仍然使用模态框
-      setShowSettings(true);
-    }
+    window.electronAPI?.openSettingsWindow();
   };
 
   // 处理打开历史记录
@@ -482,25 +470,6 @@ export default function App() {
   };
 
   const micProps = getMicButtonProps();
-
-  if (page === "settings") {
-    return (
-      <React.Suspense
-        fallback={
-          <div className="min-h-screen bg-[#f5f5f7] dark:bg-[#1c1c1e] flex items-center justify-center">
-            <div className="flex items-center space-x-3">
-              <LoadingDots />
-              <span className="text-content text-[#1d1d1f]/80 dark:text-[#f5f5f7]/80">
-                加载设置页面...
-              </span>
-            </div>
-          </div>
-        }
-      >
-        <SettingsPage />
-      </React.Suspense>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-[#f5f5f7] dark:bg-[#1c1c1e] p-4 pb-4">
@@ -760,9 +729,6 @@ export default function App() {
           </div>
         )}
       </div>
-
-      {/* 设置面板 */}
-      {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
     </div>
   );
 }

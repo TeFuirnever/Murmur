@@ -118,11 +118,8 @@ export interface ElectronAPI {
   registerHotkey: (hotkey: string) => Promise<HotkeyRegistrationResult>;
   unregisterHotkey: (hotkey: string) => Promise<HotkeyRegistrationResult>;
   getCurrentHotkey: () => Promise<string>;
-  registerF2Hotkey: () => Promise<HotkeyRegistrationResult>;
-  unregisterF2Hotkey: () => Promise<HotkeyRegistrationResult>;
   setRecordingState: (isRecording: boolean) => Promise<void>;
   getRecordingState: () => Promise<boolean>;
-  onF2DoubleClick: (callback: () => void) => () => void;
   onHotkeyTriggered: (callback: (hotkey: string) => void) => () => void;
 
   // File operations

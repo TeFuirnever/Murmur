@@ -65,7 +65,6 @@ describe("ipc-contracts", () => {
 
   it("EVENTS domain has all expected channels", () => {
     expect(C.EVENTS.HOTKEY_TRIGGERED).toBe("hotkey-triggered");
-    expect(C.EVENTS.F2_DOUBLE_CLICK).toBe("f2-double-click");
     expect(C.EVENTS.MODEL_DOWNLOAD_PROGRESS).toBe("model-download-progress");
     expect(C.EVENTS.FILE_TRANSCRIPTION_PROGRESS).toBe(
       "file-transcription-progress",
