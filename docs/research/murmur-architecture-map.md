@@ -83,13 +83,17 @@ Path: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/preload.ts`
 - **Window:** `hideWindow`, `showWindow`, `minimizeWindow`, `maximizeWindow`, `isWindowMaximized`, `closeWindow`, `closeApp`, `setAlwaysOnTop(bool)`, `onWindowMaximizeChange(cb)`, `openHistoryWindow`, `closeHistoryWindow`, `hideHistoryWindow`, `openSettingsWindow`, `closeSettingsWindow`, `hideSettingsWindow`.
 - **Dictation event:** `onToggleDictation(cb)`.
 - **FunASR:** `transcribeAudio(data)`, `checkFunASRStatus()`, `installFunASR()`, `restartFunasrServer()`.
-- **Models:** `checkModelFiles()`, `getDownloadProgress()`, `downloadModels()`, `downloadModel(name)`, `getAvailableModels()`, `getCurrentModel()`, `switchModel(name)`, `onModelDownloadProgress(cb)`.
+- **Models:** `checkModelFiles()`, `downloadModels()`, `onModelDownloadProgress(cb)`. <!-- [20260816_Refactor_DeadChannels] API surface synced after the lean pass (9b7ed60). -->
+
 - **AI:** `processText(text, mode, timeout?)`, `checkAIStatus(testConfig?)`, `getAIModes()`, `getAIProviderPresets()`, `detectLocalModels()`.
-- **Clipboard:** `pasteText(text)`, `copyText(text)`, `readClipboard()`, `writeClipboard(text)`.
-- **Transcription DB:** `saveTranscription(data)`, `getTranscriptions(limit, offset)`, `getTranscription(id)`, `searchTranscriptions(query, limit)`, `getTranscriptionStats()`, `deleteTranscription(id)`, `clearAllTranscriptions()`, `diarizeAudio(id)`.
+- **Clipboard:** `pasteText(text)`, `copyText(text)`. <!-- [20260816_Refactor_DeadChannels] API surface synced after the lean pass (9b7ed60). -->
+
+- **Transcription DB:** `saveTranscription(data)`, `getTranscriptions(limit, offset)`, `deleteTranscription(id)`, `clearAllTranscriptions()`, `diarizeAudio(id)`. <!-- [20260816_Refactor_DeadChannels] API surface synced after the lean pass (9b7ed60). -->
+
 - **File transcription:** `importAudioFile()`, `validateAudioFile(path)`, `transcribeFile(path, options)`, `cancelFileTranscription()`, `onFileTranscriptionProgress(cb)`.
 - **Export / AI review:** `exportTranscription(id, format, options)`, `exportTranscriptions(format)`, `aiReviewTranscription(id, template)`.
-- **Settings:** `getSettings()` (legacy), `getAllSettings()`, `getSetting(key, default?)`, `setSetting(key, value)`, `saveSetting(key, value)`, `resetSettings()`, `importSettings()`, `exportSettings()`, `onSettingsUpdate(cb)`.
+- **Settings:** `getAllSettings()`, `getSetting(key, default?)`, `setSetting(key, value)`, `saveSetting(key, value)`, `resetSettings()`, `onSettingsUpdate(cb)`. <!-- [20260816_Refactor_DeadChannels] API surface synced after the lean pass (9b7ed60). -->
+
 - **Hotkey:** `registerHotkey(hotkey)`, `unregisterHotkey(hotkey)`, `getCurrentHotkey()`, `registerF2Hotkey()`, `unregisterF2Hotkey()`, `setRecordingState(bool)`, `getRecordingState()`, `onF2DoubleClick(cb)`, `onHotkeyTriggered(cb)`.
 - **System:** `getSystemInfo()`, `checkPermissions()`, `requestPermissions()`, `testAccessibilityPermission()`, `openSystemPermissions()`, `getAppVersion()`, `openExternal(url)`, `log(level, message)`.
 - **Update:** `checkForUpdates()`, `downloadUpdate(info)`, `cancelUpdateDownload()`, `installUpdate(filePath)`, `onUpdateDownloadProgress(cb)`, `onUpdateDownloadComplete(cb)`, `onUpdateDownloadError(cb)`.
@@ -147,11 +151,12 @@ Path: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/src/helpers/windowManager.ts`
 
 Path: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/src/helpers/database.ts`
 
-**What it does:** SQLite via `better-sqlite3`. Creates `transcriptions` and `settings` tables, an FTS5 virtual table (`transcriptions_fts`, trigram tokenizer) with insert/delete/update triggers, and indexes. Runs schema migrations (`source_type`, `source_file_path`, `segments` columns) and settings migration (encrypt plaintext `ai_api_key` on first safeStorage availability). Encryption: `_encryptedKeys` Set (currently `ai_api_key`); `_encryptValue`/`_decryptValue` wrap `safeStorage.encryptString`/`decryptString` with base64 + `{_enc}` JSON envelope. FTS search falls back to LIKE for queries <3 chars or if FTS5 unavailable. File-config cache (`murmur.json`) for `FILE_CONFIGURABLE_KEYS` (set by `setFileConfigPath`); `getSetting` falls back to file config when DB has no row. WAL journal mode, `busy_timeout=5000`, integrity check on init. `backup()` async. Env override `MURMUR_DB_PATH` (supports `:memory:` for tests).
+**What it does:** SQLite via `better-sqlite3`. Creates `transcriptions` and `settings` tables and indexes. (The FTS5 virtual table and its sync triggers were removed in the 2026-08 lean pass — search is client-side.) Runs schema migrations (`source_type`, `source_file_path`, `segments` columns) and settings migration (encrypt plaintext `ai_api_key` on first safeStorage availability). Encryption: `_encryptedKeys` Set (currently `ai_api_key`); `_encryptValue`/`_decryptValue` wrap `safeStorage.encryptString`/`decryptString` with base64 + `{_enc}` JSON envelope. File-config cache (`murmur.json`) for `FILE_CONFIGURABLE_KEYS` (set by `setFileConfigPath`); `getSetting` falls back to file config when DB has no row. WAL journal mode, `busy_timeout=5000`, integrity check on init. `backup()` async. Env override `MURMUR_DB_PATH` (supports `:memory:` for tests).
 
 **Dependencies:** `better-sqlite3` (native, must be electron-rebuilt), `path`, `fs`, `fileConfig` (`loadFileConfig`, `saveFileConfig`, `FILE_CONFIGURABLE_KEYS`). Optional `safeStorage` injected via `setSafeStorage`.
 
-**Public interface:** `initialize(dir)`, `setSafeStorage(ss)`, `setFileConfigPath(p)`, `createTables()`, `saveTranscription(data)`, `getTranscriptions(limit, offset)`, `getTranscriptionById(id)`, `getTranscriptionWithSegments(id)`, `deleteTranscription(id)`, `clearAllTranscriptions()`, `searchTranscriptions(query, limit)`, `getTranscriptionStats()`, `setSetting(key, value)`, `getSetting(key, default?)`, `getAllSettings()`, `resetSettings()`, `syncToFileConfig()`, `backup(path)`, `close()`. `TranscriptionRecord` interface exported.
+**Public interface:** `initialize(dir)`, `setSafeStorage(ss)`, `setFileConfigPath(p)`, `createTables()`, `saveTranscription(data)`, `getTranscriptions(limit, offset)`, `getTranscriptionById(id)`, `deleteTranscription(id)`, `clearAllTranscriptions()`, `setSetting(key, value)`, `getSetting(key, default?)`, `getAllSettings()`, `resetSettings()`, `syncToFileConfig()`, `close()`. <!-- [20260816_Refactor_DeadChannels] API surface synced after the lean pass (9b7ed60). -->
+`TranscriptionRecord` interface exported.
 
 **Testing seam:** **Best-unit-tested manager.** `MURMUR_DB_PATH=:memory:` enables in-memory SQLite without Electron. `tests/unit/database.test.js`, `database-fts.test.js`, `database-coverage.test.js`. SafeStorage can be mocked with a plain `{encryptString, decryptString, isEncryptionAvailable}` stub. No Electron dependency in the class itself.
 
@@ -174,7 +179,7 @@ Path: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/src/helpers/clipboard.ts`
 
 **Dependencies:** `electron` (clipboard), `child_process.spawn`, optional `osascript` package (macOS).
 
-**Public interface:** `pasteText(text)`, `copyText(text)`, `readClipboard()`, `writeClipboard(text)`, `enableMacOSAccessibility()`, `insertTextDirectly(text)`, `checkAccessibilityPermissions()`, `showAccessibilityDialog(err)`, `openSystemSettings()`, `safeLog(msg, data?)`.
+**Public interface:** `pasteText(text)`, `copyText(text)`, `checkAccessibilityPermissions()`, `showAccessibilityDialog(err)`, `openSystemSettings()`, `safeLog(msg, data?)`.
 
 **Testing seam:** Excluded from coverage — Electron `clipboard` + `spawn` + osascript dependency. E2E `06-clipboard` covers paste. The `safeLog` and platform branches could be unit-tested by mocking `clipboard` and `spawn`, but the class is coverage-excluded.
 
@@ -286,11 +291,11 @@ Path: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/src/helpers/funasrServer.ts`
 
 Path: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/src/helpers/modelManager.ts`
 
-**What it does:** Manages three FunASR models (asr paraformer-large 840MB required, vad fsmn 1.6MB required, punc ct-transformer 278MB optional). `getModelCachePath()` — searches candidates: dev `app.getAppPath()/models`, `userData/models`, `~/.cache/modelscope/hub/models`; picks first with a `damo` subdir or expected model files; else `findDamoRoot` recursive search (depth 5); fallback creates `userData/models`. `checkModelFiles()` — 2s global cache (`globalModelCheckCache`); for each model checks existence + `_verifyModel` (directory: has `model.pt`/`pytorch_model.bin`/`configuration.json`/`config.yaml`; file: size ≥ 90% expected). `getDownloadProgress()` — sums actual vs expected sizes. `downloadModels(cb, pythonCmd)` — skips if already downloaded; spawns `python download_models.py --output <cachePath>`, parses JSON stdout lines (`{stage, percentage, success, error}`), 10min timeout, calls progress callback. `clearCache()`.
+**What it does:** Manages three FunASR models (asr paraformer-large 840MB required, vad fsmn 1.6MB required, punc ct-transformer 278MB optional). `getModelCachePath()` — searches candidates: dev `app.getAppPath()/models`, `userData/models`, `~/.cache/modelscope/hub/models`; picks first with a `damo` subdir or expected model files; else `findDamoRoot` recursive search (depth 5); fallback creates `userData/models`. `checkModelFiles()` — 2s global cache (`globalModelCheckCache`); for each model checks existence + `_verifyModel` (directory: has `model.pt`/`pytorch_model.bin`/`configuration.json`/`config.yaml`; file: size ≥ 90% expected). `downloadModels(cb, pythonCmd)` — skips if already downloaded; spawns `python download_models.py --output <cachePath>`, parses JSON stdout lines (`{stage, percentage, success, error}`), 10min timeout, calls progress callback. `clearCache()`.
 
 **Dependencies:** `fs`, `path`, `child_process.spawn`, `os`, lazy `require("electron")` (app.getPath/app.getAppPath).
 
-**Public interface:** `findDamoRoot(dir, depth, maxDepth)`, `getModelCachePath()`, `checkModelFiles()`, `_verifyModel(file, config)`, `getDownloadProgress()`, `getDownloadScriptPath()`, `downloadModels(cb, pythonCmd)`, `clearCache()`. Property `modelConfigs`, `modelsDownloaded`.
+**Public interface:** `findDamoRoot(dir, depth, maxDepth)`, `getModelCachePath()`, `checkModelFiles()`, `_verifyModel(file, config)`, `getDownloadScriptPath()`, `downloadModels(cb, pythonCmd)`, `clearCache()`. Property `modelConfigs`, `modelsDownloaded`.
 
 **Testing seam:** Coverage-excluded. `tests/unit/modelManager-shape.test.js` (shape), `tests/unit/model-download-guards.test.js`. `findDamoRoot`, `_verifyModel`, and path logic are pure-ish (fs only) and could be unit-tested with temp dirs. `downloadModels` needs spawn mock.
 
@@ -402,9 +407,9 @@ Path: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/src/helpers/logManager.ts`
 
 Path: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/src/helpers/environment.ts`
 
-**What it does:** Loads `.env` from `process.cwd()` (lazy `require("dotenv")`). Provides typed config getters reading `process.env` with defaults: `getAIConfig` (placeholder — real config via settings), `getAudioConfig` (16000/1/wav), `getFunASRConfig`, `getAppConfig` (hotkey default `CommandOrControl+Shift+Space`), `getDatabaseConfig`, `getProxyConfig`, `getPerformanceConfig`. Platform `getDataDirectory()` (macOS `~/Library/Application Support/Murmur`, Windows `%APPDATA%\Murmur`, Linux `~/.config/Murmur`). `ensureDataDirectory`/`getLogDirectory`/`getCacheDirectory`/`getModelsDirectory` create dirs. `validateEnvironment()` (Node 18+ check). `exportConfig()` aggregates all. `getSystemInfo()` (os module).
+**What it does:** Loads `.env` from `process.cwd()` via a minimal built-in parser (dotenv dependency removed in the 2026-08 lean pass; shell env wins over file values). Provides typed config getters reading `process.env` with defaults: `getAIConfig` (placeholder — real config via settings), `getAudioConfig` (16000/1/wav), `getFunASRConfig`, `getAppConfig` (hotkey default `CommandOrControl+Shift+Space`), `getDatabaseConfig`, `getProxyConfig`, `getPerformanceConfig`. Platform `getDataDirectory()` (macOS `~/Library/Application Support/Murmur`, Windows `%APPDATA%\Murmur`, Linux `~/.config/Murmur`). `ensureDataDirectory`/`getLogDirectory`/`getCacheDirectory`/`getModelsDirectory` create dirs. `validateEnvironment()` (Node 18+ check). `exportConfig()` aggregates all. `getSystemInfo()` (os module).
 
-**Dependencies:** `path`, `fs`, `os`, lazy `require("dotenv")`. **No direct electron dependency** (uses `process.env`/`os`).
+**Dependencies:** `path`, `fs`, `os`. **No direct electron dependency** (uses `process.env`/`os`).
 
 **Public interface:** all getters above + `loadEnvironmentVariables()`, `isDevelopment()`, `isProduction()`, `validateEnvironment()`, `exportConfig()`.
 
@@ -556,7 +561,7 @@ Path: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/src/helpers/ipc/clipboardHand
 
 **Channels registered:** `CLIPBOARD.COPY`, `PASTE`, `READ`, `WRITE`.
 
-**What it does:** Thin wrappers around `clipboardManager.copyText/pasteText/readClipboard/writeClipboard` with try/catch → `{success:false, error}`.
+**What it does:** Thin wrappers around `clipboardManager.copyText/pasteText` with try/catch → `{success:false, error}`. (READ/WRITE wrappers removed in the 2026-08 lean pass.)
 
 **Dependencies:** `ipc-contracts`. `ClipboardManager`, `Logger`.
 
@@ -596,7 +601,7 @@ Path: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/src/helpers/ipc/modelHandlers
 
 **Channels registered:** `MODELS.CHECK`, `PROGRESS`, `DOWNLOAD`, `DOWNLOAD_MODEL`, `AVAILABLE`, `CURRENT`, `SWITCH`.
 
-**What it does:** Delegates to `funasrManager.checkModelFiles/getDownloadProgress/downloadModels/checkStatus`. `DOWNLOAD`/`DOWNLOAD_MODEL` send `MODEL_DOWNLOAD_PROGRESS` events. `AVAILABLE` returns hardcoded 3-model list. `SWITCH` returns not-supported error (fixed model combo).
+**What it does:** Delegates to `funasrManager.checkModelFiles/downloadModels`. `DOWNLOAD` sends `MODEL_DOWNLOAD_PROGRESS` events. (PROGRESS/AVAILABLE/CURRENT/SWITCH/DOWNLOAD_MODEL placeholder channels removed in the 2026-08 lean pass.)
 
 **Dependencies:** `ipc-contracts`. `FunasrManager`.
 

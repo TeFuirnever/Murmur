@@ -1,5 +1,10 @@
 # Research: Dual-Version (Lite vs Effects/Pro) Strategy for react-bits Integration
 
+> **Status (2026-08-16): superseded.** The visual-effects feature was removed wholesale
+> in commit 9b7ed60 (effects components, effects_enabled setting, motion+ogl deps, and
+> the chunk-isolation CI gate). This document is retained as a historical research
+> snapshot only — do not plan feature work from it.
+
 > Date: 2026-07-28 | Scope: Should Murmur ship as two editions (Lite vs Effects/Pro) to add react-bits visual effects?
 > Method: Primary sources only (electron-builder docs, Vite docs, react-bits repo source, npm/Bundlephobia, Electron GPU issues). Code references are to the Murmur repo at repo root `/Users/guanxueliang/Desktop/oh-my-ai/Murmur`.
 
