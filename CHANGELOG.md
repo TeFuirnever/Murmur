@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-08-16
+
+### Fixed
+
+- **v1.3.0 的 macOS 安装包启动崩溃**：v1.3.0 的 dmg 内 `better_sqlite3.node` 是按系统 Node ABI 137 编译的（Electron 39 需要 ABI 140），首次 `new Database()` 即抛 `NODE_MODULE_VERSION` 不匹配，主窗口无法打开。根因：CI 上 pnpm 的 `onlyBuiltDependencies` 白名单允许 better-sqlite3 在安装时下载系统 Node 的预编译产物，而随后的 `electron-builder install-app-deps` 重建是约 0.2 秒的静默 no-op，从未替换成 Electron ABI 版本。修复：mac 构建 job 改为 `npx @electron/rebuild -f -w better-sqlite3` 强制真实重建；mac/win 两个 job 在打包前新增 ABI 门禁 —— 必须在 Electron 运行时下真实打开一次 SQLite 内存库才能继续打包。**v1.3.0 的 macOS dmg 不可用，请 macOS 用户改装 v1.3.1**（v1.3.0 的 Windows 安装包经核实 ABI 正确，不受影响）。
+
 ## [1.3.0] - 2026-08-16
 
 ### Fixed
