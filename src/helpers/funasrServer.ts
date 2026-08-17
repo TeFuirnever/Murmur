@@ -49,6 +49,26 @@ function calculateTranscriptionTimeout(
   return { ms, label };
 }
 
+// [20260817_T2_KillTree] Ticket #179 (spec #177 T2): the ONLY way any code
+// path may kill the Python server process. On Windows proc.kill() only kills
+// the direct child, so a wedged server leaks its whole subprocess tree
+// (~1GB RSS per crash). taskkill /T kills the tree, /F forces termination;
+// spawnSync blocks until the tree is dead so callers may respawn right after.
+export function killProcessTree(proc: ChildProcess | null): void {
+  if (!proc) return;
+  try {
+    if (process.platform === "win32" && proc.pid) {
+      spawnSync("taskkill", ["/T", "/F", "/PID", String(proc.pid)], {
+        windowsHide: true,
+      });
+    } else {
+      proc.kill("SIGKILL");
+    }
+  } catch (_e) {
+    /* already dead */
+  }
+}
+
 /** Logger interface (accepts console or LogManager). */
 interface Logger {
   info?(message: string, ...args: unknown[]): void;
@@ -99,6 +119,10 @@ class FunASRServer {
   private maxRestarts: number;
   private _startupParams: StartupParams | null;
   private _stopping: boolean;
+  // [20260817_T2_KillTree] Suppresses the old process's close listener while
+  // crash handling is killing it — otherwise killProcessTree's close event
+  // re-enters _handleServerCrash (double restart count + double respawn).
+  private _crashHandling: boolean;
 
   // [20260724_TS_BigBang_Export] Exposed as a static so external consumers
   // (and tests) can access it via `FunASRServer.calculateTranscriptionTimeout`
@@ -117,6 +141,7 @@ class FunASRServer {
     this.maxRestarts = 3;
     this._startupParams = null;
     this._stopping = false;
+    this._crashHandling = false;
   }
 
   private _saveStartupParams(params: StartupParams): void {
@@ -221,7 +246,7 @@ class FunASRServer {
           this.modelsInitialized = false;
           if (!initResponseReceived) {
             reject(new Error("FunASR服务器进程异常退出"));
-          } else if (!this._stopping) {
+          } else if (!this._stopping && !this._crashHandling) {
             this._handleServerCrash();
           }
         });
@@ -239,7 +264,9 @@ class FunASRServer {
         setTimeout(() => {
           if (!initResponseReceived) {
             this.logger.warn && this.logger.warn("FunASR服务器启动超时");
-            if (this.serverProcess) this.serverProcess.kill();
+            // [20260817_T2_KillTree] Tree kill — bare kill() leaves the
+            // Python child tree alive on Windows.
+            killProcessTree(this.serverProcess);
             reject(new Error("FunASR服务器启动超时(120秒)"));
           }
         }, 120000);
@@ -298,6 +325,17 @@ class FunASRServer {
     if (this._startupParams) {
       const { pythonEnv, pythonCmd, serverPath, modelCachePath } =
         this._startupParams;
+      // [20260817_T2_KillTree] A ping-timeout crash means the process is
+      // wedged, not exited — dropping the handle without killing leaks the
+      // entire Python tree (double ~1GB RSS within one crash cycle). Kill
+      // the tree BEFORE respawning; _crashHandling suppresses the close
+      // listener this kill fires (no re-entry into crash handling).
+      this._crashHandling = true;
+      try {
+        killProcessTree(this.serverProcess);
+      } finally {
+        this._crashHandling = false;
+      }
       this.serverProcess = null;
       this.serverReady = false;
       try {
@@ -331,7 +369,9 @@ class FunASRServer {
       try {
         await this._sendServerCommand({ action: "exit" });
       } catch (_error) {
-        this.serverProcess.kill();
+        // [20260817_T2_KillTree] Exit command failed (dead/wedged pipe) —
+        // tree kill so Windows does not keep the Python child tree.
+        killProcessTree(this.serverProcess);
       }
       this.messageRouter.detach();
       this.serverProcess = null;
@@ -351,22 +391,10 @@ class FunASRServer {
     }
     await new Promise((resolve) => {
       const timeout = setTimeout(() => {
-        try {
-          // On Windows, use taskkill to kill the entire process tree.
-          // proc.kill() only kills the direct child, leaving orphan Python
-          // subprocesses. taskkill /T kills the tree; /F forces termination.
-          if (process.platform === "win32" && proc.pid) {
-            // spawnSync blocks until taskkill completes, ensuring the entire
-            // Python process tree is dead before we resolve and exit.
-            spawnSync("taskkill", ["/T", "/F", "/PID", String(proc.pid)], {
-              windowsHide: true,
-            });
-          } else {
-            proc.kill("SIGKILL");
-          }
-        } catch (_e) {
-          /* already dead */
-        }
+        // [20260817_T2_KillTree] Shared tree killer (Windows process-tree
+        // task-kill via blocking spawnSync; SIGKILL elsewhere). See
+        // killProcessTree for rationale.
+        killProcessTree(proc);
         resolve(undefined);
       }, 5000);
       proc.on("close", () => {
@@ -385,6 +413,8 @@ class FunASRServer {
     this.modelsInitialized = false;
     this.initializationPromise = null;
     this.restartCount = 0;
+    // [20260817_T2_KillTree] Clear crash suppression with the rest of state.
+    this._crashHandling = false;
   }
 
   async transcribeAudio(
