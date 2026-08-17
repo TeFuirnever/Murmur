@@ -1050,6 +1050,53 @@ class FunASRServer:
 
         return {"success": True, "segments": segments}
 
+    # [20260817_T5_HandleCommand] Ticket #181 (spec #177 T5): the stdin
+    # command dispatch, extracted verbatim from run()'s read loop so it is
+    # unit-testable without spawning the process (protocol extensions for
+    # idle-unload/hotwords must extend tests/python accordingly).
+    # Returns (result, keep_running):
+    #   result is None     -> action was queued (transcribe_file); the read
+    #                         loop must NOT print anything for it
+    #   keep_running False -> stop the read loop after printing (exit)
+    def handle_command(self, command):
+        if command.get("action") == "transcribe":
+            audio_path = command.get("audio_path")
+            options = command.get("options", {})
+            return self.transcribe_audio(audio_path, options), True
+        elif command.get("action") == "status":
+            return self.check_status(), True
+        elif command.get("action") == "stats":
+            return {"success": True, "stats": self.get_performance_stats()}, True
+        elif command.get("action") == "cleanup":
+            self._cleanup_memory()
+            return {"success": True, "message": "内存清理完成"}, True
+        elif command.get("action") == "transcribe_file":
+            # 放入推理队列，不立即返回确认
+            # 推理结果和进度通过 response_queue → output_worker → stdout 发送
+            self.request_queue.put({
+                "request_id": command.get("request_id", ""),
+                "action": "transcribe_file",
+                "audio_path": command.get("audio_path"),
+                "options": command.get("options", {})
+            })
+            return None, True
+        elif command.get("action") == "cancel_transcription":
+            self.cancel_event.set()
+            return {"success": True, "message": "取消信号已发送"}, True
+        elif command.get("action") == "diarize":
+            audio_path = command.get("audio_path")
+            segments = command.get("segments", [])
+            return self.diarize_audio(audio_path, segments), True
+        elif command.get("action") == "ping":
+            return {"success": True, "action": "pong"}, True
+        elif command.get("action") == "exit":
+            return {"success": True, "message": "服务器退出"}, False
+        else:
+            return {
+                "success": False,
+                "error": f"未知命令: {command.get('action')}",
+            }, True
+
     def run(self):
         """运行服务器主循环"""
         logger.info("FunASR服务器启动")
@@ -1139,55 +1186,20 @@ class FunASRServer:
                 # 提取 request_id 用于响应关联
                 request_id = command.get("request_id", "")
 
-                # 处理命令
-                if command.get("action") == "transcribe":
-                    audio_path = command.get("audio_path")
-                    options = command.get("options", {})
-                    result = self.transcribe_audio(audio_path, options)
-                elif command.get("action") == "status":
-                    result = self.check_status()
-                elif command.get("action") == "stats":
-                    result = {"success": True, "stats": self.get_performance_stats()}
-                elif command.get("action") == "cleanup":
-                    self._cleanup_memory()
-                    result = {"success": True, "message": "内存清理完成"}
-                elif command.get("action") == "transcribe_file":
-                    # 放入推理队列，不立即返回确认
-                    # 推理结果和进度通过 response_queue → output_worker → stdout 发送
-                    self.request_queue.put({
-                        "request_id": request_id,
-                        "action": "transcribe_file",
-                        "audio_path": command.get("audio_path"),
-                        "options": command.get("options", {})
-                    })
-                    continue
-                elif command.get("action") == "cancel_transcription":
-                    self.cancel_event.set()
-                    result = {"success": True, "message": "取消信号已发送"}
-                elif command.get("action") == "diarize":
-                    audio_path = command.get("audio_path")
-                    segments = command.get("segments", [])
-                    result = self.diarize_audio(audio_path, segments)
-                elif command.get("action") == "ping":
-                    result = {"success": True, "action": "pong"}
-                elif command.get("action") == "exit":
-                    result = {"success": True, "message": "服务器退出"}
+                # 处理命令（[20260817_T5_HandleCommand] 分发逻辑已抽取为
+                # handle_command，便于协议扩展的单测；此处只保留读写循环）
+                result, keep_running = self.handle_command(command)
+
+                # 输出结果（附带 request_id；result=None 表示已入队，
+                # 由 output_worker 异步输出，读循环不打印）
+                if result is not None:
                     if request_id:
                         result["request_id"] = request_id
                     print(json.dumps(result, ensure_ascii=False))
                     sys.stdout.flush()
-                    break
-                else:
-                    result = {
-                        "success": False,
-                        "error": f"未知命令: {command.get('action')}",
-                    }
 
-                # 输出结果（附带 request_id）
-                if request_id:
-                    result["request_id"] = request_id
-                print(json.dumps(result, ensure_ascii=False))
-                sys.stdout.flush()
+                if not keep_running:
+                    break
 
             except KeyboardInterrupt:
                 break
