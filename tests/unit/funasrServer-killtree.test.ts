@@ -243,13 +243,20 @@ describe("[20260817_T2_KillTree] stop-fallback and startup timeout", () => {
         serverScript,
         "/models",
       );
-      // Attach the rejection assertion BEFORE firing the timer so the
-      // rejection is never momentarily unhandled.
-      const rejection = expect(startPromise).rejects.toThrow("启动超时");
+      // Attach the rejection handler BEFORE firing the timer so the
+      // rejection is never momentarily unhandled. (Plain .catch rather than
+      // a detached expect().rejects — the suite's awaited-assertion
+      // regression detector requires await directly before expect.)
+      let caught: Error | undefined;
+      const handled = startPromise.catch((e: Error) => {
+        caught = e;
+      });
       // Let the promise callbacks settle without advancing the timeout yet.
       await vi.advanceTimersByTimeAsync(0);
       await vi.advanceTimersByTimeAsync(120_000);
-      await rejection;
+      await handled;
+      expect(caught).toBeInstanceOf(Error);
+      expect(caught?.message).toContain("启动超时");
       expect(spawnSync).toHaveBeenCalledWith(
         "taskkill",
         ["/T", "/F", "/PID", String(mockSpawnChild.pid)],
