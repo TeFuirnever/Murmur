@@ -120,7 +120,7 @@ chore: 升级 Electron 到 v36
 4. **Security audit** — `pnpm audit --audit-level moderate`（非阻塞）
 5. **License compliance** — `pnpm license:check`（拦截 GPL/AGPL）
 6. **Dependency review** — PR 中自动审查新增依赖（high 级别阻断）
-7. **Test + coverage** — `pnpm test -- --coverage`（覆盖率阈值：全 src/ 统计，statements 44% / branches 37% / functions 42% / lines 44%；后端 helpers 层独立 95%+）
+7. **Test + coverage** — `pnpm test -- --coverage`（覆盖率阈值：全 src/ 统计，statements 96% / branches 92% / functions 94% / lines 96%，2026-08-16 起以 1406+ 用例维持）
 8. **Build main** — `pnpm run build:main`
 9. **Build preload** — `pnpm run build:preload`
 10. **Build renderer** — `pnpm run build:renderer`
@@ -148,11 +148,7 @@ pnpm ci:check --e2e    # 含 e2e（慢）
 pnpm lint && pnpm test # 快速迭代
 ```
 
-**覆盖率回归路线图**：全 src/ 覆盖率当前 46%（statements），后端 helpers 层 95%+。缺口在前端 React 组件（需要 jsdom + RTL）。
-
-- v1.1.0 目标：55%（加 App.tsx + settings 测试）
-- v1.2.0 目标：70%（加 history.tsx + hooks 测试）
-- v1.3.0 目标：80%+（全组件覆盖，对齐业界标准）
+**覆盖率现状**：全 src/ 覆盖率 96.6% statements / 92.8% branches / 94.5% functions / 97.1% lines（2026-08-16，PR #166 达成）。此前的追赶路线图（55% → 70% → 80%）已完成并关闭。
 
 ## 架构概览
 
