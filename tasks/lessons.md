@@ -77,3 +77,18 @@ Adding a new setting to Murmur requires touching **5 places**, and missing any o
 Downscaling a 1024px full-color app icon to 16×16 tray size produces an unreadable blob — the kawaii detail collapses. macOS tray also forces `setTemplateImage(true)` which strips color to a monochrome silhouette.
 
 **Rule:** Ship a dedicated `tray-icon-16.png` (manually optimized for tiny sizes) rather than reusing the app icon. For colored brand tray icons (Discord/Slack style), remove `setTemplateImage(true)`. See `tray.ts` `getTrayIconPath()` for the platform-conditional resolution.
+
+---
+
+## L7: Build green ≠ artifact works — gate releases on installing and booting the packaged app
+
+**Date:** 2026-08-16
+**Context:** The v1.3.x release cycle (v1.2.0 → v1.3.2). Every installer the pipeline ever produced was broken in some way while all workflow jobs stayed green.
+
+Three stacked root causes, each invisible to "did the build finish" checks:
+
+1. **electron-builder's `files` glob silently skips missing paths.** The build jobs never ran `build:preload`, so `dist-preload/preload.js` simply wasn't in the asar — for every release ≤ v1.3.1. The app booted, then the renderer showed 「Electron API 不可用」 with zero functionality. Nothing failed because nothing looked.
+2. **`electron-builder install-app-deps` can silently no-op (~0.2s "finished").** With pnpm's `onlyBuiltDependencies` allowlist, better-sqlite3's own install script fetches a system-Node-ABI prebuild (ABI 137); the "rebuild" never replaced it, so the v1.3.0 macOS dmg crashed on first `new Database()`. Local builds survived by luck (warm pnpm store held an Electron-ABI build), which is why local verification passed while CI shipped broken.
+3. **pnpm only links `node_modules/.bin` shims for direct dependencies.** electron-builder 26 pulled `@electron/rebuild` in transitively; `npx` then found the package locally without its bin shim → "'electron-rebuild' is not recognized" on Windows CI.
+
+**Rule:** The release pipeline's acceptance object is "the installed app", not "files in dist/". Four gates now enforce this in `build.yml` (see `CONTRIBUTING.md` → Release Gates): native-ABI gate (open a real in-memory DB under `ELECTRON_RUN_AS_NODE` Electron), preload-presence gate (`test -f dist-preload/preload.js`), mac packaged boot smoke (mount the DMG, launch, assert 主窗口创建成功 / 应用启动完成 / 热键注册成功 — the last is renderer→preload→IPC, proving the bridge), and the Windows NSIS silent-install counterpart. When verifying locally, remember `require('better-sqlite3')` alone proves nothing — the addon loads lazily inside `new Database()`. And never run `asar extract-file` from the repo root: it writes the file's basename into the CWD (this clobbered package.json once).

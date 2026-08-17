@@ -113,7 +113,7 @@ Murmur targets **Windows** and **macOS**. See `CLAUDE.md` → _Cross-Platform Su
 
 - Use `process.platform === "win32"` for platform checks, not `os.platform()` or feature detection.
 - Windows paths use backslashes; UNC paths (`\\server\share`) are rejected by `audioPathValidator`.
-- Native modules (`better-sqlite3`) need Electron ABI — on Windows CI, use `--ignore-scripts` + `@electron/rebuild`.
+- Native modules (`better-sqlite3`) need Electron ABI. Hazard: `electron-builder install-app-deps` can silently no-op while pnpm's build allowlist fetches a system-Node-ABI prebuild — release CI forces `@electron/rebuild -f` and gates packaging on a real DB open under Electron (details in `CLAUDE.md` → Cross-Platform Support).
 - Embedded Python (`prepare-embedded-python.js`) supports both macOS (`-apple-darwin`) and Windows (`-pc-windows-msvc-shared`) downloads.
 - Add `it.skipIf(process.platform === "win32")` for Unix-only test behavior.
 
@@ -153,6 +153,7 @@ Murmur targets **Windows** and **macOS**. See `CLAUDE.md` → _Cross-Platform Su
 - **Bug fix:** reproduce the bug, add a failing test **first**, then fix and verify.
 - **High-risk** (session flow, IPC, security, privacy, release packaging): include a risk statement and fresh verification evidence.
 - **Gate failure:** run `node scripts/ci-check.js --json` to diagnose; use `--fix` for auto-fixable issues.
+- **Releases:** push a `v*` tag → `build.yml` builds installers behind four release gates (native ABI, preload presence, mac/win packaged boot smoke). Never bypass or downgrade these gates — every release before v1.3.2 shipped broken while CI stayed green. See `CONTRIBUTING.md` → Release Gates.
 
 ### Commit Format
 
