@@ -58,6 +58,10 @@ export function killProcessTree(proc: ChildProcess | null): void {
   if (!proc) return;
   try {
     if (process.platform === "win32" && proc.pid) {
+      // [20260817_T2_KillTreeReview] taskkill exit status 1 ("process not
+      // found") is the expected already-dead case; other non-zero statuses
+      // (e.g. access denied) are also swallowed here — callers respawn right
+      // after, and a surviving tree would be caught by the next ping cycle.
       spawnSync("taskkill", ["/T", "/F", "/PID", String(proc.pid)], {
         windowsHide: true,
       });
@@ -119,10 +123,6 @@ class FunASRServer {
   private maxRestarts: number;
   private _startupParams: StartupParams | null;
   private _stopping: boolean;
-  // [20260817_T2_KillTree] Suppresses the old process's close listener while
-  // crash handling is killing it — otherwise killProcessTree's close event
-  // re-enters _handleServerCrash (double restart count + double respawn).
-  private _crashHandling: boolean;
 
   // [20260724_TS_BigBang_Export] Exposed as a static so external consumers
   // (and tests) can access it via `FunASRServer.calculateTranscriptionTimeout`
@@ -141,7 +141,6 @@ class FunASRServer {
     this.maxRestarts = 3;
     this._startupParams = null;
     this._stopping = false;
-    this._crashHandling = false;
   }
 
   private _saveStartupParams(params: StartupParams): void {
@@ -236,7 +235,13 @@ class FunASRServer {
           }
         });
 
+        // [20260817_T2_KillTreeReview] Capture the process identity: a
+        // stale close from a superseded process must not tear down state
+        // belonging to the current one (crash handling removes these
+        // listeners before killing, this guard covers any other stale path).
+        const proc = this.serverProcess;
         this.serverProcess.on("close", (code) => {
+          if (this.serverProcess !== proc) return;
           this.logger.warn &&
             this.logger.warn("FunASR服务器进程退出", { code });
           this._stopHealthMonitor();
@@ -246,7 +251,7 @@ class FunASRServer {
           this.modelsInitialized = false;
           if (!initResponseReceived) {
             reject(new Error("FunASR服务器进程异常退出"));
-          } else if (!this._stopping && !this._crashHandling) {
+          } else if (!this._stopping) {
             this._handleServerCrash();
           }
         });
@@ -325,17 +330,18 @@ class FunASRServer {
     if (this._startupParams) {
       const { pythonEnv, pythonCmd, serverPath, modelCachePath } =
         this._startupParams;
-      // [20260817_T2_KillTree] A ping-timeout crash means the process is
-      // wedged, not exited — dropping the handle without killing leaks the
-      // entire Python tree (double ~1GB RSS within one crash cycle). Kill
-      // the tree BEFORE respawning; _crashHandling suppresses the close
-      // listener this kill fires (no re-entry into crash handling).
-      this._crashHandling = true;
-      try {
-        killProcessTree(this.serverProcess);
-      } finally {
-        this._crashHandling = false;
-      }
+      // [20260817_T2_KillTreeReview] A ping-timeout crash means the process
+      // is wedged, not exited — dropping the handle without killing leaks
+      // the entire Python tree (double ~1GB RSS within one crash cycle).
+      // Kill the tree BEFORE respawning. The close listeners are removed
+      // first: the kill's close event arrives asynchronously (after this
+      // function has already respawned), and a flag-based guard can never
+      // cover that window — only removal (plus the identity guard on the
+      // listener) prevents the stale close from re-entering crash handling
+      // and tearing down the fresh process.
+      const oldProc = this.serverProcess;
+      if (oldProc) oldProc.removeAllListeners("close");
+      killProcessTree(oldProc);
       this.serverProcess = null;
       this.serverReady = false;
       try {
@@ -381,6 +387,11 @@ class FunASRServer {
   }
 
   async gracefulShutdown(): Promise<void> {
+    // [20260817_T2_KillTreeReview] Mark stopping so the close event fired by
+    // the timeout-arm tree kill below cannot trigger a crash-restart while
+    // the app is quitting (which would respawn a Python process that
+    // outlives the app). _stopFunASRServer already does the same.
+    this._stopping = true;
     this._stopHealthMonitor();
     if (!this.serverProcess) return;
     const proc = this.serverProcess;
@@ -413,8 +424,6 @@ class FunASRServer {
     this.modelsInitialized = false;
     this.initializationPromise = null;
     this.restartCount = 0;
-    // [20260817_T2_KillTree] Clear crash suppression with the rest of state.
-    this._crashHandling = false;
   }
 
   async transcribeAudio(

@@ -32,7 +32,11 @@ class FakeChildProcess extends EventEmitter {
   killed = false;
   kill(signal?: string): boolean {
     this.killed = true;
-    this.emit("close", signal === "SIGKILL" ? null : 0);
+    // [20260817_T2_KillTreeReview] Real ChildProcess NEVER emits close
+    // synchronously from kill() — a sync-emitting fake once validated a
+    // flag-based re-entry guard that provably never worked on real
+    // processes. Emit via setImmediate to keep fake semantics honest.
+    setImmediate(() => this.emit("close", signal === "SIGKILL" ? null : 0));
     return true;
   }
 }
@@ -95,6 +99,8 @@ function setPlatform(platform: string): void {
 }
 
 describe("[20260817_T2_KillTree] killProcessTree helper", () => {
+  afterEach(() => setPlatform(ORIG_PLATFORM));
+
   it("exports a shared killProcessTree helper", () => {
     expect(typeof funasrServerModule.killProcessTree).toBe("function");
   });
@@ -129,6 +135,8 @@ describe("[20260817_T2_KillTree] crash-restart kills the old tree first", () => 
   beforeEach(() => {
     logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
   });
+
+  afterEach(() => setPlatform(ORIG_PLATFORM));
 
   it("win32: taskkill old pid before respawning", async () => {
     setPlatform("win32");
@@ -291,9 +299,12 @@ describe("[20260817_T2_KillTree] stop-fallback and startup timeout", () => {
       s.restartCount = 0;
 
       await s._handleServerCrash();
-      // killProcessTree SIGKILLs mockSpawnChild → its close listener fires
-      // synchronously; without the _crashHandling guard it would call
-      // _handleServerCrash again (2nd respawn + restartCount=2).
+      // killProcessTree SIGKILLs mockSpawnChild; its close event fires
+      // asynchronously AFTER the respawn completed (real-process timing).
+      // Crash handling removed the old listeners before the kill — nothing
+      // may re-enter _handleServerCrash (which would respawn a 2nd process
+      // and burn the restart budget). Flush immediates to prove it.
+      await vi.advanceTimersByTimeAsync(0);
       expect(s._startFunASRServer).toHaveBeenCalledTimes(1);
       expect(s.restartCount).toBe(1);
       s._stopHealthMonitor();

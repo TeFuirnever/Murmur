@@ -1186,12 +1186,14 @@ class FunASRServer:
                 # 提取 request_id 用于响应关联
                 request_id = command.get("request_id", "")
 
-                # 处理命令（[20260817_T5_HandleCommand] 分发逻辑已抽取为
-                # handle_command，便于协议扩展的单测；此处只保留读写循环）
+                # Dispatch the command. [20260817_T5_HandleCommand] The
+                # dispatch logic now lives in handle_command (unit-testable);
+                # this loop keeps only the read/print cycle.
                 result, keep_running = self.handle_command(command)
 
-                # 输出结果（附带 request_id；result=None 表示已入队，
-                # 由 output_worker 异步输出，读循环不打印）
+                # Print the result with request_id attached. result=None
+                # means the action was queued — output_worker prints it
+                # asynchronously, so the read loop must not print here.
                 if result is not None:
                     if request_id:
                         result["request_id"] = request_id
