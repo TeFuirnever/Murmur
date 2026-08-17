@@ -30,6 +30,50 @@ interface FunASRInstallResult {
 
 type ProgressCallback = (progress: Record<string, unknown>) => void;
 
+// [20260817_T1_EmbeddedLayout] Ticket #178 (spec #177 T1): platform-aware
+// embedded-env layout, shared by interpreter resolution and env
+// construction. The Windows half mirrors scripts/prepare-embedded-python.js
+// exactly (python/python.exe, Lib/site-packages, DLLs resolved via PATH
+// prepend of the python dir itself); macOS keeps bin/python3.11 +
+// lib/python3.11. Before this, the runtime only ever resolved the macOS
+// layout, so a packaged Windows app could not find its own interpreter.
+export interface EmbeddedPythonLayout {
+  /** Absolute interpreter path. */
+  pythonBin: string;
+  /** Distribution root — also used as PYTHONHOME. */
+  pythonDir: string;
+  /** First PYTHONPATH entry (stdlib dir). */
+  libDir: string;
+  /** Second PYTHONPATH entry. */
+  sitePackagesDir: string;
+  /** Prepended to PATH (Windows: the python dir; macOS: its bin/). */
+  binDir: string;
+  /** Platform path-list separator. */
+  pathSep: string;
+}
+
+export function embeddedPythonLayout(rootDir: string): EmbeddedPythonLayout {
+  const pythonDir = path.join(rootDir, "python");
+  if (process.platform === "win32") {
+    return {
+      pythonBin: path.join(pythonDir, "python.exe"),
+      pythonDir,
+      libDir: path.join(pythonDir, "Lib"),
+      sitePackagesDir: path.join(pythonDir, "Lib", "site-packages"),
+      binDir: pythonDir,
+      pathSep: ";",
+    };
+  }
+  return {
+    pythonBin: path.join(pythonDir, "bin", "python3.11"),
+    pythonDir,
+    libDir: path.join(pythonDir, "lib", "python3.11"),
+    sitePackagesDir: path.join(pythonDir, "lib", "python3.11", "site-packages"),
+    binDir: path.join(pythonDir, "bin"),
+    pathSep: ":",
+  };
+}
+
 class PythonEnvironment {
   private logger: Logger;
   pythonCmd: string | null;
@@ -63,35 +107,32 @@ class PythonEnvironment {
     );
   }
 
-  getEmbeddedPythonPath(): string {
+  // [20260817_T1_EmbeddedLayout] Root of the embedded distribution:
+  // project dir in dev, unpacked resources in production. Single place the
+  // dev/prod split lives; everything downstream is layout-driven.
+  private _embeddedRoot(): string {
     if (process.env.NODE_ENV === "development") {
       // [20260724_TS_BigBang_DirnameFix] app.getAppPath()-based path
       const { app } = require("electron");
-      return path.join(app.getAppPath(), "python", "bin", "python3.11");
-      // [20260724_TS_BigBang_DirnameFix] END
+      return app.getAppPath();
     }
-    return path.join(
-      process.resourcesPath,
-      "app.asar.unpacked",
-      "python",
-      "bin",
-      "python3.11",
-    );
+    return path.join(process.resourcesPath, "app.asar.unpacked");
+  }
+
+  getEmbeddedPythonPath(): string {
+    // [20260817_T1_EmbeddedLayout] Platform layout: python/python.exe on
+    // Windows, bin/python3.11 on macOS.
+    return embeddedPythonLayout(this._embeddedRoot()).pythonBin;
   }
 
   setupIsolatedEnvironment(): boolean {
-    const isUsingEmbedded = fs.existsSync(this.getEmbeddedPythonPath());
+    const layout = embeddedPythonLayout(this._embeddedRoot());
+    const isUsingEmbedded = fs.existsSync(layout.pythonBin);
     if (isUsingEmbedded) {
-      const pythonDir = path.dirname(
-        path.dirname(this.getEmbeddedPythonPath()),
+      process.env.PYTHONHOME = layout.pythonDir;
+      process.env.PYTHONPATH = [layout.libDir, layout.sitePackagesDir].join(
+        layout.pathSep,
       );
-      process.env.PYTHONHOME = pythonDir;
-      const pathSep = process.platform === "win32" ? ";" : ":";
-      const pythonPath = [
-        path.join(pythonDir, "lib", "python3.11"),
-        path.join(pythonDir, "lib", "python3.11", "site-packages"),
-      ].join(pathSep);
-      process.env.PYTHONPATH = pythonPath;
     } else {
       delete process.env.PYTHONHOME;
       delete process.env.PYTHONPATH;
@@ -100,7 +141,8 @@ class PythonEnvironment {
   }
 
   buildPythonEnvironment(): NodeJS.ProcessEnv {
-    const isUsingEmbedded = fs.existsSync(this.getEmbeddedPythonPath());
+    const layout = embeddedPythonLayout(this._embeddedRoot());
+    const isUsingEmbedded = fs.existsSync(layout.pythonBin);
 
     if (this._cachedPythonEnv && this._lastEmbeddedCheck === isUsingEmbedded) {
       return this._cachedPythonEnv;
@@ -115,18 +157,11 @@ class PythonEnvironment {
     env.PYTHONUTF8 = "1";
 
     if (isUsingEmbedded) {
-      const pythonDir = path.dirname(
-        path.dirname(this.getEmbeddedPythonPath()),
+      env.PYTHONHOME = layout.pythonDir;
+      env.PYTHONPATH = [layout.libDir, layout.sitePackagesDir].join(
+        layout.pathSep,
       );
-      env.PYTHONHOME = pythonDir;
-      const pathSep = process.platform === "win32" ? ";" : ":";
-      env.PYTHONPATH = [
-        path.join(pythonDir, "lib", "python3.11"),
-        path.join(pythonDir, "lib", "python3.11", "site-packages"),
-      ].join(pathSep);
-
-      const binDir = path.join(pythonDir, "bin");
-      env.PATH = binDir + pathSep + (env.PATH || "");
+      env.PATH = layout.binDir + layout.pathSep + (env.PATH || "");
 
       env.MPLBACKEND = "Agg";
       delete env.TERM;
