@@ -166,14 +166,33 @@ describe("FunASRServer process lifecycle", () => {
     });
 
     it("kills process when sendCommand throws", async () => {
-      const s = srv(server);
-      s.serverReady = true;
-      const fakeProc = new FakeChildProcess();
-      s.serverProcess = fakeProc;
-      s.messageRouter.sendRaw = vi.fn().mockRejectedValue(new Error("nope"));
-      await s._stopFunASRServer();
-      expect(fakeProc.killed).toBe(true);
-      expect(s.serverProcess).toBeNull();
+      // [20260817_T4_CiMatrix] The fallback kill asserts the fake's
+      // kill() was invoked — the SIGKILL arm. On Windows the stop fallback
+      // goes through killProcessTree's taskkill arm, which no mock in this
+      // suite simulates; force the posix arm (win32 arm is covered by
+      // funasrServer-killtree.test.ts).
+      const ORIG_PLATFORM = process.platform;
+      Object.defineProperty(process, "platform", {
+        value: "darwin",
+        configurable: true,
+        writable: true,
+      });
+      try {
+        const s = srv(server);
+        s.serverReady = true;
+        const fakeProc = new FakeChildProcess();
+        s.serverProcess = fakeProc;
+        s.messageRouter.sendRaw = vi.fn().mockRejectedValue(new Error("nope"));
+        await s._stopFunASRServer();
+        expect(fakeProc.killed).toBe(true);
+        expect(s.serverProcess).toBeNull();
+      } finally {
+        Object.defineProperty(process, "platform", {
+          value: ORIG_PLATFORM,
+          configurable: true,
+          writable: true,
+        });
+      }
     });
 
     it("does nothing when no serverProcess", async () => {

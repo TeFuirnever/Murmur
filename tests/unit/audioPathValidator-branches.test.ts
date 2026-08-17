@@ -92,15 +92,30 @@ describe("[20260816_Test_BranchPush] audioPathValidator branch coverage", () => 
   });
 
   it("rejects an absolute path outside every allowed root", () => {
-    const result = validateAudioPath("/etc/passwd.wav");
+    // [20260817_T4_CiMatrix] POSIX-style "/etc/..." is NOT absolute on
+    // Windows (no drive letter), so the test would exercise the relative
+    // branch instead of the intended outside-root rejection. Use a
+    // platform-appropriate outside-root absolute path (repo pattern:
+    // per-platform fixtures in regression-session-fixes).
+    const outsidePath =
+      process.platform === "win32"
+        ? "C:\\Windows\\System32\\drivers\\etc\\passwd.wav"
+        : "/etc/passwd.wav";
+    const result = validateAudioPath(outsidePath);
     expect(result.valid).toBe(false);
   });
 
   it("walks up to the filesystem root when no ancestor exists", () => {
     // Every component is non-existent, so the canonicalization loop falls
-    // back to "/" as the first existing ancestor and the prefix join takes
-    // the trailing-separator arm.
-    const result = validateAudioPath("/definitely-not-here-xyz/sub/audio.wav");
+    // back to the filesystem root ("/" or "C:\\") as the first existing
+    // ancestor and the prefix join takes the trailing-separator arm.
+    // [20260817_T4_CiMatrix] Platform-appropriate absolute path — see the
+    // previous test's note.
+    const missingAncestorPath =
+      process.platform === "win32"
+        ? "C:\\definitely-not-here-xyz\\sub\\audio.wav"
+        : "/definitely-not-here-xyz/sub/audio.wav";
+    const result = validateAudioPath(missingAncestorPath);
     expect(result.valid).toBe(false);
   });
 
