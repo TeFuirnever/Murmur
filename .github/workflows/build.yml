@@ -112,7 +112,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ "$(uname -s)" = "Windows_NT" ]; then PY=python/python.exe; else PY=python/bin/python3.11; fi
+          # [20260818_T3_PythonPackagingGate] Git Bash on windows-latest
+          # reports uname as MINGW*_NT-**, NOT "Windows_NT" — match on _NT.
+          if uname -s | grep -q "_NT"; then PY=python/python.exe; else PY=python/bin/python3.11; fi
           test -f "$PY" || { echo "::error::embedded interpreter missing: $PY"; exit 1; }
           "$PY" -c "import numpy, soundfile, funasr" || { echo "::error::embedded python dependency import failed"; exit 1; }
           echo "embedded python deps gate passed"
@@ -163,16 +165,31 @@ jobs:
           rm -f "$HOME/Library/Application Support/Murmur/logs/app.log"
           /tmp/murmur-smoke/Murmur.app/Contents/MacOS/Murmur > /tmp/murmur-smoke/stdout.log 2>&1 &
           APP_PID=$!
-          sleep 60
           LOG="$HOME/Library/Application Support/Murmur/logs/app.log"
-          test -f "$LOG" || { echo "::error::app.log never appeared"; cat /tmp/murmur-smoke/stdout.log | tail -20; exit 1; }
-          # [20260818_T3_PythonSelfCheckMilestone] Python链路自检通过 is
-          # logged by funasrManager.initializeAtStartup when the packaged
-          # python resolves AND `import funasr` runs in a real subprocess —
-          # the boot-level proof the shipped env works (B-0 regression).
-          for milestone in "主窗口创建成功" "应用启动完成" "注册成功" "Python链路自检通过"; do
-            grep -q "$milestone" "$LOG" || { echo "::error::boot milestone missing: $milestone"; tail -20 "$LOG"; exit 1; }
+          # [20260818_T3_PythonSelfCheckMilestone] Poll for milestones instead
+          # of a fixed sleep: the python self-check spawns `import funasr`
+          # (cold torch load) which can exceed a fixed 60s window on a cold
+          # runner disk. Poll up to 180s, break as soon as all are present.
+          MILESTONES=("主窗口创建成功" "应用启动完成" "注册成功" "Python链路自检通过")
+          ALL_PRESENT=1
+          for _ in $(seq 1 36); do
+            sleep 5
+            ALL_PRESENT=1
+            for milestone in "${MILESTONES[@]}"; do
+              if [ -f "$LOG" ] && ! grep -q "$milestone" "$LOG"; then
+                ALL_PRESENT=0
+              fi
+            done
+            [ "$ALL_PRESENT" = "1" ] && break
           done
+          test -f "$LOG" || { echo "::error::app.log never appeared"; cat /tmp/murmur-smoke/stdout.log | tail -20; exit 1; }
+          if [ "$ALL_PRESENT" != "1" ]; then
+            echo "::error::boot milestones incomplete after 180s"
+            for milestone in "${MILESTONES[@]}"; do
+              grep -q "$milestone" "$LOG" || echo "missing: $milestone"
+            done
+            tail -20 "$LOG"; exit 1
+          fi
           if grep -qE "NODE_MODULE_VERSION|Uncaught Exception|preload 脚本加载失败|Python链路自检失败" "$LOG"; then
             echo "::error::fatal errors in packaged app boot log"
             grep -E "NODE_MODULE_VERSION|Uncaught Exception|preload" "$LOG" | head -5
@@ -273,7 +290,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ "$(uname -s)" = "Windows_NT" ]; then PY=python/python.exe; else PY=python/bin/python3.11; fi
+          # [20260818_T3_PythonPackagingGate] Git Bash on windows-latest
+          # reports uname as MINGW*_NT-**, NOT "Windows_NT" — match on _NT.
+          if uname -s | grep -q "_NT"; then PY=python/python.exe; else PY=python/bin/python3.11; fi
           test -f "$PY" || { echo "::error::embedded interpreter missing: $PY"; exit 1; }
           "$PY" -c "import numpy, soundfile, funasr" || { echo "::error::embedded python dependency import failed"; exit 1; }
           echo "embedded python deps gate passed"
@@ -329,15 +348,25 @@ jobs:
           $logDir = Join-Path $env:APPDATA 'Murmur\logs'
           Remove-Item (Join-Path $logDir 'app.log') -ErrorAction SilentlyContinue
           Start-Process -FilePath $appExe
-          Start-Sleep -Seconds 90
           $log = Join-Path $logDir 'app.log'
+          # [20260818_T3_PythonSelfCheckMilestone] Poll for milestones
+          # instead of a fixed sleep — cold `import funasr` (torch) can
+          # outrun a fixed window. Poll up to 240s, break when all present.
+          $milestones = @('主窗口创建成功','应用启动完成','注册成功','Python链路自检通过')
+          $allPresent = $false
+          for ($i = 0; $i -lt 48; $i++) {
+            Start-Sleep -Seconds 5
+            if (Test-Path $log) {
+              $content = Get-Content $log -Raw -Encoding UTF8
+              $missing = @($milestones | Where-Object { $content -notlike "*$_*" })
+              if ($missing.Count -eq 0) { $allPresent = $true; break }
+            }
+          }
           if (-not (Test-Path $log)) { throw "app.log not found at $log" }
-          $content = Get-Content $log -Raw -Encoding UTF8
-          # [20260818_T3_PythonSelfCheckMilestone] Windows counterpart: the
-          # boot milestone proves the packaged python.exe resolves and the
-          # dependency stack imports inside the INSTALLED app.
-          foreach ($milestone in @('主窗口创建成功','应用启动完成','注册成功','Python链路自检通过')) {
-            if ($content -notlike "*$milestone*") { throw "boot milestone missing: $milestone" }
+          if (-not $allPresent) {
+            Write-Host "missing milestones: $($missing -join ', ')"
+            Get-Content $log -Tail 20
+            throw "boot milestones incomplete after 240s"
           }
           foreach ($fatal in @('NODE_MODULE_VERSION','Uncaught Exception','preload 脚本加载失败','Python链路自检失败')) {
             if ($content -like "*$fatal*") { throw "fatal error in packaged boot log: $fatal" }
