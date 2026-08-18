@@ -41,7 +41,7 @@ describe("[20260819_T9_TranscriptCleaner] golden normal corpus — zero changes"
 
 describe("[20260819_T9_TranscriptCleaner] golden pathological corpus", () => {
   it.each(golden.pathological.map((c, i) => [i, c] as const))(
-    "pathological[%i] collapses exactly (%s)",
+    "pathological[%i] collapses exactly",
     (_i, c) => {
       expect(cleanTranscriptionText(c.input)).toBe(c.expected);
     },
@@ -82,6 +82,33 @@ describe("[20260819_T9_TranscriptCleaner] rules & exemptions", () => {
   it("threshold semantics: PHRASE_MIN_REPEATS is 3 (spec: 仅连续 ≥3 次)", () => {
     expect(PHRASE_MIN_REPEATS).toBe(3);
   });
+
+  // [T9 review fixup] The 6-vs-4 threshold deviation lives exactly at this
+  // boundary — lock both sides so the line cannot drift silently.
+  it("exactly-6 identical run folds to 3; exactly-5 run is preserved", () => {
+    expect(cleanTranscriptionText("笑死哈哈哈哈哈哈真的")).toBe(
+      "笑死哈哈哈真的",
+    );
+    expect(cleanTranscriptionText("笑死哈哈哈哈哈真的")).toBe(
+      "笑死哈哈哈哈哈真的",
+    );
+  });
+
+  it("punctuated natural repeats pass through (review MAJOR regression lock)", () => {
+    expect(cleanTranscriptionText("对,对,对,是这个意思")).toBe(
+      "对,对,对,是这个意思",
+    );
+    expect(cleanTranscriptionText("嗯,嗯,嗯,我在听")).toBe("嗯,嗯,嗯,我在听");
+  });
+
+  it("digit runs carry information and never fold (char or phrase pass)", () => {
+    expect(cleanTranscriptionText("订单号888888已发货")).toBe(
+      "订单号888888已发货",
+    );
+    expect(cleanTranscriptionText("验证码是111111,五分钟内有效")).toBe(
+      "验证码是111111,五分钟内有效",
+    );
+  });
 });
 
 describe("[20260819_T9_TranscriptCleaner] linear-time guarantee", () => {
@@ -102,3 +129,5 @@ describe("[20260819_T9_TranscriptCleaner] linear-time guarantee", () => {
     expect(elapsed).toBeLessThan(500);
   });
 });
+
+// [20260819_T9_TranscriptCleaner] END

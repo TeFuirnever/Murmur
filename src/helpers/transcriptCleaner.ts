@@ -34,6 +34,28 @@ export const PHRASE_MIN_REPEATS = 3;
  */
 export const SHORT_INPUT_EXEMPTION = 6;
 
+/**
+ * Digits are exempt from char-run folding: verification codes, amounts and
+ * order numbers carry recoverable information (order 888888 → 888 is data
+ * loss, unlike folding laughter 哈哈哈哈…).
+ */
+const DIGIT_CHARS = /[0-9]/;
+/**
+ * A repeat unit must start and end on a word character. Units glued to
+ * punctuation or whitespace ("对," ×3 from the punctuated transcript of a
+ * natural "对、对、对" reply; "yeah " ×4) are NATURAL speech in the default
+ * use_punc pipeline and must never fold — the phrase rule targets model
+ * degeneracy, which does not come punctuated.
+ */
+const NON_WORD_BOUNDARY_CHARS = /[\s.,!?;:、。,。!?:;"'""''()《》【】…—·]/;
+/** All-digit repeat units are exempt too ("888888" = "88"×3 is a code). */
+const ALL_DIGITS = /^[0-9]+$/;
+
+function isWordBoundarySafe(text: string, index: number): boolean {
+  const ch = text[index];
+  return ch !== undefined && !NON_WORD_BOUNDARY_CHARS.test(ch);
+}
+
 function foldCharRuns(text: string): string {
   let out = "";
   let runStart = 0;
@@ -41,7 +63,8 @@ function foldCharRuns(text: string): string {
     const runEnded = i === text.length || text[i] !== text[runStart];
     if (runEnded) {
       const runLen = i - runStart;
-      if (runLen >= CHAR_REPEAT_FOLD_THRESHOLD) {
+      const isDigitRun = DIGIT_CHARS.test(text[runStart]!);
+      if (runLen >= CHAR_REPEAT_FOLD_THRESHOLD && !isDigitRun) {
         out += text[runStart]!.repeat(CHAR_REPEAT_FOLD_FLOOR);
       } else {
         out += text.slice(runStart, i);
@@ -61,10 +84,23 @@ function foldConsecutivePhrases(text: string): string {
     // unit that repeats is the semantic one. Longer units still win when
     // shorter ones don't repeat ("我知道了"×k only matches at len 4).
     for (let len = PHRASE_MIN_LEN; len <= PHRASE_MAX_LEN; len += 1) {
-      const phrase = text.substr(i, len);
+      const phrase = text.slice(i, i + len);
       if (phrase.length < len) continue;
+      if (ALL_DIGITS.test(phrase)) continue;
+      // Boundary guard (review MAJOR): reject units that end on (or would
+      // start the next copy at) punctuation/whitespace — "对,"×3 is a
+      // natural punctuated reply, not a model loop.
+      if (
+        !isWordBoundarySafe(text, i) ||
+        !isWordBoundarySafe(text, i + len - 1) ||
+        !isWordBoundarySafe(text, i + len)
+      ) {
+        continue;
+      }
       let repeats = 1;
-      while (text.substr(i + repeats * len, len) === phrase) {
+      while (
+        text.slice(i + repeats * len, i + (repeats + 1) * len) === phrase
+      ) {
         repeats += 1;
       }
       if (repeats >= PHRASE_MIN_REPEATS) {
@@ -89,3 +125,5 @@ export function cleanTranscriptionText(text: string): string {
   }
   return foldConsecutivePhrases(foldCharRuns(text));
 }
+
+// [20260819_T9_TranscriptCleaner] END
