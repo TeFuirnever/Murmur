@@ -141,6 +141,7 @@
       "dist-main/main.js",
       "dist-preload/preload.js",
       "funasr_server.py",
+      "audio_preprocessing.py",
       "download_models.py",
       "package.json",
       "LICENSE",
@@ -157,6 +158,7 @@
     ],
     "asarUnpack": [
       "funasr_server.py",
+      "audio_preprocessing.py",
       "download_models.py",
       "python/**/*",
       "node_modules/**/*better-sqlite3*/**/*",

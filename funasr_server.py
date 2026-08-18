@@ -450,6 +450,12 @@ class FunASRServer:
 
         wav_path = audio_path
         was_converted = False
+        # [20260818_T6_AudioPreprocess] Temp files to clean in finally:
+        # converted_path = format-conversion temp (None on wav/flac
+        # passthrough); dsp_path = preprocessing output (may equal the
+        # input when preprocessing fell back).
+        converted_path = None
+        dsp_path = None
 
         try:
             # 路径验证
@@ -474,6 +480,14 @@ class FunASRServer:
             wav_path, was_converted = self._convert_to_wav(audio_path)
             if was_converted:
                 logger.info(f"convert phase END request_id={request_id} elapsed={time.time()-_t0:.2f}s")
+
+            # [20260818_T6_AudioPreprocess] DSP runs AFTER conversion, so it
+            # covers BOTH branches: converted temp wavs AND the native
+            # wav/flac passthrough (which previously reached the model raw).
+            converted_path = wav_path if was_converted else None
+            dsp_path = self._apply_preprocessing(wav_path)
+            if dsp_path != wav_path:
+                wav_path = dsp_path
 
             # 获取音频时长（从转换后的 WAV 获取更准确）
             duration = self._get_audio_duration(wav_path)
@@ -795,12 +809,36 @@ class FunASRServer:
                 "request_id": request_id
             }
         finally:
-            if was_converted and wav_path != audio_path:
+            # [20260818_T6_AudioPreprocess] Unlink BOTH temps (the
+            # format-converted file and the DSP output); never the user's
+            # original, never twice.
+            if dsp_path and dsp_path != audio_path:
                 try:
-                    os.unlink(wav_path)
+                    os.unlink(dsp_path)
+                except Exception:
+                    pass
+            if (
+                converted_path
+                and converted_path != audio_path
+                and converted_path != dsp_path
+            ):
+                try:
+                    os.unlink(converted_path)
                 except Exception:
                     pass
         return result
+
+    # [20260818_T6_AudioPreprocess] Ticket #185 (spec #177 T6): run the DSP
+    # module (80Hz HPF + segmented RMS normalization) on the transcribe-file
+    # path. Enhancement-only semantics: on any DSP failure, warn and return
+    # the original path — preprocessing must never block transcription.
+    def _apply_preprocessing(self, wav_path):
+        try:
+            import audio_preprocessing
+            return audio_preprocessing.preprocess_audio_file(wav_path)
+        except Exception as e:
+            logger.warning(f"音频预处理失败，使用原始音频: {e}")
+            return wav_path
 
     def _convert_to_wav(self, audio_path):
         """使用 librosa/soundfile 将非 WAV 音频转为 16kHz 单声道 WAV 临时文件
