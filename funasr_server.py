@@ -66,6 +66,33 @@ def suppress_stdout():
         devnull.close()
 
 
+# [20260819_T8_ThreadAdapt] Ticket #187 (spec #177 T8): inference thread
+# auto-adaptation. Formula over LOGICAL cores leaves UI headroom on small
+# machines and caps fan/heat on big ones; the old code hard-coded
+# OMP_NUM_THREADS=4 (no headroom on 4-core, over-subscription on 2-core).
+THREAD_UI_HEADROOM = 2
+THREAD_CAP = 8
+
+
+def compute_inference_threads(cores, override=None):
+    """min(max(1, cores-2), 8) over logical cores.
+
+    override comes from MURMUR_NUM_THREADS (mirrors the MURMUR_DEVICE
+    pattern from ADR-006): parsed as int, clamped to [1, cores]; invalid
+    values (non-numeric / < 1) fall back to the computed value.
+    """
+    auto = min(max(1, cores - THREAD_UI_HEADROOM), THREAD_CAP)
+    if override is None:
+        return auto
+    try:
+        requested = int(str(override).strip())
+    except (TypeError, ValueError):
+        return auto
+    if requested < 1:
+        return auto
+    return max(1, min(requested, cores))
+
+
 class FunASRServer:
     def __init__(self, damo_root=None):
         self.asr_model = None
@@ -86,23 +113,54 @@ class FunASRServer:
         # 外部传入的 damo 根目录（例如 /Volumes/APFS/AI/models/damo）
         self.damo_root = damo_root or os.environ.get("DAMO_ROOT")
 
+        # [20260819_T8_ThreadAdapt] Thread env FIRST: _detect_device imports
+        # torch when MURMUR_DEVICE is unset, and OMP/MKL env vars only take
+        # effect if written BEFORE torch's first import. The old order set
+        # them after detection, which silently voided them.
+        self.inference_threads = 1
+        self._setup_runtime_environment()
+
         self.device = os.environ.get("MURMUR_DEVICE") or self._detect_device()
         logger.info(f"推理设备: {self.device}")
 
         signal.signal(signal.SIGTERM, self._signal_handler)
         signal.signal(signal.SIGINT, self._signal_handler)
-        self._setup_runtime_environment()
 
     def _setup_runtime_environment(self):
-        """设置运行时环境变量以优化性能"""
-        try:
-            import os
+        """设置推理线程环境变量（必须在 torch 首次导入之前调用）
 
-            # 设置线程数优化
-            os.environ["OMP_NUM_THREADS"] = "4"
-            logger.info("运行时环境变量设置完成")
+        [20260819_T8_ThreadAdapt] Replaces the OMP_NUM_THREADS="4" hardcode
+        with the computed value. OMP covers gcc/openmp builds, MKL covers
+        Windows torch's MKL backend; macOS Accelerate ignores both env vars,
+        which is why torch.set_num_threads (applied at model load) is the
+        authoritative convergence point on every platform. Under a CUDA
+        device the limit still constrains CPU-side preprocessing (DSP /
+        feature extraction) — GPU kernels are unaffected.
+        """
+        try:
+            cores = os.cpu_count() or 1
+            override = os.environ.get("MURMUR_NUM_THREADS")
+            self.inference_threads = compute_inference_threads(cores, override)
+            os.environ["OMP_NUM_THREADS"] = str(self.inference_threads)
+            os.environ["MKL_NUM_THREADS"] = str(self.inference_threads)
+            source = "MURMUR_NUM_THREADS" if override else "auto"
+            logger.info(
+                f"推理线程数: {self.inference_threads} (逻辑核={cores}, 来源={source}, "
+                f"公式=min(max(1,核-{THREAD_UI_HEADROOM}),{THREAD_CAP}), 覆盖钳制[1,核])"
+            )
         except Exception as e:
-            logger.warning(f"环境设置失败: {str(e)}")
+            logger.warning(f"线程环境设置失败: {str(e)}")
+
+    # [20260819_T8_ThreadAdapt] Authoritative torch-side limit; applied at
+    # model load (after torch import) — see _setup_runtime_environment.
+    def _apply_torch_thread_limit(self):
+        try:
+            import torch
+
+            torch.set_num_threads(self.inference_threads)
+            logger.info(f"torch.set_num_threads({self.inference_threads})")
+        except ImportError:
+            logger.warning("torch 不可用，跳过 torch 线程上限设置")
 
     @staticmethod
     def _detect_device():
@@ -264,6 +322,10 @@ class FunASRServer:
 
             logger.info("正在并行初始化FunASR模型...")
             start_time = time.time()
+
+            # [20260819_T8_ThreadAdapt] torch is imported by the model
+            # loaders below — apply the authoritative thread limit first.
+            self._apply_torch_thread_limit()
 
             # 创建加载结果存储
             results = {}
