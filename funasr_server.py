@@ -338,6 +338,11 @@ class FunASRServer:
 
     def transcribe_audio(self, audio_path, options=None):
         """转录音频文件"""
+        # [20260819_T7_MicPreprocess] Default = original path: overwritten
+        # by the DSP output inside the try; a raise BEFORE that point (e.g.
+        # non-finite input rejection) must not hit an unbound name in the
+        # finally cleanup.
+        infer_path = audio_path
         if not self.initialized:
             init_result = self.initialize()
             if not init_result["success"]:
@@ -362,16 +367,23 @@ class FunASRServer:
             if options:
                 default_options.update(options)
 
+            # [20260819_T7_MicPreprocess] Ticket #186 (spec #177 T7): run the
+            # DSP module on the push-to-talk path too. The renderer delivers
+            # a 16k mono WAV temp (created/cleaned by the TS side); the DSP
+            # output below is OUR temp and is unlinked in the finally block.
+            # Fallback policy mirrors the file path (see _apply_preprocessing).
+            infer_path = self._apply_preprocessing(audio_path)
+
             # 执行语音识别
             if default_options["use_vad"]:
                 vad_result = self.vad_model.generate(
-                    input=audio_path, batch_size_s=default_options["batch_size_s"]
+                    input=infer_path, batch_size_s=default_options["batch_size_s"]
                 )
                 logger.info("VAD处理完成")
 
             # 执行ASR识别
             asr_result = self.asr_model.generate(
-                input=audio_path,
+                input=infer_path,
                 batch_size_s=default_options["batch_size_s"],
                 hotword=default_options["hotword"],
                 cache={},
@@ -405,7 +417,7 @@ class FunASRServer:
                 except Exception as e:
                     logger.warning(f"FunASR标点恢复失败，使用原始文本: {str(e)}")
 
-            duration = self._get_audio_duration(audio_path)
+            duration = self._get_audio_duration(infer_path)
             self.transcription_count += 1
 
             result = {
@@ -435,6 +447,16 @@ class FunASRServer:
             logger.error(error_msg)
             logger.error(traceback.format_exc())
             return {"success": False, "error": error_msg, "type": "transcription_error"}
+        finally:
+            # [20260819_T7_MicPreprocess] Clean OUR temp only — the original
+            # mic temp belongs to the TS side (close-then-unlink discipline
+            # lives in audioFileHelpers); fallback returns the original path,
+            # which the != audio_path guard leaves untouched.
+            if infer_path != audio_path:
+                try:
+                    os.unlink(infer_path)
+                except Exception:
+                    pass
 
     def transcribe_file_audio(self, audio_path, options=None):
         """带时间戳的文件转录，用于 transcribe_file 命令"""

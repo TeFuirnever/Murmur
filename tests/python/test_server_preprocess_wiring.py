@@ -74,6 +74,92 @@ class ApplyPreprocessingTest(unittest.TestCase):
             audio_preprocessing.preprocess_audio_file = original
 
 
+class MicPathPreprocessTest(unittest.TestCase):
+    """[20260819_T7_MicPreprocess] Ticket #186: the push-to-talk path must
+    feed the models the DSP-preprocessed audio, and must clean up its temp
+    file. Behavioral: real tiny wav + fake models recording their input."""
+
+    def setUp(self):
+        self.server = FunASRServer(damo_root="/tmp/test-damo")
+        self.server.initialized = True
+        self.server.punc_model = None
+
+        import numpy as np
+        import soundfile as sf
+        import tempfile
+
+        t = np.arange(16000, dtype=np.float64) / 16000.0
+        speech = (0.05 * np.sin(2 * np.pi * 500.0 * t)).astype(np.float32)
+        tmp = tempfile.NamedTemporaryFile(
+            suffix=".wav", delete=False, dir=tempfile.gettempdir()
+        )
+        sf.write(tmp.name, speech, 16000, subtype="PCM_16")
+        tmp.close()
+        self.mic_wav = tmp.name
+        self._sf = sf
+
+        class FakeModel:
+            def __init__(self, text):
+                self.inputs = []
+                self.text = text
+
+            def generate(self, input=None, **kwargs):
+                self.inputs.append(input)
+                return [{"text": self.text, "value": []}]
+
+        self.fake_vad = FakeModel("")
+        self.fake_asr = FakeModel("识别结果")
+        self.server.vad_model = self.fake_vad
+        self.server.asr_model = self.fake_asr
+
+    def tearDown(self):
+        if os.path.exists(self.mic_wav):
+            os.unlink(self.mic_wav)
+
+    def test_models_receive_dsp_temp_and_temp_is_cleaned(self):
+        result = self.server.transcribe_audio(self.mic_wav)
+        self.assertTrue(result["success"], result)
+        self.assertEqual(self.fake_vad.inputs, [self.fake_asr.inputs[0]])
+        dsp_path = self.fake_asr.inputs[0]
+        self.assertNotEqual(
+            dsp_path, self.mic_wav, "models must receive preprocessed audio"
+        )
+        self.assertFalse(
+            os.path.exists(dsp_path), "DSP temp must be deleted after use"
+        )
+        self.assertTrue(
+            os.path.exists(self.mic_wav), "original mic temp must survive"
+        )
+
+    def test_dsp_bug_falls_back_to_original_path(self):
+        original = audio_preprocessing.preprocess_audio_file
+
+        def boom(_p):
+            raise RuntimeError("dsp exploded")
+
+        audio_preprocessing.preprocess_audio_file = boom
+        try:
+            result = self.server.transcribe_audio(self.mic_wav)
+            self.assertTrue(result["success"], result)
+            self.assertEqual(self.fake_asr.inputs, [self.mic_wav])
+        finally:
+            audio_preprocessing.preprocess_audio_file = original
+
+    def test_non_finite_input_fails_transcription_cleanly(self):
+        original = audio_preprocessing.preprocess_audio_file
+
+        def reject(_p):
+            raise ValueError("audio contains non-finite samples")
+
+        audio_preprocessing.preprocess_audio_file = reject
+        try:
+            result = self.server.transcribe_audio(self.mic_wav)
+            self.assertFalse(result["success"])
+            self.assertIn("non-finite", result["error"])
+        finally:
+            audio_preprocessing.preprocess_audio_file = original
+
+
 class WiringContractTest(unittest.TestCase):
     """Source-contract: the call site + temp cleanup stay wired (repo
     convention for load-bearing glue that cannot be driven without real
