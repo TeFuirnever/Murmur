@@ -75,11 +75,12 @@ THREAD_CAP = 8
 
 
 def compute_inference_threads(cores, override=None):
-    """min(max(1, cores-2), 8) over logical cores.
+    """min(max(1, cores - THREAD_UI_HEADROOM), THREAD_CAP) over logical cores.
 
     override comes from MURMUR_NUM_THREADS (mirrors the MURMUR_DEVICE
-    pattern from ADR-006): parsed as int, clamped to [1, cores]; invalid
-    values (non-numeric / < 1) fall back to the computed value.
+    pattern from ADR-006): must parse as an INTEGER, clamped to
+    [1, cores]; anything else (non-integer like "2.5", < 1, None) falls
+    back to the computed value.
     """
     auto = min(max(1, cores - THREAD_UI_HEADROOM), THREAD_CAP)
     if override is None:

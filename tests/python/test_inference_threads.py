@@ -58,11 +58,14 @@ class RuntimeEnvironmentTest(unittest.TestCase):
                 os.environ[key] = value
 
     def test_env_vars_set_to_computed_value(self):
+        # [T8 review fixup] The override is ALSO clamped to cores, so a
+        # hardcoded "3" would fail on ≤2-core machines.
         os.environ["MURMUR_NUM_THREADS"] = "3"
         server = FunASRServer(damo_root="/tmp/test-damo")
-        self.assertEqual(server.inference_threads, 3)
-        self.assertEqual(os.environ["OMP_NUM_THREADS"], "3")
-        self.assertEqual(os.environ["MKL_NUM_THREADS"], "3")
+        expected = min(3, os.cpu_count() or 1)
+        self.assertEqual(server.inference_threads, expected)
+        self.assertEqual(os.environ["OMP_NUM_THREADS"], str(expected))
+        self.assertEqual(os.environ["MKL_NUM_THREADS"], str(expected))
 
     def test_no_override_uses_formula(self):
         os.environ.pop("MURMUR_NUM_THREADS", None)
@@ -76,6 +79,8 @@ class RuntimeEnvironmentTest(unittest.TestCase):
         server = FunASRServer(damo_root="/tmp/test-damo")
         expected = compute_inference_threads(os.cpu_count() or 1)
         self.assertEqual(server.inference_threads, expected)
+        # [T8 review fixup] The test name promises the env is still set.
+        self.assertEqual(os.environ["OMP_NUM_THREADS"], str(expected))
 
 
 class ApplicationPointContractTest(unittest.TestCase):
@@ -108,11 +113,30 @@ class ApplicationPointContractTest(unittest.TestCase):
 
     def test_torch_set_num_threads_applied_at_model_load(self):
         src = self.source()
-        init_body = src[src.index("def initialize") : src.index("def run")]
+        # [T8 review fixup] Slice ONLY the initialize() body — a wider
+        # slice would let the call migrate to another method unnoticed.
+        start = src.index("def initialize")
+        end = src.index("\n    def ", start)
+        init_body = src[start:end]
         self.assertIn("self._apply_torch_thread_limit()", init_body)
 
 
 class ApplyTorchThreadLimitTest(unittest.TestCase):
+    # [T8 review fixup] __init__ writes OMP/MKL env vars; restore them so
+    # this test does not leak state into later tests in the process.
+    def setUp(self):
+        self._saved = {
+            k: os.environ.get(k)
+            for k in ("OMP_NUM_THREADS", "MKL_NUM_THREADS")
+        }
+
+    def tearDown(self):
+        for key, value in self._saved.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
     def test_calls_torch_with_computed_value(self):
         import types
 
