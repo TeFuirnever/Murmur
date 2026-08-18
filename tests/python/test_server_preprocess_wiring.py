@@ -38,7 +38,7 @@ class ApplyPreprocessingTest(unittest.TestCase):
             audio_preprocessing.preprocess_audio_file = original
 
     def test_falls_back_to_original_when_module_raises(self):
-        # Enhancement-only semantics: a DSP failure must never block
+        # Enhancement-only semantics: a DSP BUG must never block
         # transcription of the original file.
         original = audio_preprocessing.preprocess_audio_file
 
@@ -50,6 +50,26 @@ class ApplyPreprocessingTest(unittest.TestCase):
             self.assertEqual(
                 self.server._apply_preprocessing("/tmp/in.wav"), "/tmp/in.wav"
             )
+        finally:
+            audio_preprocessing.preprocess_audio_file = original
+
+    def test_invalid_input_valueerror_propagates(self):
+        # [Review MAJOR fixup] ValueError = the INPUT is illegal (non-finite
+        # samples). Feeding the model known-bad audio and returning a
+        # garbage success is worse than failing the transcription with a
+        # clear message — only DSP *bugs* fall back, invalid input does not.
+        original = audio_preprocessing.preprocess_audio_file
+
+        def reject(_p):
+            raise ValueError(
+                "audio contains non-finite samples (NaN/Inf) — refusing "
+                "to feed it to the model"
+            )
+
+        audio_preprocessing.preprocess_audio_file = reject
+        try:
+            with self.assertRaises(ValueError):
+                self.server._apply_preprocessing("/tmp/in.wav")
         finally:
             audio_preprocessing.preprocess_audio_file = original
 

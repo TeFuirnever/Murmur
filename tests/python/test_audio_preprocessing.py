@@ -194,7 +194,8 @@ class LoadAndFileTest(unittest.TestCase):
 
 class RtfBudgetTest(unittest.TestCase):
     def test_60s_audio_rtf_under_budget(self):
-        # 60s of mixed content; budget RTF < 0.05 → wall clock < 3s.
+        # 60s of mixed content; budget RTF < 0.05 via the module constant
+        # (no duplicated magic number in the test).
         n = SR * 60
         rng = np.random.default_rng(7)
         x = (
@@ -206,7 +207,7 @@ class RtfBudgetTest(unittest.TestCase):
         start = time.perf_counter()
         ap.preprocess_audio(x, SR)
         elapsed = time.perf_counter() - start
-        self.assertLess(elapsed, 3.0)
+        self.assertLess(elapsed, 60 * ap.RTF_BUDGET)
 
 
 if __name__ == "__main__":

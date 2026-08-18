@@ -830,12 +830,17 @@ class FunASRServer:
 
     # [20260818_T6_AudioPreprocess] Ticket #185 (spec #177 T6): run the DSP
     # module (80Hz HPF + segmented RMS normalization) on the transcribe-file
-    # path. Enhancement-only semantics: on any DSP failure, warn and return
-    # the original path — preprocessing must never block transcription.
+    # path. Fallback policy (review fixup): a DSP *bug* (any non-ValueError)
+    # warns and returns the original path — preprocessing must never block
+    # transcription. ValueError means the INPUT is illegal (non-finite
+    # samples); it propagates so transcription FAILS with a clear message
+    # instead of feeding known-bad audio to the model.
     def _apply_preprocessing(self, wav_path):
         try:
             import audio_preprocessing
             return audio_preprocessing.preprocess_audio_file(wav_path)
+        except ValueError:
+            raise
         except Exception as e:
             logger.warning(f"音频预处理失败，使用原始音频: {e}")
             return wav_path

@@ -64,6 +64,10 @@ def highpass_filter(samples, sr, cutoff_hz=HPF_CUTOFF_HZ):
     the pipeline already requires for file transcription).
     """
     x = np.asarray(samples, dtype=np.float64)
+    if len(x) == 0:
+        # Degenerate input (0-frame file): nothing to filter (review
+        # fixup — numpy's rfft would raise a bare FFT error otherwise).
+        return np.asarray(samples, dtype=np.float32)
     spec = np.fft.rfft(x)
     freqs = np.fft.rfftfreq(len(x), 1.0 / sr)
     spec[freqs < cutoff_hz] = 0.0
@@ -80,11 +84,13 @@ def normalize_segment(samples):
     x = np.asarray(samples, dtype=np.float64)
     rms = float(np.sqrt(np.mean(x**2))) if len(x) else 0.0
     if rms < SILENCE_RMS_THRESHOLD:
-        return samples if isinstance(samples, np.ndarray) else np.asarray(samples)
+        # Review fixup: uniform dtype + copy semantics on passthrough (the
+        # old branch returned the caller's array reference and its dtype).
+        return np.asarray(samples, dtype=np.float32)
     target = 10.0 ** (TARGET_RMS_DBFS / 20.0)
     peak = float(np.max(np.abs(x)))
     if peak <= 0.0:
-        return np.asarray(samples)
+        return np.asarray(samples, dtype=np.float32)
     gain = min(target / rms, PEAK_CEILING / peak)
     return (x * gain).astype(np.float32)
 
