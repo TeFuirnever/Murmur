@@ -96,7 +96,11 @@ class MicPathPreprocessTest(unittest.TestCase):
         sf.write(tmp.name, speech, 16000, subtype="PCM_16")
         tmp.close()
         self.mic_wav = tmp.name
-        self._sf = sf
+        # [T7 review fixup] tearDown never runs when setUp fails partway;
+        # addCleanup registers the moment the temp exists.
+        self.addCleanup(
+            lambda: os.path.exists(self.mic_wav) and os.unlink(self.mic_wav)
+        )
 
         class FakeModel:
             def __init__(self, text):
@@ -113,8 +117,15 @@ class MicPathPreprocessTest(unittest.TestCase):
         self.server.asr_model = self.fake_asr
 
     def tearDown(self):
-        if os.path.exists(self.mic_wav):
-            os.unlink(self.mic_wav)
+        pass  # cleanup registered via addCleanup in setUp
+
+    def test_missing_file_returns_clean_error_no_unbound(self):
+        # [T7 review fixup] Early-exit regression: the finally cleanup must
+        # never hit an unbound infer_path (the exact bug class the red run
+        # found during implementation).
+        result = self.server.transcribe_audio("/nonexistent-mic.wav")
+        self.assertFalse(result["success"])
+        self.assertIn("音频文件不存在", result["error"])
 
     def test_models_receive_dsp_temp_and_temp_is_cleaned(self):
         result = self.server.transcribe_audio(self.mic_wav)
@@ -155,7 +166,10 @@ class MicPathPreprocessTest(unittest.TestCase):
         try:
             result = self.server.transcribe_audio(self.mic_wav)
             self.assertFalse(result["success"])
-            self.assertIn("non-finite", result["error"])
+            # Assert the server's stable wrapper fields, not the module's
+            # (fake-mirrored) message wording. [T7 review fixup]
+            self.assertEqual(result["type"], "transcription_error")
+            self.assertIn("音频转录失败", result["error"])
         finally:
             audio_preprocessing.preprocess_audio_file = original
 

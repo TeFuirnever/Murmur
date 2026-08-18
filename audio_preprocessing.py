@@ -152,8 +152,17 @@ def preprocess_audio_file(in_path, out_path=None):
         out_path = tmp.name
         tmp.close()
     # PCM_16: the limiter guarantees peak ≤ PEAK_CEILING, so the float→int
-    # quantization cannot clip.
-    sf.write(out_path, processed, sr, subtype="PCM_16")
+    # quantization cannot clip. [T7 review fixup] A failed write must not
+    # leave the half-created temp behind — the callers' fallback path never
+    # learns this path existed, so cleanup has to happen right here.
+    try:
+        sf.write(out_path, processed, sr, subtype="PCM_16")
+    except Exception:
+        try:
+            os.unlink(out_path)
+        except OSError:
+            pass
+        raise
     logger.info(
         "preprocessed %s -> %s (sr=%d, samples=%d)",
         in_path,
