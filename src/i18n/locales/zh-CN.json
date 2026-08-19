@@ -49,7 +49,11 @@
       "about": "关于"
     },
     "general": {
-      "alwaysOnTopDesc": "将应用窗口保持在最前面"
+      "alwaysOnTopDesc": "将应用窗口保持在最前面",
+      "hotwordsLabel": "热词",
+      "hotwordsDesc": "每行一个。识别时优先匹配这些词(如同事姓名、产品名),提升生僻专名命中率,不保证全部正确。",
+      "hotwordsPlaceholder": "张晗玥\n刘翀\n产品名…",
+      "hotwordsLimit": "最多 200 行,每行 32 字"
     },
     "quickStart": {
       "title": "快速开始",

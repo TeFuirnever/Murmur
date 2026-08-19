@@ -3,7 +3,10 @@
 import fs from "fs";
 import path from "path";
 
-/** Settings keys that can be configured via ~/.murmur.json */
+/** Settings keys that can be configured via ~/.murmur.json
+ * [20260820_T14_Hotwords] hotwords is deliberately NOT in this list
+ * (colleague names must not land in a plaintext dotfile; the encrypted
+ * settings store covers them). Exported at the bottom for the boundary test. */
 const FILE_CONFIGURABLE_KEYS: readonly string[] = [
   "ai_base_url",
   "ai_model",

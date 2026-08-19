@@ -23,6 +23,7 @@ sys.path.insert(
 os.environ.setdefault("MURMUR_DEVICE", "cpu")
 
 from funasr_server import FunASRServer  # noqa: E402
+import funasr_server  # noqa: E402
 
 
 class FunASRServerProtocolTest(unittest.TestCase):
@@ -146,6 +147,29 @@ class FunASRServerProtocolTest(unittest.TestCase):
         self.assertFalse(result["success"])
         self.assertIn("未知命令", result["error"])
         self.assertTrue(keep)
+
+
+class HotwordDefenseTest(unittest.TestCase):
+    """[20260820_T14_Hotwords] Ticket #183: Python-side defense-in-depth —
+    a non-string or oversized hotword arriving over the protocol (corrupted
+    DB, renderer bug) must degrade to a safe value, never crash generate().
+    """
+
+    def test_valid_string_passes_through(self):
+        self.assertEqual(
+            funasr_server.sanitize_hotword("张晗玥 刘翀"), "张晗玥 刘翀"
+        )
+
+    def test_non_string_degrades_to_empty(self):
+        self.assertEqual(funasr_server.sanitize_hotword(None), "")
+        self.assertEqual(funasr_server.sanitize_hotword(["a", "b"]), "")
+        self.assertEqual(funasr_server.sanitize_hotword(12345), "")
+
+    def test_oversized_value_is_truncated(self):
+        huge = "词" * 10000
+        out = funasr_server.sanitize_hotword(huge)
+        self.assertLessEqual(len(out), funasr_server.HOTWORD_MAX_CHARS)
+        self.assertGreater(len(out), 0)
 
 
 if __name__ == "__main__":

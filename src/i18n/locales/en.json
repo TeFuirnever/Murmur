@@ -49,7 +49,11 @@
       "about": "About"
     },
     "general": {
-      "alwaysOnTopDesc": "Keep the app window on top"
+      "alwaysOnTopDesc": "Keep the app window on top",
+      "hotwordsLabel": "Hotwords",
+      "hotwordsDesc": "One entry per line. Recognition prefers these terms (colleague names, product names) — improves rare proper-noun hit rate, not a guarantee.",
+      "hotwordsPlaceholder": "Jane Zhang\nAcme API…",
+      "hotwordsLimit": "Up to 200 lines, 32 chars each"
     },
     "quickStart": {
       "title": "Quick Start",

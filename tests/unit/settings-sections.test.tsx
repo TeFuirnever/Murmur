@@ -108,6 +108,7 @@ function buildSettings(overrides: Partial<SettingsState> = {}): SettingsState {
     auto_paste: "paste",
     close_behavior: "hide",
     theme: "system",
+    hotwords: "",
     ...overrides,
   };
 }

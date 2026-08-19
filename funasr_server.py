@@ -73,6 +73,18 @@ def suppress_stdout():
 THREAD_UI_HEADROOM = 2
 THREAD_CAP = 8
 
+# [20260820_T14_Hotwords] Ticket #183: Python-side defense-in-depth cap
+# for the hotword option (TS boundary validation is the primary gate; this
+# catches corrupted-DB / renderer-bug payloads that reach the protocol).
+HOTWORD_MAX_CHARS = 4096
+
+
+def sanitize_hotword(value):
+    """Coerce a protocol hotword to a safe string ('' on non-string)."""
+    if not isinstance(value, str):
+        return ""
+    return value[:HOTWORD_MAX_CHARS]
+
 
 def compute_inference_threads(cores, override=None):
     """min(max(1, cores - THREAD_UI_HEADROOM), THREAD_CAP) over logical cores.
@@ -430,6 +442,12 @@ class FunASRServer:
             if options:
                 default_options.update(options)
 
+            # [20260820_T14_Hotwords] Defense-in-depth: coerce the hotword
+            # option to a safe string before it reaches generate().
+            default_options["hotword"] = sanitize_hotword(
+                default_options.get("hotword", "")
+            )
+
             # [20260819_T7_MicPreprocess] Ticket #186 (spec #177 T7): run the
             # DSP module on the push-to-talk path too. The renderer delivers
             # a 16k mono WAV temp (created/cleaned by the TS side); the DSP
@@ -527,7 +545,8 @@ class FunASRServer:
             options = {}
 
         request_id = options.get("request_id", "")
-        hotword = options.get("hotword", "")
+        # [20260820_T14_Hotwords] Defense-in-depth (file path).
+        hotword = sanitize_hotword(options.get("hotword", ""))
         self.cancel_event.clear()
         import time
         _t0 = time.time()

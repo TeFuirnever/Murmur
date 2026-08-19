@@ -8,6 +8,7 @@ import type { TranscriptionForExport } from "../exportFormatters";
 import { buildPrompt } from "../aiPrompts";
 import { validateAudioPath } from "../audioPathValidator";
 import { cleanTranscriptionText } from "../transcriptCleaner";
+import { sanitizeHotwordInput } from "../hotwords";
 
 // [20260819_T10_CleanerWiring] Ticket #188 (spec #177 T10): clean ASR
 // output at the two transcription seams (mic AUDIO + file TRANSCRIBE_FILE).
@@ -90,6 +91,8 @@ interface DatabaseManager {
     lastInsertRowid?: number | bigint;
     changes?: number;
   };
+  // [20260820_T14_Hotwords] Synchronous settings read (hotword injection).
+  getSetting(key: string, defaultValue?: unknown): unknown;
   getTranscriptionById(id: number): TranscriptionRow | null;
   getTranscriptions(limit: number, offset: number): TranscriptionRow[];
   deleteTranscription(id: number): unknown;
@@ -135,10 +138,66 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
   const { funasrManager, databaseManager, logger, processTextWithAI } =
     managers;
 
+  // [20260820_T14_Hotwords] Main-process hotword injection (preload/IPC
+  // signatures untouched): read the stored list, sanitize at this boundary,
+  // and inject into the request options. Empty/invalid → options returned
+  // as-is (no hotword field — byte-identical to pre-T14 traffic). An
+  // explicit caller-provided hotword wins over the stored list. A settings
+  // read failure must never block transcription.
+  const injectStoredHotwords = async (
+    options: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> => {
+    if (typeof options.hotword === "string" && options.hotword.trim()) {
+      return options;
+    }
+    try {
+      const stored = await databaseManager.getSetting("hotwords");
+      const hotword = sanitizeHotwordInput(stored);
+      if (!hotword) return options;
+      return { ...options, hotword };
+    } catch (error) {
+      logger.warn?.("读取热词设置失败，跳过注入", error);
+      return options;
+    }
+  };
+
+  // [20260820_T14_Hotwords] Empty-hotword retry: if a hotword-injected
+  // request fails, retry ONCE with the original (hotword-free) options —
+  // a bad hotword list must not brick transcription. Success on the retry
+  // surfaces hotword_degraded=true so the UI can point at the settings.
+  const withHotwordFallback = async (
+    baseOptions: Record<string, unknown>,
+    hotwordOptions: Record<string, unknown>,
+    run: (options: Record<string, unknown>) => Promise<unknown>,
+  ): Promise<unknown> => {
+    const first = await run(hotwordOptions);
+    const injected = hotwordOptions !== baseOptions;
+    if (!injected) return first;
+    const failed = !first || (first as { success?: boolean }).success === false;
+    if (!failed) return first;
+    logger.warn?.("热词转写失败，以空热词重试一次");
+    const retry = await run(baseOptions);
+    if (retry && (retry as { success?: boolean }).success) {
+      return { ...(retry as object), hotword_degraded: true };
+    }
+    return retry;
+  };
+
   ipcMain.handle(
     C.TRANSCRIPTION.AUDIO,
     async (_event, audioData: unknown, options: unknown) => {
-      const result = await funasrManager.transcribeAudio(audioData, options);
+      // [20260820_T14_Hotwords] Mic seam: inject then run with fallback.
+      const baseOptions = (options ?? {}) as Record<string, unknown>;
+      const withHotword = await injectStoredHotwords(baseOptions);
+      const result = (await withHotwordFallback(
+        baseOptions,
+        withHotword,
+        (opts) =>
+          funasrManager.transcribeAudio(
+            audioData,
+            opts as Record<string, unknown>,
+          ),
+      )) as unknown;
       // [20260819_T10_CleanerWiring] Mic seam (see applyTranscriptionCleaning).
       applyTranscriptionCleaning(result, logger);
       return result;
@@ -211,12 +270,24 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
       if (!validation.valid) {
         return { success: false, error: validation.error };
       }
-      const result = await funasrManager.transcribeFile(audioPath, {
+      // [20260820_T14_Hotwords] File seam: same injection + fallback as the
+      // mic seam (hotwords apply to imports too — long files are where
+      // proper nouns live).
+      const baseOptions: Record<string, unknown> = {
         ...options,
         onProgress: (progress: unknown) => {
           event.sender.send(C.EVENTS.FILE_TRANSCRIPTION_PROGRESS, progress);
         },
-      });
+      };
+      const withHotword = await injectStoredHotwords(baseOptions);
+      // [20260820_T14_Hotwords] withHotwordFallback returns unknown; the
+      // file path below reads the transcription shape through this view.
+      const result = (await withHotwordFallback(
+        baseOptions,
+        withHotword,
+        (opts) =>
+          funasrManager.transcribeFile(audioPath, opts) as Promise<unknown>,
+      )) as CleanableTranscriptionResult & { id?: number; duration?: number };
       // [20260819_T10_CleanerWiring] File seam: clean response (text /
       // raw_text / segments), keep the pre-clean original for the DB.
       applyTranscriptionCleaning(result, logger);
@@ -225,13 +296,12 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
         try {
           // [20260819_T10_CleanerWiring] original_text is added by
           // applyTranscriptionCleaning; read it through the typed view.
-          const cleaned = result as CleanableTranscriptionResult;
           const dbResult = databaseManager.saveTranscription({
             text: result.text,
             // [20260819_T10_CleanerWiring] raw_text column keeps the
             // PRE-CLEAN text (recovery); processed_text keeps the cleaned
             // raw output (previously this column stored the uncleaned raw).
-            raw_text: cleaned.original_text || null,
+            raw_text: result.original_text || null,
             processed_text: result.raw_text || result.text,
             source_type: "file",
             source_file_path: audioPath,
