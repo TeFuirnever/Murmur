@@ -9,7 +9,7 @@
 说话就能打字，音频秒转文字，AI 自动润色。基于 FunASR，数据不出你的电脑。
 
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)](#安装)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey)](#安装)
 
 <!-- [20260731_README_DynamicBadge] Replaced hardcoded "tests-672 passing" /
      "coverage-95%" badges (which were stale — the 95% figure used the old
@@ -91,6 +91,8 @@
 - **Windows**：`Murmur.Setup.<version>.exe`
 
 > **包管理器（规划中）**：Homebrew（`brew install --cask murmur`）和 Winget（`winget install TeFuirnever.Murmur`）即将支持，cask/manifest 定义见 `docs/homebrew/`、`docs/winget/`，尚未提交到上游。
+>
+> **Linux**：暂无官方安装包（维护人力有限，优先保障 macOS/Windows 双平台质量）。欢迎社区贡献 Linux 打包与维护方案（issue / PR）。
 
 <!-- [20260803_InstallHonesty] END -->
 
@@ -280,6 +282,8 @@ Download the latest build from [Releases](https://github.com/TeFuirnever/Murmur/
 - **Windows**: `Murmur.Setup.<version>.exe`
 
 > **Package managers (planned):** Homebrew (`brew install --cask murmur`) and Winget (`winget install TeFuirnever.Murmur`) are coming soon — cask/manifest definitions live in `docs/homebrew/` and `docs/winget/` but are not yet submitted upstream.
+>
+> **Linux**: no official packages for now (limited maintainer capacity — macOS/Windows quality comes first). Community contributions for Linux packaging and maintenance are welcome (issues / PRs).
 
 <!-- [20260803_InstallHonesty] END -->
 
