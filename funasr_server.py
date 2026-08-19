@@ -136,6 +136,10 @@ class FunASRServer:
         self.request_queue = queue.Queue()
         self.response_queue = queue.Queue()
         self.cancel_event = threading.Event()
+        # [20260821_T11_UnloadReload] Serializes initialize() across the
+        # main read loop (mic lazy-init) and the inference worker
+        # (reload_models) — concurrent double model load = memory blowup.
+        self._init_lock = threading.Lock()
         self._inference_thread = None
         self._output_thread = None
 
@@ -467,10 +471,10 @@ class FunASRServer:
         # non-finite input rejection) must not hit an unbound name in the
         # finally cleanup.
         infer_path = audio_path
-        if not self.initialized:
-            init_result = self.initialize()
-            if not init_result["success"]:
-                return init_result
+        # [20260821_T11_UnloadReload] Lock-guarded lazy init (worker
+        # reload can race this main-loop path).
+        if not self._ensure_initialized():
+            return {"success": False, "error": "模型初始化失败", "type": "init_error"}
 
         try:
             # 检查音频文件是否存在
@@ -596,6 +600,17 @@ class FunASRServer:
         request_id = options.get("request_id", "")
         # [20260820_T14_Hotwords] Defense-in-depth (file path).
         hotword = sanitize_hotword(options.get("hotword", ""))
+        # [20260821_T11_UnloadReload] File path ran WITHOUT an init guard
+        # (review finding): after an unload it crashed on None models.
+        # Runs on the inference worker thread — reload stays off the read
+        # loop naturally.
+        if not self._ensure_initialized():
+            return {
+                "success": False,
+                "error": "模型初始化失败",
+                "type": "init_error",
+                "request_id": request_id,
+            }
         self.cancel_event.clear()
         import time
         _t0 = time.time()
@@ -1093,6 +1108,59 @@ class FunASRServer:
                 "error": "FunASR未安装",
             }
 
+    # [20260821_T11_UnloadReload] Ticket #189 (spec #177 T11): init guard
+    # shared by both transcribe paths; double-checked under the init lock
+    # so a worker-thread reload and a main-loop mic transcribe collapse
+    # into a single initialize().
+    def _ensure_initialized(self):
+        if self.initialized:
+            return True
+        with self._init_lock:
+            if self.initialized:
+                return True
+            result = self.initialize()
+            return bool(result and result.get("success"))
+
+    # [20260821_T11_UnloadReload] Worker-thread handlers. Called ONLY from
+    # _inference_worker (queued via request_queue) — serialization with
+    # transcribe_file is structural; the main loop just enqueues, so ping
+    # stays answerable throughout.
+    def _do_unload(self, request_id):
+        """释放全部模型（含懒加载的说话人模型），重置初始化状态"""
+        self.asr_model = None
+        self.vad_model = None
+        self.punc_model = None
+        # Lazy speaker model unloads too and stays lazy on reload.
+        self.cam_model = None
+        self.initialized = False
+        logger.info(f"模型已卸载 request_id={request_id}")
+        self.response_queue.put({
+            "request_id": request_id,
+            "type": "result",
+            "success": True,
+            "message": "模型已卸载",
+        })
+
+    def _do_reload(self, request_id):
+        """在推理线程重载模型；progress 事件续期 TS 侧请求超时"""
+        self.response_queue.put({
+            "request_id": request_id,
+            "type": "progress",
+            "phase": "reload",
+            "message": "模型重载中...",
+            "progress_pct": 0,
+        })
+        # [T11] Under the init lock (via _ensure_initialized): a mic
+        # transcribe on the main loop can lazy-init concurrently.
+        ok = self._ensure_initialized()
+        self.response_queue.put({
+            "request_id": request_id,
+            "type": "result",
+            "success": ok,
+            "error": None if ok else "模型初始化失败",
+            "asr_model": self.asr_model_name,
+        })
+
     def _inference_worker(self):
         """推理线程：从 request_queue 取任务，执行推理"""
         while self.running:
@@ -1105,7 +1173,13 @@ class FunASRServer:
                 action = task.get("action")
 
                 try:
-                    if action == "transcribe_file":
+                    if action == "unload_models":
+                        self._do_unload(request_id)
+                        continue
+                    elif action == "reload_models":
+                        self._do_reload(request_id)
+                        continue
+                    elif action == "transcribe_file":
                         opts = task.get("options", {})
                         opts["request_id"] = request_id
                         result = self.transcribe_file_audio(
@@ -1272,6 +1346,15 @@ class FunASRServer:
         elif command.get("action") == "cleanup":
             self._cleanup_memory()
             return {"success": True, "message": "内存清理完成"}, True
+        elif command.get("action") in ("unload_models", "reload_models"):
+            # [20260821_T11_UnloadReload] Queued like transcribe_file:
+            # serialization with in-flight file work is structural (busy =
+            # deferred, never concurrent); the read loop only enqueues.
+            self.request_queue.put({
+                "request_id": command.get("request_id", ""),
+                "action": command.get("action"),
+            })
+            return None, True
         elif command.get("action") == "transcribe_file":
             # 放入推理队列，不立即返回确认
             # 推理结果和进度通过 response_queue → output_worker → stdout 发送
