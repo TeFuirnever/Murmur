@@ -5,6 +5,25 @@ import PythonEnvironment from "./pythonEnvironment";
 import ModelManager from "./modelManager";
 import FunASRServer from "./funasrServer";
 
+// [20260822_T12_IdleUnload] Ticket #190 (spec #177 T12): idle-unload
+// constants. MURMUR_IDLE_UNLOAD_MS overrides the default (ADR-006
+// MURMUR_DEVICE pattern), clamped to [10s, 24h]; invalid values fall back
+// to the default. Env reaches only dev launches (packaged GUI apps do not
+// inherit the user shell) — developer stories only, by design.
+const IDLE_UNLOAD_DEFAULT_MS = 300_000; // 5 minutes
+export const IDLE_UNLOAD_MIN_MS = 10_000;
+export const IDLE_UNLOAD_MAX_MS = 24 * 60 * 60_000;
+
+function resolveIdleUnloadTimeoutMs(): number {
+  const raw = process.env.MURMUR_IDLE_UNLOAD_MS;
+  if (!raw) return IDLE_UNLOAD_DEFAULT_MS;
+  const parsed = Number.parseInt(raw, 10);
+  if (Number.isNaN(parsed)) return IDLE_UNLOAD_DEFAULT_MS;
+  return Math.min(Math.max(parsed, IDLE_UNLOAD_MIN_MS), IDLE_UNLOAD_MAX_MS);
+}
+
+export const IDLE_UNLOAD_TIMEOUT_MS = resolveIdleUnloadTimeoutMs();
+
 /** Logger interface (accepts console or LogManager). */
 interface Logger {
   info?(message: string, ...args: unknown[]): void;
@@ -19,6 +38,11 @@ class FunASRManager {
   private pythonEnv: PythonEnvironment;
   private modelManager: ModelManager;
   private server: FunASRServer;
+
+  private idleTimer: ReturnType<typeof setTimeout> | null = null;
+  // [20260822_T12_IdleUnload] In-flight/pending transcription flag — the
+  // idle deadline defers while work is active (busy = deferred).
+  private _transcriptionActive = false;
 
   constructor(logger: Logger | null = null) {
     this.logger = logger || console;
@@ -99,21 +123,44 @@ class FunASRManager {
     return this.modelManager.downloadModels(cb, pythonCmd);
   }
 
-  // Transcription delegation
-  transcribeAudio(
+  // Transcription delegation — each entry point arms the idle-unload
+  // timer and guards the busy flag around the in-flight window
+  // ([20260822_T12_IdleUnload]; ping/status/stats never reset it).
+  async transcribeAudio(
     audioBlob: unknown,
     options: Record<string, unknown>,
   ): Promise<unknown> {
-    return this.server.transcribeAudio(audioBlob, options);
+    this._resetIdleUnloadTimer();
+    this._transcriptionActive = true;
+    try {
+      return await this.server.transcribeAudio(audioBlob, options);
+    } finally {
+      this._transcriptionActive = false;
+      this._resetIdleUnloadTimer();
+    }
   }
-  transcribeFile(
+  async transcribeFile(
     audioPath: string,
     options: Record<string, unknown>,
   ): Promise<unknown> {
-    return this.server.transcribeFile(audioPath, options);
+    this._resetIdleUnloadTimer();
+    this._transcriptionActive = true;
+    try {
+      return await this.server.transcribeFile(audioPath, options);
+    } finally {
+      this._transcriptionActive = false;
+      this._resetIdleUnloadTimer();
+    }
   }
-  diarizeAudio(audioPath: string, segments: unknown): Promise<unknown> {
-    return this.server.diarizeAudio(audioPath, segments);
+  async diarizeAudio(audioPath: string, segments: unknown): Promise<unknown> {
+    this._resetIdleUnloadTimer();
+    this._transcriptionActive = true;
+    try {
+      return await this.server.diarizeAudio(audioPath, segments);
+    } finally {
+      this._transcriptionActive = false;
+      this._resetIdleUnloadTimer();
+    }
   }
   cancelTranscription(): Promise<unknown> {
     return this.server.cancelTranscription();
@@ -291,6 +338,44 @@ class FunASRManager {
         models_downloaded: false,
       };
     }
+  }
+
+  // [20260822_T12_IdleUnload] Arm/re-arm the idle-unload timer. Called ONLY
+  // from transcription entry points (mic/file/diarize) — ping, status and
+  // stats polls must NEVER postpone an unload.
+  _resetIdleUnloadTimer(): void {
+    if (this.idleTimer) clearTimeout(this.idleTimer);
+    this.idleTimer = setTimeout(() => {
+      this.idleTimer = null;
+      void this._onIdleUnloadTimeout();
+    }, IDLE_UNLOAD_TIMEOUT_MS);
+  }
+
+  async _onIdleUnloadTimeout(): Promise<void> {
+    // Busy = deferred: re-arm for another full window instead of unloading
+    // mid-flight (the Python side also defers under the models lock, but
+    // avoiding the pointless command keeps logs clean).
+    if (this._transcriptionActive) {
+      this.logger.info && this.logger.info("空闲超时但转写进行中，顺延卸载");
+      this._resetIdleUnloadTimer();
+      return;
+    }
+    this.logger.info &&
+      this.logger.info(`空闲 ${IDLE_UNLOAD_TIMEOUT_MS / 60000} 分钟，卸载模型`);
+    try {
+      await this.server.unloadModels();
+    } catch (error) {
+      this.logger.warn &&
+        this.logger.warn("空闲卸载失败（下次转写将懒重载）", error);
+    }
+  }
+
+  // [20260822_T12_IdleUnload] Hotkey-down pre-trigger: start the reload
+  // immediately so the user's speech covers the reload window (the Python
+  // read loop stays ping-answerable; health monitoring is suppressed for
+  // the duration inside the server wrapper).
+  reloadModels(): Promise<unknown> {
+    return this.server.reloadModels();
   }
 }
 

@@ -52,6 +52,12 @@ export interface ElectronAPI {
     message?: string;
     error?: string;
   }>;
+  // [20260822_T12_IdleUnload] Fire-and-forget reload warm-up (#190).
+  reloadFunasrModels: () => Promise<{
+    success: boolean;
+    message?: string;
+    error?: string;
+  }>;
 
   // Model management
   checkModelFiles: () => Promise<ModelCheckResult>;

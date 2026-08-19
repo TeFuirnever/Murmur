@@ -21,6 +21,8 @@ interface FunasrManager {
     cb: (progress: Record<string, unknown>) => void,
   ): Promise<unknown>;
   restartServer(): Promise<unknown>;
+  // [20260822_T12_IdleUnload] Hotkey-down reload pre-trigger (#190).
+  reloadModels(): Promise<unknown>;
   modelsInitialized: boolean;
   serverReady: boolean;
   initializationPromise: Promise<unknown> | null;
@@ -69,6 +71,19 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
     return await funasrManager.installFunASR((progress) => {
       event.sender.send(C.EVENTS.FUNASR_INSTALL_PROGRESS, progress);
     });
+  });
+
+  // [20260822_T12_IdleUnload] Hotkey-down pre-trigger: fire-and-forget —
+  // the renderer never blocks on the reload; the transcription request
+  // that follows waits on the Python models lock instead.
+  ipcMain.handle(C.FUNASR.RELOAD_MODELS, async () => {
+    try {
+      void funasrManager.reloadModels();
+      return { success: true, message: "模型重载已触发" };
+    } catch (error) {
+      logger.error?.("触发模型重载失败", error);
+      return { success: false, error: (error as Error).message };
+    }
   });
 
   ipcMain.handle(C.FUNASR.RESTART, async () => {

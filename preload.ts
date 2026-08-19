@@ -63,6 +63,8 @@ export const preloadApi: ElectronAPI = {
   checkFunASRStatus: () => ipcRenderer.invoke(C.FUNASR.STATUS),
   installFunASR: () => ipcRenderer.invoke(C.FUNASR.INSTALL),
   restartFunasrServer: () => ipcRenderer.invoke(C.FUNASR.RESTART),
+  // [20260822_T12_IdleUnload] Hotkey-down reload pre-trigger (#190).
+  reloadFunasrModels: () => ipcRenderer.invoke(C.FUNASR.RELOAD_MODELS),
 
   // Model file management
   checkModelFiles: () => ipcRenderer.invoke(C.MODELS.CHECK),

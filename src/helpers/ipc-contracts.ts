@@ -13,6 +13,9 @@ export const FUNASR = {
   INSTALL: "install-funasr",
   STATUS: "check-funasr-status",
   RESTART: "restart-funasr-server",
+  // [20260822_T12_IdleUnload] Hotkey-down reload pre-trigger (fire-and-
+  // forget warm-up; ticket #190).
+  RELOAD_MODELS: "reload-funasr-models",
 } as const;
 
 // [20260815_Refactor_DeadIpc] Removed dead channels (zero renderer callers):
