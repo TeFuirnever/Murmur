@@ -14,6 +14,7 @@ import signal
 import contextlib
 import io
 import argparse
+import unicodedata
 import glob
 import threading
 import queue
@@ -80,10 +81,22 @@ HOTWORD_MAX_CHARS = 4096
 
 
 def sanitize_hotword(value):
-    """Coerce a protocol hotword to a safe string ('' on non-string)."""
+    """Coerce a protocol hotword to a safe string ('' on non-string).
+
+    [T14 review MINOR] Logs degradation/truncation (defense must be
+    observable) and strips Cc control characters so caller-supplied
+    garbage cannot reach generate() unfiltered.
+    """
     if not isinstance(value, str):
+        if value:
+            logger.warning(f"热词类型非法({type(value).__name__})，降级为空串")
         return ""
-    return value[:HOTWORD_MAX_CHARS]
+    cleaned = "".join(
+        ch for ch in value if unicodedata.category(ch) != "Cc"
+    )[:HOTWORD_MAX_CHARS]
+    if len(cleaned) != len(value):
+        logger.warning("热词含控制字符或超长，已清洗/截断")
+    return cleaned
 
 
 def compute_inference_threads(cores, override=None):
@@ -634,7 +647,7 @@ class FunASRServer:
             })
 
             if self.cancel_event.is_set():
-                return {"success": False, "error": "转录已取消", "request_id": request_id}
+                return {"success": False, "canceled": True, "error": "转录已取消", "request_id": request_id}
 
             # --- Helper: 从 ASR 时间戳构建 segments ---
             def _build_segments_from_timestamps(asr_text, asr_timestamps, time_offset_ms=0):
@@ -866,7 +879,7 @@ class FunASRServer:
             _t_punc = time.time()
             if self.cancel_event.is_set():
                 logger.info(f"PUNC phase SKIPPED (cancelled) request_id={request_id}")
-                return {"success": False, "error": "转录已取消", "request_id": request_id}
+                return {"success": False, "canceled": True, "error": "转录已取消", "request_id": request_id}
 
             self.response_queue.put({
                 "request_id": request_id,

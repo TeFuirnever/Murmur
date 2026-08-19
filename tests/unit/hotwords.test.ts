@@ -58,6 +58,24 @@ describe("[20260820_T14_Hotwords] sanitizeHotwordInput", () => {
     expect(sanitizeHotwordInput("")).toBe("");
     expect(sanitizeHotwordInput("  \n\t ")).toBe("");
   });
+
+  // [T14 review MAJOR-4] The caps themselves must not CREATE lone
+  // surrogates: UTF-16-unit slicing can split a surrogate pair at the
+  // line or total boundary — the exact crash input this module exists to
+  // prevent.
+  it("line-length cap never splits a surrogate pair", () => {
+    const line = "a".repeat(31) + "😀" + "b";
+    const out = sanitizeHotwordInput(line);
+    expect(out.endsWith("😀") || out.endsWith("a")).toBe(true);
+  });
+
+  it("total-length cap never splits a surrogate pair", () => {
+    const lines = Array.from({ length: 130 }, () => "😀".repeat(32));
+    const out = sanitizeHotwordInput(lines.join("\n"));
+    expect(out).not.toMatch(
+      /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/,
+    );
+  });
 });
 
 describe("[20260820_T14_Hotwords] settings boundary", () => {

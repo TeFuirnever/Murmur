@@ -165,13 +165,15 @@ describe("hotword injection", () => {
     expect(result.success).toBe(false);
   });
 
-  it("AUDIO: both attempts fail → original error, no hotword_degraded", async () => {
+  it("AUDIO: both attempts fail → retry's error is returned (provenance locked)", async () => {
     const C = await setup();
     mockDb.getSetting!.mockResolvedValue("张晗玥");
-    mockFunasr.transcribeAudio!.mockResolvedValue({
-      success: false,
-      error: "彻底失败",
-    });
+    mockFunasr
+      .transcribeAudio!.mockResolvedValueOnce({
+        success: false,
+        error: "第一次失败",
+      })
+      .mockResolvedValueOnce({ success: false, error: "第二次失败" });
     const handler = registeredHandlers.get(C.TRANSCRIPTION.AUDIO)!;
     const result = (await handler(null, new ArrayBuffer(0), {})) as {
       success: boolean;
@@ -180,8 +182,77 @@ describe("hotword injection", () => {
     };
     expect(mockFunasr.transcribeAudio).toHaveBeenCalledTimes(2);
     expect(result.success).toBe(false);
-    expect(result.error).toBe("彻底失败");
+    expect(result.error).toBe("第二次失败");
     expect(result.hotword_degraded).toBeUndefined();
+  });
+
+  // [T14 review BLOCKER] The REAL transcribeAudio THROWS on failure (it
+  // never resolves {success:false}) — a rejection must be normalized so
+  // the retry actually fires in production, not only under mocks.
+  it("AUDIO: rejection on first attempt (real contract) still triggers the empty-hotword retry", async () => {
+    const C = await setup();
+    mockDb.getSetting!.mockResolvedValue("张晗玥");
+    mockFunasr
+      .transcribeAudio!.mockRejectedValueOnce(new Error("服务器未就绪"))
+      .mockResolvedValueOnce({ success: true, text: "重试成功" });
+    const handler = registeredHandlers.get(C.TRANSCRIPTION.AUDIO)!;
+    const result = (await handler(null, new ArrayBuffer(0), {})) as {
+      success: boolean;
+      text: string;
+      hotword_degraded?: boolean;
+    };
+    expect(mockFunasr.transcribeAudio).toHaveBeenCalledTimes(2);
+    expect(result.success).toBe(true);
+    expect(result.hotword_degraded).toBe(true);
+  });
+
+  // [T14 review MAJOR-1] A user CANCEL is not retryable — retrying would
+  // restart a transcription the user just aborted (the Python entry even
+  // clears cancel_event, defeating the cancel button entirely).
+  it("FILE: canceled result is returned immediately — no retry", async () => {
+    const C = await setup();
+    mockDb.getSetting!.mockResolvedValue("张晗玥");
+    mockFunasr.transcribeFile!.mockResolvedValue({
+      success: false,
+      canceled: true,
+      error: "转录已取消",
+    });
+    const audioPath = path.join(os.tmpdir(), `t14-cancel-${Date.now()}.wav`);
+    fs.writeFileSync(audioPath, "x");
+    try {
+      const handler = registeredHandlers.get(C.TRANSCRIPTION.TRANSCRIBE_FILE)!;
+      const result = (await handler(null, audioPath)) as {
+        success: boolean;
+        canceled?: boolean;
+      };
+      expect(mockFunasr.transcribeFile).toHaveBeenCalledTimes(1);
+      expect(result.success).toBe(false);
+      expect(result.canceled).toBe(true);
+    } finally {
+      fs.unlinkSync(audioPath);
+    }
+  });
+
+  it("FILE: failure with injected hotword retries; success surfaces hotword_degraded", async () => {
+    const C = await setup();
+    mockDb.getSetting!.mockResolvedValue("张晗玥");
+    mockFunasr
+      .transcribeFile!.mockResolvedValueOnce({ success: false, error: "x" })
+      .mockResolvedValueOnce({ success: true, text: "ok", raw_text: "ok" });
+    const audioPath = path.join(os.tmpdir(), `t14-retry-${Date.now()}.wav`);
+    fs.writeFileSync(audioPath, "x");
+    try {
+      const handler = registeredHandlers.get(C.TRANSCRIPTION.TRANSCRIBE_FILE)!;
+      const result = (await handler(null, audioPath)) as {
+        success: boolean;
+        hotword_degraded?: boolean;
+      };
+      expect(mockFunasr.transcribeFile).toHaveBeenCalledTimes(2);
+      expect(result.success).toBe(true);
+      expect(result.hotword_degraded).toBe(true);
+    } finally {
+      fs.unlinkSync(audioPath);
+    }
   });
 
   it("TRANSCRIBE_FILE: hotwords injected into file-path options too", async () => {

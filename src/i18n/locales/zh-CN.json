@@ -200,7 +200,8 @@
     "statusModelsNeeded": "语音识别模型尚未下载，请先下载模型",
     "statusPythonNeeded": "Python 环境尚未安装",
     "statusFunasrNeeded": "FunASR 尚未安装",
-    "statusNotReady": "语音识别服务未就绪"
+    "statusNotReady": "语音识别服务未就绪",
+    "hotwordDegraded": "热词可能导致识别失败,已自动去除热词重试成功。请检查 设置 → 通用 → 热词"
   },
   "common": {
     "confirm": "确认",

@@ -24,15 +24,27 @@ const LONE_SURROGATES =
  * Coerce arbitrary input into a safe, joined hotword string.
  * Returns "" for empty/invalid input — callers must OMIT the hotword
  * field entirely in that case (byte-identical to pre-hotword behavior).
+ *
+ * [T14 review MAJOR-4] All slicing is CODE-POINT based (Array.from) and a
+ * final lone-surrogate strip runs after the total cap: UTF-16-unit slicing
+ * can split a surrogate pair at a cap boundary — manufacturing the very
+ * crash input (lone surrogate → Python stdout UTF-8 encode failure) this
+ * module exists to prevent.
  */
 export function sanitizeHotwordInput(input: unknown): string {
   if (typeof input !== "string") return "";
-  const lines = input
-    .replace(CONTROL_CHARS, "")
-    .replace(LONE_SURROGATES, "")
+  const cleaned = input.replace(CONTROL_CHARS, "").replace(LONE_SURROGATES, "");
+  const lines = cleaned
     .split("\n")
-    .map((line) => line.trim().slice(0, MAX_HOTWORD_LINE_CHARS))
+    .map((line) =>
+      Array.from(line.trim()).slice(0, MAX_HOTWORD_LINE_CHARS).join(""),
+    )
     .filter((line) => line.length > 0)
     .slice(0, MAX_HOTWORD_LINES);
-  return lines.join(" ").slice(0, MAX_HOTWORD_TOTAL_CHARS).trim();
+  const joined = Array.from(lines.join(" "))
+    .slice(0, MAX_HOTWORD_TOTAL_CHARS)
+    .join("");
+  // Final strip: the total cap itself can still split a pair.
+  return joined.replace(LONE_SURROGATES, "").trimEnd();
 }
+// [20260820_T14_Hotwords] END

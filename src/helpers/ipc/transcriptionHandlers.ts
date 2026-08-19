@@ -165,18 +165,35 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
   // request fails, retry ONCE with the original (hotword-free) options —
   // a bad hotword list must not brick transcription. Success on the retry
   // surfaces hotword_degraded=true so the UI can point at the settings.
+  // [T14 review BLOCKER] The real transcribeAudio THROWS on failure (only
+  // success resolves) — rejections are normalized here so the retry fires
+  // under the real contract, not just under {success:false} mocks.
+  // [T14 review MAJOR-1] A user CANCEL is never retryable: the Python
+  // entry clears cancel_event, so a retry would restart the transcription
+  // the user just aborted.
   const withHotwordFallback = async (
     baseOptions: Record<string, unknown>,
     hotwordOptions: Record<string, unknown>,
     run: (options: Record<string, unknown>) => Promise<unknown>,
   ): Promise<unknown> => {
-    const first = await run(hotwordOptions);
+    const normalize = async (p: Promise<unknown>): Promise<unknown> => {
+      try {
+        return await p;
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    };
     const injected = hotwordOptions !== baseOptions;
+    const first = await normalize(run(hotwordOptions));
     if (!injected) return first;
+    if ((first as { canceled?: boolean }).canceled === true) return first;
     const failed = !first || (first as { success?: boolean }).success === false;
     if (!failed) return first;
     logger.warn?.("热词转写失败，以空热词重试一次");
-    const retry = await run(baseOptions);
+    const retry = await normalize(run(baseOptions));
     if (retry && (retry as { success?: boolean }).success) {
       return { ...(retry as object), hotword_degraded: true };
     }
