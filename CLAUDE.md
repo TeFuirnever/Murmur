@@ -146,7 +146,7 @@ When adding platform-specific code, use `process.platform === "win32"` checks. A
 
 ### Issue tracker
 
-Issues and PRDs live as GitHub issues. Use the `gh` CLI for all operations. See `docs/agents/issue-tracker.md`.
+Issues and PRDs live as GitHub issues. Use the `gh-axi` CLI for all operations (agent-ergonomic `gh` wrapper, same auth, lower token cost). See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
@@ -155,6 +155,11 @@ Five canonical triage roles: `needs-triage`, `needs-info`, `ready-for-agent`, `r
 ### Domain docs
 
 Domain context: see `docs/agents/domain.md`.
+
+### Agent tooling
+
+- `backlog.md` is the shared task ledger for all agent sessions and worktrees. Use `tasks-axi` (`add` / `start` / `done` / `block` / `ready`) for all task state — never hand-edit task lines in the ledger.
+- Browser automation: use `chrome-devtools-axi` (`open`, `snapshot`, `click @uid`, `eval`) instead of screenshot-and-guess.
 
 ## GBrain Configuration (configured by /setup-gbrain)
 
