@@ -122,6 +122,9 @@ def compute_inference_threads(cores, override=None):
 class FunASRServer:
     def __init__(self, damo_root=None):
         self.asr_model = None
+        # [20260820_T15_SeacoSwap] Which ASR generation actually loaded
+        # (exposed via check_status so the UI can flag degraded hotwords).
+        self.asr_model_name = None
         self.vad_model = None
         self.punc_model = None
         self.cam_model = None
@@ -264,24 +267,57 @@ class FunASRServer:
         logger.info(f"收到信号 {signum}，准备退出...")
         self.running = False
 
-    def _load_asr_model(self):
-        """加载ASR模型"""
-        try:
-            logger.info("开始加载ASR模型...")
-            with suppress_stdout():
-                from funasr import AutoModel
+    # [20260820_T15_SeacoSwap] Ticket #192: primary = hotword-capable
+    # SeACo (T13 spike: zero CER regression, timestamps intact); the old
+    # paraformer stays as the ROLLBACK when SeACo fails to load (missing
+    # files mid-upgrade, corrupt download) — the app stays usable.
+    ASR_MODEL_SEACO = "damo/speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch"
+    ASR_MODEL_FALLBACK = "damo/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch"
 
-                self.asr_model = AutoModel(
-                    model="damo/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
-                    model_revision="v2.0.4",
-                    disable_update=True,
-                    device=self.device,
-                )
-            logger.info("ASR模型加载完成")
-            return True
-        except Exception as e:
-            logger.error(f"ASR模型加载失败: {str(e)}")
-            return False
+    # [20260820_T15_SeacoSwap] Promoted from a nested run() helper: the
+    # ASR loader's disk-presence gate needs the same resolution.
+    @staticmethod
+    def _default_damo_root():
+        """解析默认模型根目录（MODELSCOPE_CACHE 兼容两种布局）"""
+        root = os.environ.get("MODELSCOPE_CACHE")
+        if root:
+            if os.path.isdir(os.path.join(root, "damo")):
+                return os.path.join(root, "damo")
+            if os.path.isdir(os.path.join(root, "hub", "damo")):
+                return os.path.join(root, "hub", "damo")
+        home_dir = os.path.expanduser("~")
+        return os.path.join(home_dir, ".cache", "modelscope", "hub", "damo")
+
+    def _load_asr_model(self):
+        """加载ASR模型（SeACo 优先，旧模型回退）"""
+        from funasr import AutoModel
+
+        # [T15 review BLOCKER] Disk-presence gate: a repo id that is NOT
+        # on local disk must be skipped WITHOUT calling AutoModel — funasr
+        # auto-downloads ~1GB from modelscope on cache miss, silently
+        # defeating the rollback (or blowing the 300s init timeout).
+        cache_path = self.damo_root or self._default_damo_root()
+        candidates = [
+            m
+            for m in (self.ASR_MODEL_SEACO, self.ASR_MODEL_FALLBACK)
+            if os.path.isdir(os.path.join(cache_path, m.split("/", 1)[1]))
+        ]
+        for model_name in candidates:
+            try:
+                logger.info(f"开始加载ASR模型: {model_name}")
+                with suppress_stdout():
+                    self.asr_model = AutoModel(
+                        model=model_name,
+                        model_revision="v2.0.4",
+                        disable_update=True,
+                        device=self.device,
+                    )
+                logger.info(f"ASR模型加载完成: {model_name}")
+                self.asr_model_name = model_name
+                return True
+            except Exception as e:
+                logger.error(f"ASR模型加载失败({model_name}): {str(e)}")
+        return False
 
     def _load_vad_model(self):
         """加载VAD模型"""
@@ -1023,6 +1059,9 @@ class FunASRServer:
             "models_loaded": {
                 "asr": self.asr_model is not None,
                 "vad": self.vad_model is not None,
+            # [T15 review MINOR] Surface the loaded generation so the UI
+            # can flag silent hotword degradation on the old model.
+            "asr_model": self.asr_model_name,
                 "punc": self.punc_model is not None,
             },
         }
@@ -1040,6 +1079,9 @@ class FunASRServer:
                 "models": {
                     "asr": self.asr_model is not None,
                     "vad": self.vad_model is not None,
+            # [T15 review MINOR] Surface the loaded generation so the UI
+            # can flag silent hotword degradation on the old model.
+            "asr_model": self.asr_model_name,
                     "punc": self.punc_model is not None,  # FunASR标点恢复模型状态
                 },
             }
@@ -1262,29 +1304,18 @@ class FunASRServer:
         logger.info("FunASR服务器启动")
 
         # 解析 damo 根目录
-        def _default_damo_root():
-            # 允许通过 MODELSCOPE_CACHE 指定根；常见是 ~/.cache/modelscope/hub/damo
-            root = os.environ.get("MODELSCOPE_CACHE")
-            if root:
-                # 兼容两种布局：<cache>/damo 或 <cache>/hub/damo
-                if os.path.isdir(os.path.join(root, "damo")):
-                    return os.path.join(root, "damo")
-                if os.path.isdir(os.path.join(root, "hub", "damo")):
-                    return os.path.join(root, "hub", "damo")
-                # 像 Node 一样自定义到 /Volumes/APFS/AI/models/damo，就直接传入 --damo-root
-            # 默认回到用户主目录的 modelscope/hub/damo
-            home_dir = os.path.expanduser("~")
-            return os.path.join(home_dir, ".cache", "modelscope", "hub", "damo")
-
-        cache_path = self.damo_root if self.damo_root else _default_damo_root()
+        cache_path = self.damo_root if self.damo_root else self._default_damo_root()
         logger.info(f"使用的模型根目录(damo root): {cache_path}")
 
-        repos = [
+        # [20260820_T15_SeacoSwap] Either ASR generation satisfies the
+        # required-ASR check (SeACo for fresh installs / upgraded users,
+        # old paraformer for mid-upgrade rollback states).
+        vad_repo = "speech_fsmn_vad_zh-cn-16k-common-pytorch"
+        asr_repos = [
+            "speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
             "speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
-            "speech_fsmn_vad_zh-cn-16k-common-pytorch",
-            "punc_ct-transformer_zh-cn-common-vocab272727-pytorch",
         ]
-        required_repos = repos[:2]  # ASR + VAD are required; punc is optional
+        # ASR (either generation) + VAD are required; punc is optional.
 
         def _repo_ready(repo_dir):
             # 目录存在且包含任意常见权重/配置文件即认为已就绪
@@ -1299,11 +1330,12 @@ class FunASRServer:
                     return True
             return False
 
-        missing_required = []
-        for r in required_repos:
-            rd = os.path.join(cache_path, r)
-            if not _repo_ready(rd):
-                missing_required.append(r)
+        asr_satisfied = any(
+            _repo_ready(os.path.join(cache_path, r)) for r in asr_repos
+        )
+        missing_required = [] if asr_satisfied else asr_repos[:1]
+        if not _repo_ready(os.path.join(cache_path, vad_repo)):
+            missing_required.append(vad_repo)
 
         if not missing_required:
             logger.info("模型文件存在，开始初始化")

@@ -21,6 +21,10 @@ interface ModelConfig {
   cache_path: string;
   expected_size: number;
   required: boolean;
+  // [20260820_T15_SeacoSwap] Optional rollback model — accepted by
+  // checkModelFiles when the primary is absent (upgrade-in-progress /
+  // failed download keeps the app usable on the old model).
+  fallback_name?: string;
 }
 
 interface ModelCheckResult {
@@ -52,10 +56,16 @@ class ModelManager {
     this.modelsDownloaded = null;
     this.modelConfigs = {
       asr: {
-        name: "damo/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+        // [20260820_T15_SeacoSwap] SeACo-Paraformer (hotword-capable, T13
+        // spike: zero CER regression, timestamps present, 952.7 MB). The
+        // old paraformer stays recorded as the rollback target — the
+        // server falls back to it when SeACo fails to load.
+        name: "damo/speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+        fallback_name:
+          "damo/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
         cache_path:
-          "speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
-        expected_size: 840 * 1024 * 1024,
+          "speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+        expected_size: Math.round(952.7 * 1024 * 1024),
         required: true,
       },
       vad: {
@@ -82,7 +92,11 @@ class ModelManager {
           const damoPath = path.join(startDir, entry.name);
           const subdirs = fs.readdirSync(damoPath, { withFileTypes: true });
           const hasExpectedModel = subdirs.some(
-            (m) => m.isDirectory() && m.name.startsWith("speech_paraformer"),
+            // [20260820_T15_SeacoSwap] Either ASR generation marks a valid damo root.
+            (m) =>
+              m.isDirectory() &&
+              (m.name.startsWith("speech_seaco_paraformer") ||
+                m.name.startsWith("speech_paraformer")),
           );
           if (hasExpectedModel) return damoPath;
         }
@@ -144,6 +158,7 @@ class ModelManager {
           .readdirSync(candidate)
           .some(
             (n) =>
+              n.startsWith("speech_seaco_paraformer") ||
               n.startsWith("speech_paraformer") ||
               n.startsWith("speech_fsmn") ||
               n.startsWith("punc_ct"),
@@ -198,20 +213,39 @@ class ModelManager {
     > = {};
 
     for (const [modelType, config] of Object.entries(this.modelConfigs)) {
+      // [20260820_T15_SeacoSwap] Fallback-aware check: a missing/incomplete
+      // PRIMARY counts as "not fully downloaded" (upgrade entry stays
+      // visible), but if the recorded FALLBACK is ready the model still
+      // satisfies minimum_ready — the server runs on the old generation
+      // instead of refusing to start (review MAJOR fix).
+      let isComplete = false;
       const modelFile = path.join(cachePath, config.cache_path);
       if (fs.existsSync(modelFile)) {
-        const isComplete = this._verifyModel(modelFile, config);
-        modelDetails[modelType] = { downloaded: true, complete: isComplete };
-        if (!isComplete) {
-          allDownloaded = false;
-          missingModels.push(modelType);
-          if (config.required) minimumReady = false;
+        isComplete = this._verifyModel(modelFile, config);
+      }
+      let ready = isComplete;
+      if (!ready && config.fallback_name) {
+        const fallbackFile = path.join(
+          cachePath,
+          config.fallback_name.split("/").slice(1).join("/"),
+        );
+        if (fs.existsSync(fallbackFile)) {
+          ready = this._verifyModel(fallbackFile, {
+            ...config,
+            cache_path: config.fallback_name.split("/").slice(1).join("/"),
+          });
         }
-      } else {
+      }
+      modelDetails[modelType] = { downloaded: ready, complete: ready };
+      if (!ready) {
         allDownloaded = false;
         missingModels.push(modelType);
-        modelDetails[modelType] = { downloaded: false };
         if (config.required) minimumReady = false;
+      } else if (!isComplete) {
+        // Fallback carries readiness, but the primary is absent — surface
+        // the upgrade without blocking startup.
+        allDownloaded = false;
+        missingModels.push(modelType);
       }
     }
 
