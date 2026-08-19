@@ -551,6 +551,58 @@ describe("funasrManager initializeAtStartup", () => {
     expect(logger.info).toHaveBeenCalled();
   });
 
+  // [20260818_T3_PythonSelfCheckMilestone] Ticket #184: the packaged boot
+  // smoke needs an unambiguous python-chain milestone. Today a broken
+  // embedded env only produces a warn ("FunASR启动初始化失败，但不影响
+  // 应用启动") and the app still boots green — exactly how the broken
+  // Windows env shipped through every smoke (spec #177 B-0).
+  it("success path: logs the Python链路自检通过 boot milestone", async () => {
+    const { manager, logger } = makeManager();
+    manager.findPythonExecutable = vi.fn(() => Promise.resolve("/py/3.11"));
+    manager.checkFunASRInstallation = vi.fn(() =>
+      Promise.resolve({ installed: true, working: true }),
+    );
+    vi.spyOn(
+      manager as unknown as { preInitializeModels: () => Promise<unknown> },
+      "preInitializeModels",
+    ).mockResolvedValue(null);
+
+    await manager.initializeAtStartup();
+
+    expect(logger.info).toHaveBeenCalledWith("Python链路自检通过", {
+      pythonCmd: "/py/3.11",
+    });
+    expect(logger.warn).not.toHaveBeenCalledWith(
+      "Python链路自检失败",
+      expect.anything(),
+    );
+  });
+
+  it("funasr import broken (working:false): logs Python链路自检失败 but boot still completes", async () => {
+    const { manager, logger } = makeManager();
+    manager.findPythonExecutable = vi.fn(() => Promise.resolve("/py/3.11"));
+    manager.checkFunASRInstallation = vi.fn(() =>
+      Promise.resolve({ installed: false, working: false }),
+    );
+    vi.spyOn(
+      manager as unknown as { preInitializeModels: () => Promise<unknown> },
+      "preInitializeModels",
+    ).mockResolvedValue(null);
+
+    await manager.initializeAtStartup();
+
+    expect(logger.warn).toHaveBeenCalledWith("Python链路自检失败", {
+      installed: false,
+      working: false,
+    });
+    expect(logger.info).not.toHaveBeenCalledWith(
+      "Python链路自检通过",
+      expect.anything(),
+    );
+    // Non-fatal by design: the app still finishes startup init.
+    expect(manager.isInitialized).toBe(true);
+  });
+
   it("failure path: findPythonExecutable rejects → warns but still calls preInitializeModels", async () => {
     const { manager, logger } = makeManager();
     let preCalled = false;
@@ -569,7 +621,14 @@ describe("funasrManager initializeAtStartup", () => {
 
     // isInitialized stays false because the try-block threw before assignment
     expect(manager.isInitialized).toBe(false);
-    expect(logger.warn).toHaveBeenCalledTimes(1);
+    // [20260818_T3_PythonSelfCheckMilestone] Two warns on this path now: the
+    // explicit self-check failure milestone (smoke-gate assertable) plus the
+    // legacy non-fatal notice.
+    expect(logger.warn).toHaveBeenCalledTimes(2);
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Python链路自检失败",
+      expect.any(Error),
+    );
     expect(logger.warn).toHaveBeenCalledWith(
       "FunASR启动初始化失败，但不影响应用启动",
       expect.any(Error),

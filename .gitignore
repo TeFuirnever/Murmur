@@ -115,7 +115,10 @@ temp/
 .gyp
 .gyprc
 
-python
+# [20260817_T4_PythonTests] Anchored to repo root: this ignores the embedded
+# Python runtime distribution (python/) only. The old bare `python` pattern
+# also swallowed tests/python/ — the stdlib-unittest protocol suite (T5).
+/python/
 
 # OMC & AI agent config (local only)
 .omc/

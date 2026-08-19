@@ -256,12 +256,17 @@ async function main() {
   // [20260725_Autopilot_T2.2] Add typecheck:tests — runs tsc against
   // tsconfig.test.json which covers tests/**. Catches type errors in .ts
   // and .tsx test files that pnpm test (vitest transform) does not.
+  // [20260817_T4_PythonTestRunner] Add test:python:unit — the stdlib-unittest
+  // suite under tests/python (protocol contract + numpy smoke), so Python
+  // server changes are gate-covered locally too. CI mirrors this in the
+  // "Python unit tests" step of ci.yml on both platform matrix entries.
   const stage1 = await Promise.all([
     run("pnpm format:check", "format:check"),
     run("pnpm lint", "lint"),
     run("pnpm license:check", "license:check"),
     run("pnpm typecheck", "typecheck"),
     run("pnpm typecheck:tests", "typecheck:tests"),
+    run("pnpm run test:python:unit", "test:python:unit"),
   ]);
   stage1.forEach(printResult);
   // [20260725_Autopilot_T2.2] END

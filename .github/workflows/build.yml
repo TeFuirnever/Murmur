@@ -89,8 +89,35 @@ jobs:
         run: |
           ELECTRON_RUN_AS_NODE=1 npx electron -e "const D=require('better-sqlite3'); new D(':memory:').prepare('select 1 as ok').get(); console.log('native ABI gate passed')"
       # [20260816_Fix_MacCiNodeAbi] END
+      # [20260818_T3_PythonPackagingGate] Ticket #184: cache the embedded
+      # Python env (torch/funasr wheels are the slow, disk-hungry part) and
+      # HARD-gate the package on it. This combo replaces the old
+      # continue-on-error on the Windows job, which let installers ship
+      # without a Python env while the build stayed green (spec #177 B-0).
+      - name: Cache embedded Python
+        id: cache-python
+        uses: actions/cache@v4
+        with:
+          path: python
+          key: embedded-python-${{ runner.os }}-${{ hashFiles('scripts/prepare-embedded-python.js') }}
       - name: Prepare embedded Python
+        if: steps.cache-python.outputs.cache-hit != 'true'
         run: pnpm run prepare:python:embedded
+
+      # [20260818_T3_PythonPackagingGate] Gate: the env that will ship inside
+      # the installer must actually import the transcription stack (numpy
+      # feeds the DSP path, soundfile the audio decode, funasr the models).
+      # A 0-byte or pip-metadata-polluted env fails HERE, not in users' hands.
+      - name: Verify embedded Python deps (packaging gate)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # [20260818_T3_PythonPackagingGate] Git Bash on windows-latest
+          # reports uname as MINGW*_NT-**, NOT "Windows_NT" — match on _NT.
+          if uname -s | grep -q "_NT"; then PY=python/python.exe; else PY=python/bin/python3.11; fi
+          test -f "$PY" || { echo "::error::embedded interpreter missing: $PY"; exit 1; }
+          "$PY" -c "import numpy, soundfile, funasr" || { echo "::error::embedded python dependency import failed (if this persists across runs, the python/ cache entry may be corrupt — run: gh cache delete embedded-python-\${{ runner.os }}-\$(git hash-object scripts/prepare-embedded-python.js))"; exit 1; }
+          echo "embedded python deps gate passed"
 
       - name: Build main bundle
         run: pnpm run build:main
@@ -138,15 +165,39 @@ jobs:
           rm -f "$HOME/Library/Application Support/Murmur/logs/app.log"
           /tmp/murmur-smoke/Murmur.app/Contents/MacOS/Murmur > /tmp/murmur-smoke/stdout.log 2>&1 &
           APP_PID=$!
-          sleep 60
           LOG="$HOME/Library/Application Support/Murmur/logs/app.log"
-          test -f "$LOG" || { echo "::error::app.log never appeared"; cat /tmp/murmur-smoke/stdout.log | tail -20; exit 1; }
-          for milestone in "主窗口创建成功" "应用启动完成" "注册成功"; do
-            grep -q "$milestone" "$LOG" || { echo "::error::boot milestone missing: $milestone"; tail -20 "$LOG"; exit 1; }
+          # [20260818_T3_PythonSelfCheckMilestone] Poll for milestones instead
+          # of a fixed sleep: the python self-check spawns `import funasr`
+          # (cold torch load) which can exceed a fixed 60s window on a cold
+          # runner disk. Poll up to 180s, break as soon as all are present.
+          # Review fixup: a missing app.log must count as NOT present — the
+          # first draft broke out after one 5s tick when the log had not been
+          # created yet, shrinking the old 60s grace window to 5s.
+          MILESTONES=("主窗口创建成功" "应用启动完成" "注册成功" "Python链路自检通过")
+          ALL_PRESENT=1
+          for _ in $(seq 1 36); do
+            sleep 5
+            ALL_PRESENT=1
+            if [ ! -f "$LOG" ]; then
+              ALL_PRESENT=0
+            else
+              for milestone in "${MILESTONES[@]}"; do
+                grep -q "$milestone" "$LOG" || ALL_PRESENT=0
+              done
+            fi
+            [ "$ALL_PRESENT" = "1" ] && break
           done
-          if grep -qE "NODE_MODULE_VERSION|Uncaught Exception|preload 脚本加载失败" "$LOG"; then
+          test -f "$LOG" || { echo "::error::app.log never appeared"; cat /tmp/murmur-smoke/stdout.log | tail -20; exit 1; }
+          if [ "$ALL_PRESENT" != "1" ]; then
+            echo "::error::boot milestones incomplete after 180s"
+            for milestone in "${MILESTONES[@]}"; do
+              grep -q "$milestone" "$LOG" || echo "missing: $milestone"
+            done
+            tail -20 "$LOG"; exit 1
+          fi
+          if grep -qE "NODE_MODULE_VERSION|Uncaught Exception|preload 脚本加载失败|Python链路自检失败" "$LOG"; then
             echo "::error::fatal errors in packaged app boot log"
-            grep -E "NODE_MODULE_VERSION|Uncaught Exception|preload" "$LOG" | head -5
+            grep -E "NODE_MODULE_VERSION|Uncaught Exception|preload|Python链路自检失败" "$LOG" | head -5
             exit 1
           fi
           kill "$APP_PID" 2>/dev/null || true
@@ -218,12 +269,38 @@ jobs:
           node node_modules/electron/install.js
           ELECTRON_RUN_AS_NODE=1 npx electron -e "const D=require('better-sqlite3'); new D(':memory:').prepare('select 1 as ok').get(); console.log('native ABI gate passed')"
       # [20260816_Fix_MacCiNodeAbi] END
-      # [20260802_Fix_WinEmbeddedPython] prepare-embedded-python.js now
-      # supports Windows (-pc-windows-msvc-shared). Keep continue-on-error
-      # because torch/funasr pip install may exceed CI time/disk limits.
+      # [20260818_T3_PythonPackagingGate] Ticket #184: the old
+      # continue-on-error here (torch/funasr pip may exceed CI time/disk)
+      # shipped v1.2.0-v1.3.2 Windows installers whose Python env was
+      # silently missing while builds stayed green (spec #177 B-0). Now:
+      # cache the env (kills the time/disk pressure that motivated the
+      # soft-fail), prepare is a hard step, and the import gate below must
+      # pass before packaging. If the env cannot be produced, the build
+      # fails — a package without Python cannot transcribe at all.
+      - name: Cache embedded Python
+        id: cache-python
+        uses: actions/cache@v4
+        with:
+          path: python
+          key: embedded-python-${{ runner.os }}-${{ hashFiles('scripts/prepare-embedded-python.js') }}
       - name: Prepare embedded Python
+        if: steps.cache-python.outputs.cache-hit != 'true'
         run: pnpm run prepare:python:embedded
-        continue-on-error: true
+
+      # [20260818_T3_PythonPackagingGate] Gate: interpreter present AND the
+      # full transcription stack imports (numpy/soundfile/funasr) before we
+      # are allowed to package. Platform layout mirrors the runtime's
+      # embeddedPythonLayout (win32: python/python.exe).
+      - name: Verify embedded Python deps (packaging gate)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # [20260818_T3_PythonPackagingGate] Git Bash on windows-latest
+          # reports uname as MINGW*_NT-**, NOT "Windows_NT" — match on _NT.
+          if uname -s | grep -q "_NT"; then PY=python/python.exe; else PY=python/bin/python3.11; fi
+          test -f "$PY" || { echo "::error::embedded interpreter missing: $PY"; exit 1; }
+          "$PY" -c "import numpy, soundfile, funasr" || { echo "::error::embedded python dependency import failed (if this persists across runs, the python/ cache entry may be corrupt — run: gh cache delete embedded-python-\${{ runner.os }}-\$(git hash-object scripts/prepare-embedded-python.js))"; exit 1; }
+          echo "embedded python deps gate passed"
 
       - name: Build main bundle
         run: pnpm run build:main
@@ -276,14 +353,32 @@ jobs:
           $logDir = Join-Path $env:APPDATA 'Murmur\logs'
           Remove-Item (Join-Path $logDir 'app.log') -ErrorAction SilentlyContinue
           Start-Process -FilePath $appExe
-          Start-Sleep -Seconds 90
           $log = Join-Path $logDir 'app.log'
-          if (-not (Test-Path $log)) { throw "app.log not found at $log" }
-          $content = Get-Content $log -Raw -Encoding UTF8
-          foreach ($milestone in @('主窗口创建成功','应用启动完成','注册成功')) {
-            if ($content -notlike "*$milestone*") { throw "boot milestone missing: $milestone" }
+          # [20260818_T3_PythonSelfCheckMilestone] Poll for milestones
+          # instead of a fixed sleep — cold `import funasr` (torch) can
+          # outrun a fixed window. Poll up to 240s, break when all present.
+          $milestones = @('主窗口创建成功','应用启动完成','注册成功','Python链路自检通过')
+          $missing = @($milestones)
+          $allPresent = $false
+          for ($i = 0; $i -lt 48; $i++) {
+            Start-Sleep -Seconds 5
+            if (Test-Path $log) {
+              $content = Get-Content $log -Raw -Encoding UTF8
+              $missing = @($milestones | Where-Object { $content -notlike "*$_*" })
+              if ($missing.Count -eq 0) { $allPresent = $true; break }
+            }
           }
-          foreach ($fatal in @('NODE_MODULE_VERSION','Uncaught Exception','preload 脚本加载失败')) {
+          if (-not (Test-Path $log)) { throw "app.log not found at $log" }
+          if (-not $allPresent) {
+            Write-Host "missing milestones: $($missing -join ', ')"
+            Get-Content $log -Tail 20
+            throw "boot milestones incomplete after 240s"
+          }
+          # Review fixup: re-read so fatal patterns written AFTER the
+          # break-early snapshot are still caught (parity with mac's live
+          # grep).
+          $content = Get-Content $log -Raw -Encoding UTF8
+          foreach ($fatal in @('NODE_MODULE_VERSION','Uncaught Exception','preload 脚本加载失败','Python链路自检失败')) {
             if ($content -like "*$fatal*") { throw "fatal error in packaged boot log: $fatal" }
           }
           if (-not (Get-Process -Name 'Murmur' -ErrorAction SilentlyContinue)) { throw 'Murmur process is not running' }

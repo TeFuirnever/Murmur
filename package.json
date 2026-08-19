@@ -22,6 +22,7 @@
     "prepare:python:info": "node scripts/prepare-embedded-python.js --info",
     "test:python": "node scripts/test-embedded-python.js",
     "test:python:info": "node scripts/test-embedded-python.js --info",
+    "test:python:unit": "node scripts/run-python-tests.js",
     "prebuild:mac": "npm run prepare:python:embedded && npm run build:main && npm run build:preload && npm run build:renderer",
     "build:mac": "electron-builder --mac",
     "prebuild:win": "npm run prepare:python:embedded && npm run build:main && npm run build:preload && npm run build:renderer",
@@ -140,6 +141,7 @@
       "dist-main/main.js",
       "dist-preload/preload.js",
       "funasr_server.py",
+      "audio_preprocessing.py",
       "download_models.py",
       "package.json",
       "LICENSE",
@@ -156,6 +158,7 @@
     ],
     "asarUnpack": [
       "funasr_server.py",
+      "audio_preprocessing.py",
       "download_models.py",
       "python/**/*",
       "node_modules/**/*better-sqlite3*/**/*",

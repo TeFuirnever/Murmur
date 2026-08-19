@@ -185,13 +185,36 @@ class FunASRManager {
       const pythonCmd = await this.findPythonExecutable();
       this.logger.info &&
         this.logger.info("Python可执行文件找到", { pythonCmd });
-      const funasrStatus = await this.checkFunASRInstallation();
+      const funasrStatus = (await this.checkFunASRInstallation()) as {
+        installed?: boolean;
+        working?: boolean;
+        error?: string;
+      };
       this.logger.info &&
         this.logger.info("FunASR安装状态检查完成", funasrStatus);
+      // [20260818_T3_PythonSelfCheckMilestone] Ticket #184: unambiguous boot
+      // milestone for the packaged-app smoke gate. Until now a broken
+      // embedded env only produced a non-fatal warn and the app still booted
+      // green — exactly how the broken Windows env shipped through every
+      // boot smoke (spec #177 B-0). The check itself spawns a real Python
+      // subprocess running `import funasr` (which pulls numpy/torch), so
+      // "通过" proves interpreter resolution AND the dependency stack of the
+      // packaged environment. Smokes assert: 通过 present, 失败 absent.
+      if (funasrStatus && funasrStatus.working) {
+        this.logger.info &&
+          this.logger.info("Python链路自检通过", { pythonCmd });
+      } else {
+        this.logger.warn &&
+          this.logger.warn("Python链路自检失败", funasrStatus);
+      }
       this.isInitialized = true;
       this.preInitializeModels();
       this.logger.info && this.logger.info("FunASR管理器启动初始化完成");
     } catch (error) {
+      // [20260818_T3_PythonSelfCheckMilestone] Same milestone on the
+      // resolution-failure path (e.g. embedded interpreter missing) so the
+      // smoke can gate on it regardless of which step failed.
+      this.logger.warn && this.logger.warn("Python链路自检失败", error);
       this.logger.warn &&
         this.logger.warn("FunASR启动初始化失败，但不影响应用启动", error);
       this.preInitializeModels();

@@ -13,6 +13,11 @@
 - **Git**
 - macOS / Windows / Linux
 
+> [20260817_T4_CiMatrix] `pnpm ci:check` 的 stage1 包含 `test:python:unit`
+> （`tests/python/` 的 stdlib unittest + numpy 冒烟），因此本机跑完整门禁
+> 需要可用的 Python 与 numpy + soundfile（嵌入式环境或系统 Python 均可;
+> CI 侧由 workflow 的 setup-python 步骤提供）。
+
 ### 搭建步骤
 
 ```bash

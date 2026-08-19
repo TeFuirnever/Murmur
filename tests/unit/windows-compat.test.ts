@@ -58,37 +58,59 @@ describe("clipboard.js — pasteWindows Windows compat", () => {
 });
 
 // ─── Finding #5: funasrServer gracefulShutdown on Windows ───────────
-describe("funasrServer.js — gracefulShutdown Windows compat", () => {
-  it("gracefulShutdown uses taskkill on Windows for process tree kill", () => {
+// [20260817_T2_KillTree] Contract updated for the shared killProcessTree
+// helper (ticket #179): the taskkill logic moved out of gracefulShutdown
+// into killProcessTree, and ALL kill paths must delegate to it.
+describe("funasrServer.js — process tree kill Windows compat", () => {
+  it("killProcessTree uses taskkill /T /F /PID on Windows via spawnSync", () => {
     const source = readHelperSource("funasrServer");
-    // Extract gracefulShutdown method
-    const shutdownSection = source.substring(
-      source.indexOf("async gracefulShutdown()"),
-      source.indexOf("resetState()"),
+    const helperSection = source.substring(
+      source.indexOf("export function killProcessTree"),
+      source.indexOf("/** Logger interface"),
     );
-    // On Windows, should use taskkill /T /F /PID for process tree kill
-    // instead of proc.kill("SIGKILL") which only kills the direct child
-    expect(shutdownSection).toContain("taskkill");
-    expect(shutdownSection).toContain("/T");
-    expect(shutdownSection).toContain("/F");
-    expect(shutdownSection).toContain("/PID");
-    // Should be guarded by platform check
-    expect(shutdownSection).toContain("win32");
+    expect(helperSection).toContain("taskkill");
+    expect(helperSection).toContain("/T");
+    expect(helperSection).toContain("/F");
+    expect(helperSection).toContain("/PID");
+    expect(helperSection).toContain("win32");
+    expect(helperSection).toContain("spawnSync");
+    expect(helperSection).toContain("windowsHide");
   });
 
-  // Risk: spawn is async, resolve() fires before taskkill completes.
-  // Must use spawnSync (blocking) to ensure process tree is fully killed.
-  it("gracefulShutdown uses spawnSync (blocking) for taskkill, not async spawn", () => {
+  it("gracefulShutdown delegates the timeout kill to killProcessTree", () => {
     const source = readHelperSource("funasrServer");
     const shutdownSection = source.substring(
       source.indexOf("async gracefulShutdown()"),
       source.indexOf("resetState()"),
     );
-    // Should use spawnSync, not spawn, for the kill command
-    expect(shutdownSection).toContain("spawnSync");
-    // Import at module level should include spawnSync.
-    // [20260724_TS_BigBang_TestFix] Accept ESM `import ... from "child_process"`
-    // (post-migration) in addition to the legacy `require("child_process")`.
+    expect(shutdownSection).toContain("killProcessTree");
+    expect(shutdownSection).not.toContain("taskkill");
+  });
+
+  it("crash-restart, stop fallback, and startup timeout all use killProcessTree", () => {
+    const source = readHelperSource("funasrServer");
+    const crashSection = source.substring(
+      source.indexOf("async _handleServerCrash()"),
+      source.indexOf("async _sendServerCommand"),
+    );
+    expect(crashSection).toContain("killProcessTree");
+
+    const stopSection = source.substring(
+      source.indexOf("async _stopFunASRServer()"),
+      source.indexOf("async gracefulShutdown()"),
+    );
+    expect(stopSection).toContain("killProcessTree");
+
+    const timeoutSection = source.substring(
+      source.indexOf("FunASR服务器启动超时"),
+      source.indexOf("}, 120000);"),
+    );
+    expect(timeoutSection).toContain("killProcessTree");
+    expect(timeoutSection).not.toContain(".kill()");
+  });
+
+  it("spawnSync remains imported at module level", () => {
+    const source = readHelperSource("funasrServer");
     const importLine = source
       .split("\n")
       .find(

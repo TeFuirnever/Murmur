@@ -66,6 +66,34 @@ def suppress_stdout():
         devnull.close()
 
 
+# [20260819_T8_ThreadAdapt] Ticket #187 (spec #177 T8): inference thread
+# auto-adaptation. Formula over LOGICAL cores leaves UI headroom on small
+# machines and caps fan/heat on big ones; the old code hard-coded
+# OMP_NUM_THREADS=4 (no headroom on 4-core, over-subscription on 2-core).
+THREAD_UI_HEADROOM = 2
+THREAD_CAP = 8
+
+
+def compute_inference_threads(cores, override=None):
+    """min(max(1, cores - THREAD_UI_HEADROOM), THREAD_CAP) over logical cores.
+
+    override comes from MURMUR_NUM_THREADS (mirrors the MURMUR_DEVICE
+    pattern from ADR-006): must parse as an INTEGER, clamped to
+    [1, cores]; anything else (non-integer like "2.5", < 1, None) falls
+    back to the computed value.
+    """
+    auto = min(max(1, cores - THREAD_UI_HEADROOM), THREAD_CAP)
+    if override is None:
+        return auto
+    try:
+        requested = int(str(override).strip())
+    except (TypeError, ValueError):
+        return auto
+    if requested < 1:
+        return auto
+    return max(1, min(requested, cores))
+
+
 class FunASRServer:
     def __init__(self, damo_root=None):
         self.asr_model = None
@@ -86,23 +114,54 @@ class FunASRServer:
         # 外部传入的 damo 根目录（例如 /Volumes/APFS/AI/models/damo）
         self.damo_root = damo_root or os.environ.get("DAMO_ROOT")
 
+        # [20260819_T8_ThreadAdapt] Thread env FIRST: _detect_device imports
+        # torch when MURMUR_DEVICE is unset, and OMP/MKL env vars only take
+        # effect if written BEFORE torch's first import. The old order set
+        # them after detection, which silently voided them.
+        self.inference_threads = 1
+        self._setup_runtime_environment()
+
         self.device = os.environ.get("MURMUR_DEVICE") or self._detect_device()
         logger.info(f"推理设备: {self.device}")
 
         signal.signal(signal.SIGTERM, self._signal_handler)
         signal.signal(signal.SIGINT, self._signal_handler)
-        self._setup_runtime_environment()
 
     def _setup_runtime_environment(self):
-        """设置运行时环境变量以优化性能"""
-        try:
-            import os
+        """设置推理线程环境变量（必须在 torch 首次导入之前调用）
 
-            # 设置线程数优化
-            os.environ["OMP_NUM_THREADS"] = "4"
-            logger.info("运行时环境变量设置完成")
+        [20260819_T8_ThreadAdapt] Replaces the OMP_NUM_THREADS="4" hardcode
+        with the computed value. OMP covers gcc/openmp builds, MKL covers
+        Windows torch's MKL backend; macOS Accelerate ignores both env vars,
+        which is why torch.set_num_threads (applied at model load) is the
+        authoritative convergence point on every platform. Under a CUDA
+        device the limit still constrains CPU-side preprocessing (DSP /
+        feature extraction) — GPU kernels are unaffected.
+        """
+        try:
+            cores = os.cpu_count() or 1
+            override = os.environ.get("MURMUR_NUM_THREADS")
+            self.inference_threads = compute_inference_threads(cores, override)
+            os.environ["OMP_NUM_THREADS"] = str(self.inference_threads)
+            os.environ["MKL_NUM_THREADS"] = str(self.inference_threads)
+            source = "MURMUR_NUM_THREADS" if override else "auto"
+            logger.info(
+                f"推理线程数: {self.inference_threads} (逻辑核={cores}, 来源={source}, "
+                f"公式=min(max(1,核-{THREAD_UI_HEADROOM}),{THREAD_CAP}), 覆盖钳制[1,核])"
+            )
         except Exception as e:
-            logger.warning(f"环境设置失败: {str(e)}")
+            logger.warning(f"线程环境设置失败: {str(e)}")
+
+    # [20260819_T8_ThreadAdapt] Authoritative torch-side limit; applied at
+    # model load (after torch import) — see _setup_runtime_environment.
+    def _apply_torch_thread_limit(self):
+        try:
+            import torch
+
+            torch.set_num_threads(self.inference_threads)
+            logger.info(f"torch.set_num_threads({self.inference_threads})")
+        except ImportError:
+            logger.warning("torch 不可用，跳过 torch 线程上限设置")
 
     @staticmethod
     def _detect_device():
@@ -265,6 +324,10 @@ class FunASRServer:
             logger.info("正在并行初始化FunASR模型...")
             start_time = time.time()
 
+            # [20260819_T8_ThreadAdapt] torch is imported by the model
+            # loaders below — apply the authoritative thread limit first.
+            self._apply_torch_thread_limit()
+
             # 创建加载结果存储
             results = {}
 
@@ -338,6 +401,11 @@ class FunASRServer:
 
     def transcribe_audio(self, audio_path, options=None):
         """转录音频文件"""
+        # [20260819_T7_MicPreprocess] Default = original path: overwritten
+        # by the DSP output inside the try; a raise BEFORE that point (e.g.
+        # non-finite input rejection) must not hit an unbound name in the
+        # finally cleanup.
+        infer_path = audio_path
         if not self.initialized:
             init_result = self.initialize()
             if not init_result["success"]:
@@ -362,16 +430,23 @@ class FunASRServer:
             if options:
                 default_options.update(options)
 
+            # [20260819_T7_MicPreprocess] Ticket #186 (spec #177 T7): run the
+            # DSP module on the push-to-talk path too. The renderer delivers
+            # a 16k mono WAV temp (created/cleaned by the TS side); the DSP
+            # output below is OUR temp and is unlinked in the finally block.
+            # Fallback policy mirrors the file path (see _apply_preprocessing).
+            infer_path = self._apply_preprocessing(audio_path)
+
             # 执行语音识别
             if default_options["use_vad"]:
                 vad_result = self.vad_model.generate(
-                    input=audio_path, batch_size_s=default_options["batch_size_s"]
+                    input=infer_path, batch_size_s=default_options["batch_size_s"]
                 )
                 logger.info("VAD处理完成")
 
             # 执行ASR识别
             asr_result = self.asr_model.generate(
-                input=audio_path,
+                input=infer_path,
                 batch_size_s=default_options["batch_size_s"],
                 hotword=default_options["hotword"],
                 cache={},
@@ -405,7 +480,7 @@ class FunASRServer:
                 except Exception as e:
                     logger.warning(f"FunASR标点恢复失败，使用原始文本: {str(e)}")
 
-            duration = self._get_audio_duration(audio_path)
+            duration = self._get_audio_duration(infer_path)
             self.transcription_count += 1
 
             result = {
@@ -435,6 +510,16 @@ class FunASRServer:
             logger.error(error_msg)
             logger.error(traceback.format_exc())
             return {"success": False, "error": error_msg, "type": "transcription_error"}
+        finally:
+            # [20260819_T7_MicPreprocess] Clean OUR temp only — the original
+            # mic temp belongs to the TS side (close-then-unlink discipline
+            # lives in audioFileHelpers); fallback returns the original path,
+            # which the != audio_path guard leaves untouched.
+            if infer_path != audio_path:
+                try:
+                    os.unlink(infer_path)
+                except Exception:
+                    pass
 
     def transcribe_file_audio(self, audio_path, options=None):
         """带时间戳的文件转录，用于 transcribe_file 命令"""
@@ -450,6 +535,12 @@ class FunASRServer:
 
         wav_path = audio_path
         was_converted = False
+        # [20260818_T6_AudioPreprocess] Temp files to clean in finally:
+        # converted_path = format-conversion temp (None on wav/flac
+        # passthrough); dsp_path = preprocessing output (may equal the
+        # input when preprocessing fell back).
+        converted_path = None
+        dsp_path = None
 
         try:
             # 路径验证
@@ -474,6 +565,14 @@ class FunASRServer:
             wav_path, was_converted = self._convert_to_wav(audio_path)
             if was_converted:
                 logger.info(f"convert phase END request_id={request_id} elapsed={time.time()-_t0:.2f}s")
+
+            # [20260818_T6_AudioPreprocess] DSP runs AFTER conversion, so it
+            # covers BOTH branches: converted temp wavs AND the native
+            # wav/flac passthrough (which previously reached the model raw).
+            converted_path = wav_path if was_converted else None
+            dsp_path = self._apply_preprocessing(wav_path)
+            if dsp_path != wav_path:
+                wav_path = dsp_path
 
             # 获取音频时长（从转换后的 WAV 获取更准确）
             duration = self._get_audio_duration(wav_path)
@@ -795,12 +894,41 @@ class FunASRServer:
                 "request_id": request_id
             }
         finally:
-            if was_converted and wav_path != audio_path:
+            # [20260818_T6_AudioPreprocess] Unlink BOTH temps (the
+            # format-converted file and the DSP output); never the user's
+            # original, never twice.
+            if dsp_path and dsp_path != audio_path:
                 try:
-                    os.unlink(wav_path)
+                    os.unlink(dsp_path)
+                except Exception:
+                    pass
+            if (
+                converted_path
+                and converted_path != audio_path
+                and converted_path != dsp_path
+            ):
+                try:
+                    os.unlink(converted_path)
                 except Exception:
                     pass
         return result
+
+    # [20260818_T6_AudioPreprocess] Ticket #185 (spec #177 T6): run the DSP
+    # module (80Hz HPF + segmented RMS normalization) on the transcribe-file
+    # path. Fallback policy (review fixup): a DSP *bug* (any non-ValueError)
+    # warns and returns the original path — preprocessing must never block
+    # transcription. ValueError means the INPUT is illegal (non-finite
+    # samples); it propagates so transcription FAILS with a clear message
+    # instead of feeding known-bad audio to the model.
+    def _apply_preprocessing(self, wav_path):
+        try:
+            import audio_preprocessing
+            return audio_preprocessing.preprocess_audio_file(wav_path)
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.warning(f"音频预处理失败，使用原始音频: {e}")
+            return wav_path
 
     def _convert_to_wav(self, audio_path):
         """使用 librosa/soundfile 将非 WAV 音频转为 16kHz 单声道 WAV 临时文件
@@ -1050,6 +1178,53 @@ class FunASRServer:
 
         return {"success": True, "segments": segments}
 
+    # [20260817_T5_HandleCommand] Ticket #181 (spec #177 T5): the stdin
+    # command dispatch, extracted verbatim from run()'s read loop so it is
+    # unit-testable without spawning the process (protocol extensions for
+    # idle-unload/hotwords must extend tests/python accordingly).
+    # Returns (result, keep_running):
+    #   result is None     -> action was queued (transcribe_file); the read
+    #                         loop must NOT print anything for it
+    #   keep_running False -> stop the read loop after printing (exit)
+    def handle_command(self, command):
+        if command.get("action") == "transcribe":
+            audio_path = command.get("audio_path")
+            options = command.get("options", {})
+            return self.transcribe_audio(audio_path, options), True
+        elif command.get("action") == "status":
+            return self.check_status(), True
+        elif command.get("action") == "stats":
+            return {"success": True, "stats": self.get_performance_stats()}, True
+        elif command.get("action") == "cleanup":
+            self._cleanup_memory()
+            return {"success": True, "message": "内存清理完成"}, True
+        elif command.get("action") == "transcribe_file":
+            # 放入推理队列，不立即返回确认
+            # 推理结果和进度通过 response_queue → output_worker → stdout 发送
+            self.request_queue.put({
+                "request_id": command.get("request_id", ""),
+                "action": "transcribe_file",
+                "audio_path": command.get("audio_path"),
+                "options": command.get("options", {})
+            })
+            return None, True
+        elif command.get("action") == "cancel_transcription":
+            self.cancel_event.set()
+            return {"success": True, "message": "取消信号已发送"}, True
+        elif command.get("action") == "diarize":
+            audio_path = command.get("audio_path")
+            segments = command.get("segments", [])
+            return self.diarize_audio(audio_path, segments), True
+        elif command.get("action") == "ping":
+            return {"success": True, "action": "pong"}, True
+        elif command.get("action") == "exit":
+            return {"success": True, "message": "服务器退出"}, False
+        else:
+            return {
+                "success": False,
+                "error": f"未知命令: {command.get('action')}",
+            }, True
+
     def run(self):
         """运行服务器主循环"""
         logger.info("FunASR服务器启动")
@@ -1139,55 +1314,22 @@ class FunASRServer:
                 # 提取 request_id 用于响应关联
                 request_id = command.get("request_id", "")
 
-                # 处理命令
-                if command.get("action") == "transcribe":
-                    audio_path = command.get("audio_path")
-                    options = command.get("options", {})
-                    result = self.transcribe_audio(audio_path, options)
-                elif command.get("action") == "status":
-                    result = self.check_status()
-                elif command.get("action") == "stats":
-                    result = {"success": True, "stats": self.get_performance_stats()}
-                elif command.get("action") == "cleanup":
-                    self._cleanup_memory()
-                    result = {"success": True, "message": "内存清理完成"}
-                elif command.get("action") == "transcribe_file":
-                    # 放入推理队列，不立即返回确认
-                    # 推理结果和进度通过 response_queue → output_worker → stdout 发送
-                    self.request_queue.put({
-                        "request_id": request_id,
-                        "action": "transcribe_file",
-                        "audio_path": command.get("audio_path"),
-                        "options": command.get("options", {})
-                    })
-                    continue
-                elif command.get("action") == "cancel_transcription":
-                    self.cancel_event.set()
-                    result = {"success": True, "message": "取消信号已发送"}
-                elif command.get("action") == "diarize":
-                    audio_path = command.get("audio_path")
-                    segments = command.get("segments", [])
-                    result = self.diarize_audio(audio_path, segments)
-                elif command.get("action") == "ping":
-                    result = {"success": True, "action": "pong"}
-                elif command.get("action") == "exit":
-                    result = {"success": True, "message": "服务器退出"}
+                # Dispatch the command. [20260817_T5_HandleCommand] The
+                # dispatch logic now lives in handle_command (unit-testable);
+                # this loop keeps only the read/print cycle.
+                result, keep_running = self.handle_command(command)
+
+                # Print the result with request_id attached. result=None
+                # means the action was queued — output_worker prints it
+                # asynchronously, so the read loop must not print here.
+                if result is not None:
                     if request_id:
                         result["request_id"] = request_id
                     print(json.dumps(result, ensure_ascii=False))
                     sys.stdout.flush()
-                    break
-                else:
-                    result = {
-                        "success": False,
-                        "error": f"未知命令: {command.get('action')}",
-                    }
 
-                # 输出结果（附带 request_id）
-                if request_id:
-                    result["request_id"] = request_id
-                print(json.dumps(result, ensure_ascii=False))
-                sys.stdout.flush()
+                if not keep_running:
+                    break
 
             except KeyboardInterrupt:
                 break

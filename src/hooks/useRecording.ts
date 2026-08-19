@@ -190,7 +190,11 @@ export const useRecording = ({
 
           // 准备转录数据
           const transcriptionData: Record<string, unknown> = {
-            raw_text: raw_text,
+            // [20260819_T10_CleanerWiring] DB raw_text keeps the PRE-CLEAN
+            // ASR text when the main-process cleaner changed anything
+            // (recoverable original); AI polish below still uses the
+            // cleaned `raw_text` local (from result.text).
+            raw_text: transcriptionResult.original_text ?? raw_text,
             text: raw_text,
             confidence: transcriptionResult.confidence || 0,
             language: transcriptionResult.language || "zh-CN",
