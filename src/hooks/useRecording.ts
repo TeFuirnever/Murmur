@@ -185,6 +185,17 @@ export const useRecording = ({
         const transcriptionResult =
           await window.electronAPI.transcribeAudio(arrayBuffer);
 
+        // [20260820_T14_Hotwords] Surface the main-process empty-hotword
+        // retry (AC: 向 UI 指向设置项). Lazy imports keep the i18n
+        // singleton out of module scope (breaks react-i18next test mocks).
+        if (transcriptionResult.hotword_degraded) {
+          const [{ toast }, { default: i18n }] = await Promise.all([
+            import("sonner"),
+            import("../i18n"),
+          ]);
+          toast.warning(i18n.t("recording.hotwordDegraded"));
+        }
+
         if (transcriptionResult.success) {
           const raw_text = transcriptionResult.text || "";
 

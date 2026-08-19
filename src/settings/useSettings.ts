@@ -22,6 +22,9 @@ export interface SettingsState {
   auto_paste: string;
   close_behavior: string;
   theme: string;
+  // [20260820_T14_Hotwords] Hotword list, one entry per line; sanitized at
+  // the save and injection boundaries (src/helpers/hotwords.ts).
+  hotwords: string;
   // [20260816_Refactor_RemoveEffects] effects_enabled was removed with the
   // visual-effects feature (ogl/motion deps deleted the same day).
 }
@@ -79,6 +82,7 @@ const DEFAULT_SETTINGS: SettingsState = {
   auto_paste: "paste",
   close_behavior: "hide",
   theme: "system",
+  hotwords: "",
 };
 
 export function applyTheme(theme: string): void {
@@ -142,6 +146,13 @@ export function useSettings() {
           auto_paste: (allSettings.auto_paste || "paste") as string,
           close_behavior: (allSettings.close_behavior || "hide") as string,
           theme: (allSettings.theme || "system") as string,
+          // [20260820_T14_Hotwords] Stored raw (multi-line, save boundary
+          // = allowlist + generic length cap); FULL sanitization happens
+          // once, at the injection boundary (src/helpers/hotwords.ts).
+          hotwords:
+            typeof allSettings.hotwords === "string"
+              ? allSettings.hotwords
+              : "",
         };
         setSettings((prev) => ({ ...prev, ...loadedSettings }));
         applyTheme(loadedSettings.theme);

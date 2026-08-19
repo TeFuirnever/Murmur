@@ -35,6 +35,9 @@ const ALLOWED_SETTING_KEYS = new Set<string>([
   "minimize_to_tray",
   "show_notifications",
   "model_download_path",
+  // [20260820_T14_Hotwords] Hotword list (one entry per line, sanitized at
+  // both the save and injection boundaries — see src/helpers/hotwords.ts).
+  "hotwords",
   // [20260816_Refactor_RemoveEffects] effects_enabled removed from this
   // allowlist with the visual-effects feature.
 ]);

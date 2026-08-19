@@ -158,6 +158,18 @@ export function useFileTranscription() {
         {},
       );
 
+      // [20260820_T14_Hotwords] Surface the main-process empty-hotword
+      // retry (AC: 向 UI 指向设置项). i18n + sonner load lazily INSIDE the
+      // branch: importing the i18n singleton at module scope breaks test
+      // suites that mock react-i18next with partial factories.
+      if (response.hotword_degraded) {
+        const [{ toast }, { default: i18n }] = await Promise.all([
+          import("sonner"),
+          import("../i18n"),
+        ]);
+        toast.warning(i18n.t("recording.hotwordDegraded"));
+      }
+
       if (response.success) {
         setProgress({ phase: "done", message: "转录完成", progress_pct: 100 });
         await new Promise((r) => setTimeout(r, 600));

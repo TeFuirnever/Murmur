@@ -49,7 +49,11 @@
       "about": "关于"
     },
     "general": {
-      "alwaysOnTopDesc": "将应用窗口保持在最前面"
+      "alwaysOnTopDesc": "将应用窗口保持在最前面",
+      "hotwordsLabel": "热词",
+      "hotwordsDesc": "每行一个。识别时优先匹配这些词(如同事姓名、产品名),提升生僻专名命中率,不保证全部正确。",
+      "hotwordsPlaceholder": "张晗玥\n刘翀\n产品名…",
+      "hotwordsLimit": "最多 200 行,每行 32 字"
     },
     "quickStart": {
       "title": "快速开始",
@@ -196,7 +200,8 @@
     "statusModelsNeeded": "语音识别模型尚未下载，请先下载模型",
     "statusPythonNeeded": "Python 环境尚未安装",
     "statusFunasrNeeded": "FunASR 尚未安装",
-    "statusNotReady": "语音识别服务未就绪"
+    "statusNotReady": "语音识别服务未就绪",
+    "hotwordDegraded": "热词可能导致识别失败,已自动去除热词重试成功。请检查 设置 → 通用 → 热词"
   },
   "common": {
     "confirm": "确认",

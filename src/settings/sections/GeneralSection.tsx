@@ -152,6 +152,38 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
           <option value="en">{t("settings.language.en", "English")}</option>
         </select>
       </div>
+
+      {/* [20260820_T14_Hotwords] Hotword editor: raw multi-line storage;
+          full sanitization happens at the injection boundary
+          (src/helpers/hotwords.ts). Limits surface in the hint so paste
+          accidents are visible instead of silently capped later. */}
+      <div>
+        <label
+          htmlFor="hotwords-input"
+          className="block text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7] mb-1"
+        >
+          {t("settings.general.hotwordsLabel", "热词")}
+        </label>
+        <p className="text-xs text-[#86868b] mb-2">
+          {t(
+            "settings.general.hotwordsDesc",
+            "每行一个。识别时优先匹配这些词,提升生僻专名命中率。",
+          )}
+        </p>
+        <textarea
+          id="hotwords-input"
+          value={settings.hotwords}
+          onChange={(e) => onInputChange("hotwords", e.target.value)}
+          rows={4}
+          spellCheck={false}
+          placeholder={t("settings.general.hotwordsPlaceholder", "张晗玥…")}
+          aria-describedby="hotwords-hint"
+          className="w-full text-sm px-3 py-2 border border-[#d2d2d7] dark:border-[#3a3a3c] rounded-lg bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7] focus:ring-2 focus:ring-[#0071e3] focus:border-transparent resize-y"
+        />
+        <p id="hotwords-hint" className="text-xs text-[#86868b] mt-1">
+          {t("settings.general.hotwordsLimit", "最多 200 行,每行 32 字")}
+        </p>
+      </div>
     </div>
   );
 };

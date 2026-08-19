@@ -111,6 +111,10 @@ export interface FileTranscriptionResult {
   // cleaned text/raw_text so the DB raw column keeps the recoverable
   // original (ticket #188).
   original_text?: string;
+  // [20260820_T14_Hotwords] True when transcription succeeded only after
+  // the empty-hotword retry — the UI should point the user at the hotword
+  // settings (ticket #183).
+  hotword_degraded?: boolean;
   file_size?: number;
 }
 

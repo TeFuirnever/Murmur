@@ -28,6 +28,7 @@ const BASE: SettingsState = {
   auto_paste: "paste",
   close_behavior: "hide",
   theme: "system",
+  hotwords: "",
 };
 
 type TestWindow = Omit<Window, "electronAPI"> & {

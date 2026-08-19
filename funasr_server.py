@@ -14,6 +14,7 @@ import signal
 import contextlib
 import io
 import argparse
+import unicodedata
 import glob
 import threading
 import queue
@@ -72,6 +73,30 @@ def suppress_stdout():
 # OMP_NUM_THREADS=4 (no headroom on 4-core, over-subscription on 2-core).
 THREAD_UI_HEADROOM = 2
 THREAD_CAP = 8
+
+# [20260820_T14_Hotwords] Ticket #183: Python-side defense-in-depth cap
+# for the hotword option (TS boundary validation is the primary gate; this
+# catches corrupted-DB / renderer-bug payloads that reach the protocol).
+HOTWORD_MAX_CHARS = 4096
+
+
+def sanitize_hotword(value):
+    """Coerce a protocol hotword to a safe string ('' on non-string).
+
+    [T14 review MINOR] Logs degradation/truncation (defense must be
+    observable) and strips Cc control characters so caller-supplied
+    garbage cannot reach generate() unfiltered.
+    """
+    if not isinstance(value, str):
+        if value:
+            logger.warning(f"热词类型非法({type(value).__name__})，降级为空串")
+        return ""
+    cleaned = "".join(
+        ch for ch in value if unicodedata.category(ch) != "Cc"
+    )[:HOTWORD_MAX_CHARS]
+    if len(cleaned) != len(value):
+        logger.warning("热词含控制字符或超长，已清洗/截断")
+    return cleaned
 
 
 def compute_inference_threads(cores, override=None):
@@ -430,6 +455,12 @@ class FunASRServer:
             if options:
                 default_options.update(options)
 
+            # [20260820_T14_Hotwords] Defense-in-depth: coerce the hotword
+            # option to a safe string before it reaches generate().
+            default_options["hotword"] = sanitize_hotword(
+                default_options.get("hotword", "")
+            )
+
             # [20260819_T7_MicPreprocess] Ticket #186 (spec #177 T7): run the
             # DSP module on the push-to-talk path too. The renderer delivers
             # a 16k mono WAV temp (created/cleaned by the TS side); the DSP
@@ -527,7 +558,8 @@ class FunASRServer:
             options = {}
 
         request_id = options.get("request_id", "")
-        hotword = options.get("hotword", "")
+        # [20260820_T14_Hotwords] Defense-in-depth (file path).
+        hotword = sanitize_hotword(options.get("hotword", ""))
         self.cancel_event.clear()
         import time
         _t0 = time.time()
@@ -615,7 +647,7 @@ class FunASRServer:
             })
 
             if self.cancel_event.is_set():
-                return {"success": False, "error": "转录已取消", "request_id": request_id}
+                return {"success": False, "canceled": True, "error": "转录已取消", "request_id": request_id}
 
             # --- Helper: 从 ASR 时间戳构建 segments ---
             def _build_segments_from_timestamps(asr_text, asr_timestamps, time_offset_ms=0):
@@ -847,7 +879,7 @@ class FunASRServer:
             _t_punc = time.time()
             if self.cancel_event.is_set():
                 logger.info(f"PUNC phase SKIPPED (cancelled) request_id={request_id}")
-                return {"success": False, "error": "转录已取消", "request_id": request_id}
+                return {"success": False, "canceled": True, "error": "转录已取消", "request_id": request_id}
 
             self.response_queue.put({
                 "request_id": request_id,
