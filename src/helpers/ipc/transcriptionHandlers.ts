@@ -147,8 +147,19 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
   const injectStoredHotwords = async (
     options: Record<string, unknown>,
   ): Promise<Record<string, unknown>> => {
+    // [T14 review MINOR] Caller wins over the stored list, but does NOT
+    // bypass hygiene: an explicit hotword is sanitized too (a broken
+    // renderer must not feed garbage straight to the protocol). Identity
+    // is preserved when sanitizing is a no-op, so caller-hotword requests
+    // stay non-injected (no retry) as designed.
     if (typeof options.hotword === "string" && options.hotword.trim()) {
-      return options;
+      const sanitized = sanitizeHotwordInput(options.hotword);
+      if (sanitized === options.hotword) return options;
+      if (!sanitized) {
+        const { hotword: _dropped, ...rest } = options;
+        return rest;
+      }
+      return { ...options, hotword: sanitized };
     }
     try {
       const stored = await databaseManager.getSetting("hotwords");

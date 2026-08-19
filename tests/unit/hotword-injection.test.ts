@@ -126,6 +126,21 @@ describe("hotword injection", () => {
     });
   });
 
+  // [T14 review MINOR] "Caller wins" must not mean "caller bypasses
+  // hygiene": an explicit hotword is still SANITIZED (control chars /
+  // lone surrogates / caps) before reaching the protocol.
+  it("AUDIO: caller-provided hotword IS sanitized (garbage cleaned, value kept)", async () => {
+    const C = await setup();
+    const handler = registeredHandlers.get(C.TRANSCRIPTION.AUDIO)!;
+    await handler(null, new ArrayBuffer(0), {
+      hotword: "显\u0000式\uDBFF传入" + "超".repeat(40),
+    });
+    const opts = mockFunasr.transcribeAudio!.mock.calls[0]![1] as {
+      hotword: string;
+    };
+    expect(opts.hotword).toBe("显式传入" + "超".repeat(28));
+  });
+
   it("AUDIO: failure with injected hotword retries once without it; success surfaces hotword_degraded", async () => {
     const C = await setup();
     mockDb.getSetting!.mockResolvedValue("张晗玥");
