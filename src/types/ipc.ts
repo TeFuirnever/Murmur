@@ -149,6 +149,9 @@ export interface FunASRStatusResult {
   missing_models?: string[];
   initializing: boolean;
   models_initialized?: boolean;
+  // [T12 review BLOCKER] Process-alive flag — true + models_initialized
+  // false = idle-unloaded (recordable state, #190).
+  server_ready?: boolean;
   status_message?: string;
 }
 

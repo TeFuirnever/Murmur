@@ -453,7 +453,16 @@ class FunASRServer {
     if (!this.serverProcess || !this.serverReady) {
       return { success: false, error: "FunASR服务器未就绪" };
     }
-    return this.messageRouter.sendCommand("unload_models");
+    const result = (await this.messageRouter.sendCommand(
+      "unload_models",
+    )) as { success?: boolean };
+    // [T12 review BLOCKER] The TS-side flag drives STATUS → renderer
+    // isReady; without this the unloaded server still reads "ready" and
+    // the hotkey pre-trigger never fires in its core scenario.
+    if (result && result.success) {
+      this.modelsInitialized = false;
+    }
+    return result;
   }
 
   async reloadModels(): Promise<unknown> {
@@ -462,14 +471,18 @@ class FunASRServer {
     }
     this._reloadInFlight = true;
     try {
-      return await this.messageRouter.sendCommand(
+      const result = (await this.messageRouter.sendCommand(
         "reload_models",
         {},
         {
           timeout: RELOAD_COMMAND_TIMEOUT_MS,
           timeoutError: "模型重载超时",
         },
-      );
+      )) as { success?: boolean };
+      if (result && result.success) {
+        this.modelsInitialized = true;
+      }
+      return result;
     } finally {
       this._reloadInFlight = false;
     }

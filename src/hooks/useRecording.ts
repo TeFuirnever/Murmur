@@ -73,17 +73,21 @@ export const useRecording = ({
       }
 
       // 检查FunASR是否就绪
-      // [20260822_T12_IdleUnload] Ticket #190: an UNLOADED (idle-freed)
-      // server is a RECORDABLE state — the hotkey press fires the reload
-      // pre-trigger and recording proceeds; the Python models lock
-      // guarantees the transcription waits for the reload (busy = deferred,
-      // T11). Only a genuinely unusable state (models not on disk) blocks.
+      // [20260822_T12_IdleUnload] Ticket #190 (T12 review MAJOR): ONLY the
+      // UNLOADED state (process alive, models freed) is recordable — the
+      // hotkey press fires the reload pre-trigger and recording proceeds;
+      // the Python models lock defers the transcription (T11). Loading /
+      // error / dead-server states keep blocking at the START (recording
+      // through them loses the audio at stop time).
       if (!modelStatus.isReady) {
-        if (modelStatus.stage === "need_download") {
+        if (modelStatus.isUnloaded) {
+          // Hotkey-down pre-trigger: warm the reload while the user speaks.
+          void window.electronAPI?.reloadFunasrModels?.();
+        } else if (modelStatus.isLoading) {
+          throw new Error("FunASR服务器正在启动中，请稍候...");
+        } else {
           throw new Error("FunASR服务器未就绪，请检查配置");
         }
-        // Hotkey-down pre-trigger: warm the reload while the user speaks.
-        void window.electronAPI?.reloadFunasrModels?.();
       }
 
       // 检查浏览器支持

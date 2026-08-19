@@ -40,9 +40,11 @@ class FunASRManager {
   private server: FunASRServer;
 
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
-  // [20260822_T12_IdleUnload] In-flight/pending transcription flag — the
-  // idle deadline defers while work is active (busy = deferred).
-  private _transcriptionActive = false;
+  // [20260822_T12_IdleUnload] In-flight/pending transcription COUNTER
+  // (review MINOR: a boolean clears when the FIRST of two concurrent
+  // transcriptions finishes, letting the idle unload fire mid-flight on
+  // the second) — the idle deadline defers while any work is active.
+  private _transcriptionCount = 0;
 
   constructor(logger: Logger | null = null) {
     this.logger = logger || console;
@@ -131,11 +133,11 @@ class FunASRManager {
     options: Record<string, unknown>,
   ): Promise<unknown> {
     this._resetIdleUnloadTimer();
-    this._transcriptionActive = true;
+    this._transcriptionCount += 1;
     try {
       return await this.server.transcribeAudio(audioBlob, options);
     } finally {
-      this._transcriptionActive = false;
+      this._transcriptionCount -= 1;
       this._resetIdleUnloadTimer();
     }
   }
@@ -144,21 +146,21 @@ class FunASRManager {
     options: Record<string, unknown>,
   ): Promise<unknown> {
     this._resetIdleUnloadTimer();
-    this._transcriptionActive = true;
+    this._transcriptionCount += 1;
     try {
       return await this.server.transcribeFile(audioPath, options);
     } finally {
-      this._transcriptionActive = false;
+      this._transcriptionCount -= 1;
       this._resetIdleUnloadTimer();
     }
   }
   async diarizeAudio(audioPath: string, segments: unknown): Promise<unknown> {
     this._resetIdleUnloadTimer();
-    this._transcriptionActive = true;
+    this._transcriptionCount += 1;
     try {
       return await this.server.diarizeAudio(audioPath, segments);
     } finally {
-      this._transcriptionActive = false;
+      this._transcriptionCount -= 1;
       this._resetIdleUnloadTimer();
     }
   }
@@ -355,7 +357,7 @@ class FunASRManager {
     // Busy = deferred: re-arm for another full window instead of unloading
     // mid-flight (the Python side also defers under the models lock, but
     // avoiding the pointless command keeps logs clean).
-    if (this._transcriptionActive) {
+    if (this._transcriptionCount > 0) {
       this.logger.info && this.logger.info("空闲超时但转写进行中，顺延卸载");
       this._resetIdleUnloadTimer();
       return;
@@ -363,7 +365,19 @@ class FunASRManager {
     this.logger.info &&
       this.logger.info(`空闲 ${IDLE_UNLOAD_TIMEOUT_MS / 60000} 分钟，卸载模型`);
     try {
-      await this.server.unloadModels();
+      // [T12 review MINOR] The wrapper returns {success:false} instead of
+      // throwing when the server is down — log that too, don't swallow.
+      const result = (await this.server.unloadModels()) as {
+        success?: boolean;
+        error?: string;
+      };
+      if (result && result.success === false) {
+        this.logger.warn &&
+          this.logger.warn(
+            "空闲卸载未执行（服务器未就绪；下次转写将懒重载）",
+            result.error,
+          );
+      }
     } catch (error) {
       this.logger.warn &&
         this.logger.warn("空闲卸载失败（下次转写将懒重载）", error);

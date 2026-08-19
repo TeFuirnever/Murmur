@@ -78,7 +78,12 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
   // that follows waits on the Python models lock instead.
   ipcMain.handle(C.FUNASR.RELOAD_MODELS, async () => {
     try {
-      void funasrManager.reloadModels();
+      // [T12 review MINOR] The promise can reject (reload timeout / server
+      // died mid-reload) — route it to the logger, not the global
+      // unhandledRejection handler.
+      funasrManager
+        .reloadModels()
+        .catch((e: unknown) => logger.warn?.("模型重载失败", e));
       return { success: true, message: "模型重载已触发" };
     } catch (error) {
       logger.error?.("触发模型重载失败", error);
