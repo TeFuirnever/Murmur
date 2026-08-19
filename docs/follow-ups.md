@@ -65,3 +65,7 @@ dev:main 改用 `build:main && electron .`，dev/e2e/prod 加载同一 artifact�
 - **Option A（`ELECTRON_RUN_AS_NODE` vitest）已证不可行**：试跑全 test → 84 fail / 79 files。Murmur test suite 不兼容 electron node runtime（electron-stub mock / 系统 node 模块行为差异，如 `preload-loadable.test.ts` 的 `requireCJS.cache["electron-stub"]`）。修 84 test 不值得。
 - **当前最优 = #116**：rebuild（CI test 前）+ pretest probe（本地 dev/test 切换提示），已 merged。
 - Option B（ADR 文档化排除契约）价值有限（#116 注释已解释 ABI split），按需。
+
+## README 平台徽章承诺了未发布的 Linux（2026-08-19 视景评审 H-5）
+
+README 平台徽章写着 macOS | Windows | Linux，但 Releases 只发布 dmg/exe。按 VISION.md「文档与现实一致」原则，应从徽章移除 Linux（或显式标注为规划中）。维护者裁决：暂不支持 Linux（完整记录见 `docs/vision-answers.md` H-5）。待维护者确认改法后执行。

@@ -128,6 +128,7 @@ When adding platform-specific code, use `process.platform === "win32"` checks. A
 - `docs/faq.md` — user FAQ (bilingual)
 - `docs/troubleshooting.md` — troubleshooting guide (bilingual)
 - `docs/follow-ups.md` — tracked technical debt and deferred items
+- `VISION.md` — project acceptance policy: what aligns and what gets resisted
 
 ## Reference
 
@@ -136,6 +137,7 @@ When adding platform-specific code, use `process.platform === "win32"` checks. A
 - IPC contracts → `src/helpers/ipc-contracts.ts` (single source of truth, `as const` channels)
 - AI prompt templates → `src/helpers/aiPrompts.ts`
 - Security measures → `SECURITY.md`
+- Vision & positioning → `VISION.md` (acceptance policy), `docs/vision-answers.md` (review verdicts), `docs/competitive-positioning.md` (streaming go/no-go gates)
 - CI gate check → `scripts/ci-check.js` and `/ci-gate` skill
 
 #
