@@ -213,20 +213,39 @@ class ModelManager {
     > = {};
 
     for (const [modelType, config] of Object.entries(this.modelConfigs)) {
+      // [20260820_T15_SeacoSwap] Fallback-aware check: a missing/incomplete
+      // PRIMARY counts as "not fully downloaded" (upgrade entry stays
+      // visible), but if the recorded FALLBACK is ready the model still
+      // satisfies minimum_ready — the server runs on the old generation
+      // instead of refusing to start (review MAJOR fix).
+      let isComplete = false;
       const modelFile = path.join(cachePath, config.cache_path);
       if (fs.existsSync(modelFile)) {
-        const isComplete = this._verifyModel(modelFile, config);
-        modelDetails[modelType] = { downloaded: true, complete: isComplete };
-        if (!isComplete) {
-          allDownloaded = false;
-          missingModels.push(modelType);
-          if (config.required) minimumReady = false;
+        isComplete = this._verifyModel(modelFile, config);
+      }
+      let ready = isComplete;
+      if (!ready && config.fallback_name) {
+        const fallbackFile = path.join(
+          cachePath,
+          config.fallback_name.split("/").slice(1).join("/"),
+        );
+        if (fs.existsSync(fallbackFile)) {
+          ready = this._verifyModel(fallbackFile, {
+            ...config,
+            cache_path: config.fallback_name.split("/").slice(1).join("/"),
+          });
         }
-      } else {
+      }
+      modelDetails[modelType] = { downloaded: ready, complete: ready };
+      if (!ready) {
         allDownloaded = false;
         missingModels.push(modelType);
-        modelDetails[modelType] = { downloaded: false };
         if (config.required) minimumReady = false;
+      } else if (!isComplete) {
+        // Fallback carries readiness, but the primary is absent — surface
+        // the upgrade without blocking startup.
+        allDownloaded = false;
+        missingModels.push(modelType);
       }
     }
 
