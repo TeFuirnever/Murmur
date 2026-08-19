@@ -79,6 +79,9 @@ THREAD_CAP = 8
 # catches corrupted-DB / renderer-bug payloads that reach the protocol).
 HOTWORD_MAX_CHARS = 4096
 
+# [T11 review NIT] Shared error message for failed (re)initialization.
+INIT_FAILED_MESSAGE = "模型初始化失败"
+
 
 def sanitize_hotword(value):
     """Coerce a protocol hotword to a safe string ('' on non-string).
@@ -139,7 +142,7 @@ class FunASRServer:
         # [20260821_T11_UnloadReload] Serializes initialize() across the
         # main read loop (mic lazy-init) and the inference worker
         # (reload_models) — concurrent double model load = memory blowup.
-        self._init_lock = threading.Lock()
+        self._init_lock = threading.RLock()
         self._inference_thread = None
         self._output_thread = None
 
@@ -471,126 +474,132 @@ class FunASRServer:
         # non-finite input rejection) must not hit an unbound name in the
         # finally cleanup.
         infer_path = audio_path
-        # [20260821_T11_UnloadReload] Lock-guarded lazy init (worker
-        # reload can race this main-loop path).
-        if not self._ensure_initialized():
-            return {"success": False, "error": "模型初始化失败", "type": "init_error"}
+        # [T11 review MAJOR] Hold the models lock across the whole
+        # inference section: a worker unload/reload defers instead of
+        # freeing models mid-generate (busy = deferred, never
+        # concurrent — now true in BOTH directions). RLock because
+        # _ensure_initialized re-acquires inside.
+        with self._init_lock:
+            # [20260821_T11_UnloadReload] Lock-guarded lazy init (worker
+            # reload can race this main-loop path).
+            if not self._ensure_initialized():
+                return {"success": False, "error": INIT_FAILED_MESSAGE, "type": "init_error"}
 
-        try:
-            # 检查音频文件是否存在
-            if not os.path.exists(audio_path):
-                return {"success": False, "error": f"音频文件不存在: {audio_path}"}
+            try:
+                # 检查音频文件是否存在
+                if not os.path.exists(audio_path):
+                    return {"success": False, "error": f"音频文件不存在: {audio_path}"}
 
-            logger.info(f"开始转录音频文件: {audio_path}")
+                logger.info(f"开始转录音频文件: {audio_path}")
 
-            # 设置默认选项
-            default_options = {
-                "batch_size_s": 60,
-                "hotword": "",
-                "use_vad": True,
-                "use_punc": True,  # 使用FunASR自带的标点恢复
-                "language": "zh",
-            }
+                # 设置默认选项
+                default_options = {
+                    "batch_size_s": 60,
+                    "hotword": "",
+                    "use_vad": True,
+                    "use_punc": True,  # 使用FunASR自带的标点恢复
+                    "language": "zh",
+                }
 
-            if options:
-                default_options.update(options)
+                if options:
+                    default_options.update(options)
 
-            # [20260820_T14_Hotwords] Defense-in-depth: coerce the hotword
-            # option to a safe string before it reaches generate().
-            default_options["hotword"] = sanitize_hotword(
-                default_options.get("hotword", "")
-            )
-
-            # [20260819_T7_MicPreprocess] Ticket #186 (spec #177 T7): run the
-            # DSP module on the push-to-talk path too. The renderer delivers
-            # a 16k mono WAV temp (created/cleaned by the TS side); the DSP
-            # output below is OUR temp and is unlinked in the finally block.
-            # Fallback policy mirrors the file path (see _apply_preprocessing).
-            infer_path = self._apply_preprocessing(audio_path)
-
-            # 执行语音识别
-            if default_options["use_vad"]:
-                vad_result = self.vad_model.generate(
-                    input=infer_path, batch_size_s=default_options["batch_size_s"]
+                # [20260820_T14_Hotwords] Defense-in-depth: coerce the hotword
+                # option to a safe string before it reaches generate().
+                default_options["hotword"] = sanitize_hotword(
+                    default_options.get("hotword", "")
                 )
-                logger.info("VAD处理完成")
 
-            # 执行ASR识别
-            asr_result = self.asr_model.generate(
-                input=infer_path,
-                batch_size_s=default_options["batch_size_s"],
-                hotword=default_options["hotword"],
-                cache={},
-            )
+                # [20260819_T7_MicPreprocess] Ticket #186 (spec #177 T7): run the
+                # DSP module on the push-to-talk path too. The renderer delivers
+                # a 16k mono WAV temp (created/cleaned by the TS side); the DSP
+                # output below is OUR temp and is unlinked in the finally block.
+                # Fallback policy mirrors the file path (see _apply_preprocessing).
+                infer_path = self._apply_preprocessing(audio_path)
 
-            # 提取识别文本
-            if isinstance(asr_result, list) and len(asr_result) > 0:
-                if isinstance(asr_result[0], dict) and "text" in asr_result[0]:
-                    raw_text = asr_result[0]["text"]
+                # 执行语音识别
+                if default_options["use_vad"]:
+                    vad_result = self.vad_model.generate(
+                        input=infer_path, batch_size_s=default_options["batch_size_s"]
+                    )
+                    logger.info("VAD处理完成")
+
+                # 执行ASR识别
+                asr_result = self.asr_model.generate(
+                    input=infer_path,
+                    batch_size_s=default_options["batch_size_s"],
+                    hotword=default_options["hotword"],
+                    cache={},
+                )
+
+                # 提取识别文本
+                if isinstance(asr_result, list) and len(asr_result) > 0:
+                    if isinstance(asr_result[0], dict) and "text" in asr_result[0]:
+                        raw_text = asr_result[0]["text"]
+                    else:
+                        raw_text = str(asr_result[0])
                 else:
-                    raw_text = str(asr_result[0])
-            else:
-                raw_text = str(asr_result)
+                    raw_text = str(asr_result)
 
-            logger.info(f"ASR识别完成，原始文本: {raw_text[:100]}...")
+                logger.info(f"ASR识别完成，原始文本: {raw_text[:100]}...")
 
-            # 使用FunASR进行标点恢复
-            final_text = raw_text
-            if default_options["use_punc"] and self.punc_model and raw_text.strip():
-                try:
-                    punc_result = self.punc_model.generate(input=raw_text)
-                    if isinstance(punc_result, list) and len(punc_result) > 0:
-                        if (
-                            isinstance(punc_result[0], dict)
-                            and "text" in punc_result[0]
-                        ):
-                            final_text = punc_result[0]["text"]
-                        else:
-                            final_text = str(punc_result[0])
-                    logger.info("FunASR标点恢复完成")
-                except Exception as e:
-                    logger.warning(f"FunASR标点恢复失败，使用原始文本: {str(e)}")
+                # 使用FunASR进行标点恢复
+                final_text = raw_text
+                if default_options["use_punc"] and self.punc_model and raw_text.strip():
+                    try:
+                        punc_result = self.punc_model.generate(input=raw_text)
+                        if isinstance(punc_result, list) and len(punc_result) > 0:
+                            if (
+                                isinstance(punc_result[0], dict)
+                                and "text" in punc_result[0]
+                            ):
+                                final_text = punc_result[0]["text"]
+                            else:
+                                final_text = str(punc_result[0])
+                        logger.info("FunASR标点恢复完成")
+                    except Exception as e:
+                        logger.warning(f"FunASR标点恢复失败，使用原始文本: {str(e)}")
 
-            duration = self._get_audio_duration(infer_path)
-            self.transcription_count += 1
+                duration = self._get_audio_duration(infer_path)
+                self.transcription_count += 1
 
-            result = {
-                "success": True,
-                "text": final_text,
-                "raw_text": raw_text,
-                "confidence": (
-                    getattr(asr_result[0], "confidence", 0.0)
-                    if isinstance(asr_result, list)
-                    else 0.0
-                ),
-                "duration": duration,
-                "language": "zh-CN",
-                "model_type": "pytorch",  # 标识使用的是pytorch版本
-            }
+                result = {
+                    "success": True,
+                    "text": final_text,
+                    "raw_text": raw_text,
+                    "confidence": (
+                        getattr(asr_result[0], "confidence", 0.0)
+                        if isinstance(asr_result, list)
+                        else 0.0
+                    ),
+                    "duration": duration,
+                    "language": "zh-CN",
+                    "model_type": "pytorch",  # 标识使用的是pytorch版本
+                }
 
-            # 生产环境：每10次转录后进行内存清理
-            if self.transcription_count % 10 == 0:
-                self._cleanup_memory()
-                logger.info(f"已完成 {self.transcription_count} 次转录，执行内存清理")
+                # 生产环境：每10次转录后进行内存清理
+                if self.transcription_count % 10 == 0:
+                    self._cleanup_memory()
+                    logger.info(f"已完成 {self.transcription_count} 次转录，执行内存清理")
 
-            logger.info(f"转录完成，最终文本: {final_text[:100]}...")
-            return result
+                logger.info(f"转录完成，最终文本: {final_text[:100]}...")
+                return result
 
-        except Exception as e:
-            error_msg = f"音频转录失败: {str(e)}"
-            logger.error(error_msg)
-            logger.error(traceback.format_exc())
-            return {"success": False, "error": error_msg, "type": "transcription_error"}
-        finally:
-            # [20260819_T7_MicPreprocess] Clean OUR temp only — the original
-            # mic temp belongs to the TS side (close-then-unlink discipline
-            # lives in audioFileHelpers); fallback returns the original path,
-            # which the != audio_path guard leaves untouched.
-            if infer_path != audio_path:
-                try:
-                    os.unlink(infer_path)
-                except Exception:
-                    pass
+            except Exception as e:
+                error_msg = f"音频转录失败: {str(e)}"
+                logger.error(error_msg)
+                logger.error(traceback.format_exc())
+                return {"success": False, "error": error_msg, "type": "transcription_error"}
+            finally:
+                # [20260819_T7_MicPreprocess] Clean OUR temp only — the original
+                # mic temp belongs to the TS side (close-then-unlink discipline
+                # lives in audioFileHelpers); fallback returns the original path,
+                # which the != audio_path guard leaves untouched.
+                if infer_path != audio_path:
+                    try:
+                        os.unlink(infer_path)
+                    except Exception:
+                        pass
 
     def transcribe_file_audio(self, audio_path, options=None):
         """带时间戳的文件转录，用于 transcribe_file 命令"""
@@ -607,7 +616,7 @@ class FunASRServer:
         if not self._ensure_initialized():
             return {
                 "success": False,
-                "error": "模型初始化失败",
+                "error": INIT_FAILED_MESSAGE,
                 "type": "init_error",
                 "request_id": request_id,
             }
@@ -1126,13 +1135,17 @@ class FunASRServer:
     # transcribe_file is structural; the main loop just enqueues, so ping
     # stays answerable throughout.
     def _do_unload(self, request_id):
-        """释放全部模型（含懒加载的说话人模型），重置初始化状态"""
-        self.asr_model = None
-        self.vad_model = None
-        self.punc_model = None
-        # Lazy speaker model unloads too and stays lazy on reload.
-        self.cam_model = None
-        self.initialized = False
+        """Free all models (incl. the lazy speaker model), reset state."""
+        # [T11 review MAJOR] Under the models lock: if a mic transcribe /
+        # diarize holds it on the read loop, unload WAITS (busy = deferred)
+        # instead of freeing models mid-generate.
+        with self._init_lock:
+            self.asr_model = None
+            self.vad_model = None
+            self.punc_model = None
+            # Lazy speaker model unloads too and stays lazy on reload.
+            self.cam_model = None
+            self.initialized = False
         logger.info(f"模型已卸载 request_id={request_id}")
         self.response_queue.put({
             "request_id": request_id,
@@ -1142,7 +1155,7 @@ class FunASRServer:
         })
 
     def _do_reload(self, request_id):
-        """在推理线程重载模型；progress 事件续期 TS 侧请求超时"""
+        """Reload models on the worker thread; progress renews TS timeouts."""
         self.response_queue.put({
             "request_id": request_id,
             "type": "progress",
@@ -1157,7 +1170,7 @@ class FunASRServer:
             "request_id": request_id,
             "type": "result",
             "success": ok,
-            "error": None if ok else "模型初始化失败",
+            "error": None if ok else INIT_FAILED_MESSAGE,
             "asr_model": self.asr_model_name,
         })
 
@@ -1252,88 +1265,93 @@ class FunASRServer:
         返回:
             segments列表，每个元素增加speaker字段
         """
-        import librosa
-        import numpy as np
+        # [T11 review MAJOR] Same models lock as transcribe_audio —
+        # diarize runs on the read loop too, unload must defer.
+        with self._init_lock:
 
-        if not segments or len(segments) == 0:
-            return {"success": False, "error": "无分段数据"}
+            import librosa
+            import numpy as np
 
-        try:
-            self._load_cam_model()
-        except RuntimeError as e:
-            return {"success": False, "error": str(e)}
+            if not segments or len(segments) == 0:
+                return {"success": False, "error": "无分段数据"}
 
-        # 加载整个音频文件到内存
-        audio, sr = librosa.load(audio_path, sr=16000, mono=True)
+            try:
+                self._load_cam_model()
+            except RuntimeError as e:
+                return {"success": False, "error": str(e)}
 
-        embeddings = []
-        valid_indices = []
-        for i, seg in enumerate(segments):
-            start_sample = int(seg["start_ms"] / 1000.0 * sr)
-            end_sample = int(seg["end_ms"] / 1000.0 * sr)
-            start_sample = max(0, start_sample)
-            end_sample = min(len(audio), end_sample)
+            # 加载整个音频文件到内存
+            audio, sr = librosa.load(audio_path, sr=16000, mono=True)
 
-            if end_sample - start_sample < sr * 0.1:
-                continue  # 跳过大短的片段（<100ms）
+            embeddings = []
+            valid_indices = []
+            for i, seg in enumerate(segments):
+                start_sample = int(seg["start_ms"] / 1000.0 * sr)
+                end_sample = int(seg["end_ms"] / 1000.0 * sr)
+                start_sample = max(0, start_sample)
+                end_sample = min(len(audio), end_sample)
 
-            chunk = audio[start_sample:end_sample]
-            # 使用CAM++提取声纹嵌入
-            result = self.cam_model(chunk, output_dir=None)
-            if result and len(result) > 0:
-                emb = result[0].get("spk_embedding") or result[0].get("embedding")
-                if emb is not None:
-                    embeddings.append(np.array(emb).flatten())
-                    valid_indices.append(i)
+                if end_sample - start_sample < sr * 0.1:
+                    continue  # 跳过大短的片段（<100ms）
 
-        if len(embeddings) == 0:
-            for seg in segments:
-                seg["speaker"] = "Speaker"
+                chunk = audio[start_sample:end_sample]
+                # 使用CAM++提取声纹嵌入
+                result = self.cam_model(chunk, output_dir=None)
+                if result and len(result) > 0:
+                    emb = result[0].get("spk_embedding") or result[0].get("embedding")
+                    if emb is not None:
+                        embeddings.append(np.array(emb).flatten())
+                        valid_indices.append(i)
+
+            if len(embeddings) == 0:
+                for seg in segments:
+                    seg["speaker"] = "Speaker"
+                return {"success": True, "segments": segments}
+
+            # 余弦相似度聚类
+            embeddings = np.stack(embeddings)  # (N, D)
+            N = len(embeddings)
+            threshold = 0.7
+            labels = list(range(N))  # 初始每个embedding一个cluster
+
+            for i in range(N):
+                for j in range(i + 1, N):
+                    sim = np.dot(embeddings[i], embeddings[j]) / (
+                        np.linalg.norm(embeddings[i]) * np.linalg.norm(embeddings[j]) + 1e-8
+                    )
+                    if sim > threshold:
+                        # 合并cluster
+                        root_i = labels[i]
+                        root_j = labels[j]
+                        new_label = min(root_i, root_j)
+                        for k in range(N):
+                            if labels[k] == root_i or labels[k] == root_j:
+                                labels[k] = new_label
+
+            # 重映射label到连续编号
+            unique_labels = sorted(set(labels))
+            label_map = {old: f"Speaker {chr(65 + idx)}" for idx, old in enumerate(unique_labels)}
+            if len(unique_labels) == 1:
+                label_map[unique_labels[0]] = "Speaker"
+
+            speaker_for_index = {}
+            for vi, label_id in zip(valid_indices, labels):
+                speaker_for_index[vi] = label_map[label_id]
+
+            for i, seg in enumerate(segments):
+                seg["speaker"] = speaker_for_index.get(i, "Speaker")
+
             return {"success": True, "segments": segments}
 
-        # 余弦相似度聚类
-        embeddings = np.stack(embeddings)  # (N, D)
-        N = len(embeddings)
-        threshold = 0.7
-        labels = list(range(N))  # 初始每个embedding一个cluster
+        # [20260817_T5_HandleCommand] Ticket #181 (spec #177 T5): the stdin
+        # command dispatch, extracted verbatim from run()'s read loop so it is
+        # unit-testable without spawning the process (protocol extensions for
+        # idle-unload/hotwords must extend tests/python accordingly).
+        # Returns (result, keep_running):
+        #   result is None     -> action was queued (transcribe_file); the read
+        #                         loop must NOT print anything for it
+        #   keep_running False -> stop the read loop after printing (exit)
 
-        for i in range(N):
-            for j in range(i + 1, N):
-                sim = np.dot(embeddings[i], embeddings[j]) / (
-                    np.linalg.norm(embeddings[i]) * np.linalg.norm(embeddings[j]) + 1e-8
-                )
-                if sim > threshold:
-                    # 合并cluster
-                    root_i = labels[i]
-                    root_j = labels[j]
-                    new_label = min(root_i, root_j)
-                    for k in range(N):
-                        if labels[k] == root_i or labels[k] == root_j:
-                            labels[k] = new_label
-
-        # 重映射label到连续编号
-        unique_labels = sorted(set(labels))
-        label_map = {old: f"Speaker {chr(65 + idx)}" for idx, old in enumerate(unique_labels)}
-        if len(unique_labels) == 1:
-            label_map[unique_labels[0]] = "Speaker"
-
-        speaker_for_index = {}
-        for vi, label_id in zip(valid_indices, labels):
-            speaker_for_index[vi] = label_map[label_id]
-
-        for i, seg in enumerate(segments):
-            seg["speaker"] = speaker_for_index.get(i, "Speaker")
-
-        return {"success": True, "segments": segments}
-
-    # [20260817_T5_HandleCommand] Ticket #181 (spec #177 T5): the stdin
-    # command dispatch, extracted verbatim from run()'s read loop so it is
-    # unit-testable without spawning the process (protocol extensions for
-    # idle-unload/hotwords must extend tests/python accordingly).
-    # Returns (result, keep_running):
-    #   result is None     -> action was queued (transcribe_file); the read
-    #                         loop must NOT print anything for it
-    #   keep_running False -> stop the read loop after printing (exit)
     def handle_command(self, command):
         if command.get("action") == "transcribe":
             audio_path = command.get("audio_path")

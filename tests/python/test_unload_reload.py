@@ -10,6 +10,7 @@
 #     init lock (reload-in-worker can race a mic transcribe on the main
 #     loop — double model load = memory blowup)
 import os
+import queue
 import sys
 import threading
 import time
@@ -42,7 +43,7 @@ class ProtocolRoutingTest(unittest.TestCase):
 
     def _server(self):
         srv = make_server()
-        srv.request_queue = __import__("queue").Queue()
+        srv.request_queue = queue.Queue()
         return srv
 
     def test_unload_models_routes_to_request_queue(self):
@@ -75,7 +76,7 @@ class DoUnloadTest(unittest.TestCase):
         srv.punc_model = FakeModel()
         srv.cam_model = FakeModel()
         srv.initialized = True
-        srv.response_queue = __import__("queue").Queue()
+        srv.response_queue = queue.Queue()
 
         srv._do_unload("r1")
 
@@ -94,7 +95,7 @@ class DoReloadTest(unittest.TestCase):
     def test_reload_runs_initialize_and_reports_generation(self):
         srv = make_server()
         srv.initialized = False
-        srv.response_queue = __import__("queue").Queue()
+        srv.response_queue = queue.Queue()
         srv.asr_model_name = None
 
         calls = []
@@ -122,7 +123,7 @@ class DoReloadTest(unittest.TestCase):
     def test_reload_failure_reports_error(self):
         srv = make_server()
         srv.initialized = False
-        srv.response_queue = __import__("queue").Queue()
+        srv.response_queue = queue.Queue()
 
         def boom():
             return {"success": False, "error": "加载失败"}
@@ -181,6 +182,42 @@ class EnsureInitializedTest(unittest.TestCase):
             t.join()
         self.assertEqual(len(calls), 1)
         self.assertTrue(srv.initialized)
+
+
+class UnloadDefersDuringInferenceTest(unittest.TestCase):
+    """[T11 review MAJOR] The worker's unload must NOT free models while a
+    mic transcribe/diarize holds the models lock on the main loop — the
+    reviewer reproduced a mid-inference NoneType failure without it."""
+
+    def test_unload_waits_for_the_models_lock(self):
+        srv = make_server()
+        srv.asr_model = FakeModel()
+        srv.vad_model = FakeModel()
+        srv.punc_model = FakeModel()
+        srv.cam_model = FakeModel()
+        srv.initialized = True
+        srv.response_queue = queue.Queue()
+
+        with srv._init_lock:  # simulated in-flight mic inference
+            t = threading.Thread(target=srv._do_unload, args=("r9",))
+            t.start()
+            time.sleep(0.15)
+            # Models untouched, no premature response — busy = deferred.
+            self.assertIsNotNone(srv.asr_model)
+            self.assertTrue(srv.initialized)
+            self.assertTrue(srv.response_queue.empty())
+        t.join(timeout=2)
+        self.assertFalse(t.is_alive())
+        self.assertIsNone(srv.asr_model)
+        self.assertFalse(srv.initialized)
+
+    def test_lock_is_reentrant(self):
+        # transcribe_audio holds the lock across its body AND calls
+        # _ensure_initialized inside — a non-reentrant lock self-deadlocks.
+        srv = make_server()
+        srv.initialized = True
+        with srv._init_lock:
+            self.assertTrue(srv._ensure_initialized())
 
 
 if __name__ == "__main__":
