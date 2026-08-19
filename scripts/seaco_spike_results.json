@@ -1,0 +1,254 @@
+{
+  "model": "damo/speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+  "cache_pre_existing": true,
+  "size_mb_cached": 952.7,
+  "load_time_s_cold_or_cached": 2.88,
+  "golden": {
+    "variants": 36,
+    "mean_cer": 0.0,
+    "worst_cer": 0.0,
+    "timestamp_seen": true,
+    "rows": [
+      {
+        "variant": "s00_g002_clean",
+        "cer": 0.0,
+        "text": "今 天 我 们 讨 论 第 三 季 度 的 产 品 路 线 图",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s00_g002_rumble",
+        "cer": 0.0,
+        "text": "今 天 我 们 讨 论 第 三 季 度 的 产 品 路 线 图",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s00_g010_clean",
+        "cer": 0.0,
+        "text": "今 天 我 们 讨 论 第 三 季 度 的 产 品 路 线 图",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s00_g010_rumble",
+        "cer": 0.0,
+        "text": "今 天 我 们 讨 论 第 三 季 度 的 产 品 路 线 图",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s00_g100_clean",
+        "cer": 0.0,
+        "text": "今 天 我 们 讨 论 第 三 季 度 的 产 品 路 线 图",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s00_g100_rumble",
+        "cer": 0.0,
+        "text": "今 天 我 们 讨 论 第 三 季 度 的 产 品 路 线 图",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s01_g002_clean",
+        "cer": 0.0,
+        "text": "会 议 纪 要 需 要 在 周 五 之 前 发 给 所 有 参 会 人 员",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s01_g002_rumble",
+        "cer": 0.0,
+        "text": "会 议 纪 要 需 要 在 周 五 之 前 发 给 所 有 参 会 人 员",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s01_g010_clean",
+        "cer": 0.0,
+        "text": "会 议 纪 要 需 要 在 周 五 之 前 发 给 所 有 参 会 人 员",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s01_g010_rumble",
+        "cer": 0.0,
+        "text": "会 议 纪 要 需 要 在 周 五 之 前 发 给 所 有 参 会 人 员",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s01_g100_clean",
+        "cer": 0.0,
+        "text": "会 议 纪 要 需 要 在 周 五 之 前 发 给 所 有 参 会 人 员",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s01_g100_rumble",
+        "cer": 0.0,
+        "text": "会 议 纪 要 需 要 在 周 五 之 前 发 给 所 有 参 会 人 员",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s02_g002_clean",
+        "cer": 0.0,
+        "text": "这 个 方 案 的 预 算 超 出 了 原 定 计 划 的 百 分 之 十 五",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s02_g002_rumble",
+        "cer": 0.0,
+        "text": "这 个 方 案 的 预 算 超 出 了 原 定 计 划 的 百 分 之 十 五",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s02_g010_clean",
+        "cer": 0.0,
+        "text": "这 个 方 案 的 预 算 超 出 了 原 定 计 划 的 百 分 之 十 五",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s02_g010_rumble",
+        "cer": 0.0,
+        "text": "这 个 方 案 的 预 算 超 出 了 原 定 计 划 的 百 分 之 十 五",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s02_g100_clean",
+        "cer": 0.0,
+        "text": "这 个 方 案 的 预 算 超 出 了 原 定 计 划 的 百 分 之 十 五",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s02_g100_rumble",
+        "cer": 0.0,
+        "text": "这 个 方 案 的 预 算 超 出 了 原 定 计 划 的 百 分 之 十 五",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s03_g002_clean",
+        "cer": 0.0,
+        "text": "客 户 端 支 持 视 窗 和 苹 果 双 平 台 运 行",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s03_g002_rumble",
+        "cer": 0.0,
+        "text": "客 户 端 支 持 视 窗 和 苹 果 双 平 台 运 行",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s03_g010_clean",
+        "cer": 0.0,
+        "text": "客 户 端 支 持 视 窗 和 苹 果 双 平 台 运 行",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s03_g010_rumble",
+        "cer": 0.0,
+        "text": "客 户 端 支 持 视 窗 和 苹 果 双 平 台 运 行",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s03_g100_clean",
+        "cer": 0.0,
+        "text": "客 户 端 支 持 视 窗 和 苹 果 双 平 台 运 行",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s03_g100_rumble",
+        "cer": 0.0,
+        "text": "客 户 端 支 持 视 窗 和 苹 果 双 平 台 运 行",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s04_g002_clean",
+        "cer": 0.0,
+        "text": "语 音 识 别 的 准 确 率 直 接 影 响 用 户 体 验",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s04_g002_rumble",
+        "cer": 0.0,
+        "text": "语 音 识 别 的 准 确 率 直 接 影 响 用 户 体 验",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s04_g010_clean",
+        "cer": 0.0,
+        "text": "语 音 识 别 的 准 确 率 直 接 影 响 用 户 体 验",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s04_g010_rumble",
+        "cer": 0.0,
+        "text": "语 音 识 别 的 准 确 率 直 接 影 响 用 户 体 验",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s04_g100_clean",
+        "cer": 0.0,
+        "text": "语 音 识 别 的 准 确 率 直 接 影 响 用 户 体 验",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s04_g100_rumble",
+        "cer": 0.0,
+        "text": "语 音 识 别 的 准 确 率 直 接 影 响 用 户 体 验",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s05_g002_clean",
+        "cer": 0.0,
+        "text": "下 周 一 上 午 十 点 在 三 号 会 议 室 进 行 评 审",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s05_g002_rumble",
+        "cer": 0.0,
+        "text": "下 周 一 上 午 十 点 在 三 号 会 议 室 进 行 评 审",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s05_g010_clean",
+        "cer": 0.0,
+        "text": "下 周 一 上 午 十 点 在 三 号 会 议 室 进 行 评 审",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s05_g010_rumble",
+        "cer": 0.0,
+        "text": "下 周 一 上 午 十 点 在 三 号 会 议 室 进 行 评 审",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s05_g100_clean",
+        "cer": 0.0,
+        "text": "下 周 一 上 午 十 点 在 三 号 会 议 室 进 行 评 审",
+        "has_timestamp": true
+      },
+      {
+        "variant": "s05_g100_rumble",
+        "cer": 0.0,
+        "text": "下 周 一 上 午 十 点 在 三 号 会 议 室 进 行 评 审",
+        "has_timestamp": true
+      }
+    ]
+  },
+  "vad_chain_ok": true,
+  "hotword_rare_nouns": [
+    {
+      "reference": "请把会议纪要发给张晗玥和刘翀",
+      "hotword": "张晗玥 刘翀",
+      "current_no_hotword": "请把会议纪要发给张含月和刘冲",
+      "seaco_no_hotword": "请 把 会 议 纪 要 发 给 张 含 月 和 刘 冲",
+      "seaco_with_hotword": "请 把 会 议 纪 要 发 给 张 晗 玥 和 刘 冲"
+    },
+    {
+      "reference": "下周由龚燊带队去深圳湾总部",
+      "hotword": "龚燊",
+      "current_no_hotword": "下周由公审带队去深圳湾总部",
+      "seaco_no_hotword": "下 周 由 公 审 带 队 去 深 圳 湾 总 部",
+      "seaco_with_hotword": "下 周 由 龚 审 带 队 去 深 圳 湾 总 部"
+    },
+    {
+      "reference": "这个项目的负责人是 Jedediah Kellerberg",
+      "hotword": "Jedediah Kellerberg",
+      "current_no_hotword": "这个项目的负责人是GDDA keler bert",
+      "seaco_no_hotword": "这 个 项 目 的 负 责 人 是 GDDA keler bert",
+      "seaco_with_hotword": "这 个 项 目 的 负 责 人 是 jedediah keler bert"
+    }
+  ]
+}
