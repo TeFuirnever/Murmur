@@ -33,7 +33,18 @@ function applyTranscriptionCleaning(result: unknown, logger: Logger): void {
   if (!cleanable || !cleanable.success || !cleanable.text) return;
 
   const originalText = cleanable.text;
-  const cleanedText = cleanTranscriptionText(originalText) || originalText;
+  const rawCleaned = cleanTranscriptionText(originalText);
+  // Fail-safe: a non-empty input must never clean to empty. v1 rules are
+  // fold-only (property-tested), so this is unreachable defensive depth —
+  // but if a future rule regresses the invariant, WARN loudly instead of
+  // silently no-op'ing. [T10 review fixup]
+  let cleanedText = rawCleaned;
+  if (!cleanedText) {
+    logger.warn?.("清洗产生空文本，回退原文（清洗器规则回归信号）", {
+      original: originalText,
+    });
+    cleanedText = originalText;
+  }
   const cleanedRaw = cleanable.raw_text
     ? cleanTranscriptionText(cleanable.raw_text) || cleanable.raw_text
     : undefined;

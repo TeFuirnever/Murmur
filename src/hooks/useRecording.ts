@@ -194,9 +194,7 @@ export const useRecording = ({
             // ASR text when the main-process cleaner changed anything
             // (recoverable original); AI polish below still uses the
             // cleaned `raw_text` local (from result.text).
-            raw_text:
-              (transcriptionResult as { original_text?: string })
-                .original_text ?? raw_text,
+            raw_text: transcriptionResult.original_text ?? raw_text,
             text: raw_text,
             confidence: transcriptionResult.confidence || 0,
             language: transcriptionResult.language || "zh-CN",

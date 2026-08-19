@@ -187,4 +187,41 @@ describe("transcriptionHandlers cleaner wiring", () => {
     expect(result.success).toBe(true);
     expect(mockDb.saveTranscription).toHaveBeenCalledWith(userEdited);
   });
+
+  // [T10 review fixup] Low-risk branch coverage.
+  it("failed transcription passes through untouched (no original_text)", async () => {
+    const C = await setup();
+    mockFunasr.transcribeAudio!.mockResolvedValueOnce({
+      success: false,
+      error: "识别失败",
+    });
+    const handler = registeredHandlers.get(C.TRANSCRIPTION.AUDIO)!;
+    const result = (await handler(null, new ArrayBuffer(0))) as {
+      success: boolean;
+      error?: string;
+      original_text?: string;
+    };
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("识别失败");
+    expect(result.original_text).toBeUndefined();
+  });
+
+  it("AUDIO result without raw_text cleans text only", async () => {
+    const C = await setup();
+    mockFunasr.transcribeAudio!.mockResolvedValueOnce({
+      success: true,
+      text: DEGENERATE,
+    });
+    const handler = registeredHandlers.get(C.TRANSCRIPTION.AUDIO)!;
+    const result = (await handler(null, new ArrayBuffer(0))) as {
+      text: string;
+      raw_text?: string;
+      original_text: string;
+    };
+    expect(result.text).toBe(CLEANED);
+    expect(result.raw_text).toBeUndefined();
+    expect(result.original_text).toBe(DEGENERATE);
+  });
 });
+
+// [20260819_T10_CleanerWiring] END
