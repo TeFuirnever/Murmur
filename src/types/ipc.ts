@@ -107,6 +107,10 @@ export interface FileTranscriptionResult {
   language?: string;
   processed_text?: string;
   raw_text?: string;
+  // [20260819_T10_CleanerWiring] Pre-clean ASR text carried alongside the
+  // cleaned text/raw_text so the DB raw column keeps the recoverable
+  // original (ticket #188).
+  original_text?: string;
   file_size?: number;
 }
 

@@ -128,6 +128,24 @@ describe("[20260819_T9_TranscriptCleaner] linear-time guarantee", () => {
     const elapsed = performance.now() - start;
     expect(elapsed).toBeLessThan(500);
   });
+
+  // [20260819_T10_CleanerWiring] Structural invariant the T10 wiring's
+  // empty fail-safe relies on: v1 rules are fold-only, so a non-empty
+  // input can never clean to empty — the "empty result" UI feedback path
+  // is therefore unreachable defensive depth (documented on #188).
+  it("non-empty input can never clean to empty (fold-only invariant)", () => {
+    const samples = [
+      ...golden.pathological.map((c) => c.input),
+      "嗯".repeat(500),
+      "好".repeat(50),
+      ",,,",
+    ];
+    for (const s of samples) {
+      if (s.trim().length > 0) {
+        expect(cleanTranscriptionText(s).length).toBeGreaterThan(0);
+      }
+    }
+  });
 });
 
 // [20260819_T9_TranscriptCleaner] END
