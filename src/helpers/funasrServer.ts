@@ -453,9 +453,9 @@ class FunASRServer {
     if (!this.serverProcess || !this.serverReady) {
       return { success: false, error: "FunASR服务器未就绪" };
     }
-    const result = (await this.messageRouter.sendCommand(
-      "unload_models",
-    )) as { success?: boolean };
+    const result = (await this.messageRouter.sendCommand("unload_models")) as {
+      success?: boolean;
+    };
     // [T12 review BLOCKER] The TS-side flag drives STATUS → renderer
     // isReady; without this the unloaded server still reads "ready" and
     // the hotkey pre-trigger never fires in its core scenario.
