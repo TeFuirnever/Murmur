@@ -42,8 +42,12 @@ def main():
     
     # 模型配置
     models = [
+        # [20260820_T15_SeacoSwap] Hotword-capable SeACo variant (T13:
+        # zero CER regression, timestamps intact). The old paraformer is
+        # NOT downloaded fresh — it remains on disk as the rollback for
+        # upgrading users.
         {
-            "name": "damo/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+            "name": "damo/speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
             "type": "asr"
         },
         {

@@ -21,6 +21,10 @@ interface ModelConfig {
   cache_path: string;
   expected_size: number;
   required: boolean;
+  // [20260820_T15_SeacoSwap] Optional rollback model — accepted by
+  // checkModelFiles when the primary is absent (upgrade-in-progress /
+  // failed download keeps the app usable on the old model).
+  fallback_name?: string;
 }
 
 interface ModelCheckResult {
@@ -52,10 +56,16 @@ class ModelManager {
     this.modelsDownloaded = null;
     this.modelConfigs = {
       asr: {
-        name: "damo/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+        // [20260820_T15_SeacoSwap] SeACo-Paraformer (hotword-capable, T13
+        // spike: zero CER regression, timestamps present, 952.7 MB). The
+        // old paraformer stays recorded as the rollback target — the
+        // server falls back to it when SeACo fails to load.
+        name: "damo/speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+        fallback_name:
+          "damo/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
         cache_path:
-          "speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
-        expected_size: 840 * 1024 * 1024,
+          "speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+        expected_size: Math.round(952.7 * 1024 * 1024),
         required: true,
       },
       vad: {
@@ -82,7 +92,11 @@ class ModelManager {
           const damoPath = path.join(startDir, entry.name);
           const subdirs = fs.readdirSync(damoPath, { withFileTypes: true });
           const hasExpectedModel = subdirs.some(
-            (m) => m.isDirectory() && m.name.startsWith("speech_paraformer"),
+            // [20260820_T15_SeacoSwap] Either ASR generation marks a valid damo root.
+            (m) =>
+              m.isDirectory() &&
+              (m.name.startsWith("speech_seaco_paraformer") ||
+                m.name.startsWith("speech_paraformer")),
           );
           if (hasExpectedModel) return damoPath;
         }
@@ -144,6 +158,7 @@ class ModelManager {
           .readdirSync(candidate)
           .some(
             (n) =>
+              n.startsWith("speech_seaco_paraformer") ||
               n.startsWith("speech_paraformer") ||
               n.startsWith("speech_fsmn") ||
               n.startsWith("punc_ct"),
