@@ -60,8 +60,8 @@ test.describe("Suite 6: Clipboard & Auto-Paste", () => {
         error: e.message,
       })),
     );
-    // Result is either void (success) or an error object
-    // The important thing is the IPC channel exists and responds
-    expect(result).toBeDefined();
+    // [20260820_E2E_PasteContractFix] CLIPBOARD.PASTE now returns
+    // {success:true} on resolve — same contract as CLIPBOARD.COPY.
+    expect(result).toEqual({ success: true });
   });
 });
