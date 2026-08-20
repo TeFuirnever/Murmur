@@ -29,8 +29,8 @@ Any red step stops the push: the branch never reaches GitHub in a failing state.
 
 Agents can invoke the same gate via the `/no-mistakes` skill (installed at user level). Prefer pushing through the gate for any non-trivial delivery; see also the delivery gates in `CLAUDE.md`.
 
-| Concern                        | Answer                                                            |
-| ------------------------------ | ----------------------------------------------------------------- |
-| Does it slow me down           | Pipeline runs in an isolated worktree; you can keep working       |
-| Which agent does the AI review | Whichever `claude` resolves to at that moment (relay-transparent) |
-| Where is gate state            | `~/.no-mistakes/` - nothing runs resident                         |
+| Concern                        | Answer                                                                                                                                                                                       |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Does it slow me down           | Pipeline runs in an isolated worktree; you can keep working                                                                                                                                  |
+| Which agent does the AI review | Whichever `claude` resolves to at that moment (relay-transparent)                                                                                                                            |
+| Where is gate state            | `~/.no-mistakes/`; the pipeline runs on a managed daemon installed as a system service (launchd on macOS) - it idles until a push triggers it. Manage with `no-mistakes daemon status\|stop` |

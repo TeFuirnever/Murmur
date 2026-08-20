@@ -333,8 +333,13 @@ describe("[20260816_Test_BranchPush] history branch matrix", () => {
   it("copies through navigator.clipboard when the bridge disappears", async () => {
     apiMocks.getTranscriptions.mockResolvedValue([makeRecord(1, "无桥复制")]);
     await mountHistory();
+    // Wait for the record before dropping the bridge: the mount effect's
+    // loadTranscriptions bails without electronAPI, and React passive effects
+    // can flush after mountHistory's header check — deleting the bridge too
+    // early leaves the list empty and this test races (seen on macos CI).
+    expect(await screen.findByText("无桥复制")).toBeInTheDocument();
     delete (globalThis.window as unknown as TestWindow).electronAPI;
-    fireEvent.click(await screen.findByTitle("复制文本"));
+    fireEvent.click(screen.getByTitle("复制文本"));
     await waitFor(() => {
       expect(clipboardStub.writeText).toHaveBeenCalledWith("无桥复制");
     });
@@ -356,8 +361,11 @@ describe("[20260816_Test_BranchPush] history branch matrix", () => {
   it("skips deletion when the bridge is absent", async () => {
     apiMocks.getTranscriptions.mockResolvedValue([makeRecord(5, "待删除无桥")]);
     await mountHistory();
+    // Same race as the clipboard test above: the button only exists once the
+    // load effect has run, so await the record before removing the bridge.
+    expect(await screen.findByText("待删除无桥")).toBeInTheDocument();
     delete (globalThis.window as unknown as TestWindow).electronAPI;
-    fireEvent.click(await screen.findByTitle("删除记录"));
+    fireEvent.click(screen.getByTitle("删除记录"));
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(apiMocks.deleteTranscription).not.toHaveBeenCalled();
     expect(screen.getByText("待删除无桥")).toBeInTheDocument();
