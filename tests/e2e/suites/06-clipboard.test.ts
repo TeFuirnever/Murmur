@@ -53,8 +53,10 @@ test.describe("Suite 6: Clipboard & Auto-Paste", () => {
   });
 
   test("6.3 — pasteText IPC call succeeds", async () => {
-    // pasteText may fail in test environment (no active text field)
-    // but the IPC call itself should not throw
+    // CLIPBOARD.PASTE resolves {success:true} on the happy path. On macOS
+    // this requires the runner to have granted the app accessibility
+    // permission — without it pasteText throws and the handler answers
+    // {success:false}, failing this test.
     const result = await window.evaluate(() =>
       window.electronAPI.pasteText("test paste").catch((e) => ({
         error: e.message,

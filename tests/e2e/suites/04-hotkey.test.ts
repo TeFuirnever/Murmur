@@ -18,8 +18,8 @@ test.describe("Suite 4: Hotkey Management", () => {
     ({ app: electronApp, window } = await launchElectronApp());
 
     // [20260820_E2E_HotkeyDisplayFix] The hotkey hint text ("点击麦克风或按
-    // ⌘ + ⇧ + 空格 开始录音") only renders when modelStatus.isReady — mock
-    // the model ready before asserting the displayed hotkey.
+    // ⌘/Ctrl + ⇧ + 空格 开始录音") only renders when modelStatus.isReady —
+    // mock the model ready before asserting the displayed hotkey.
     await mockModelReady(electronApp);
     await window.reload();
     await window.waitForLoadState("domcontentloaded");
@@ -31,12 +31,13 @@ test.describe("Suite 4: Hotkey Management", () => {
 
   test("4.1 — Default hotkey displayed in UI", async () => {
     // Wait for the ready-state hint so the symbolic hotkey text is on screen,
-    // then assert formatHotkey's symbol rendering (useHotkey.ts): ⌘ + ⇧ + 空格.
+    // then assert formatHotkey's symbol rendering (useHotkey.ts): the
+    // platform modifier (⌘ on macOS, Ctrl on Windows) plus ⇧ and 空格.
     const hint = window.getByText("点击麦克风或按", { exact: false });
     await expect(hint).toBeVisible({ timeout: 10_000 });
 
     const body = await window.textContent("body");
-    expect(body).toContain("⌘");
+    expect(body).toContain(process.platform === "darwin" ? "⌘" : "Ctrl");
     expect(body).toContain("⇧");
     expect(body).toContain("空格");
   });
