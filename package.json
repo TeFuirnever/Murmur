@@ -100,7 +100,7 @@
     "husky": "^9.1.7",
     "jsdom": "^30.0.0",
     "license-checker": "^25.0.1",
-    "lint-staged": "^17.0.5",
+    "lint-staged": "^17.3.0",
     "node-gyp": "^13.0.1",
     "playwright-core": "^1.60.0",
     "postcss": "^8.5.26",
