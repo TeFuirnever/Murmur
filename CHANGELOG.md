@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **模型加载成功后 FunASR 服务器进程崩溃**（PR #207）：三个模型加载器在并行线程中各自使用 `suppress_stdout()`（临时把 stdout 指向 devnull，防止 FunASR 库的非 JSON 输出污染协议通道），但其保存/恢复是无锁的按线程操作——多线程同时在抑制窗口内时，交错恢复会让 `sys.stdout` 指向一个已被其他线程关闭的 devnull，模型全部加载成功后的协议输出随即抛 `ValueError: I/O operation on closed file`，服务器进程退出（用户表现为转写时报"FunASR服务器未就绪"，重启 3 次耗尽）。该竞态自并行加载引入（2025-09）起潜伏，仅在磁盘上已有模型的机器上触发，CI runner 无模型故从未拦截。修复为锁 + 引用计数的全局抑制，模型加载并行度不变；双平台打包启动冒烟的致命模式列表同时加入 `Unhandled Rejection`。
+
 ## [1.3.2] - 2026-08-16
 
 ### Fixed

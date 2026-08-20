@@ -153,7 +153,7 @@ Murmur targets **Windows** and **macOS**. See `CLAUDE.md` → _Cross-Platform Su
 - **Bug fix:** reproduce the bug, add a failing test **first**, then fix and verify.
 - **High-risk** (session flow, IPC, security, privacy, release packaging): include a risk statement and fresh verification evidence.
 - **Gate failure:** run `node scripts/ci-check.js --json` to diagnose; use `--fix` for auto-fixable issues.
-- **Releases:** push a `v*` tag → `build.yml` builds installers behind four release gates (native ABI, preload presence, mac/win packaged boot smoke). Never bypass or downgrade these gates — every release before v1.3.2 shipped broken while CI stayed green. See `CONTRIBUTING.md` → Release Gates.
+- **Releases:** push a `v*` tag → `build.yml` builds installers behind five release gates (native ABI, preload presence, Python packaging import gate, mac/win packaged boot smoke). Never bypass or downgrade these gates — every release before v1.3.2 shipped broken while CI stayed green. See `CONTRIBUTING.md` → Release Gates.
 
 ### Commit Format
 
