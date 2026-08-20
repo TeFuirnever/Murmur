@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-08-20
+
+### Fixed
+
+- **v1.3.2 的 Windows 与 macOS 安装包均无法下载模型、无法转写**（issues #176 #196，spec #177 B-0）：两个独立打包缺陷。Windows：运行时在所有平台都按 macOS 布局（`python/bin/python3.11`）查找嵌入式 Python，而 Windows 包内的实际布局是 `python/python.exe`——路径永远对不上，应用始终报"嵌入式Python环境不可用"。macOS：Python 二进制位于 `app.asar` 归档内部，应用能"看到"但操作系统无法执行归档内的二进制，FunASR 服务器进程永远起不来（报"FunASR服务器未就绪"）。修复（PR #178）：运行时按平台解析正确布局，生产环境改从 `app.asar.unpacked` 真实文件路径加载。同时硬化构建流水线（PR #184）：嵌入式 Python 环境准备从 Windows 侧的静默容错（`continue-on-error`，正是它让 v1.2.0–v1.3.2 的 Windows 包静默缺 Python 而构建全绿）改为双平台硬性步骤并配缓存，打包前必须用该环境真实 import numpy/soundfile/funasr，打包后在 CI 真实安装启动 mac DMG 与 Windows EXE 并验证 Python 链路。**请 v1.3.2 及更早版本的用户升级本版本。**
+- **模型加载成功后 FunASR 服务器进程崩溃**（PR #207）：三个模型加载器在并行线程中各自使用 `suppress_stdout()`（临时把 stdout 指向 devnull，防止 FunASR 库的非 JSON 输出污染协议通道），但其保存/恢复是无锁的按线程操作——多线程同时在抑制窗口内时，交错恢复会让 `sys.stdout` 指向一个已被其他线程关闭的 devnull，模型全部加载成功后的协议输出随即抛 `ValueError: I/O operation on closed file`，服务器进程退出（用户表现为转写时报"FunASR服务器未就绪"，重启 3 次耗尽）。该竞态自并行加载引入（2025-09）起潜伏，仅在磁盘上已有模型的机器上触发，CI runner 无模型故从未拦截。修复为锁 + 引用计数的全局抑制，模型加载并行度不变；双平台打包启动冒烟的致命模式列表同时加入 `Unhandled Rejection`。
+
+### Added
+
+- **热词支持**（PR #199 #200，spec #177 T13-T15）：设置 → 通用 → 热词，每行一个（上限 200 行、每行 32 字），识别时自动注入，提升同事姓名、产品名等生僻专名的命中率（实测：张含月→张晗玥）。若热词导致识别失败会自动去除热词重试并提示检查配置。配套将默认 ASR 模型切换为支持热词的 SeACo-Paraformer（见下）。
+- **空闲自动卸载模型 + 快捷键预热**（PR #201 #202，spec #177 T11-T12）：转写结束后约 5 分钟无活动自动卸载模型释放内存（约 2GB 级）；下次按下录音快捷键时自动在后台重载，等待期间界面明确显示模型未就绪而非静默失败。
+
+### Changed
+
+- **默认 ASR 模型切换为 SeACo-Paraformer**（PR #200）：热词能力版 Paraformer-large（`speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch`，约 950MB），标准测试集零识别回归；本地已有旧模型而未下载新模型时自动回退旧模型，不会静默触发大体积下载。
+- **音频预处理提升困难场景识别**（PR #194，spec #177 T6-T7）：转写前自动做 80Hz 高通滤波（抑制低频嗡嗡声/风噪）与分段响度归一化（近静音直通、峰值限幅保护），麦克风录音与文件导入两条路径均生效。
+- **转写文本清洗**（PR #194，spec #177 T9-T10）：折叠 ASR 幻觉式的连续重复字符（≥6 连续折叠至 3）与连续重复短语（≥3 次折叠），带标点边界保护与数字豁免（电话号、长数字串不折叠）；清洗前的原文完整保留在记录的 raw_text 字段中。
+- **推理线程自适应与并行加载**（PR #194 #198，spec #177 T8）：推理线程数按逻辑核数自适应（`min(max(1, 核数-2), 8)`）——多核机器转写更快，小核机器为界面留出余量不再卡顿；ASR/VAD/标点三个模型并行加载，启动显著加快。
+- **进程清理与双平台 CI**（PR #194，spec #177 T2 T4）：退出时统一按进程树终止 Python 子进程（Windows `taskkill /T /F`），不再残留孤儿进程；CI 升级为 Windows + macOS 双平台矩阵运行全部测试。
+
 ## [1.3.2] - 2026-08-16
 
 ### Fixed
