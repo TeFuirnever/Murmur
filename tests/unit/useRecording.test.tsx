@@ -31,6 +31,7 @@ import type { ElectronAPI } from "../../src/electronAPI";
 const mockModelStatus = {
   isLoading: false,
   isReady: false,
+  isUnloaded: false,
   isDownloading: false,
   modelsDownloaded: false,
   error: null as string | null,
@@ -229,12 +230,37 @@ describe("[20260729_Test_UseRecording] useRecording — startRecording gate", ()
     vi.clearAllMocks();
   });
 
-  it("throws and sets error when model is loading", async () => {
+  // [20260822_T12_IdleUnload] Gate contract (T12 review MAJOR): ONLY the
+  // UNLOADED state (process alive, models freed) is recordable — the
+  // hotkey press fires the reload pre-trigger; loading/error/dead states
+  // block at the START (recording through them loses audio at stop).
+  it("UNLOADED model: recording PROCEEDS and fires the reload pre-trigger", async () => {
     mockModelStatus.isReady = false;
+    mockModelStatus.isUnloaded = true;
+    mockModelStatus.isLoading = false;
+    mockModelStatus.error = null;
+    mockModelStatus.stage = "unloaded";
+    const reloadSpy = vi.fn();
+    setElectronAPI({ reloadFunasrModels: reloadSpy });
+
+    const { result } = renderHook(() => useRecording());
+
+    await act(async () => {
+      await result.current.startRecording();
+    });
+
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
+    expect(result.current.error).toBeNull();
+  });
+
+  it("loading model: recording is blocked (audio would be lost at stop)", async () => {
+    mockModelStatus.isReady = false;
+    mockModelStatus.isUnloaded = false;
     mockModelStatus.isLoading = true;
     mockModelStatus.error = null;
     mockModelStatus.stage = "loading";
-    setElectronAPI({});
+    const reloadSpy = vi.fn();
+    setElectronAPI({ reloadFunasrModels: reloadSpy });
 
     const { result } = renderHook(() => useRecording());
 
@@ -242,17 +268,19 @@ describe("[20260729_Test_UseRecording] useRecording — startRecording gate", ()
       await result.current.startRecording();
     });
 
+    expect(reloadSpy).not.toHaveBeenCalled();
     expect(result.current.isRecording).toBe(false);
-    expect(result.current.error).toContain("FunASR");
     expect(result.current.error).toContain("启动");
   });
 
-  it("throws and sets error when model has an error", async () => {
+  it("error-stage model: recording is blocked", async () => {
     mockModelStatus.isReady = false;
+    mockModelStatus.isUnloaded = false;
     mockModelStatus.isLoading = false;
     mockModelStatus.error = "boom";
     mockModelStatus.stage = "error";
-    setElectronAPI({});
+    const reloadSpy = vi.fn();
+    setElectronAPI({ reloadFunasrModels: reloadSpy });
 
     const { result } = renderHook(() => useRecording());
 
@@ -260,26 +288,9 @@ describe("[20260729_Test_UseRecording] useRecording — startRecording gate", ()
       await result.current.startRecording();
     });
 
+    expect(reloadSpy).not.toHaveBeenCalled();
     expect(result.current.isRecording).toBe(false);
-    expect(result.current.error).toContain("FunASR");
     expect(result.current.error).toContain("未就绪");
-  });
-
-  it("throws the generic prep error when model is neither ready, loading, nor errored", async () => {
-    mockModelStatus.isReady = false;
-    mockModelStatus.isLoading = false;
-    mockModelStatus.error = null;
-    mockModelStatus.stage = "need_download";
-    setElectronAPI({});
-
-    const { result } = renderHook(() => useRecording());
-
-    await act(async () => {
-      await result.current.startRecording();
-    });
-
-    expect(result.current.isRecording).toBe(false);
-    expect(result.current.error).toContain("准备");
   });
 
   it("throws when getUserMedia is unavailable (unsupported browser)", async () => {

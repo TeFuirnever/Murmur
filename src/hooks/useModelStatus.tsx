@@ -11,6 +11,10 @@ interface ModelProgressEntry {
 interface ModelStatus {
   isLoading: boolean;
   isReady: boolean;
+  // [T12 review BLOCKER] True when the server PROCESS is alive but its
+  // models are freed (idle-unload) — a recordable state; the hotkey
+  // pre-trigger covers the reload window.
+  isUnloaded: boolean;
   isDownloading: boolean;
   modelsDownloaded: boolean;
   error: string | null;
@@ -47,6 +51,7 @@ export function ModelStatusProvider({
   const [modelStatus, setModelStatus] = React.useState<ModelStatus>({
     isLoading: true,
     isReady: false,
+    isUnloaded: false,
     isDownloading: false,
     modelsDownloaded: false,
     error: null,
@@ -131,6 +136,7 @@ export function ModelStatusProvider({
           ...prev,
           isLoading: false,
           isReady: false,
+          isUnloaded: false,
           modelsDownloaded: false,
           missingModels,
           error: null,
@@ -142,6 +148,7 @@ export function ModelStatusProvider({
           ...prev,
           isLoading: false,
           isReady: true,
+          isUnloaded: false,
           modelsDownloaded: true,
           missingModels: [],
           error: null,
@@ -153,17 +160,33 @@ export function ModelStatusProvider({
           ...prev,
           isLoading: true,
           isReady: false,
+          isUnloaded: false,
           modelsDownloaded: true,
           missingModels: [],
           error: null,
           progress: 50,
           stage: "loading",
         }));
+      } else if (serverStatus.server_ready === true) {
+        // [T12 review BLOCKER] Process alive + models freed = idle-unloaded:
+        // recordable, hotkey pre-trigger covers the reload. Not an error.
+        setModelStatus((prev) => ({
+          ...prev,
+          isLoading: false,
+          isReady: false,
+          isUnloaded: true,
+          modelsDownloaded: true,
+          missingModels: [],
+          error: null,
+          progress: 0,
+          stage: "unloaded",
+        }));
       } else {
         setModelStatus((prev) => ({
           ...prev,
           isLoading: false,
           isReady: false,
+          isUnloaded: false,
           modelsDownloaded: true,
           missingModels: [],
           error: serverStatus.error || "服务器未就绪",
