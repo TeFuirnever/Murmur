@@ -81,25 +81,38 @@ test.describe("Suite 1: Application Lifecycle", () => {
     expect(version).toMatch(/^\d+\.\d+\.\d+$/);
   });
 
-  test("1.5 — Settings page route renders correctly", async () => {
-    const { app: settingsApp, window: settingsWindow } =
-      await launchElectronApp();
+  test("1.5 — Settings opens as a standalone window and renders", async () => {
+    // [20260816_Refactor_DeadChannels] removed the in-app settings route —
+    // settings now live in a standalone settings.html window opened via
+    // WINDOW.OPEN_SETTINGS. [20260820_E2E_SettingsWindowFix] Rewritten to
+    // verify that real window: click the main-window gear button, wait for
+    // the second BrowserWindow, and assert real settings content renders.
+    const settingsWindowPromise = electronApp.waitForEvent("window");
+    await window.locator("button:has(svg.lucide-settings)").click();
+    const settingsPage = await settingsWindowPromise;
 
     try {
-      await settingsWindow.waitForLoadState("domcontentloaded");
+      await settingsPage.waitForLoadState("domcontentloaded");
 
-      const hasSettingsContent = await settingsWindow.evaluate(() => {
-        const body = document.body.innerText;
-        return (
-          body.includes("主题") ||
-          body.includes("theme") ||
-          body.includes("AI") ||
-          body.includes("设置")
-        );
-      });
-      expect(hasSettingsContent).toBe(true);
+      // The sidebar sections (通用/权限/AI/关于 zh defaults, General/… en)
+      // settle after getAllSettings resolves — poll rather than read once.
+      await expect
+        .poll(
+          async () => {
+            const body = await settingsPage.textContent("body");
+            return (
+              body.includes("通用") ||
+              body.includes("General") ||
+              body.includes("权限") ||
+              body.includes("Permissions") ||
+              body.includes("AI")
+            );
+          },
+          { timeout: 10_000 },
+        )
+        .toBe(true);
     } finally {
-      await closeElectronApp(settingsApp);
+      await settingsPage.close();
     }
   });
 });

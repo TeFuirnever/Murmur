@@ -9,14 +9,21 @@ import {
   launchElectronApp,
   closeElectronApp,
 } from "../helpers/electron-launch";
+import { mockModelNeedDownload } from "../helpers/ipc-mock";
 
 test.describe("Suite 0: First-Time User Experience", () => {
   let electronApp;
   let window;
 
   test.beforeAll(async () => {
-    // Fresh app with no settings, no models, no history
+    // Fresh app with no settings, no models, no history.
+    // [20260820_E2E_FtueDeterminism] Whether this machine actually has
+    // models downloaded is an environment bet — mock MODELS.CHECK to the
+    // "no models" payload so the FTUE state is deterministic.
     ({ app: electronApp, window } = await launchElectronApp());
+    await mockModelNeedDownload(electronApp);
+    await window.reload();
+    await window.waitForLoadState("domcontentloaded");
   });
 
   test.afterAll(async () => {
@@ -28,13 +35,11 @@ test.describe("Suite 0: First-Time User Experience", () => {
     const title = await window.locator("h1").first().textContent();
     expect(title).toContain("Murmur");
 
-    // Status text should indicate model needs to be downloaded
-    const body = await window.textContent("body");
-    const hasDownloadPrompt =
-      body.includes("需要下载") ||
-      body.includes("下载") ||
-      body.includes("download");
-    expect(hasDownloadPrompt).toBe(true);
+    // Model check is async — wait for the settled need_download copy
+    // instead of reading body text right after domcontentloaded.
+    await expect(
+      window.getByText("需要下载AI模型文件才能开始使用"),
+    ).toBeVisible({ timeout: 10_000 });
   });
 
   test("0.2 — Mic button is disabled when model not ready", async () => {
@@ -45,10 +50,11 @@ test.describe("Suite 0: First-Time User Experience", () => {
   });
 
   test("0.3 — Onboarding steps are visible", async () => {
+    // The three-step onboarding block renders only in need_download stage.
+    await expect(window.getByText("使用步骤：")).toBeVisible({
+      timeout: 10_000,
+    });
     const body = await window.textContent("body");
-    // First-time user should see usage steps
-    const hasSteps =
-      body.includes("使用步骤") || body.includes("下载") || body.includes("①");
-    expect(hasSteps).toBe(true);
+    expect(body).toContain("①");
   });
 });

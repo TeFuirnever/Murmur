@@ -9,7 +9,11 @@ import {
   launchElectronApp,
   closeElectronApp,
 } from "../helpers/electron-launch";
-import { mockIpcHandler } from "../helpers/ipc-mock";
+import {
+  mockIpcHandler,
+  mockModelNeedDownload,
+  mockModelReady,
+} from "../helpers/ipc-mock";
 
 test.describe("Suite 2: Model Download & Loading", () => {
   let electronApp;
@@ -22,37 +26,45 @@ test.describe("Suite 2: Model Download & Loading", () => {
   test("2.1 — Initial state shows need_download", async () => {
     ({ app: electronApp, window } = await launchElectronApp());
 
+    // [20260820_E2E_DeterministicModelState] Mock the "no models" payload
+    // so the assertion does not bet on this machine having no models.
+    await mockModelNeedDownload(electronApp);
+    await window.reload();
+    await window.waitForLoadState("domcontentloaded");
+
+    // Model check is async — wait for the settled need_download copy
+    // instead of reading body text right after domcontentloaded.
+    await expect(
+      window.getByText("需要下载AI模型文件才能开始使用"),
+    ).toBeVisible({ timeout: 10_000 });
+
     // Mic button should be disabled
     const micButton = window.locator('[data-testid="mic-button"]');
     const isDisabled = await micButton.getAttribute("disabled");
     expect(isDisabled).not.toBeNull();
-
-    // Status text indicates download needed
-    const body = await window.textContent("body");
-    expect(body.includes("需要下载") || body.includes("下载")).toBe(true);
   });
 
   test("2.2 — Model ready state enables recording", async () => {
     ({ app: electronApp, window } = await launchElectronApp());
 
-    // Mock model status to ready
-    await mockIpcHandler(electronApp, "check-model-files", {
-      stage: "ready",
-      isReady: true,
-      downloadProgress: 100,
-    });
+    // [20260820_E2E_ModelReadyPayloadFix] stage "ready" is DERIVED by
+    // useModelStatus from the MODELS.CHECK + FUNASR.STATUS payloads — the
+    // old {stage:"ready"} mock never produced a ready state.
+    await mockModelReady(electronApp);
 
     // Reload to trigger re-check
     await window.reload();
     await window.waitForLoadState("domcontentloaded");
 
-    // Wait for model status to update
+    // After model is ready, button should not be disabled. The stage
+    // settles asynchronously — poll instead of reading the attribute once.
     const micButton = window.locator('[data-testid="mic-button"]');
-    // After model is ready, button should not be disabled
     await expect(micButton).toBeAttached();
-    const isDisabled = await micButton.getAttribute("disabled");
-    // isDisabled should be null (not disabled) when model is ready
-    expect(isDisabled).toBeNull();
+    await expect
+      .poll(async () => await micButton.getAttribute("disabled"), {
+        timeout: 10_000,
+      })
+      .toBeNull();
   });
 
   test("2.3 — Download failure shows error state", async () => {
@@ -75,11 +87,16 @@ test.describe("Suite 2: Model Download & Loading", () => {
   test("2.4 — Model status IPC returns valid structure", async () => {
     ({ app: electronApp, window } = await launchElectronApp());
 
+    // Real (unmocked) call — assert the actual MODELS.CHECK payload shape
+    // (modelManager.ts checkModelFiles), not the derived useModelStatus
+    // stage object.
     const status = await window.evaluate(() =>
       window.electronAPI.checkModelFiles(),
     );
     expect(status).toBeDefined();
-    expect(status).toHaveProperty("stage");
-    expect(status).toHaveProperty("isReady");
+    expect(status).toHaveProperty("success");
+    expect(status).toHaveProperty("models_downloaded");
+    expect(status).toHaveProperty("minimum_ready");
+    expect(status).toHaveProperty("missing_models");
   });
 });
