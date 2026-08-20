@@ -195,9 +195,14 @@ jobs:
             done
             tail -20 "$LOG"; exit 1
           fi
-          if grep -qE "NODE_MODULE_VERSION|Uncaught Exception|preload 脚本加载失败|Python链路自检失败" "$LOG"; then
+          # [20260820_Gate_UnhandledRejection] A suppress_stdout race on main
+          # killed the FunASR server after model init while the main process
+          # logged "Unhandled Rejection" — a pattern the fatal list ignored,
+          # so a broken build could still pass this smoke. Unhandled main
+          # rejections are never acceptable in a packaged app.
+          if grep -qE "NODE_MODULE_VERSION|Uncaught Exception|Unhandled Rejection|preload 脚本加载失败|Python链路自检失败" "$LOG"; then
             echo "::error::fatal errors in packaged app boot log"
-            grep -E "NODE_MODULE_VERSION|Uncaught Exception|preload|Python链路自检失败" "$LOG" | head -5
+            grep -E "NODE_MODULE_VERSION|Uncaught Exception|Unhandled Rejection|preload|Python链路自检失败" "$LOG" | head -5
             exit 1
           fi
           kill "$APP_PID" 2>/dev/null || true
@@ -378,7 +383,9 @@ jobs:
           # break-early snapshot are still caught (parity with mac's live
           # grep).
           $content = Get-Content $log -Raw -Encoding UTF8
-          foreach ($fatal in @('NODE_MODULE_VERSION','Uncaught Exception','preload 脚本加载失败','Python链路自检失败')) {
+          # [20260820_Gate_UnhandledRejection] Windows counterpart of the mac
+          # fatal-list hardening: gate on "Unhandled Rejection" too.
+          foreach ($fatal in @('NODE_MODULE_VERSION','Uncaught Exception','Unhandled Rejection','preload 脚本加载失败','Python链路自检失败')) {
             if ($content -like "*$fatal*") { throw "fatal error in packaged boot log: $fatal" }
           }
           if (-not (Get-Process -Name 'Murmur' -ErrorAction SilentlyContinue)) { throw 'Murmur process is not running' }

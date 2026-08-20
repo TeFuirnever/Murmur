@@ -54,17 +54,51 @@ logger = logging.getLogger(__name__)
 logger.info(f"FunASR服务器日志文件: {log_file_path}")
 
 
+# [20260820_Fix_SuppressStdoutRace] The model loaders run in parallel
+# threads and each wraps its AutoModel call in suppress_stdout(). The
+# previous per-thread save/restore of the PROCESS-GLOBAL sys.stdout raced:
+# with N threads inside at once, each thread's "old" stdout was the previous
+# thread's devnull, and after interleaved restores sys.stdout could point at
+# a devnull already closed by another thread's exit — the next protocol
+# print then raised "ValueError: I/O operation on closed file" and killed
+# the server AFTER models loaded successfully. Fix: serialize the
+# save/restore with a lock and reference-count concurrent users so the sink
+# is installed once (first entrant) and removed once (last exits). The lock
+# covers only the bookkeeping, never the suppressed body, so model loads
+# still run in parallel.
+_SUPPRESS_STDOUT_LOCK = threading.Lock()
+_SUPPRESS_STDOUT_DEPTH = 0
+_SUPPRESS_STDOUT_SAVED = None
+_SUPPRESS_STDOUT_SINK = None
+
+
 @contextlib.contextmanager
 def suppress_stdout():
-    """上下文管理器：临时重定向stdout到devnull，避免FunASR库的非JSON输出干扰IPC通信"""
-    old_stdout = sys.stdout
-    devnull = open(os.devnull, "w")
+    """上下文管理器：临时重定向stdout到devnull，避免FunASR库的非JSON输出干扰IPC通信
+
+    Thread-safe: multiple threads may be inside at once; only the first
+    entrant saves the original stdout and installs the shared sink, and the
+    last exiter restores it (lock + reference counting).
+    """
+    global _SUPPRESS_STDOUT_DEPTH, _SUPPRESS_STDOUT_SAVED, _SUPPRESS_STDOUT_SINK
+    with _SUPPRESS_STDOUT_LOCK:
+        if _SUPPRESS_STDOUT_DEPTH == 0:
+            _SUPPRESS_STDOUT_SAVED = sys.stdout
+            _SUPPRESS_STDOUT_SINK = open(os.devnull, "w")
+            sys.stdout = _SUPPRESS_STDOUT_SINK
+        _SUPPRESS_STDOUT_DEPTH += 1
     try:
-        sys.stdout = devnull
         yield
     finally:
-        sys.stdout = old_stdout
-        devnull.close()
+        with _SUPPRESS_STDOUT_LOCK:
+            _SUPPRESS_STDOUT_DEPTH -= 1
+            if _SUPPRESS_STDOUT_DEPTH == 0:
+                sys.stdout = _SUPPRESS_STDOUT_SAVED
+                _SUPPRESS_STDOUT_SAVED = None
+                if _SUPPRESS_STDOUT_SINK is not None:
+                    _SUPPRESS_STDOUT_SINK.close()
+                    _SUPPRESS_STDOUT_SINK = None
+# [20260820_Fix_SuppressStdoutRace] END
 
 
 # [20260819_T8_ThreadAdapt] Ticket #187 (spec #177 T8): inference thread
