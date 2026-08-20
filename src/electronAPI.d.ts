@@ -84,8 +84,10 @@ export interface ElectronAPI {
   detectLocalModels: () => Promise<LocalModelDetection[]>;
 
   // Clipboard
-  pasteText: (text: string) => Promise<void>;
-  copyText: (text: string) => Promise<void>;
+  // [20260820_E2E_PasteContractFix] PASTE resolves the same envelope COPY
+  // uses: {success:true} on success, {success:false, error} on failure.
+  pasteText: (text: string) => Promise<OperationResult>;
+  copyText: (text: string) => Promise<OperationResult>;
 
   // Transcription
   saveTranscription: (data: {
