@@ -158,6 +158,7 @@ Domain context: see `docs/agents/domain.md`.
 
 ### Agent tooling
 
+- **Push gate**: prefer `git push no-mistakes <branch>` for non-trivial deliveries - the local pipeline (AI review, tests, docs, lint) must be green before the branch reaches `origin`. Usage guide: `docs/agents/no-mistakes-gate.md`.
 - `backlog.md` is the shared task ledger for all agent sessions and worktrees. Use `tasks-axi` (`add` / `start` / `done` / `block` / `ready`) for all task state — never hand-edit task lines in the ledger.
 - Browser automation: use `chrome-devtools-axi` (`open`, `snapshot`, `click @uid`, `eval`) instead of screenshot-and-guess.
 
