@@ -15,6 +15,10 @@
 // Harness mirrors windowManager-events.test.ts (vi.hoisted electronMock +
 // per-test MockBrowserWindow spy + resetModules/dynamic import).
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+// [20260820_Fix_211_KeychainBootOrder] Expected load path must be built
+// with path.join: the Windows CI matrix failed on a hardcoded forward-slash
+// string while windowManager's real path.join emits backslashes there.
+import path from "path";
 
 type ViFn = ReturnType<typeof vi.fn>;
 interface BrowserWindowInstance {
@@ -113,9 +117,10 @@ describe("windowManager deferred main-window load (issue #211)", () => {
     await wm.loadMainWindowContent();
 
     // NODE_ENV is "test" in vitest → non-dev branch loads the packaged
-    // index.html under the fake app path.
+    // index.html under the fake app path (path.join keeps the assertion
+    // separator-correct on both CI platforms).
     expect(instance.loadFile).toHaveBeenCalledWith(
-      "/fake/app/path/src/dist/index.html",
+      path.join("/fake/app/path", "src", "dist", "index.html"),
     );
     expect(instance.loadURL).not.toHaveBeenCalled();
   });
