@@ -52,7 +52,10 @@ describe("clipboardHandlers", () => {
       // readClipboard/writeClipboard channels were removed with their
       // zero-renderer-caller handlers.
       copyText: vi.fn(async (text: string) => ({ success: true, text })),
-      pasteText: vi.fn(async (text: string) => ({ success: true, text })),
+      // [20260820_E2E_PasteContractFix] Real clipboardManager.pasteText
+      // resolves void on success — the IPC handler wraps it in
+      // {success:true} (same envelope as COPY).
+      pasteText: vi.fn(async (_text: string) => undefined),
     };
 
     mockManagers = {
@@ -108,7 +111,9 @@ describe("clipboardHandlers", () => {
       expect(mockClipboardManager.pasteText).toHaveBeenCalledWith(
         "hello-paste",
       );
-      expect(result).toEqual({ success: true, text: "hello-paste" });
+      // [20260820_E2E_PasteContractFix] PASTE wraps the void resolve in the
+      // same {success:true} envelope COPY uses.
+      expect(result).toEqual({ success: true });
     });
 
     it("returns error result when pasteText throws", async () => {

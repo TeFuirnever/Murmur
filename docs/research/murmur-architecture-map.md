@@ -558,9 +558,9 @@ Path: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/src/helpers/ipc/hotkeyHandler
 
 Path: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/src/helpers/ipc/clipboardHandlers.ts`
 
-**Channels registered:** `CLIPBOARD.COPY`, `PASTE`, `READ`, `WRITE`.
+**Channels registered:** `CLIPBOARD.COPY`, `PASTE`.
 
-**What it does:** Thin wrappers around `clipboardManager.copyText/pasteText` with try/catch → `{success:false, error}`. (READ/WRITE wrappers removed in the 2026-08 lean pass.)
+**What it does:** Thin wrappers around `clipboardManager.copyText/pasteText`; both channels resolve `{success:true}` on success and, via try/catch, `{success:false, error}` on failure. `pasteText` itself resolves void — the handler synthesizes the success envelope (2026-08-20) so COPY and PASTE share one contract. (READ/WRITE wrappers removed in the 2026-08 lean pass.)
 
 **Dependencies:** `ipc-contracts`. `ClipboardManager`, `Logger`.
 

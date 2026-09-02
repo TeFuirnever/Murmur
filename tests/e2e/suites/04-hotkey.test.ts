@@ -8,7 +8,7 @@ import {
   launchElectronApp,
   closeElectronApp,
 } from "../helpers/electron-launch";
-import { mockIpcHandler } from "../helpers/ipc-mock";
+import { mockModelReady } from "../helpers/ipc-mock";
 
 test.describe("Suite 4: Hotkey Management", () => {
   let electronApp;
@@ -16,6 +16,13 @@ test.describe("Suite 4: Hotkey Management", () => {
 
   test.beforeAll(async () => {
     ({ app: electronApp, window } = await launchElectronApp());
+
+    // [20260820_E2E_HotkeyDisplayFix] The hotkey hint text ("点击麦克风或按
+    // ⌘/Ctrl + ⇧ + 空格 开始录音") only renders when modelStatus.isReady —
+    // mock the model ready before asserting the displayed hotkey.
+    await mockModelReady(electronApp);
+    await window.reload();
+    await window.waitForLoadState("domcontentloaded");
   });
 
   test.afterAll(async () => {
@@ -23,35 +30,26 @@ test.describe("Suite 4: Hotkey Management", () => {
   });
 
   test("4.1 — Default hotkey displayed in UI", async () => {
-    // The hotkey text should be visible in the main window
-    const body = await window.textContent("body");
+    // Wait for the ready-state hint so the symbolic hotkey text is on screen,
+    // then assert formatHotkey's symbol rendering (useHotkey.ts): the
+    // platform modifier (⌘ on macOS, Ctrl on Windows) plus ⇧ and 空格.
+    const hint = window.getByText("点击麦克风或按", { exact: false });
+    await expect(hint).toBeVisible({ timeout: 10_000 });
 
-    // Should show either Mac or Windows hotkey
-    const hasHotkey =
-      body.includes("⌘") ||
-      body.includes("Ctrl") ||
-      body.includes("Shift") ||
-      body.includes("Space");
-    expect(hasHotkey).toBe(true);
+    const body = await window.textContent("body");
+    expect(body).toContain(process.platform === "darwin" ? "⌘" : "Ctrl");
+    expect(body).toContain("⇧");
+    expect(body).toContain("空格");
   });
 
   test("4.2 — Hotkey IPC event triggers recording toggle", async () => {
-    // Mock model as ready
-    await mockIpcHandler(electronApp, "check-model-files", {
-      stage: "ready",
-      isReady: true,
-    });
-
-    // Reload to pick up mock
-    await window.reload();
-    await window.waitForLoadState("domcontentloaded");
-
     const micButton = window.locator('[data-testid="mic-button"]');
     await expect(micButton).toBeAttached();
 
-    // Simulate hotkey trigger via IPC event (like global hotkey would)
-    await electronApp.evaluate(() => {
-      const { BrowserWindow } = require("electron");
+    // Simulate hotkey trigger via IPC event (like global hotkey would).
+    // [20260820_E2E_EvalScopeRequireFix] electron module comes from the
+    // evaluate callback's first argument — no require() in eval scope.
+    await electronApp.evaluate(({ BrowserWindow }) => {
       const win = BrowserWindow.getAllWindows()[0];
       if (win) {
         win.webContents.send("hotkey-triggered");
@@ -69,8 +67,7 @@ test.describe("Suite 4: Hotkey Management", () => {
       .toBe("停止录音");
 
     // Trigger again to stop
-    await electronApp.evaluate(() => {
-      const { BrowserWindow } = require("electron");
+    await electronApp.evaluate(({ BrowserWindow }) => {
       const win = BrowserWindow.getAllWindows()[0];
       if (win) {
         win.webContents.send("hotkey-triggered");
@@ -91,8 +88,10 @@ test.describe("Suite 4: Hotkey Management", () => {
     const result = await window.evaluate(() =>
       window.electronAPI.registerHotkey("CommandOrControl+Shift+Space"),
     );
-    // Should return true (success) or undefined (void)
-    // The important thing is it doesn't throw
-    expect(result === undefined || result === true).toBe(true);
+    // [20260820_E2E_HotkeyRegisterContract] The renderer registered this
+    // same accelerator at startup (useHotkey), so HOTKEY.REGISTER answers
+    // from its duplicate-sender path — the handler's envelope is
+    // {success:true}, never a bare boolean.
+    expect(result).toEqual({ success: true });
   });
 });
