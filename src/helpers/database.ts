@@ -262,6 +262,14 @@ class DatabaseManager {
             (e as Error).message,
           );
         }
+      } else if (row) {
+        // [20260820_Fix_211_KeychainBootOrder] setSafeStorage is now
+        // injected unconditionally at boot (issue #211 ordering), so this
+        // migration can run while encryption is unavailable. A plaintext
+        // ai_api_key exists but cannot be encrypted yet — keep schema
+        // version 0 so a later boot with working encryption retries the
+        // migration; bumping here would permanently skip it.
+        return;
       }
     }
 
