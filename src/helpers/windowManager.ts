@@ -63,7 +63,16 @@ class WindowManager {
     });
   }
 
-  async createMainWindow(): Promise<Electron.BrowserWindow | null> {
+  // [20260820_Fix_211_KeychainBootOrder] Issue #211: safeStorage's keychain
+  // authorization prompt can block indefinitely, and it used to run BEFORE
+  // any window existed — users saw "app won't start". createMainWindow now
+  // supports deferLoad: the BrowserWindow is created (and shown) WITHOUT
+  // loading the renderer; loadMainWindowContent() then performs the load.
+  // main.ts uses this to settle the keychain prompt over a VISIBLE empty
+  // window before the renderer (and its encrypted-settings reads) boots.
+  async createMainWindow(options?: {
+    deferLoad?: boolean;
+  }): Promise<Electron.BrowserWindow | null> {
     if (this.mainWindow) {
       this.mainWindow.focus();
       return this.mainWindow;
@@ -102,19 +111,6 @@ class WindowManager {
         },
       });
 
-      const isDev = process.env.NODE_ENV === "development";
-
-      if (isDev) {
-        await this.mainWindow.loadURL("http://localhost:5173");
-      } else {
-        await this.mainWindow.loadFile(
-          // [20260724_TS_BigBang_DirnameFix] Renderer HTML lives at
-          // src/dist/ in both dev and packaged layouts.
-          path.join(app.getAppPath(), "src", "dist", "index.html"),
-          // [20260724_TS_BigBang_DirnameFix] END
-        );
-      }
-
       this.mainWindow.on("closed", () => {
         this.mainWindow = null;
       });
@@ -136,9 +132,39 @@ class WindowManager {
         );
       });
 
+      // [20260820_Fix_211_KeychainBootOrder] With deferLoad the window
+      // stays empty (no renderer) until loadMainWindowContent() runs; the
+      // default path loads immediately for every other caller.
+      if (!options?.deferLoad) {
+        await this._loadMainWindowContent();
+      }
       return this.mainWindow;
     } finally {
       this._creatingMainWindow = false;
+    }
+  }
+
+  // [20260820_Fix_211_KeychainBootOrder] Public completion of a deferred
+  // createMainWindow: loads the renderer. No-op if the user closed the
+  // still-empty window while the keychain prompt was pending.
+  async loadMainWindowContent(): Promise<void> {
+    if (!this.mainWindow) return;
+    await this._loadMainWindowContent();
+  }
+
+  private async _loadMainWindowContent(): Promise<void> {
+    if (!this.mainWindow) return;
+    const isDev = process.env.NODE_ENV === "development";
+
+    if (isDev) {
+      await this.mainWindow.loadURL("http://localhost:5173");
+    } else {
+      await this.mainWindow.loadFile(
+        // [20260724_TS_BigBang_DirnameFix] Renderer HTML lives at
+        // src/dist/ in both dev and packaged layouts.
+        path.join(app.getAppPath(), "src", "dist", "index.html"),
+        // [20260724_TS_BigBang_DirnameFix] END
+      );
     }
   }
 

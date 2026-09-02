@@ -220,10 +220,41 @@ async function startApp(): Promise<void> {
       databaseManager.getSetting("window_always_on_top", true),
     );
     windowManager.setDefaultAlwaysOnTop(alwaysOnTop);
-    await windowManager.createMainWindow();
+    // [20260820_Fix_211_KeychainBootOrder] deferLoad: create the VISIBLE
+    // window without the renderer first. setSafeStorage below may block on
+    // the macOS keychain authorization dialog (every adhoc build identity
+    // change re-prompts on upgrade, issue #211); running it before any
+    // window existed made the app look dead while the dialog waited. With
+    // the window up first, the dialog pops over a visible app, and the
+    // renderer (whose settings reads include the encrypted ai_api_key)
+    // only boots after crypto state has deterministically settled —
+    // setSafeStorage is called unconditionally, even when encryption is
+    // unavailable, so there is never an unresolved middle state.
+    await windowManager.createMainWindow({ deferLoad: true });
     logger.info("主窗口创建成功");
+    console.error("[main:startup] phase=window-created");
   } catch (error) {
     logger.error("创建主窗口时出错:", error);
+  }
+
+  // [20260820_Fix_211_KeychainBootOrder] Crypto injection is isolated in
+  // its own try/catch: a throw here (e.g. a keychain/DB error instead of
+  // the expected block) must NOT skip loadMainWindowContent below, or the
+  // user is stranded on a blank window forever. Encryption simply stays
+  // unavailable and settings fall back to plaintext storage.
+  try {
+    if (safeStorage) {
+      databaseManager.setSafeStorage(safeStorage);
+    }
+  } catch (error) {
+    logger.error("safeStorage初始化失败，跳过加密存储（非致命）:", error);
+  }
+  console.error("[main:startup] phase=crypto-settled");
+
+  try {
+    await windowManager.loadMainWindowContent();
+  } catch (error) {
+    logger.error("加载主窗口内容失败:", error);
   }
 
   // Set up tray
@@ -288,10 +319,10 @@ app.whenReady().then(async () => {
   // a distinct phase so a future hang pinpoints the failing step.
   console.error("[main:startup] phase=whenReady-fired");
   try {
-    if (safeStorage && safeStorage.isEncryptionAvailable()) {
-      databaseManager.setSafeStorage(safeStorage);
-    }
-    console.error("[main:startup] phase=safeStorage-done");
+    // [20260820_Fix_211_KeychainBootOrder] safeStorage injection moved from
+    // here (pre-startApp) into startApp AFTER window creation — see the
+    // deferLoad comment block there. Keeping the phase canary for the
+    // remaining step so a future hang still pinpoints quickly.
     await startApp();
     console.error("[main:startup] phase=startApp-complete");
   } catch (err) {
