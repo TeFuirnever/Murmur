@@ -210,5 +210,8 @@
     "error": "错误",
     "success": "成功",
     "unknown": "未知"
+  },
+  "bot": {
+    "ariaLabel": "Murmur 吉祥物"
   }
 }

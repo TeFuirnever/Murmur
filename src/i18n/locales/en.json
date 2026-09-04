@@ -210,5 +210,8 @@
     "error": "Error",
     "success": "Success",
     "unknown": "Unknown"
+  },
+  "bot": {
+    "ariaLabel": "Murmur mascot"
   }
 }

@@ -1068,7 +1068,11 @@ describe("[20260816_Test_BranchPush] App branch matrix", () => {
   it("opens the history and settings windows from the title bar", async () => {
     readyModel();
     await mountApp();
-    const titleBar = screen.getByText("Murmur").closest("div");
+    // [20260905_Feat_BloubMascotWiring] the wordmark now sits inside a
+    // bot+wordmark wrapper, so the row is located by its own classes
+    const titleBar = screen
+      .getByText("Murmur")
+      .closest("div.items-center.justify-between");
     const buttons = Array.from(
       titleBar?.querySelectorAll("button") ?? [],
     ) as HTMLButtonElement[];
@@ -1086,7 +1090,11 @@ describe("[20260816_Test_BranchPush] App branch matrix", () => {
     fireEvent.click(screen.getByRole("button", { name: "最小化" }));
     fireEvent.click(screen.getByRole("button", { name: "最大化" }));
     fireEvent.click(screen.getByRole("button", { name: "关闭" }));
-    const titleBar = screen.getByText("Murmur").closest("div");
+    // [20260905_Feat_BloubMascotWiring] the wordmark now sits inside a
+    // bot+wordmark wrapper, so the row is located by its own classes
+    const titleBar = screen
+      .getByText("Murmur")
+      .closest("div.items-center.justify-between");
     const buttons = Array.from(
       titleBar?.querySelectorAll("button") ?? [],
     ) as HTMLButtonElement[];

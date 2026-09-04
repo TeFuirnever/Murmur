@@ -13,6 +13,11 @@ import TranscriptionResult from "./components/TranscriptionResult";
 import { SoundWaveIcon } from "./components/SoundWaveIcon";
 import { VoiceWaveIndicator } from "./components/VoiceWaveIndicator";
 import { Tooltip } from "./components/Tooltip";
+import { useTranslation } from "react-i18next";
+// [20260905_Feat_BloubMascotWiring] bloub bot mascot: engine-driven status
+// avatar in the title bar (spec #224 ticket 3)
+import { BloubBot, type BloubBotRef } from "./components/BloubBot";
+import type { StateId } from "./bot/states";
 
 // [20260816_Refactor_DeadChannels] The in-app lazy SettingsPage route was
 // removed — the settings window is a separate entry (settings.html) in both
@@ -56,6 +61,7 @@ export default function App() {
   const { handleMouseDown, handleMouseMove, handleMouseUp, handleClick } =
     useWindowDrag();
   const modelStatus = useModelStatus();
+  const { t } = useTranslation();
 
   const handleRecordingCompleteRef = useRef<
     ((result: string | Record<string, unknown>) => void) | null
@@ -88,7 +94,14 @@ export default function App() {
   const PASTE_DEBOUNCE_TIME = 1000; // 1秒内相同文本不重复粘贴
 
   // 缓存设置项，避免每次操作都走 IPC
-  const settingsRef = useRef({ auto_paste: "paste", close_behavior: "hide" });
+  const settingsRef = useRef({
+    auto_paste: "paste",
+    close_behavior: "hide",
+    enable_ai_optimization: true,
+  });
+
+  // [20260905_Feat_BloubMascotWiring] title-bar bot mascot (spec #224)
+  const mascotRef = useRef<BloubBotRef>(null);
 
   // 安全粘贴函数
   const safePaste = useCallback(async (text: string) => {
@@ -150,6 +163,12 @@ export default function App() {
         // 注意：不在这里保存到数据库，由 useRecording.js 统一处理保存逻辑
 
         toast.success("🎤 语音识别完成，AI正在优化文本...");
+        // [20260905_Feat_BloubMascotWiring] with optimization disabled this is
+        // the end of the pipeline: celebrate. Otherwise the comet waits for
+        // the optimization-complete handler.
+        if (!settingsRef.current.enable_ai_optimization) {
+          mascotRef.current?.playOnce("comet");
+        }
       }
     },
     [],
@@ -170,6 +189,8 @@ export default function App() {
         // 自动粘贴AI优化后的文本
         await safePaste(optimizedResult.text as string);
 
+        // [20260905_Feat_BloubMascotWiring] end of the transcription pipeline
+        mascotRef.current?.playOnce("comet");
         toast.success("🤖 AI文本优化完成并已自动粘贴！");
       } else {
         // 如果AI优化失败，则粘贴原始文本
@@ -190,9 +211,11 @@ export default function App() {
     try {
       if (window.electronAPI) {
         await window.electronAPI.copyText(text);
+        mascotRef.current?.playOnce("wink");
         toast.success("文本已复制到剪贴板");
       } else {
         await navigator.clipboard.writeText(text);
+        mascotRef.current?.playOnce("wink");
         toast.success("文本已复制到剪贴板");
       }
     } catch (error) {
@@ -338,6 +361,11 @@ export default function App() {
     window.electronAPI.getSetting("close_behavior", "hide").then((v) => {
       settingsRef.current.close_behavior = v as string;
     });
+    // [20260905_Feat_BloubMascotWiring] needed to decide when a transcription
+    // is truly "done" (with optimization off, FunASR completion IS the end)
+    window.electronAPI.getSetting("enable_ai_optimization", true).then((v) => {
+      settingsRef.current.enable_ai_optimization = v !== false;
+    });
   };
 
   // 缓存设置项：挂载时加载一次
@@ -412,6 +440,45 @@ export default function App() {
 
   const micState = getMicState();
 
+  // [20260905_Feat_BloubMascotWiring] app state -> bot animation state,
+  // the mapping confirmed on spec #224 (decision ticket #219). Model-stage
+  // states take precedence over mic states: while the model is not ready the
+  // mic cannot run anyway, and download/absence is what the bot should tell.
+  const getBotState = (): StateId => {
+    if (recordingError) return "exclaim";
+    if (!modelStatus.isReady) {
+      switch (modelStatus.stage) {
+        case "downloading":
+          return "orbit";
+        case "loading":
+          return "thinking";
+        case "error":
+          return "alert";
+        case "need_download":
+        case "unloaded":
+          return "sleep";
+        case "ready":
+          break;
+        default:
+          // "checking" and any future stage: inquiring dots
+          return "thinking";
+      }
+    }
+    switch (micState) {
+      case "recording":
+        return "wide";
+      case "processing":
+        return "thinking";
+      case "optimizing":
+        return "orbit";
+      case "hover":
+        return "wide";
+      default:
+        return "idle";
+    }
+  };
+  const botState = getBotState();
+
   // 获取麦克风按钮属性
   const getMicButtonProps = () => {
     const baseClasses =
@@ -482,9 +549,19 @@ export default function App() {
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
         >
-          <h1 className="text-3xl font-bold text-[#1d1d1f] dark:text-[#f5f5f7] text-heading">
-            Murmur
-          </h1>
+          {/* [20260905_Feat_BloubMascotWiring] bot mascot, left of the wordmark;
+              non-interactive so it stays inside the window drag region */}
+          <div className="flex items-center gap-2">
+            <BloubBot
+              ref={mascotRef}
+              state={botState}
+              size={44}
+              ariaLabel={t("bot.ariaLabel", "Murmur 吉祥物")}
+            />
+            <h1 className="text-3xl font-bold text-[#1d1d1f] dark:text-[#f5f5f7] text-heading">
+              Murmur
+            </h1>
+          </div>
           <div className="flex items-center space-x-2 non-draggable">
             <Tooltip content="最小化" position="bottom">
               <button
