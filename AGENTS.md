@@ -104,6 +104,11 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
   - `src/helpers/windowManager.ts` (sandbox, CSP, window creation)
   - `src/helpers/database.ts` (safeStorage encryption, schema)
   - `src/helpers/audioPathValidator.ts` (cross-platform path validation)
+  - `src/bot/` (vendored bloub animation engine, spec #224: numeric constants
+    are frame-by-frame video measurements — never round or "fix" them; the
+    eye-fit table is build-time only, never re-solve per frame; see
+    `docs/bot/measurements.md`. Note: unrelated to the removed ogl/motion
+    visual-effects stack)
   - Packaging/release and electron-builder configuration
   - User-visible text and i18n resources
 

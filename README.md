@@ -80,6 +80,8 @@
 | ---------------------- | ------------------------------------- | -------------------- | ------------ |
 | `Cmd+Shift+Space` 即录 | OpenAI/DeepSeek/通义/智谱/本地 Ollama | SQLite + 搜索 + 导出 | 中文/English |
 
+> 🤖 **会动的 Bot 吉祥物**:标题栏的小家伙会随应用状态变形——录音时睁大眼、识别时冒思考点、转写完成放彗星。引擎移植自 [bloub](https://github.com/jeremy-prt/bloub)(MIT),动画常数逐帧测量、零漂移复刻;在 设置 → Bot 可自选形状/颜色/表情。
+
 ## 🚀 安装
 
 <!-- [20260803_InstallHonesty] Homebrew/Winget 发布计划进行中（见 docs/homebrew、docs/winget），

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **bloub 吉祥物**:标题栏新增会动的 Bot 头像(spec #224,决策过程见 wayfinder 总图 #217)。移植自 [bloub](https://github.com/jeremy-prt/bloub)(MIT,`src/bot/` 引擎零框架、纯时间函数,测量常数逐帧取自参考视频、零漂移校验)。吉祥物按应用状态变形:待机呼吸、录音睁眼、识别思考点、润色/模型下载/文件转写旋环、错误分级惊叹号;复制成功眨眼、转写完成彗星。设置窗新增「Bot」区,可自选 8 形状/12 颜色(默认跟随明暗主题)/16 表情。设置键 `bot_shape`/`bot_color`/`bot_expression`。注意:本特性与已移除的旧视觉特效系统(ogl/motion)无关,不依赖也不重启该栈。
+
 ## [1.4.0] - 2026-08-20
 
 ### Fixed
