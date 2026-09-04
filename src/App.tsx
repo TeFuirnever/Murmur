@@ -20,6 +20,13 @@ import { useTranslation } from "react-i18next";
 // avatar in the title bar (spec #224 ticket 3)
 import { BloubBot, type BloubBotRef } from "./components/BloubBot";
 import type { StateId } from "./bot/states";
+import {
+  COLOR_BY_ID,
+  SHAPE_BY_ID,
+  type ColorId,
+  type ShapeId,
+} from "./bot/skins";
+import { EXPRESSION_BY_ID, type ExpressionId } from "./bot/expressions";
 
 // [20260816_Refactor_DeadChannels] The in-app lazy SettingsPage route was
 // removed — the settings window is a separate entry (settings.html) in both
@@ -104,6 +111,13 @@ export default function App() {
 
   // [20260905_Feat_BloubMascotWiring] title-bar bot mascot (spec #224)
   const mascotRef = useRef<BloubBotRef>(null);
+  // [20260905_Feat_BloubSettings] catalogue selection from settings; state
+  // (not a ref) so the mascot hot-swaps on onSettingsUpdate
+  const [botAppearance, setBotAppearance] = useState<{
+    shape?: string;
+    color?: string;
+    expression?: string;
+  }>({});
   // [20260905_Feat_BloubFileLift] file transcription lifted from FileImport so the mascot
   // can see it (survey gap: the state used to be trapped in the component)
   const fileTranscription = useFileTranscription();
@@ -371,6 +385,21 @@ export default function App() {
     window.electronAPI.getSetting("enable_ai_optimization", true).then((v) => {
       settingsRef.current.enable_ai_optimization = v !== false;
     });
+    // [20260905_Feat_BloubSettings] mascot catalogue keys (reactive state)
+    window.electronAPI.getSetting("bot_shape", "circle").then((shape) => {
+      setBotAppearance((prev) => ({ ...prev, shape: shape as string }));
+    });
+    window.electronAPI.getSetting("bot_color", "auto").then((color) => {
+      setBotAppearance((prev) => ({ ...prev, color: color as string }));
+    });
+    window.electronAPI
+      .getSetting("bot_expression", "neutral")
+      .then((expression) => {
+        setBotAppearance((prev) => ({
+          ...prev,
+          expression: expression as string,
+        }));
+      });
   };
 
   // 缓存设置项：挂载时加载一次
@@ -578,6 +607,24 @@ export default function App() {
               ref={mascotRef}
               state={botState}
               size={44}
+              shape={
+                botAppearance.shape && SHAPE_BY_ID.has(botAppearance.shape)
+                  ? (botAppearance.shape as ShapeId)
+                  : undefined
+              }
+              color={
+                botAppearance.color &&
+                botAppearance.color !== "auto" &&
+                COLOR_BY_ID.has(botAppearance.color)
+                  ? (botAppearance.color as ColorId)
+                  : undefined
+              }
+              expression={
+                botAppearance.expression &&
+                EXPRESSION_BY_ID.has(botAppearance.expression)
+                  ? (botAppearance.expression as ExpressionId)
+                  : undefined
+              }
               ariaLabel={t("bot.ariaLabel", "Murmur 吉祥物")}
             />
             <h1 className="text-3xl font-bold text-[#1d1d1f] dark:text-[#f5f5f7] text-heading">
@@ -824,7 +871,12 @@ export default function App() {
                 </span>
               </div>
             )}
-            <FileImport />
+            {/* [20260905_Feat_BloubFileLift] inject the App-owned controller:
+                mascot visibility + copy wink (P0 fix from ticket 4 review) */}
+            <FileImport
+              transcription={fileTranscription}
+              onCopied={() => mascotRef.current?.playOnce("wink")}
+            />
           </div>
         )}
       </div>

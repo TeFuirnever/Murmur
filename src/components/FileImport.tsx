@@ -70,21 +70,25 @@ export default function FileImport({
 
   if (state === "done" && result) {
     const handleCopy = async (text: string) => {
+      // [20260905_Feat_BloubFileLift] copy success (including the retry
+      // path) -> mascot wink egg
+      let copied = false;
       try {
         if (window.electronAPI?.copyText) {
           await window.electronAPI.copyText(text);
         } else {
           await navigator.clipboard.writeText(text);
         }
-        // [20260905_Feat_BloubFileLift] copy success -> mascot wink egg
-        onCopied?.();
+        copied = true;
       } catch {
         try {
           await navigator.clipboard.writeText(text);
+          copied = true;
         } catch {
           /* no clipboard available */
         }
       }
+      if (copied) onCopied?.();
     };
 
     const handleAIOptimize = async (_text: string) => {
