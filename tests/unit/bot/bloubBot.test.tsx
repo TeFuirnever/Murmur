@@ -46,7 +46,9 @@ afterEach(() => {
 
 describe("BloubBot frozen frame contract", () => {
   it("renders the engine's own body path, byte for byte", () => {
-    const { container } = render(<BloubBot state="idle" frozenAt={1} />);
+    const { container } = render(
+      <BloubBot state="idle" frozenAt={1} ariaLabel="Murmur bot" />,
+    );
     const engine = new BotEngine(100, "idle");
     const expected = engine.sample(1).bodyPath;
     const paths = bodyPaths(container);
@@ -55,19 +57,23 @@ describe("BloubBot frozen frame contract", () => {
   });
 
   it("the same frozenAt renders the identical frame across mounts", () => {
-    const a = render(<BloubBot state="idle" frozenAt={1.2} />);
+    const a = render(
+      <BloubBot state="idle" frozenAt={1.2} ariaLabel="Murmur bot" />,
+    );
     const dA = bodyPaths(a.container);
     a.unmount();
-    const b = render(<BloubBot state="idle" frozenAt={1.2} />);
+    const b = render(
+      <BloubBot state="idle" frozenAt={1.2} ariaLabel="Murmur bot" />,
+    );
     expect(bodyPaths(b.container)).toEqual(dA);
   });
 
   it("the state prop drives the rendered frame", () => {
     const { container, rerender } = render(
-      <BloubBot state="idle" frozenAt={1} />,
+      <BloubBot state="idle" frozenAt={1} ariaLabel="Murmur bot" />,
     );
     const before = bodyPaths(container);
-    rerender(<BloubBot state="egg" frozenAt={1} />);
+    rerender(<BloubBot state="egg" frozenAt={1} ariaLabel="Murmur bot" />);
     const after = bodyPaths(container);
     const idleFrame = new BotEngine(100, "idle").sample(1).bodyPath;
     const eggFrame = new BotEngine(100, "egg").sample(1).bodyPath;
@@ -79,7 +85,13 @@ describe("BloubBot frozen frame contract", () => {
     const shape = SHAPE_BY_ID.get("droplet")!.radii;
     const expr = EXPRESSION_BY_ID.get("happy") ?? null;
     const { container } = render(
-      <BloubBot state="idle" frozenAt={1} shape="droplet" expression="happy" />,
+      <BloubBot
+        state="idle"
+        frozenAt={1}
+        shape="droplet"
+        expression="happy"
+        ariaLabel="Murmur bot"
+      />,
     );
     const expected = new BotEngine(100, "idle", shape, expr).sample(1).bodyPath;
     expect(bodyPaths(container)).toContain(expected);
@@ -89,20 +101,29 @@ describe("BloubBot frozen frame contract", () => {
 describe("BloubBot theme default colour", () => {
   it("defaults the body ink to ink on the light theme", () => {
     setDark(false);
-    const { container } = render(<BloubBot state="idle" frozenAt={1} />);
+    const { container } = render(
+      <BloubBot state="idle" frozenAt={1} ariaLabel="Murmur bot" />,
+    );
     expect(inkRectFill(container)).toBe(INK_HEX);
   });
 
   it("defaults the body ink to cream under the dark class", () => {
     setDark(true);
-    const { container } = render(<BloubBot state="idle" frozenAt={1} />);
+    const { container } = render(
+      <BloubBot state="idle" frozenAt={1} ariaLabel="Murmur bot" />,
+    );
     expect(inkRectFill(container)).toBe(CREAM_HEX);
   });
 
   it("a colour prop overrides the theme default", () => {
     setDark(true);
     const { container } = render(
-      <BloubBot state="idle" frozenAt={1} color="blue" />,
+      <BloubBot
+        state="idle"
+        frozenAt={1}
+        color="blue"
+        ariaLabel="Murmur bot"
+      />,
     );
     expect(inkRectFill(container)).toBe(COLOR_BY_ID.get("blue")!.hex);
   });
@@ -111,14 +132,16 @@ describe("BloubBot theme default colour", () => {
 describe("BloubBot live mode", () => {
   it("runs no animation loop for a frozen frame", () => {
     const raf = vi.spyOn(globalThis, "requestAnimationFrame");
-    render(<BloubBot state="idle" frozenAt={1} />);
+    render(<BloubBot state="idle" frozenAt={1} ariaLabel="Murmur bot" />);
     expect(raf).not.toHaveBeenCalled();
     raf.mockRestore();
   });
 
   it("cancels the animation loop on unmount", () => {
     const cancel = vi.spyOn(globalThis, "cancelAnimationFrame");
-    const { unmount } = render(<BloubBot state="idle" />);
+    const { unmount } = render(
+      <BloubBot state="idle" ariaLabel="Murmur bot" />,
+    );
     unmount();
     expect(cancel).toHaveBeenCalled();
     cancel.mockRestore();
@@ -128,13 +151,14 @@ describe("BloubBot live mode", () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     try {
       const ref = createRef<BloubBotRef>();
-      render(<BloubBot ref={ref} state="idle" />);
+      render(<BloubBot ref={ref} state="idle" ariaLabel="Murmur bot" />);
       await nextFrame();
       const before = bodyPaths(document.body);
 
       ref.current!.playOnce("burst");
       await nextFrame();
       await nextFrame();
+      expect(ref.current!.getState()).toBe("burst");
       const duringEgg = bodyPaths(document.body);
       expect(duringEgg).not.toHaveLength(0);
       expect(duringEgg.join("|")).not.toBe(before.join("|"));
@@ -145,9 +169,51 @@ describe("BloubBot live mode", () => {
       });
       await nextFrame();
       await nextFrame();
+      expect(ref.current!.getState()).toBe("idle");
       const afterReturn = bodyPaths(document.body);
       expect(afterReturn).not.toHaveLength(0);
       expect(afterReturn.join("|")).not.toBe(duringEgg.join("|"));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("BloubBot lifecycle and theme reactivity", () => {
+  it("flips the ink live when the .dark class toggles under a mounted shell", async () => {
+    setDark(false);
+    const { container } = render(
+      <BloubBot state="idle" frozenAt={1} ariaLabel="Murmur bot" />,
+    );
+    expect(inkRectFill(container)).toBe(INK_HEX);
+    setDark(true);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(inkRectFill(container)).toBe(CREAM_HEX);
+    setDark(false);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(inkRectFill(container)).toBe(INK_HEX);
+  });
+
+  it("unmount mid-egg leaves no post-unmount engine mutation", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const ref = createRef<BloubBotRef>();
+      const { unmount } = render(
+        <BloubBot ref={ref} state="idle" ariaLabel="Murmur bot" />,
+      );
+      ref.current!.playOnce("burst");
+      expect(ref.current!.getState()).toBe("burst");
+      const setStateSpy = vi.spyOn(BotEngine.prototype, "setState");
+      unmount();
+      await act(async () => {
+        vi.advanceTimersByTime(4000);
+      });
+      expect(setStateSpy).not.toHaveBeenCalled();
+      setStateSpy.mockRestore();
     } finally {
       vi.useRealTimers();
     }

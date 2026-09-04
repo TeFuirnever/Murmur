@@ -26,6 +26,7 @@ import {
 } from "../bot/skins";
 import { EXPRESSION_BY_ID, type ExpressionId } from "../bot/expressions";
 import { STATE_BY_ID, type StateId } from "../bot/states";
+import { NOTIF_BLUE } from "../bot/decor";
 import { clamp } from "../bot/math";
 
 const VB = HALF_VIEWBOX;
@@ -46,14 +47,20 @@ export interface BloubBotProps {
   color?: ColorId;
   /** prop > settings key (ticket 5) > neutral */
   expression?: ExpressionId;
-  /** accessible name; the caller passes the i18n-rendered label */
-  ariaLabel?: string;
+  /** accessible name; REQUIRED so every call site goes through i18n */
+  ariaLabel: string;
   className?: string;
 }
 
 export interface BloubBotRef {
-  /** one-shot feedback state (wink/burst/comet); returns to `state` after */
+  /**
+   * One-shot feedback flash (contract: wink / burst / comet only — an id
+   * equal to the underlying state would no-op); returns to `state` after the
+   * flash state's own duration.
+   */
   playOnce: (id: StateId) => void;
+  /** The state currently displayed (underlying or egg) — for tests and debug. */
+  getState: () => StateId;
 }
 
 /**
@@ -67,6 +74,14 @@ const YAW_MAX = 16;
 const PITCH_MAX = 13;
 /** Gaze height with the cursor centered, in absolute degrees (attentive pose). */
 const PITCH = 10;
+
+/**
+ * Largest clock step per frame, in seconds. rAF is suspended while the window
+ * is hidden or occluded; without this clamp the first frame after restore
+ * would advance the clock by the whole hidden duration and every in-flight
+ * fade would snap to completion. Same value as upstream BloubBot.vue's tick.
+ */
+const MAX_FRAME_DELTA = 0.064;
 
 /**
  * States whose pose loops decoratively for as long as they hold. `orbit`'s
@@ -103,25 +118,38 @@ function readPaperHex(dark: boolean): string {
       : FALLBACK_PAPER.light;
 }
 
+/**
+ * Stop-element cache per gradient: `querySelectorAll` per arc per frame is
+ * steady DOM-query pressure for a permanently mounted mascot.
+ */
+const stopsCache = new WeakMap<SVGLinearGradientElement, SVGStopElement[]>();
+
 interface ElementPool {
-  /** Ensures exactly `tags.length` children, rebuilding when a tag changes. */
-  ensure(tags: string[]): Element[];
+  /** Ensures exactly `count` children whose i-th child has tag `tagAt(i)`. */
+  ensure(count: number, tagAt: (i: number) => string): Element[];
 }
 
 function makePool(group: SVGGElement | SVGDefsElement): ElementPool {
   let current: Element[] = [];
   return {
-    ensure(tags: string[]) {
-      const mismatch =
-        current.length !== tags.length ||
-        current.some((el, i) => el.tagName !== tags[i]);
+    ensure(count: number, tagAt: (i: number) => string) {
+      let mismatch = current.length !== count;
+      if (!mismatch) {
+        for (let i = 0; i < count; i++) {
+          if (current[i]!.tagName !== tagAt(i)) {
+            mismatch = true;
+            break;
+          }
+        }
+      }
       if (mismatch) {
         current.forEach((el) => el.remove());
-        current = tags.map((tag) => {
-          const el = document.createElementNS(SVG_NS, tag);
+        current = [];
+        for (let i = 0; i < count; i++) {
+          const el = document.createElementNS(SVG_NS, tagAt(i));
           group.appendChild(el);
-          return el;
-        });
+          current.push(el);
+        }
       }
       return current;
     },
@@ -137,7 +165,7 @@ function BloubBotImpl(
     shape,
     color,
     expression,
-    ariaLabel = "Murmur bot",
+    ariaLabel,
     className,
   }: BloubBotProps,
   ref: Ref<BloubBotRef>,
@@ -172,7 +200,12 @@ function BloubBotImpl(
     state,
     setAt: 0,
   });
-  const clockRef = useRef({ value: 0, realLast: 0, running: playing });
+  const clockRef = useRef({
+    value: 0,
+    realLast: 0,
+    running: playing,
+    paintedAt: -1,
+  });
   const engineRef = useRef<BotEngine | null>(null);
   const eggTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reducedRef = useRef(false);
@@ -186,6 +219,8 @@ function BloubBotImpl(
   );
   const [, forceThemeRepaint] = useState(0);
   const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
+  /** Re-evaluated each tick so tracking survives resizes and egg returns. */
+  const gazeTickRef = useRef<(() => void) | null>(null);
 
   const engine = useCallback(() => {
     if (!engineRef.current) {
@@ -214,6 +249,7 @@ function BloubBotImpl(
     (frame: BotFrame) => {
       const inkHex = inkRef.current;
       const paperHex = paperRef.current;
+      svgRef.current?.setAttribute("data-bot-state", displayRef.current.state);
       if (maskBodyRef.current)
         maskBodyRef.current.setAttribute("d", frame.bodyPath);
       if (paperBodyRef.current)
@@ -267,7 +303,9 @@ function BloubBotImpl(
       // a dot is a circle unless the state supplies a path shape (the
       // teardrop of the tilted "!"), drawn in ball-radius units
       const paintDots = (pool: ElementPool, dots: BotFrame["dots"]) => {
-        const els = pool.ensure(dots.map((d) => (d.d ? "path" : "circle")));
+        const els = pool.ensure(dots.length, (i) =>
+          dots[i]!.d ? "path" : "circle",
+        );
         dots.forEach((dot, i) => {
           const el = els[i]!;
           const fill =
@@ -294,13 +332,16 @@ function BloubBotImpl(
       paintDots(p.dotsFront!, frame.dotsBehind ? [] : frame.dots);
 
       const backs = p.arcBack!.ensure(
-        frame.arcs.map(() => "path"),
+        frame.arcs.length,
+        () => "path",
       ) as SVGPathElement[];
       const fronts = p.arcFront!.ensure(
-        frame.arcs.map(() => "path"),
+        frame.arcs.length,
+        () => "path",
       ) as SVGPathElement[];
       const grads = p.gradients!.ensure(
-        frame.arcs.map(() => "linearGradient"),
+        frame.arcs.length,
+        () => "linearGradient",
       ) as SVGLinearGradientElement[];
       frame.arcs.forEach((arc, i) => {
         const grad = grads[i]!;
@@ -310,10 +351,10 @@ function BloubBotImpl(
         grad.setAttribute("y1", String(arc.grad.y1));
         grad.setAttribute("x2", String(arc.grad.x2));
         grad.setAttribute("y2", String(arc.grad.y2));
-        const stops = grad.querySelectorAll("stop");
-        if (stops.length !== arc.grad.stops.length) {
+        let stops = stopsCache.get(grad);
+        if (!stops || stops.length !== arc.grad.stops.length) {
           grad.replaceChildren();
-          arc.grad.stops.forEach((c, si) => {
+          stops = arc.grad.stops.map((c, si) => {
             const stop = document.createElementNS(SVG_NS, "stop");
             stop.setAttribute(
               "offset",
@@ -321,10 +362,14 @@ function BloubBotImpl(
             );
             stop.setAttribute("stop-color", c);
             grad.appendChild(stop);
+            return stop;
           });
+          stopsCache.set(grad, stops);
         } else {
+          // const capture: narrowing does not survive into the closure
+          const cached = stops;
           arc.grad.stops.forEach((c, si) =>
-            stops[si]!.setAttribute("stop-color", c),
+            cached[si]!.setAttribute("stop-color", c),
           );
         }
         for (const [el, d] of [
@@ -430,6 +475,7 @@ function BloubBotImpl(
         now,
       );
     };
+    gazeTickRef.current = applyGaze;
     const releaseGaze = () => {
       lastPointerRef.current = null;
       engine().setLook(null, clockNow());
@@ -438,13 +484,20 @@ function BloubBotImpl(
       lastPointerRef.current = { x: e.clientX, y: e.clientY };
       applyGaze();
     };
+    // fires for every element boundary crossing as it bubbles; only a leave
+    // with no destination element means the pointer left the window
+    const onOut = (e: PointerEvent) => {
+      if (!e.relatedTarget) releaseGaze();
+    };
+    const onBlur = () => releaseGaze();
     window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerout", releaseGaze);
-    window.addEventListener("blur", releaseGaze);
+    window.addEventListener("pointerout", onOut);
+    window.addEventListener("blur", onBlur);
     return () => {
+      gazeTickRef.current = null;
       window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerout", releaseGaze);
-      window.removeEventListener("blur", releaseGaze);
+      window.removeEventListener("pointerout", onOut);
+      window.removeEventListener("blur", onBlur);
     };
   }, [frozenAt, engine, clockNow]);
 
@@ -460,20 +513,26 @@ function BloubBotImpl(
     const tick = () => {
       const c = clockRef.current;
       const realNow = performance.now();
-      if (c.running) c.value += (realNow - c.realLast) / 1000;
-      c.realLast = realNow;
-      const display = displayRef.current;
-      if (
-        c.running &&
-        !reducedRef.current &&
-        REPLAY_STATES.has(display.state) &&
-        c.value - display.setAt >=
-          (STATE_BY_ID.get(display.state)?.duration ?? Infinity)
-      ) {
-        engine().setState(display.state, c.value);
-        display.setAt = c.value;
+      if (c.running) {
+        c.value += Math.min((realNow - c.realLast) / 1000, MAX_FRAME_DELTA);
       }
-      paint(engine().sample(c.value));
+      c.realLast = realNow;
+      if (c.value !== c.paintedAt) {
+        const display = displayRef.current;
+        if (
+          c.running &&
+          !reducedRef.current &&
+          REPLAY_STATES.has(display.state) &&
+          c.value - display.setAt >=
+            (STATE_BY_ID.get(display.state)?.duration ?? Infinity)
+        ) {
+          engine().setState(display.state, c.value);
+          display.setAt = c.value;
+        }
+        gazeTickRef.current?.();
+        paint(engine().sample(c.value));
+        c.paintedAt = c.value;
+      }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -488,6 +547,13 @@ function BloubBotImpl(
     paperRef.current = readPaperHex(isDarkTheme());
     if (frozenAt !== undefined) paint(engine().sample(frozenAt));
   });
+
+  // an egg outstanding at unmount must not mutate the detached engine
+  useEffect(() => {
+    return () => {
+      if (eggTimerRef.current !== null) clearTimeout(eggTimerRef.current);
+    };
+  }, []);
 
   useImperativeHandle(
     ref,
@@ -505,6 +571,7 @@ function BloubBotImpl(
           displayRef.current = { state: underlyingRef.current, setAt: back };
         }, hold * 1000);
       },
+      getState: () => displayRef.current.state,
     }),
     [engine, clockNow],
   );
@@ -518,7 +585,6 @@ function BloubBotImpl(
       role="img"
       aria-label={ariaLabel}
       className={className}
-      data-bot-state={displayRef.current.state}
     >
       <defs ref={gradDefsRef}>
         <mask
@@ -562,7 +628,8 @@ function BloubBotImpl(
         </g>
       </g>
       <g ref={dotsFrontRef} />
-      <circle ref={notifRef} fill="#2496e8" visibility="hidden" />
+      {/* all attributes of the badge are paint-owned (visibility included) */}
+      <circle ref={notifRef} fill={NOTIF_BLUE} />
       <g ref={arcFrontRef} fill="none" strokeLinecap="round" />
     </svg>
   );
