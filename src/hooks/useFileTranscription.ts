@@ -1,6 +1,8 @@
 import * as React from "react";
 
-type TranscriptionState =
+// [20260905_Feat_BloubFileLift] exported so App/lib can map file state to the
+// bot mascot without redefining the union
+export type TranscriptionState =
   | "idle"
   | "selected"
   | "transcribing"
@@ -271,3 +273,9 @@ export function useFileTranscription() {
     reset,
   };
 }
+
+// [20260905_Feat_BloubFileLift] the full hook return, for callers that lift
+// the hook up and pass it down as a prop (App -> FileImport)
+export type FileTranscriptionController = ReturnType<
+  typeof useFileTranscription
+>;

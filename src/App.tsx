@@ -9,6 +9,8 @@ import { useModelStatus } from "./hooks/useModelStatus";
 import { Settings, History, Minus, Square, X, Maximize2 } from "lucide-react";
 import { ModelDownloadProgress } from "./components/ui/model-status-indicator";
 import FileImport from "./components/FileImport";
+import { useFileTranscription } from "./hooks/useFileTranscription";
+import { fileStateToBotState } from "./lib/botFileState";
 import TranscriptionResult from "./components/TranscriptionResult";
 import { SoundWaveIcon } from "./components/SoundWaveIcon";
 import { VoiceWaveIndicator } from "./components/VoiceWaveIndicator";
@@ -102,6 +104,9 @@ export default function App() {
 
   // [20260905_Feat_BloubMascotWiring] title-bar bot mascot (spec #224)
   const mascotRef = useRef<BloubBotRef>(null);
+  // [20260905_Feat_BloubFileLift] file transcription lifted from FileImport so the mascot
+  // can see it (survey gap: the state used to be trapped in the component)
+  const fileTranscription = useFileTranscription();
 
   // 安全粘贴函数
   const safePaste = useCallback(async (text: string) => {
@@ -428,6 +433,17 @@ export default function App() {
     }
   }, [recordingError]);
 
+  // [20260905_Feat_BloubFileLift] file transcription completion -> comet egg (once per
+  // transition; the ref tracks the previous state so resets don't re-fire)
+  const prevFileStateRef = useRef(fileTranscription.state);
+  useEffect(() => {
+    const prev = prevFileStateRef.current;
+    prevFileStateRef.current = fileTranscription.state;
+    if (fileTranscription.state === "done" && prev !== "done") {
+      mascotRef.current?.playOnce("comet");
+    }
+  }, [fileTranscription.state]);
+
   // 确定当前麦克风状态
   const getMicState = () => {
     if (isRecording) return "recording";
@@ -463,6 +479,12 @@ export default function App() {
           // "checking" and any future stage: inquiring dots
           return "thinking";
       }
+    }
+    // [20260905_Feat_BloubFileLift] in file-import mode the file pipeline drives the bot;
+    // null entries (idle/done/cancelled) fall through to the mic mapping
+    if (appMode === "file-import") {
+      const fileBot = fileStateToBotState(fileTranscription.state);
+      if (fileBot) return fileBot;
     }
     switch (micState) {
       case "recording":

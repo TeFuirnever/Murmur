@@ -1,9 +1,27 @@
-import { useFileTranscription } from "../hooks/useFileTranscription";
+import {
+  useFileTranscription,
+  type FileTranscriptionController,
+} from "../hooks/useFileTranscription";
 import FileDropZone from "./FileDropZone";
 import TranscriptionProgress from "./TranscriptionProgress";
 import TranscriptionResult from "./TranscriptionResult";
 
-export default function FileImport() {
+// [20260905_Feat_BloubFileLift] `transcription` lets App own the hook instance
+// (so the title-bar mascot can see file state); when omitted the component
+// keeps driving its own, which preserves the standalone contract. `onCopied`
+// reports copy success so the mascot can flash its wink egg.
+export interface FileImportProps {
+  transcription?: FileTranscriptionController;
+  onCopied?: () => void;
+}
+
+export default function FileImport({
+  transcription,
+  onCopied,
+}: FileImportProps) {
+  // hooks must run unconditionally; the injected controller simply wins
+  const own = useFileTranscription();
+  const ctrl: FileTranscriptionController = transcription ?? own;
   const {
     state,
     fileInfo,
@@ -15,7 +33,7 @@ export default function FileImport() {
     startTranscription,
     cancelTranscription,
     reset,
-  } = useFileTranscription();
+  } = ctrl;
 
   if (state === "idle" || state === "selected") {
     return (
@@ -58,6 +76,8 @@ export default function FileImport() {
         } else {
           await navigator.clipboard.writeText(text);
         }
+        // [20260905_Feat_BloubFileLift] copy success -> mascot wink egg
+        onCopied?.();
       } catch {
         try {
           await navigator.clipboard.writeText(text);
