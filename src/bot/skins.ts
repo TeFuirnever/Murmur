@@ -21,10 +21,12 @@ import {
  */
 
 /**
- * The ids are enumerated rather than derived from the array: that is what lets
- * the i18n layer verify AT COMPILE TIME that every shape has its translation
- * (`t(\`shapes.${id}\`)` only compiles if the key exists). An `as const` on the
- * array would have the same effect but would make `radii` read-only, whereas
+ * The ids are enumerated rather than derived from the array, so the compiler
+ * checks every new shape id against every place that consumes the union (the
+ * catalogue is closed). Upstream additionally leaned on vue-i18n typed keys to
+ * force per-locale labels; Murmur's i18n has no such compile-time link, so new
+ * ids must update the settings UI's locale keys by hand (see spec #224,
+ * ticket 5). An `as const` on the array would make `radii` read-only, whereas
  * the engine passes it around as is.
  */
 export type ShapeId =

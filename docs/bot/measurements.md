@@ -85,6 +85,14 @@ four), so the `h_` prefix and the `fps=10` cut both matter. It extracts the
 three profiles that can't be built analytically (egg, hexagon, triangle); the
 rest are either the measured circle or constructed in `skins.ts`.
 
+## Re-sync and formatting notes
+
+Prettier (Murmur's formatter) trimmed trailing zeros in `profiles.ts`
+(`0.9970` -> `0.997`) and reflowed lines: parsed float values are identical
+(193/193 verified), but future byte-diffs against upstream will flag it. The
+re-sync tool is the per-file comment-stripped numeric-multiset comparison used
+for the port, not plain diff.
+
 ## Identifier renames in this port
 
 The port Englishifies identifiers per spec #224 (ticket 1, decision #221):
