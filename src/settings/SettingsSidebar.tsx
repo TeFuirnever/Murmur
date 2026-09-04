@@ -33,7 +33,7 @@ const SECTIONS: {
 // Chinese remains in this file.
 const sectionLabelFallbacks: Record<SettingsSection, string> = {
   general: "General",
-  bot: "Bot",
+  bot: "Bot", // [20260905_Feat_BloubSettings]
   permissions: "Permissions",
   ai: "AI Config",
   about: "About",

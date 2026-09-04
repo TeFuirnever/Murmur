@@ -20,7 +20,7 @@ import { AboutSection } from "./settings/sections/AboutSection";
 
 const sectionTitles: Record<SettingsSection, string> = {
   general: "settings.sections.general",
-  bot: "settings.sidebar.bot",
+  bot: "settings.sections.bot", // [20260905_Feat_BloubSettings]
   permissions: "settings.sections.permissions",
   ai: "settings.sections.ai",
   about: "settings.sections.about",
@@ -30,7 +30,7 @@ const sectionTitles: Record<SettingsSection, string> = {
 // (the i18n key resolves to the correct language at runtime).
 const sectionTitleDefaults: Record<SettingsSection, string> = {
   general: "General",
-  bot: "Bot",
+  bot: "Bot", // [20260905_Feat_BloubSettings]
   permissions: "Permissions",
   ai: "AI Configuration",
   about: "About Murmur",

@@ -10,6 +10,10 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { validateSetting } from "../../src/helpers/ipc/settingsHandlers";
 import { BotSection } from "../../src/settings/sections/BotSection";
+import { COLORS, SHAPES } from "../../src/bot/skins";
+import { EXPRESSIONS } from "../../src/bot/expressions";
+import zhCN from "../../src/i18n/locales/zh-CN.json";
+import en from "../../src/i18n/locales/en.json";
 import type { SettingsState } from "../../src/settings/useSettings";
 
 const BASE: SettingsState = {
@@ -76,5 +80,42 @@ describe("BotSection", () => {
     render(<BotSection settings={BASE} onInputChange={onInputChange} />);
     await userEvent.selectOptions(screen.getByLabelText(/Expression/), "happy");
     expect(onInputChange).toHaveBeenCalledWith("bot_expression", "happy");
+  });
+});
+
+describe("bot label keys exist in both locales", () => {
+  // the section resolves labels as t(`settings.bot.<dim>.${id}`, fallback);
+  // a typo'd id or key would silently degrade to the capitalised id in the
+  // UI, so pin every catalogue id against both locale files
+  const locales: Array<[string, typeof zhCN]> = [
+    ["zh-CN", zhCN],
+    ["en", en],
+  ];
+
+  it("covers every catalogue id under settings.bot.*", () => {
+    for (const [name, data] of locales) {
+      const bot = data.settings.bot;
+      for (const s of SHAPES)
+        expect(bot.shape[s.id], `${name} shape ${s.id}`).toBeDefined();
+      for (const c of COLORS)
+        expect(bot.color[c.id], `${name} colour ${c.id}`).toBeDefined();
+      for (const e of EXPRESSIONS)
+        expect(
+          bot.expression[e.id],
+          `${name} expression ${e.id}`,
+        ).toBeDefined();
+      expect(bot.autoColor).toBeDefined();
+      expect(data.settings.sections.bot).toBeDefined();
+      expect(data.settings.sidebar.bot).toBeDefined();
+    }
+  });
+
+  it("does not carry the dead color.auto key", () => {
+    for (const [, data] of locales) {
+      // record view: "auto" was deleted from the locales, so typed access
+      // would be a compile error — the absence is exactly what we pin
+      const color = data.settings.bot.color as Record<string, unknown>;
+      expect(color.auto).toBeUndefined();
+    }
   });
 });

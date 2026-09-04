@@ -40,7 +40,8 @@
       "appearance": "外观",
       "permissions": "权限管理",
       "language": "语言",
-      "about": "关于 Murmur"
+      "about": "关于 Murmur",
+      "bot": "Bot 吉祥物"
     },
     "sidebar": {
       "general": "通用",
@@ -193,7 +194,6 @@
         "droplet": "水滴"
       },
       "color": {
-        "auto": "跟随主题",
         "ink": "墨黑",
         "brown": "棕",
         "red": "红",

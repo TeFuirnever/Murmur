@@ -40,7 +40,8 @@
       "appearance": "Appearance",
       "permissions": "Permissions",
       "language": "Language",
-      "about": "About Murmur"
+      "about": "About Murmur",
+      "bot": "Bot"
     },
     "sidebar": {
       "general": "General",
@@ -193,7 +194,6 @@
         "droplet": "Droplet"
       },
       "color": {
-        "auto": "Follow theme",
         "ink": "Ink",
         "brown": "Brown",
         "red": "Red",

@@ -242,8 +242,8 @@ describe("useSettings hook — save / test / presets / updates", () => {
     expect(keys).toContain("theme");
     expect(keys).toContain("ai_max_tokens");
     expect(keys).not.toContain(undefined);
-    // [20260905_Feat_BloubSettings] count updated for the 3 bot keys (14).
-    // 11 settings keys total (post effects removal, + hotwords): 1 special-cased + 10 in the loop.
+    // [20260905_Feat_BloubSettings] count updated for the 3 bot keys (14):
+    // 1 special-cased (masked api_key) + 13 in the loopecial-cased + 10 in the loop.
     // [20260820_T14_Hotwords] count updated for the new key.
     expect(calls).toHaveLength(14);
   });
