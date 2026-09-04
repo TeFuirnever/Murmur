@@ -71,6 +71,28 @@ describe("FileImport with an injected transcription controller", () => {
     await waitFor(() => expect(onCopied).toHaveBeenCalledTimes(1));
   });
 
+  it("fires onCopied once when only the clipboard retry succeeds", async () => {
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: vi.fn().mockResolvedValue(undefined) },
+      configurable: true,
+    });
+    (
+      window as unknown as { electronAPI: Record<string, unknown> }
+    ).electronAPI = {
+      // primary path fails -> the catch-block clipboard retry must count
+      copyText: vi.fn().mockRejectedValue(new Error("bridge down")),
+    };
+    const onCopied = vi.fn();
+    const ctrl = stubController({
+      state: "done",
+      result: { success: true, text: "hello", id: 7 },
+    });
+    render(<FileImport transcription={ctrl} onCopied={onCopied} />);
+    const copyButton = screen.getByTitle("复制文本").closest("button");
+    (copyButton as HTMLButtonElement).click();
+    await waitFor(() => expect(onCopied).toHaveBeenCalledTimes(1));
+  });
+
   it("still drives its own hook when no controller is injected", () => {
     render(<FileImport />);
     expect(screen.getByText(/拖拽|选择/)).toBeInTheDocument();

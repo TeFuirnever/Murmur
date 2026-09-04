@@ -1,34 +1,21 @@
 // @vitest-environment jsdom
 // [20260905_Feat_BloubFileLift] Integration pin for the ticket 4 P0: App must
 // inject its OWN useFileTranscription controller into FileImport, so the
-// title-bar mascot tracks file-transcription state. The hook module is mocked
-// to a transcribing controller; if the injection is severed, FileImport falls
-// back to an internal idle instance and both assertions below fail (no orbit
-// pose, no cancel control).
+// title-bar mascot tracks file-transcription state.
+//
+// Deliberately uses the REAL hook and drives the pipeline through mocked
+// electronAPI, with `transcribeFile` pending forever: App's instance and
+// FileImport's fallback instance are then separate useState stores, and the
+// mascot's orbit pose is a true discriminator — with the injection severed
+// FileImport still shows its own progress UI, but App's instance stays idle
+// and svg[data-bot-state="orbit"] never appears. (The first version of this
+// test shared one mocked controller object across both call sites and passed
+// on the broken commit — it guarded nothing.)
 
 import "../setup/react";
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-
-const controller = {
-  state: "transcribing",
-  fileInfo: { filePath: "/a.mp3", fileName: "a.mp3", fileSize: 1 },
-  progress: { phase: "transcribing", message: "处理中", progress_pct: 42 },
-  result: null,
-  error: null,
-  isOptimizing: false,
-  optimizedText: null,
-  selectFile: vi.fn(),
-  selectFileFromPath: vi.fn(),
-  startTranscription: vi.fn(),
-  cancelTranscription: vi.fn(),
-  reset: vi.fn(),
-};
-
-vi.mock("../../src/hooks/useFileTranscription", () => ({
-  useFileTranscription: () => controller,
-}));
 
 vi.mock("../../src/hooks/useRecording", () => ({
   useRecording: () => ({
@@ -86,6 +73,16 @@ beforeEach(() => {
     onModelStatusUpdate: vi.fn(() => () => {}),
     getAIModes: vi.fn().mockResolvedValue([]),
     setAlwaysOnTop: vi.fn(),
+    // the file pipeline: dialog resolves a file, transcription hangs so the
+    // transcribing pose (and its mascot orbit mirror) is stable to assert
+    importAudioFile: vi.fn().mockResolvedValue({
+      success: true,
+      filePath: "/a.mp3",
+      fileName: "a.mp3",
+      fileSize: 1,
+    }),
+    onFileTranscriptionProgress: vi.fn(() => () => {}),
+    transcribeFile: vi.fn(() => new Promise(() => {})),
   };
   (window as unknown as { electronAPI: Record<string, unknown> }).electronAPI =
     handlers;
@@ -95,16 +92,22 @@ beforeEach(() => {
 import App from "../../src/App";
 
 describe("[20260905_Feat_BloubFileLift] App injects the lifted controller", () => {
-  it("mascot shows orbit and FileImport shows progress while transcribing", async () => {
+  it("driving the real file pipeline turns the mascot to orbit", async () => {
     render(React.createElement(App));
     fireEvent.click(screen.getByText("文件导入"));
-    // the injected transcribing state drives both the mascot pose ...
+
+    // select a file through the (mocked) dialog, then start transcription
+    fireEvent.click(screen.getByText("点击选择音频文件或拖拽到此处"));
+    const start = await screen.findByText("开始转录");
+    fireEvent.click(start);
+
+    // App's own controller must be the one transcribing: the mascot pose is
+    // the discriminator between injected and fallback instances
     await waitFor(() =>
       expect(
         document.querySelector('svg[data-bot-state="orbit"]'),
       ).not.toBeNull(),
     );
-    // ... and the injected progress UI (cancel control from the controller)
     expect(screen.getByText("取消转录")).toBeInTheDocument();
   });
 });
