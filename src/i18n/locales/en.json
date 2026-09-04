@@ -46,7 +46,8 @@
       "general": "General",
       "permissions": "Permissions",
       "ai": "AI Config",
-      "about": "About"
+      "about": "About",
+      "bot": "Bot"
     },
     "general": {
       "alwaysOnTopDesc": "Keep the app window on top",
@@ -177,6 +178,53 @@
       "downloadSize": "{{size}} MB",
       "newVersionFound": "New version available",
       "newVersionDesc": "v{{version}} has been released"
+    },
+    "bot": {
+      "description": "The title-bar mascot. Colours follow the light/dark theme until you pick one.",
+      "autoColor": "Follow theme",
+      "shape": {
+        "circle": "Circle",
+        "pebble": "Pebble",
+        "squircle": "Squircle",
+        "capsule": "Capsule",
+        "triangle": "Triangle",
+        "hexagon": "Hexagon",
+        "cloud": "Cloud",
+        "droplet": "Droplet"
+      },
+      "color": {
+        "auto": "Follow theme",
+        "ink": "Ink",
+        "brown": "Brown",
+        "red": "Red",
+        "orange": "Orange",
+        "amber": "Amber",
+        "green": "Green",
+        "turquoise": "Turquoise",
+        "blue": "Blue",
+        "violet": "Violet",
+        "rose": "Rose",
+        "gray": "Gray",
+        "cream": "Cream"
+      },
+      "expression": {
+        "neutral": "Neutral",
+        "attentive": "Attentive",
+        "surprised": "Surprised",
+        "excited": "Excited",
+        "happy": "Happy",
+        "gleeful": "Gleeful",
+        "angry": "Angry",
+        "sad": "Sad",
+        "scared": "Scared",
+        "wary": "Wary",
+        "confused": "Confused",
+        "curious": "Curious",
+        "proud": "Proud",
+        "shy": "Shy",
+        "jaded": "Jaded",
+        "drowsy": "Drowsy"
+      }
     }
   },
   "history": {

@@ -242,9 +242,10 @@ describe("useSettings hook — save / test / presets / updates", () => {
     expect(keys).toContain("theme");
     expect(keys).toContain("ai_max_tokens");
     expect(keys).not.toContain(undefined);
+    // [20260905_Feat_BloubSettings] count updated for the 3 bot keys (14).
     // 11 settings keys total (post effects removal, + hotwords): 1 special-cased + 10 in the loop.
     // [20260820_T14_Hotwords] count updated for the new key.
-    expect(calls).toHaveLength(11);
+    expect(calls).toHaveLength(14);
   });
 
   it("saveSettings skips re-sending a masked api_key but still saves the rest", async () => {
@@ -261,7 +262,7 @@ describe("useSettings hook — save / test / presets / updates", () => {
     });
     const calls = (api().setSetting as ReturnType<typeof vi.fn>).mock.calls;
     expect(calls.find((c) => c[0] === "ai_api_key")).toBeUndefined();
-    expect(calls).toHaveLength(10); // [20260820_T14_Hotwords] 10 loop keys after hotwords
+    expect(calls).toHaveLength(13); // [20260905_Feat_BloubSettings] 13 loop (10 + 3 bot keys). [20260820_T14_Hotwords] 10 loop keys after hotwords
   });
 
   it("saveSettings returns false and toasts on IPC failure", async () => {

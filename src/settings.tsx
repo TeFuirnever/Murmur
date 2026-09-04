@@ -13,12 +13,14 @@ import {
   type SettingsSection,
 } from "./settings/SettingsSidebar";
 import { GeneralSection } from "./settings/sections/GeneralSection";
+import { BotSection } from "./settings/sections/BotSection";
 import { PermissionsSection } from "./settings/sections/PermissionsSection";
 import { AIConfigSection } from "./settings/sections/AIConfigSection";
 import { AboutSection } from "./settings/sections/AboutSection";
 
 const sectionTitles: Record<SettingsSection, string> = {
   general: "settings.sections.general",
+  bot: "settings.sidebar.bot",
   permissions: "settings.sections.permissions",
   ai: "settings.sections.ai",
   about: "settings.sections.about",
@@ -28,6 +30,7 @@ const sectionTitles: Record<SettingsSection, string> = {
 // (the i18n key resolves to the correct language at runtime).
 const sectionTitleDefaults: Record<SettingsSection, string> = {
   general: "General",
+  bot: "Bot",
   permissions: "Permissions",
   ai: "AI Configuration",
   about: "About Murmur",
@@ -121,6 +124,13 @@ const SettingsPage = () => {
             <div className="bg-white dark:bg-[#2c2c2e] rounded-xl shadow-sm border border-[#d2d2d7] dark:border-[#3a3a3c] p-5">
               {activeSection === "general" && (
                 <GeneralSection
+                  settings={settings}
+                  onInputChange={handleInputChange}
+                />
+              )}
+              {activeSection === "bot" && (
+                // [20260905_Feat_BloubSettings] bot mascot catalogue pickers
+                <BotSection
                   settings={settings}
                   onInputChange={handleInputChange}
                 />

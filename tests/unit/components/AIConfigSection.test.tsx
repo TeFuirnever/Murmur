@@ -29,6 +29,9 @@ const BASE_SETTINGS: SettingsState = {
   close_behavior: "hide",
   theme: "system",
   hotwords: "",
+  bot_shape: "circle",
+  bot_color: "auto",
+  bot_expression: "neutral",
 };
 
 function renderSection(settings: SettingsState = BASE_SETTINGS) {

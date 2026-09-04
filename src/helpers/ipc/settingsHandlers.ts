@@ -38,6 +38,11 @@ const ALLOWED_SETTING_KEYS = new Set<string>([
   // [20260820_T14_Hotwords] Hotword list (one entry per line, sanitized at
   // both the save and injection boundaries — see src/helpers/hotwords.ts).
   "hotwords",
+  // [20260905_Feat_BloubSettings] bot mascot catalogue keys (spec #224
+  // ticket 5); values are validated at the mascot boundary
+  "bot_shape",
+  "bot_color",
+  "bot_expression",
   // [20260816_Refactor_RemoveEffects] effects_enabled removed from this
   // allowlist with the visual-effects feature.
 ]);
