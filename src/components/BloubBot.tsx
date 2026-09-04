@@ -1,3 +1,8 @@
+// [20260905_Fix_BloubBotReviewFixes] Review-fix batch for this file: rAF
+// clock clamp, egg-timer unmount cleanup, window-gated gaze release,
+// paint-skip guard with dirty marks, imperative data-bot-state, NOTIF_BLUE
+// import, required ariaLabel, getState on the ref. Blocks below carry the
+// batch name where they land.
 // [20260904_Feat_BloubBotShell] React mascot shell over the bloub engine
 // (spec #224 ticket 2, contract in #222). The engine is the single source of
 // truth: the component owns one rAF loop, samples it, and paints the returned
@@ -423,6 +428,8 @@ function BloubBotImpl(
     const now = clockNow();
     displayRef.current = { state, setAt: now };
     engine().setState(state, now);
+    // [20260905_Fix_BloubBotReviewFixes] repaint even when paused (engine mutation changed sample() output)
+    clockRef.current.paintedAt = -1;
   }, [state, engine, clockNow]);
 
   useEffect(() => {
@@ -430,6 +437,8 @@ function BloubBotImpl(
       shape ? (SHAPE_BY_ID.get(shape)?.radii ?? null) : null,
       clockNow(),
     );
+    // [20260905_Fix_BloubBotReviewFixes] repaint even when paused (engine mutation changed sample() output)
+    clockRef.current.paintedAt = -1;
   }, [shape, engine, clockNow]);
 
   useEffect(() => {
@@ -437,6 +446,8 @@ function BloubBotImpl(
       expression ? (EXPRESSION_BY_ID.get(expression) ?? null) : null,
       clockNow(),
     );
+    // [20260905_Fix_BloubBotReviewFixes] repaint even when paused (engine mutation changed sample() output)
+    clockRef.current.paintedAt = -1;
   }, [expression, engine, clockNow]);
 
   // pointer gaze: only on rest-face states; elsewhere the pose IS the measured

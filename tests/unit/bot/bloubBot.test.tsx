@@ -219,3 +219,22 @@ describe("BloubBot lifecycle and theme reactivity", () => {
     }
   });
 });
+
+describe("BloubBot paused repaint", () => {
+  it("repaints on a state change even when the clock is paused", async () => {
+    const { container, rerender } = render(
+      <BloubBot state="idle" playing={false} ariaLabel="Murmur bot" />,
+    );
+    await nextFrame();
+    expect(container.querySelector("svg")?.getAttribute("data-bot-state")).toBe(
+      "idle",
+    );
+    rerender(<BloubBot state="egg" playing={false} ariaLabel="Murmur bot" />);
+    await nextFrame();
+    await nextFrame();
+    // the clock is frozen, but the engine mutation must still reach the screen
+    expect(container.querySelector("svg")?.getAttribute("data-bot-state")).toBe(
+      "egg",
+    );
+  });
+});
