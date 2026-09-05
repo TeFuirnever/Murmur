@@ -102,6 +102,25 @@ def suppress_stdout():
 # [20260820_Fix_SuppressStdoutRace] END
 
 
+# [20260905_Fix_208_ProtocolStreamImmune] Issue #208: protocol output must be
+# immune to suppress_stdout() windows. print() resolves sys.stdout
+# dynamically, so a protocol line emitted while any loader thread is inside a
+# suppression window (reload progress dequeued by _output_worker, command
+# responses on the main thread) landed in the shared devnull sink and was
+# silently dropped — #207 removed the closed-devnull crash, but the swallow
+# path remained. The protocol channel therefore writes to the stream captured
+# at process start (the original host pipe), never to the redirectable
+# global. Captured at import time, before any suppression can run.
+_PROTOCOL_STDOUT = sys.stdout
+
+
+def _protocol_print(payload):
+    """Write a protocol JSON line to the host pipe via the startup stream."""
+    _PROTOCOL_STDOUT.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    _PROTOCOL_STDOUT.flush()
+# [20260905_Fix_208_ProtocolStreamImmune] END
+
+
 # [20260819_T8_ThreadAdapt] Ticket #187 (spec #177 T8): inference thread
 # auto-adaptation. Formula over LOGICAL cores leaves UI headroom on small
 # machines and caps fan/heat on big ones; the old code hard-coded
@@ -1310,8 +1329,10 @@ class FunASRServer:
         while self.running:
             try:
                 msg = self.response_queue.get(timeout=0.5)
-                print(json.dumps(msg, ensure_ascii=False))
-                sys.stdout.flush()
+                # [20260905_Fix_208_ProtocolStreamImmune] Startup stream, not
+                # print(): a dequeue during a suppress_stdout() window must
+                # still reach the host (#208).
+                _protocol_print(msg)
             except queue.Empty:
                 continue
 
@@ -1525,8 +1546,9 @@ class FunASRServer:
                 "error": "模型文件未下载，请先下载模型",
                 "type": "models_not_downloaded"
             }
-        print(json.dumps(init_result, ensure_ascii=False))
-        sys.stdout.flush()
+        # [20260905_Fix_208_ProtocolStreamImmune] Startup stream: reload
+        # re-initialization can be in flight while this init result prints.
+        _protocol_print(init_result)
 
         # 启动推理线程和输出线程
         self._inference_thread = threading.Thread(target=self._inference_worker, daemon=True)
@@ -1549,8 +1571,8 @@ class FunASRServer:
                     command = json.loads(line)
                 except json.JSONDecodeError:
                     result = {"success": False, "error": "无效的JSON命令"}
-                    print(json.dumps(result, ensure_ascii=False))
-                    sys.stdout.flush()
+                    # [20260905_Fix_208_ProtocolStreamImmune]
+                    _protocol_print(result)
                     continue
 
                 # 提取 request_id 用于响应关联
@@ -1567,8 +1589,8 @@ class FunASRServer:
                 if result is not None:
                     if request_id:
                         result["request_id"] = request_id
-                    print(json.dumps(result, ensure_ascii=False))
-                    sys.stdout.flush()
+                    # [20260905_Fix_208_ProtocolStreamImmune]
+                    _protocol_print(result)
 
                 if not keep_running:
                     break
@@ -1581,8 +1603,8 @@ class FunASRServer:
                     "error": str(e),
                     "traceback": traceback.format_exc(),
                 }
-                print(json.dumps(error_result, ensure_ascii=False))
-                sys.stdout.flush()
+                # [20260905_Fix_208_ProtocolStreamImmune]
+                _protocol_print(error_result)
 
         logger.info("FunASR服务器退出")
 
