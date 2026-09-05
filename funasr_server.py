@@ -410,11 +410,16 @@ class FunASRServer:
         # on local disk must be skipped WITHOUT calling AutoModel — funasr
         # auto-downloads ~1GB from modelscope on cache miss, silently
         # defeating the rollback (or blowing the 300s init timeout).
+        # [20260905_Fix_255_ReviewFixup] The readiness gate (not just
+        # isdir) applies here too: this path also serves reload/lazy-init,
+        # which bypasses run()'s startup gate — an isdir-only check let a
+        # mid-download dir holding only shard part-files through to
+        # AutoModel (the confusing failure #255 fixed on the startup path).
         cache_path = self.damo_root or self._default_damo_root()
         candidates = [
             m
             for m in (self.ASR_MODEL_SEACO, self.ASR_MODEL_FALLBACK)
-            if os.path.isdir(os.path.join(cache_path, m.split("/", 1)[1]))
+            if self._repo_ready(os.path.join(cache_path, m.split("/", 1)[1]))
         ]
         for model_name in candidates:
             try:
