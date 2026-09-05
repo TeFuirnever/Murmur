@@ -521,3 +521,156 @@ describe("BloubBot remaining reachable arms", () => {
     expect(bodyPaths(container)).toContain(engineFrame);
   });
 });
+
+describe("BloubBot tracking mood rotation (issue #227)", () => {
+  const firePointer = (type: string, props: Record<string, unknown>) => {
+    const ev = new Event(type, { bubbles: true });
+    Object.assign(ev, props);
+    window.dispatchEvent(ev);
+  };
+
+  /** Mount a live shell with a real-ish svg box so the gaze path runs. */
+  const mountTracking = (
+    props: Partial<Parameters<typeof BloubBot>[0]> = {},
+  ) => {
+    const rendered = render(
+      <BloubBot state="idle" ariaLabel="Murmur bot" {...props} />,
+    );
+    const svg = rendered.container.querySelector("svg") as SVGSVGElement;
+    vi.spyOn(svg, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      width: 44,
+      height: 44,
+      right: 44,
+      bottom: 44,
+      toJSON: () => ({}),
+    } as DOMRect);
+    return rendered;
+  };
+
+  it("cycles a zero-roll mood while the pointer stays, in upstream order", async () => {
+    vi.useFakeTimers({
+      toFake: [
+        "setTimeout",
+        "clearTimeout",
+        "requestAnimationFrame",
+        "cancelAnimationFrame",
+        "performance",
+      ],
+    });
+    try {
+      const spy = vi.spyOn(BotEngine.prototype, "setExpression");
+      mountTracking();
+      firePointer("pointermove", { clientX: 400, clientY: 300 });
+      await act(async () => {
+        vi.advanceTimersByTime(16);
+      });
+      // upstream rhythm: one mood every 4200 ms, starting from the first
+      await act(async () => {
+        vi.advanceTimersByTime(4300);
+      });
+      const calls = spy.mock.calls.map(
+        ([e]) => (e as { id?: string } | null)?.id ?? null,
+      );
+      expect(calls).toContain("surprised");
+      await act(async () => {
+        vi.advanceTimersByTime(4300);
+      });
+      const calls2 = spy.mock.calls.map(
+        ([e]) => (e as { id?: string } | null)?.id ?? null,
+      );
+      expect(calls2).toContain("happy");
+      spy.mockRestore();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("restores the prop expression when the pointer leaves", async () => {
+    vi.useFakeTimers({
+      toFake: [
+        "setTimeout",
+        "clearTimeout",
+        "requestAnimationFrame",
+        "cancelAnimationFrame",
+        "performance",
+      ],
+    });
+    try {
+      const spy = vi.spyOn(BotEngine.prototype, "setExpression");
+      mountTracking({ expression: "happy" });
+      firePointer("pointermove", { clientX: 400, clientY: 300 });
+      await act(async () => {
+        vi.advanceTimersByTime(16);
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(4300);
+      });
+      firePointer("pointerout", { relatedTarget: null });
+      await act(async () => {
+        vi.advanceTimersByTime(1000);
+      });
+      const calls = spy.mock.calls.map(
+        ([e]) => (e as { id?: string } | null)?.id ?? null,
+      );
+      // after the release, the last set is back to the prop expression
+      expect(calls[calls.length - 1]).toBe("happy");
+      spy.mockRestore();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not rotate without a pointer or on non-rest-face states", async () => {
+    vi.useFakeTimers({
+      toFake: [
+        "setTimeout",
+        "clearTimeout",
+        "requestAnimationFrame",
+        "cancelAnimationFrame",
+        "performance",
+      ],
+    });
+    try {
+      const spy = vi.spyOn(BotEngine.prototype, "setExpression");
+      // no pointer at all
+      const first = mountTracking();
+      await act(async () => {
+        vi.advanceTimersByTime(10_000);
+      });
+      first.unmount();
+      // pointer present but a non-baseFace state (window events are global —
+      // the idle shell must be gone before the pointer arrives)
+      const rendered2 = render(
+        <BloubBot state="orbit" ariaLabel="Murmur bot" />,
+      );
+      const svg2 = rendered2.container.querySelector("svg") as SVGSVGElement;
+      vi.spyOn(svg2, "getBoundingClientRect").mockReturnValue({
+        x: 0,
+        y: 0,
+        top: 0,
+        left: 0,
+        width: 44,
+        height: 44,
+        right: 44,
+        bottom: 44,
+        toJSON: () => ({}),
+      } as DOMRect);
+      firePointer("pointermove", { clientX: 200, clientY: 200 });
+      await act(async () => {
+        vi.advanceTimersByTime(10_000);
+      });
+      const ids = spy.mock.calls.map(
+        ([e]) => (e as { id?: string } | null)?.id,
+      );
+      expect(ids).not.toContain("surprised");
+      expect(ids).not.toContain("gleeful");
+      spy.mockRestore();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

@@ -80,6 +80,26 @@ const PITCH_MAX = 13;
 /** Gaze height with the cursor centered, in absolute degrees (attentive pose). */
 const PITCH = 10;
 
+// [20260905_Feat_TrackingMoods] Issue #227: while the pointer stays and the
+// bot is on a rest-face state, the eye SHAPE slowly cycles through these —
+// a page veneer like upstream's settings-view humeurs, never touching the
+// user's configured expression (restored on release). Ported from upstream
+// ui/gaze.ts HUMEURS + App.vue's HUMEUR_MS = 4200; the list is not a matter
+// of taste: every entry has ZERO ROLL. Yaw and pitch are neutralised by
+// tracking (absolute), roll is not — a rolled mood followed by an unrolled
+// one makes the eyes jump. Adding a rolled expression (e.g. curious, -15deg)
+// reintroduces the jump.
+const TRACKING_MOODS: readonly ExpressionId[] = [
+  "surprised",
+  "happy",
+  "gleeful",
+  "excited",
+  "proud",
+  "jaded",
+];
+/** One mood's duration, seconds. Long enough to notice, too long to agitate. */
+const MOOD_INTERVAL_S = 4.2;
+
 /**
  * Largest clock step per frame, in seconds. rAF is suspended while the window
  * is hidden or occluded; without this clamp the first frame after restore
@@ -229,6 +249,14 @@ function BloubBotImpl(
   );
   const [, forceThemeRepaint] = useState(0);
   const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
+  // [20260905_Feat_TrackingMoods] cycle state; `lastAt` re-arms whenever
+  // tracking STARTS so the first mood waits a full interval
+  const moodRef = useRef({
+    tracking: false,
+    active: false,
+    index: 0,
+    lastAt: 0,
+  });
   /** Re-evaluated each tick so tracking survives resizes and egg returns. */
   const gazeTickRef = useRef<(() => void) | null>(null);
 
@@ -448,6 +476,11 @@ function BloubBotImpl(
   }, [shape, engine, clockNow]);
 
   useEffect(() => {
+    // [20260905_Feat_TrackingMoods] a prop change is the user's choice —
+    // drop any pending mood override so a later release can't restore stale
+    const mood = moodRef.current;
+    mood.active = false;
+    mood.index = 0;
     engine().setExpression(
       expression ? (EXPRESSION_BY_ID.get(expression) ?? null) : null,
       clockNow(),
@@ -518,6 +551,47 @@ function BloubBotImpl(
     };
   }, [frozenAt, engine, clockNow]);
 
+  /** [20260905_Feat_TrackingMoods] issue #227: rotate while tracking. */
+  const stepMood = useCallback(
+    (now: number) => {
+      const mood = moodRef.current;
+      const tracking =
+        lastPointerRef.current !== null &&
+        STATE_BY_ID.get(displayRef.current.state)?.baseFace === true;
+      if (tracking) {
+        if (!mood.tracking) {
+          // tracking just started: arm the first full interval
+          mood.tracking = true;
+          mood.lastAt = now;
+          return;
+        }
+        if (now - mood.lastAt >= MOOD_INTERVAL_S) {
+          const next = EXPRESSION_BY_ID.get(
+            TRACKING_MOODS[mood.index % TRACKING_MOODS.length]!,
+          );
+          if (next) {
+            engine().setExpression(next, now);
+            mood.active = true;
+            mood.index += 1;
+            mood.lastAt = now;
+          }
+        }
+      } else if (mood.tracking || mood.active) {
+        // tracking ended (pointer left / state changed): morph back to the
+        // user's configured expression — the engine glides, so the return is
+        // part of the staging, not a cut
+        mood.tracking = false;
+        mood.active = false;
+        mood.index = 0;
+        engine().setExpression(
+          expression ? (EXPRESSION_BY_ID.get(expression) ?? null) : null,
+          now,
+        );
+      }
+    },
+    [engine, expression],
+  );
+
   // the single animation loop
   useEffect(() => {
     if (frozenAt !== undefined) {
@@ -547,6 +621,7 @@ function BloubBotImpl(
           display.setAt = c.value;
         }
         gazeTickRef.current?.();
+        stepMood(c.value);
         paint(engine().sample(c.value));
         c.paintedAt = c.value;
       }
@@ -554,7 +629,7 @@ function BloubBotImpl(
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [frozenAt, playing, engine, paint]);
+  }, [frozenAt, playing, engine, paint, stepMood]);
 
   // ink + paper resolution and (frozen) repaint — declared LAST so the frame
   // is painted after the state/shape/expression setters have run (effects
