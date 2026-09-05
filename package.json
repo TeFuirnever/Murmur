@@ -7,7 +7,7 @@
   "scripts": {
     "start": "electron .",
     "prestart": "npm run build:main && npm run build:preload",
-    "predev": "npx electron-rebuild && npm run build:preload",
+    "predev": "npx @electron/rebuild -f -w better-sqlite3 && npm run build:preload",
     "dev": "concurrently -k -r \"npm:dev:renderer\" \"npm:dev:main\"",
     "dev:main": "npm run build:main && cross-env NODE_ENV=development electron . --dev",
     "build:main": "esbuild main.ts --bundle --platform=node --format=cjs --external:electron --external:better-sqlite3 --outfile=dist-main/main.js",
