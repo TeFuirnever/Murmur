@@ -1,8 +1,16 @@
 // [20260724_TS_BigBang_Database] Migrated implementation from .js to .ts
-// (ADR-010). Was a type re-export stub; now the full better-sqlite3
-// implementation lives here. `module.exports = DatabaseManager` (class)
-// became `export default DatabaseManager`.
-import Database from "better-sqlite3";
+// (ADR-010). Was a type re-export stub; now the full SQLite implementation
+// lives here. `module.exports = DatabaseManager` (class) became
+// `export default DatabaseManager`.
+// [20260905_Feat_NodeSqlite] Engine migration better-sqlite3 -> node:sqlite
+// (spec #226): node:sqlite is built into Node >=22.5 and Electron >=39, so
+// the native-addon ABI state machine (system-Node vs Electron builds of
+// better_sqlite3.node — the root cause of the v1.3.0 crash, the ci:check
+// ordering failures and the pnpm dev boot crash) is eliminated structurally.
+// External behaviour is unchanged: same schema, same WAL/pragmas, same
+// method signatures. node:sqlite refusals to bind `undefined` are normalised
+// to null in the private helpers, matching better-sqlite3's coercion.
+import { DatabaseSync, type StatementSync } from "node:sqlite";
 import path from "path";
 import fs from "fs";
 import { loadFileConfig } from "./fileConfig";
@@ -43,22 +51,48 @@ interface Logger {
 
 type Primitive = string | number | boolean | null | undefined;
 
-// [20260726_TechDebt_TypedRows] Typed helper wrapping better-sqlite3's
+// [20260905_Feat_NodeSqlite] node:sqlite's run() result has the same shape as
+// better-sqlite3's RunResult; values may be bigint for very large counts, and
+// every consumer already narrows via Number(...) (transcriptionHandlers.ts).
+export interface RunResult {
+  changes: number;
+  lastInsertRowid: number;
+}
+
+// [20260726_TechDebt_TypedRows] Typed helper wrapping the engine's
 // untyped .get()/.all() returns. Eliminates the 10 `as { field: type }`
-// casts that were scattered across this file. better-sqlite3 returns
+// casts that were scattered across this file. The engine returns
 // `unknown` by design (the row shape depends on the query), so a typed
 // wrapper is the idiomatic fix per the library docs.
-/** Cast a better-sqlite3 row to a typed shape. Use for single-row queries. */
-function getRow<T>(
-  stmt: Database.Statement,
-  ...params: Primitive[]
-): T | undefined {
-  return stmt.get(...params) as T | undefined;
+/** Cast a row to a typed shape. Use for single-row queries. */
+function getRow<T>(stmt: StatementSync, ...params: Primitive[]): T | undefined {
+  // [20260905_Feat_NodeSqlite] normalise undefined -> null, then through
+  // unknown: node:sqlite's SQLInputValue rejects undefined (better-sqlite3
+  // coerced it), and its SQLOutputValue row shape needs the double cast.
+  const bound = params.map((p) =>
+    p === undefined ? null : p,
+  ) as unknown as Parameters<StatementSync["get"]>;
+  return stmt.get(...bound) as unknown as T | undefined;
 }
-// [20260726_TechDebt_TypedRows] END
+
+// [20260905_Feat_NodeSqlite] Run wrapper: node:sqlite rejects `undefined`
+// bind values (better-sqlite3 coerced them to null) and reports
+// changes/lastInsertRowid as number|bigint — normalise both here so every
+// call site keeps the old RunResult contract.
+function runStmt(stmt: StatementSync, ...params: Primitive[]): RunResult {
+  const bound = params.map((p) =>
+    p === undefined ? null : p,
+  ) as unknown as Parameters<StatementSync["run"]>;
+  const result = stmt.run(...bound);
+  return {
+    changes: Number(result.changes),
+    lastInsertRowid: Number(result.lastInsertRowid),
+  };
+}
+// [20260905_Feat_NodeSqlite] END
 
 class DatabaseManager {
-  private db: Database.Database | null = null;
+  private db: DatabaseSync | null = null;
   private dbPath: string | null = null;
   private logger: Logger | null;
   private safeStorage: SafeStorage | null = null;
@@ -142,22 +176,16 @@ class DatabaseManager {
       }
     }
 
-    try {
-      this.db = new Database(this.dbPath);
-    } catch (error) {
-      if ((error as Error).message?.includes("NODE_MODULE_VERSION")) {
-        throw new Error(
-          `SQLite 原生模块版本不匹配。请运行 'npx electron-rebuild' 后重试。\n原始错误: ${(error as Error).message}`,
-        );
-      }
-      throw error;
-    }
-    this.db!.pragma("journal_mode = WAL");
-    this.db!.pragma("busy_timeout = 5000");
+    // [20260905_Feat_NodeSqlite] node:sqlite ships inside the runtime — the
+    // NODE_MODULE_VERSION mismatch branch below existed only for the
+    // better-sqlite3 native addon and is gone with it.
+    this.db = new DatabaseSync(this.dbPath);
+    this.db.exec("PRAGMA journal_mode = WAL");
+    this.db.exec("PRAGMA busy_timeout = 5000");
 
-    const integrity = this.db!.pragma("integrity_check") as Array<{
-      integrity_check: string;
-    }>;
+    const integrity = this.db
+      .prepare("PRAGMA integrity_check")
+      .all() as unknown as Array<{ integrity_check: string }>;
     if (integrity[0]?.integrity_check !== "ok") {
       if (this.logger?.warn) {
         this.logger.warn("Database integrity check failed", integrity);
@@ -207,7 +235,9 @@ class DatabaseManager {
 
   private _migrateSchema(): void {
     const columns = (
-      this.db!.prepare("PRAGMA table_info(transcriptions)").all() as Array<{
+      this.db!.prepare(
+        "PRAGMA table_info(transcriptions)",
+      ).all() as unknown as Array<{
         name: string;
       }>
     ).map((col) => col.name);
@@ -276,7 +306,7 @@ class DatabaseManager {
     this.setSetting("settings_schema_version", CURRENT_VERSION);
   }
 
-  saveTranscription(data: Partial<TranscriptionRecord>): Database.RunResult {
+  saveTranscription(data: Partial<TranscriptionRecord>): RunResult {
     if (!data || typeof data !== "object") {
       throw new Error("转录数据无效");
     }
@@ -295,7 +325,8 @@ class DatabaseManager {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    return stmt.run(
+    return runStmt(
+      stmt,
       text.trim(),
       data.raw_text || null,
       data.processed_text || null,
@@ -315,12 +346,12 @@ class DatabaseManager {
       ORDER BY created_at DESC
       LIMIT ? OFFSET ?
     `);
-    return stmt.all(limit, offset) as TranscriptionRecord[];
+    return stmt.all(limit, offset) as unknown as TranscriptionRecord[];
   }
 
   getTranscriptionById(id: number): TranscriptionRecord | undefined {
     const stmt = this.db!.prepare("SELECT * FROM transcriptions WHERE id = ?");
-    return stmt.get(id) as TranscriptionRecord | undefined;
+    return stmt.get(id) as unknown as TranscriptionRecord | undefined;
   }
 
   // [20260815_Refactor_DeadIpc] getTranscriptionWithSegments removed — the
@@ -328,21 +359,21 @@ class DatabaseManager {
   // parses the segments JSON itself. searchTranscriptions/_searchLike and
   // backup were removed the same day (zero production callers).
 
-  deleteTranscription(id: number): Database.RunResult {
+  deleteTranscription(id: number): RunResult {
     const stmt = this.db!.prepare("DELETE FROM transcriptions WHERE id = ?");
-    return stmt.run(id);
+    return runStmt(stmt, id);
   }
 
-  clearAllTranscriptions(): Database.RunResult {
+  clearAllTranscriptions(): RunResult {
     const stmt = this.db!.prepare("DELETE FROM transcriptions");
-    return stmt.run();
+    return runStmt(stmt);
   }
 
   // [20260816_Refactor_DeadChannels] getTranscriptionStats removed with the
   // zero-caller TRANSCRIPTION.STATS channel (the history page counts its
   // client-side filtered list).
 
-  setSetting(key: string, value: unknown): Database.RunResult {
+  setSetting(key: string, value: unknown): RunResult {
     const stmt = this.db!.prepare(`
       INSERT OR REPLACE INTO settings (key, value, updated_at)
       VALUES (?, ?, CURRENT_TIMESTAMP)
@@ -350,7 +381,7 @@ class DatabaseManager {
     const serialized = this._encryptedKeys.has(key)
       ? this._encryptValue(value as Primitive)
       : JSON.stringify(value);
-    return stmt.run(key, serialized);
+    return runStmt(stmt, key, serialized);
   }
 
   getSetting(key: string, defaultValue: unknown = null): unknown {
@@ -379,7 +410,7 @@ class DatabaseManager {
 
   getAllSettings(): Record<string, unknown> {
     const stmt = this.db!.prepare("SELECT key, value FROM settings");
-    const rows = stmt.all() as Array<{ key: string; value: string }>;
+    const rows = stmt.all() as unknown as Array<{ key: string; value: string }>;
 
     const settings: Record<string, unknown> = {};
     for (const row of rows) {
@@ -400,9 +431,9 @@ class DatabaseManager {
     return settings;
   }
 
-  resetSettings(): Database.RunResult {
+  resetSettings(): RunResult {
     const stmt = this.db!.prepare("DELETE FROM settings");
-    return stmt.run();
+    return runStmt(stmt);
   }
 
   syncToFileConfig(): void {
