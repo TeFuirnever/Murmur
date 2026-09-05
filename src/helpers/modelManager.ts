@@ -345,7 +345,8 @@ class ModelManager {
             const result = JSON.parse(line) as {
               error?: string;
               stage?: string;
-              percentage?: number;
+              progress?: number;
+              overall_progress?: number;
               success?: boolean;
             };
             if (result.error) {
@@ -354,11 +355,22 @@ class ModelManager {
               return;
             }
             if (result.stage && progressCallback) {
+              // [20260905_Fix_216_DownloadRecovery] download_models.py sends
+              // `progress` (per-model) and `overall_progress` — never
+              // `percentage`. The old mapper read `result.percentage || 0`,
+              // so every event reached the UI as 0% for the whole download
+              // (issue #212's "一直未见有进度").
+              const overall =
+                typeof result.overall_progress === "number"
+                  ? result.overall_progress
+                  : typeof result.progress === "number"
+                    ? result.progress
+                    : 0;
               progressCallback({
                 stage: result.stage,
-                percentage: result.percentage || 0,
-                overall_progress: result.percentage || 0,
-                progress: result.percentage || 0,
+                percentage: overall,
+                overall_progress: overall,
+                progress: overall,
               });
             }
             if (result.success !== undefined) {

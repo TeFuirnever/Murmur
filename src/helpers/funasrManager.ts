@@ -122,7 +122,28 @@ class FunASRManager {
     cb: ((progress: Record<string, unknown>) => void) | null,
   ): Promise<unknown> {
     const pythonCmd = await this.pythonEnv.findPythonExecutable();
-    return this.modelManager.downloadModels(cb, pythonCmd);
+    const result = (await this.modelManager.downloadModels(cb, pythonCmd)) as {
+      success?: boolean;
+    };
+
+    // [20260905_Fix_216_DownloadRecovery] The server is launched with
+    // `--damo-root` resolved at START time. On a fresh install that root is
+    // userData/models while download_models.py lands the models in
+    // modelscope's own cache — so the RUNNING server keeps reporting
+    // models_not_downloaded even though Node's check now sees them
+    // (issue #216). Restart it so it boots with the freshly-resolved root.
+    // Failure to restart must not fail an otherwise-successful download —
+    // the user can still restart via the hotkey/reload path.
+    if (result?.success) {
+      try {
+        await this.restartServer();
+      } catch (error) {
+        this.logger.warn &&
+          this.logger.warn("下载完成后重启服务器失败（非致命）:", error);
+      }
+    }
+
+    return result;
   }
 
   // Transcription delegation — each entry point arms the idle-unload
