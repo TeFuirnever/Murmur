@@ -3,6 +3,9 @@ import "./index.css";
 import { toast } from "sonner";
 import { LoadingDots } from "./components/ui/loading-dots";
 import { useHotkey } from "./hooks/useHotkey";
+// [20260905_Fix_246_HotkeySettingsUi] Shared default for the persisted
+// recording hotkey (read on mount + SETTINGS_UPDATE re-apply).
+import { DEFAULT_HOTKEY } from "./settings/hotkeyRecorder";
 import { useWindowDrag } from "./hooks/useWindowDrag";
 import { useRecording, determineProcessingMode } from "./hooks/useRecording";
 import { useModelStatus } from "./hooks/useModelStatus";
@@ -322,20 +325,52 @@ export default function App() {
   // 使用热键Hook，不再使用F2双击功能
   const { hotkey, syncRecordingState, registerHotkey } = useHotkey();
 
-  // 注册传统热键监听
-  useEffect(() => {
-    const initializeHotkey = async () => {
-      try {
-        await registerHotkey("CommandOrControl+Shift+Space");
-      } catch {
+  // [20260905_Fix_246_HotkeySettingsUi] The hotkey comes from the persisted
+  // "hotkey" setting (edited in the settings window's General tab recorder),
+  // not a hardcoded combo — the old toast pointed at an entry that did not
+  // exist. Applied on mount and re-applied whenever SETTINGS_UPDATE carries
+  // a hotkey change; on registration failure the warning stays truthful now
+  // that the settings entry exists.
+  const applyHotkeySetting = useCallback(async () => {
+    if (!window.electronAPI?.getSetting) return;
+    try {
+      const saved = await window.electronAPI.getSetting(
+        "hotkey",
+        DEFAULT_HOTKEY,
+      );
+      const combo =
+        typeof saved === "string" && saved.trim() ? saved : DEFAULT_HOTKEY;
+      const ok = await registerHotkey(combo);
+      if (!ok) {
         toast.warning(
           "快捷键注册失败，可能被其他应用占用。可在设置中更换快捷键。",
         );
       }
-    };
-
-    initializeHotkey();
+    } catch (error) {
+      // [20260905_Fix_246_HotkeyReplaceAtomic] A rejected getSetting IPC
+      // (storage failure) must not surface as an unhandled rejection from
+      // the mount effect or the SETTINGS_UPDATE listener.
+      if (window.electronAPI?.log) {
+        window.electronAPI.log("error", "读取快捷键设置失败:", error);
+      }
+    }
   }, [registerHotkey]);
+
+  // 注册传统热键监听
+  useEffect(() => {
+    applyHotkeySetting();
+  }, [applyHotkeySetting]);
+
+  // 设置窗口更改热键后即时重新注册
+  useEffect(() => {
+    if (!window.electronAPI?.onSettingsUpdate) return;
+    const unsub = window.electronAPI.onSettingsUpdate((data) => {
+      if (data.key === "hotkey") {
+        applyHotkeySetting();
+      }
+    });
+    return unsub;
+  }, [applyHotkeySetting]);
 
   // 处理关闭窗口
   const handleClose = () => {

@@ -169,6 +169,97 @@ describe("hotkeyHandlers", () => {
       expect(mockHotkeyManager.registerHotkey).not.toHaveBeenCalled();
     });
 
+    it("replaces the hotkey when the same sender registers a different combo", async () => {
+      // [20260905_Fix_246_HotkeySettingsUi] The old sender-dedup (a bare
+      // per-sender Set) early-returned success on ANY second registration,
+      // so a runtime hotkey change silently kept the old combo alive.
+      const C = await setup();
+      const handler = registeredHandlers.get(C.HOTKEY.REGISTER)!;
+
+      await handler(mockEvent, "CommandOrControl+Shift+Space");
+      mockHotkeyManager.registerHotkey!.mockClear();
+      mockHotkeyManager.unregisterHotkey!.mockClear();
+
+      const changed = (await handler(
+        mockEvent,
+        "CommandOrControl+Shift+K",
+      )) as HandlerResult;
+
+      expect(changed.success).toBe(true);
+      expect(mockHotkeyManager.unregisterHotkey).toHaveBeenCalledWith(
+        "CommandOrControl+Shift+Space",
+      );
+      expect(mockHotkeyManager.registerHotkey).toHaveBeenCalledWith(
+        "CommandOrControl+Shift+K",
+        expect.any(Function),
+      );
+    });
+
+    it("leaves the old combo live when a changed registration fails (atomic replace)", async () => {
+      // [20260905_Fix_246_HotkeyReplaceAtomic] The replace must be atomic:
+      // the new combo is attempted FIRST and the old one is released only
+      // after success. The previous two-layer replace (renderer pre-unregister
+      // + handler unregister-before-register) could leave NO combo live after
+      // a failed registration while both layers believed the old one was —
+      // reverting then hit the dedup early-return and never re-registered:
+      // a permanently dead hotkey reported as success.
+      const C = await setup();
+      const handler = registeredHandlers.get(C.HOTKEY.REGISTER)!;
+
+      await handler(mockEvent, "CommandOrControl+Shift+Space");
+      mockHotkeyManager.registerHotkey!.mockReturnValueOnce(false);
+      mockHotkeyManager.unregisterHotkey!.mockClear();
+
+      const changed = (await handler(
+        mockEvent,
+        "CommandOrControl+Shift+K",
+      )) as HandlerResult;
+
+      // Failure: nothing was released — the old combo is genuinely live.
+      expect(changed.success).toBe(false);
+      expect(mockHotkeyManager.unregisterHotkey).not.toHaveBeenCalled();
+      // Reverting to the old combo dedups against the intact mapping.
+      mockHotkeyManager.registerHotkey!.mockClear();
+      const reverted = (await handler(
+        mockEvent,
+        "CommandOrControl+Shift+Space",
+      )) as HandlerResult;
+      expect(reverted.success).toBe(true);
+      expect(mockHotkeyManager.registerHotkey).not.toHaveBeenCalled();
+    });
+
+    it("releases the old combo only after the replacement succeeds", async () => {
+      const C = await setup();
+      const handler = registeredHandlers.get(C.HOTKEY.REGISTER)!;
+
+      await handler(mockEvent, "CommandOrControl+Shift+Space");
+      mockHotkeyManager.registerHotkey!.mockClear();
+      mockHotkeyManager.unregisterHotkey!.mockClear();
+
+      // Enforce the ordering: register(new) must be attempted BEFORE
+      // unregister(previous) — a failure between them must be impossible.
+      const callOrder: string[] = [];
+      mockHotkeyManager.registerHotkey!.mockImplementation(() => {
+        callOrder.push("register");
+        return true;
+      });
+      mockHotkeyManager.unregisterHotkey!.mockImplementation(() => {
+        callOrder.push("unregister");
+        return true;
+      });
+
+      const changed = (await handler(
+        mockEvent,
+        "CommandOrControl+Shift+K",
+      )) as HandlerResult;
+
+      expect(changed.success).toBe(true);
+      expect(callOrder).toEqual(["register", "unregister"]);
+      expect(mockHotkeyManager.unregisterHotkey).toHaveBeenCalledWith(
+        "CommandOrControl+Shift+Space",
+      );
+    });
+
     it("returns failure when hotkeyManager is null", async () => {
       const { register } = await import("../../src/helpers/ipc/hotkeyHandlers");
       registeredHandlers.clear();

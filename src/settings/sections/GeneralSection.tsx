@@ -1,6 +1,10 @@
 import { useTranslation } from "react-i18next";
+import { useState } from "react";
 import type React from "react";
 import type { SettingsState } from "../useSettings";
+// [20260905_Fix_246_HotkeySettingsUi] Hotkey recorder (issue #246: the
+// settings entry the main-window failure toast pointed at did not exist).
+import { buildAccelerator, formatAccelerator } from "../hotkeyRecorder";
 
 interface GeneralSectionProps {
   settings: SettingsState;
@@ -12,6 +16,28 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
   onInputChange,
 }) => {
   const { t, i18n } = useTranslation();
+  // [20260905_Fix_246_HotkeySettingsUi] Recording state for the hotkey
+  // capture zone. The captured combo is persisted immediately through
+  // onInputChange("hotkey", ...) — the main window re-registers on
+  // SETTINGS_UPDATE (App.tsx).
+  const [recording, setRecording] = useState(false);
+
+  const handleCaptureKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!recording) return;
+    event.preventDefault();
+    event.stopPropagation();
+    // Escape is the recorder's cancel key (buildAccelerator rejects it).
+    if (event.key === "Escape") {
+      setRecording(false);
+      return;
+    }
+    const combo = buildAccelerator(event.nativeEvent);
+    if (combo !== null) {
+      onInputChange("hotkey", combo);
+      setRecording(false);
+    }
+    // Modifier-only and modifier-less presses (null) keep recording.
+  };
 
   return (
     <div className="space-y-6">
@@ -183,6 +209,60 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
         <p id="hotwords-hint" className="text-xs text-[#86868b] mt-1">
           {t("settings.general.hotwordsLimit", "最多 200 行,每行 32 字")}
         </p>
+      </div>
+
+      {/* [20260905_Fix_246_HotkeySettingsUi] Recording-hotkey recorder. The
+          captured combo is persisted immediately (onInputChange) — the main
+          window re-registers the global shortcut on SETTINGS_UPDATE. */}
+      <div>
+        <label className="block text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7] mb-1">
+          {t("settings.general.hotkeyLabel", "录音快捷键")}
+        </label>
+        <p className="text-xs text-[#86868b] mb-2">
+          {t(
+            "settings.general.hotkeyDesc",
+            "全局快捷键,任意界面按下即可开始/停止录音。",
+          )}
+        </p>
+        <div className="flex items-center gap-3">
+          <span
+            data-testid="hotkey-current"
+            className="px-3 py-1.5 text-sm font-mono border border-[#d2d2d7] dark:border-[#3a3a3c] rounded-lg bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7]"
+          >
+            {formatAccelerator(
+              settings.hotkey,
+              t("settings.general.hotkeySpace", "空格"),
+            )}
+          </span>
+          <button
+            type="button"
+            data-testid="hotkey-record"
+            onClick={() => setRecording((prev) => !prev)}
+            className="px-3 py-1.5 text-sm rounded-lg bg-[#0071e3] text-white hover:bg-[#0077ed] focus:outline-none focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-2"
+          >
+            {recording
+              ? t("settings.general.hotkeyCancel", "取消")
+              : t("settings.general.hotkeyStart", "更改")}
+          </button>
+        </div>
+        {recording && (
+          <div
+            data-testid="hotkey-capture"
+            tabIndex={0}
+            onKeyDown={handleCaptureKeyDown}
+            // [20260905_Fix_246_HotkeyRecorderBlur] Clicking elsewhere must
+            // end the capture — otherwise the UI keeps showing "press a key"
+            // while nothing is captured until refocus.
+            onBlur={() => setRecording(false)}
+            autoFocus
+            className="mt-2 px-3 py-2 text-sm border-2 border-[#0071e3] rounded-lg bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7] focus:outline-none"
+          >
+            {t(
+              "settings.general.hotkeyRecording",
+              "请按下新的快捷键组合(Esc 取消)…",
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
