@@ -39,18 +39,23 @@ class TestDefaultDamoRootLayouts(unittest.TestCase):
         self.mc = os.path.join(self._tmp.name, "mc")
         os.makedirs(self.home, exist_ok=True)
         os.makedirs(self.mc, exist_ok=True)
-        self._old_env = os.environ.get("MODELSCOPE_CACHE")
-        self._old_home = os.environ.get("HOME")
+        # os.path.expanduser("~") reads USERPROFILE on Windows and HOME on
+        # POSIX — patch both so the fake home applies on every platform
+        # (the Windows CI matrix caught the HOME-only version).
+        self._old_env = {
+            key: os.environ.get(key)
+            for key in ("MODELSCOPE_CACHE", "HOME", "USERPROFILE")
+        }
         os.environ["HOME"] = self.home
+        os.environ["USERPROFILE"] = self.home
         os.environ.pop("MODELSCOPE_CACHE", None)
 
     def tearDown(self):
-        if self._old_env is None:
-            os.environ.pop("MODELSCOPE_CACHE", None)
-        else:
-            os.environ["MODELSCOPE_CACHE"] = self._old_env
-        if self._old_home is not None:
-            os.environ["HOME"] = self._old_home
+        for key, value in self._old_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
         self._tmp.cleanup()
 
     # helper: touch a marker file so the directory "exists" meaningfully
