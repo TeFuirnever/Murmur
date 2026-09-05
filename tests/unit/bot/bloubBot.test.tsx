@@ -278,7 +278,7 @@ describe("BloubBot paint-branch coverage across catalogue states", () => {
       <BloubBot state="burst" frozenAt={0.3} ariaLabel="Murmur bot" />,
     );
     const groups = container.querySelectorAll("svg > g");
-    const dotsGroup = groups[1]; // order: arcs-back, dots-back, body, dots-front
+    const dotsGroup = groups[1]!; // order: arcs-back, dots-back, body, dots-front
     expect(dotsGroup.querySelectorAll("circle").length).toBeGreaterThan(0);
   });
 

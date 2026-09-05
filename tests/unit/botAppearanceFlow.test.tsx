@@ -81,8 +81,6 @@ beforeEach(() => {
 // Import AFTER mocks
 import App from "../../src/App";
 import { BotEngine } from "../../src/bot/engine";
-import { SHAPE_BY_ID } from "../../src/bot/skins";
-import { EXPRESSION_BY_ID } from "../../src/bot/expressions";
 
 // scope to the mascot svg: the document's first <path> is a UI icon
 function firstBodyPath(): string {
@@ -97,12 +95,6 @@ describe("[20260905_Test_BotBranchRecovery] stored appearance flows to the masco
     settingStore.bot_color = "blue";
     settingStore.bot_expression = "happy";
     render(React.createElement(App));
-    const expected = new BotEngine(
-      100,
-      "idle",
-      SHAPE_BY_ID.get("droplet")!.radii,
-      EXPRESSION_BY_ID.get("happy") ?? null,
-    ).sample(0).bodyPath;
     // the rAF clock starts near 0; droplet silhouette differs from circle
     await waitFor(
       () => {

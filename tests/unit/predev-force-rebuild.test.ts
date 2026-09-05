@@ -34,10 +34,9 @@ const stripComments = (text: string): string =>
     .join("\n");
 
 const scannedSurfaces: Array<[string, string]> = [
-  ...Object.entries(pkg.scripts).map(([name, body]) => [
-    `script:${name}`,
-    body,
-  ]),
+  ...Object.entries(pkg.scripts).map(
+    ([name, body]) => [`script:${name}`, body] as [string, string],
+  ),
   [
     "scripts/ci-check.js",
     stripComments(readFileSync(root + "scripts/ci-check.js", "utf8")),
