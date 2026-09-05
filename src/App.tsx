@@ -9,10 +9,24 @@ import { useModelStatus } from "./hooks/useModelStatus";
 import { Settings, History, Minus, Square, X, Maximize2 } from "lucide-react";
 import { ModelDownloadProgress } from "./components/ui/model-status-indicator";
 import FileImport from "./components/FileImport";
+import { useFileTranscription } from "./hooks/useFileTranscription";
+import { fileStateToBotState } from "./lib/botFileState";
 import TranscriptionResult from "./components/TranscriptionResult";
 import { SoundWaveIcon } from "./components/SoundWaveIcon";
 import { VoiceWaveIndicator } from "./components/VoiceWaveIndicator";
 import { Tooltip } from "./components/Tooltip";
+import { useTranslation } from "react-i18next";
+// [20260905_Feat_BloubMascotWiring] bloub bot mascot: engine-driven status
+// avatar in the title bar (spec #224 ticket 3)
+import { BloubBot, type BloubBotRef } from "./components/BloubBot";
+import type { StateId } from "./bot/states";
+import {
+  COLOR_BY_ID,
+  SHAPE_BY_ID,
+  type ColorId,
+  type ShapeId,
+} from "./bot/skins";
+import { EXPRESSION_BY_ID, type ExpressionId } from "./bot/expressions";
 
 // [20260816_Refactor_DeadChannels] The in-app lazy SettingsPage route was
 // removed — the settings window is a separate entry (settings.html) in both
@@ -56,6 +70,7 @@ export default function App() {
   const { handleMouseDown, handleMouseMove, handleMouseUp, handleClick } =
     useWindowDrag();
   const modelStatus = useModelStatus();
+  const { t } = useTranslation();
 
   const handleRecordingCompleteRef = useRef<
     ((result: string | Record<string, unknown>) => void) | null
@@ -88,7 +103,24 @@ export default function App() {
   const PASTE_DEBOUNCE_TIME = 1000; // 1秒内相同文本不重复粘贴
 
   // 缓存设置项，避免每次操作都走 IPC
-  const settingsRef = useRef({ auto_paste: "paste", close_behavior: "hide" });
+  const settingsRef = useRef({
+    auto_paste: "paste",
+    close_behavior: "hide",
+    enable_ai_optimization: true,
+  });
+
+  // [20260905_Feat_BloubMascotWiring] title-bar bot mascot (spec #224)
+  const mascotRef = useRef<BloubBotRef>(null);
+  // [20260905_Feat_BloubSettings] catalogue selection from settings; state
+  // (not a ref) so the mascot hot-swaps on onSettingsUpdate
+  const [botAppearance, setBotAppearance] = useState<{
+    shape?: string;
+    color?: string;
+    expression?: string;
+  }>({});
+  // [20260905_Feat_BloubFileLift] file transcription lifted from FileImport so the mascot
+  // can see it (survey gap: the state used to be trapped in the component)
+  const fileTranscription = useFileTranscription();
 
   // 安全粘贴函数
   const safePaste = useCallback(async (text: string) => {
@@ -150,6 +182,12 @@ export default function App() {
         // 注意：不在这里保存到数据库，由 useRecording.js 统一处理保存逻辑
 
         toast.success("🎤 语音识别完成，AI正在优化文本...");
+        // [20260905_Feat_BloubMascotWiring] with optimization disabled this is
+        // the end of the pipeline: celebrate. Otherwise the comet waits for
+        // the optimization-complete handler.
+        if (!settingsRef.current.enable_ai_optimization) {
+          mascotRef.current?.playOnce("comet");
+        }
       }
     },
     [],
@@ -170,6 +208,8 @@ export default function App() {
         // 自动粘贴AI优化后的文本
         await safePaste(optimizedResult.text as string);
 
+        // [20260905_Feat_BloubMascotWiring] end of the transcription pipeline
+        mascotRef.current?.playOnce("comet");
         toast.success("🤖 AI文本优化完成并已自动粘贴！");
       } else {
         // 如果AI优化失败，则粘贴原始文本
@@ -190,9 +230,11 @@ export default function App() {
     try {
       if (window.electronAPI) {
         await window.electronAPI.copyText(text);
+        mascotRef.current?.playOnce("wink");
         toast.success("文本已复制到剪贴板");
       } else {
         await navigator.clipboard.writeText(text);
+        mascotRef.current?.playOnce("wink");
         toast.success("文本已复制到剪贴板");
       }
     } catch (error) {
@@ -338,6 +380,26 @@ export default function App() {
     window.electronAPI.getSetting("close_behavior", "hide").then((v) => {
       settingsRef.current.close_behavior = v as string;
     });
+    // [20260905_Feat_BloubMascotWiring] needed to decide when a transcription
+    // is truly "done" (with optimization off, FunASR completion IS the end)
+    window.electronAPI.getSetting("enable_ai_optimization", true).then((v) => {
+      settingsRef.current.enable_ai_optimization = v !== false;
+    });
+    // [20260905_Feat_BloubSettings] mascot catalogue keys (reactive state)
+    window.electronAPI.getSetting("bot_shape", "circle").then((shape) => {
+      setBotAppearance((prev) => ({ ...prev, shape: shape as string }));
+    });
+    window.electronAPI.getSetting("bot_color", "auto").then((color) => {
+      setBotAppearance((prev) => ({ ...prev, color: color as string }));
+    });
+    window.electronAPI
+      .getSetting("bot_expression", "neutral")
+      .then((expression) => {
+        setBotAppearance((prev) => ({
+          ...prev,
+          expression: expression as string,
+        }));
+      });
   };
 
   // 缓存设置项：挂载时加载一次
@@ -400,6 +462,17 @@ export default function App() {
     }
   }, [recordingError]);
 
+  // [20260905_Feat_BloubFileLift] file transcription completion -> comet egg (once per
+  // transition; the ref tracks the previous state so resets don't re-fire)
+  const prevFileStateRef = useRef(fileTranscription.state);
+  useEffect(() => {
+    const prev = prevFileStateRef.current;
+    prevFileStateRef.current = fileTranscription.state;
+    if (fileTranscription.state === "done" && prev !== "done") {
+      mascotRef.current?.playOnce("comet");
+    }
+  }, [fileTranscription.state]);
+
   // 确定当前麦克风状态
   const getMicState = () => {
     if (isRecording) return "recording";
@@ -411,6 +484,51 @@ export default function App() {
   };
 
   const micState = getMicState();
+
+  // [20260905_Feat_BloubMascotWiring] app state -> bot animation state,
+  // the mapping confirmed on spec #224 (decision ticket #219). Model-stage
+  // states take precedence over mic states: while the model is not ready the
+  // mic cannot run anyway, and download/absence is what the bot should tell.
+  const getBotState = (): StateId => {
+    if (recordingError) return "exclaim";
+    if (!modelStatus.isReady) {
+      switch (modelStatus.stage) {
+        case "downloading":
+          return "orbit";
+        case "loading":
+          return "thinking";
+        case "error":
+          return "alert";
+        case "need_download":
+        case "unloaded":
+          return "sleep";
+        case "ready":
+          break;
+        default:
+          // "checking" and any future stage: inquiring dots
+          return "thinking";
+      }
+    }
+    // [20260905_Feat_BloubFileLift] in file-import mode the file pipeline drives the bot;
+    // null entries (idle/done/cancelled) fall through to the mic mapping
+    if (appMode === "file-import") {
+      const fileBot = fileStateToBotState(fileTranscription.state);
+      if (fileBot) return fileBot;
+    }
+    switch (micState) {
+      case "recording":
+        return "wide";
+      case "processing":
+        return "thinking";
+      case "optimizing":
+        return "orbit";
+      case "hover":
+        return "wide";
+      default:
+        return "idle";
+    }
+  };
+  const botState = getBotState();
 
   // 获取麦克风按钮属性
   const getMicButtonProps = () => {
@@ -482,9 +600,37 @@ export default function App() {
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
         >
-          <h1 className="text-3xl font-bold text-[#1d1d1f] dark:text-[#f5f5f7] text-heading">
-            Murmur
-          </h1>
+          {/* [20260905_Feat_BloubMascotWiring] bot mascot, left of the wordmark;
+              non-interactive so it stays inside the window drag region */}
+          <div className="flex items-center gap-2">
+            <BloubBot
+              ref={mascotRef}
+              state={botState}
+              size={44}
+              shape={
+                botAppearance.shape && SHAPE_BY_ID.has(botAppearance.shape)
+                  ? (botAppearance.shape as ShapeId)
+                  : undefined
+              }
+              color={
+                botAppearance.color &&
+                botAppearance.color !== "auto" &&
+                COLOR_BY_ID.has(botAppearance.color)
+                  ? (botAppearance.color as ColorId)
+                  : undefined
+              }
+              expression={
+                botAppearance.expression &&
+                EXPRESSION_BY_ID.has(botAppearance.expression)
+                  ? (botAppearance.expression as ExpressionId)
+                  : undefined
+              }
+              ariaLabel={t("bot.ariaLabel", "Murmur 吉祥物")}
+            />
+            <h1 className="text-3xl font-bold text-[#1d1d1f] dark:text-[#f5f5f7] text-heading">
+              Murmur
+            </h1>
+          </div>
           <div className="flex items-center space-x-2 non-draggable">
             <Tooltip content="最小化" position="bottom">
               <button
@@ -725,7 +871,12 @@ export default function App() {
                 </span>
               </div>
             )}
-            <FileImport />
+            {/* [20260905_Feat_BloubFileLift] inject the App-owned controller:
+                mascot visibility + copy wink (P0 fix from ticket 4 review) */}
+            <FileImport
+              transcription={fileTranscription}
+              onCopied={() => mascotRef.current?.playOnce("wink")}
+            />
           </div>
         )}
       </div>

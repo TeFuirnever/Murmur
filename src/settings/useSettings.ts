@@ -25,6 +25,12 @@ export interface SettingsState {
   // [20260820_T14_Hotwords] Hotword list, one entry per line; sanitized at
   // the save and injection boundaries (src/helpers/hotwords.ts).
   hotwords: string;
+  // [20260905_Feat_BloubSettings] bot mascot catalogue keys (spec #224
+  // ticket 5, decision #220). Values: ShapeId / "auto"|ColorId /
+  // ExpressionId, stored as strings like every other setting.
+  bot_shape: string;
+  bot_color: string;
+  bot_expression: string;
   // [20260816_Refactor_RemoveEffects] effects_enabled was removed with the
   // visual-effects feature (ogl/motion deps deleted the same day).
 }
@@ -83,6 +89,11 @@ const DEFAULT_SETTINGS: SettingsState = {
   close_behavior: "hide",
   theme: "system",
   hotwords: "",
+  // [20260905_Feat_BloubSettings] faithful-replica defaults; "auto" colour
+  // means theme-aware (light -> ink, dark -> cream) at the mascot
+  bot_shape: "circle",
+  bot_color: "auto",
+  bot_expression: "neutral",
 };
 
 export function applyTheme(theme: string): void {
@@ -153,6 +164,12 @@ export function useSettings() {
             typeof allSettings.hotwords === "string"
               ? allSettings.hotwords
               : "",
+          // [20260905_Feat_BloubSettings] bot mascot catalogue keys; stored
+          // values are validated at the mascot boundary (unknown ids fall
+          // back to the defaults there)
+          bot_shape: (allSettings.bot_shape || "circle") as string,
+          bot_color: (allSettings.bot_color || "auto") as string,
+          bot_expression: (allSettings.bot_expression || "neutral") as string,
         };
         setSettings((prev) => ({ ...prev, ...loadedSettings }));
         applyTheme(loadedSettings.theme);

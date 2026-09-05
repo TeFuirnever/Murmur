@@ -80,6 +80,8 @@
 | ---------------------- | ------------------------------------- | -------------------- | ------------ |
 | `Cmd+Shift+Space` 即录 | OpenAI/DeepSeek/通义/智谱/本地 Ollama | SQLite + 搜索 + 导出 | 中文/English |
 
+> 🤖 **会动的 Bot 吉祥物**:标题栏的小家伙会随应用状态变形——录音时睁大眼、识别时冒思考点、转写完成放彗星。引擎移植自 [bloub](https://github.com/jeremy-prt/bloub)(MIT),动画常数逐帧测量、零漂移复刻;在 设置 → Bot 可自选形状/颜色/表情。
+
 ## 🚀 安装
 
 <!-- [20260803_InstallHonesty] Homebrew/Winget 发布计划进行中（见 docs/homebrew、docs/winget），
@@ -135,7 +137,7 @@
 
 ### 环境要求
 
-- **Node.js** 18+ 和 [pnpm](https://pnpm.io)
+- **Node.js** 22.5+ 和 [pnpm](https://pnpm.io)
 - **Python** 3.8+（用于 FunASR）
 
 ### 快速开始
@@ -177,7 +179,7 @@ pnpm ci:check     # 本地运行所有 CI 门禁
 | 前端     | React 19, Tailwind CSS 4, Vite                        |
 | 语音识别 | FunASR (Paraformer-large + FSMN-VAD + CT-Transformer) |
 | AI 优化  | 11+ OpenAI 兼容模型 + 自定义 Prompt 模板              |
-| 数据存储 | SQLite (better-sqlite3, safeStorage 加密)             |
+| 数据存储 | SQLite (node:sqlite, safeStorage 加密)                |
 
 ## 📋 路线图
 
@@ -319,7 +321,7 @@ pnpm dev
 | Frontend | React 19, Tailwind CSS 4, Vite                         |
 | Speech   | FunASR (Paraformer-large + FSMN-VAD + CT-Transformer)  |
 | AI       | 11+ OpenAI-compatible models + custom prompt templates |
-| Storage  | SQLite (better-sqlite3, safeStorage encryption)        |
+| Storage  | SQLite (node:sqlite, safeStorage encryption)           |
 
 ## Roadmap
 

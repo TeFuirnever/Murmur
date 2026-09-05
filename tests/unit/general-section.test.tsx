@@ -29,6 +29,9 @@ const BASE: SettingsState = {
   close_behavior: "hide",
   theme: "system",
   hotwords: "",
+  bot_shape: "circle",
+  bot_color: "auto",
+  bot_expression: "neutral",
 };
 
 type TestWindow = Omit<Window, "electronAPI"> & {

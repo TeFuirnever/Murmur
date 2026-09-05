@@ -27,9 +27,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Rebuild native modules for system Node
-        run: pnpm rebuild better-sqlite3
-
       - name: Build main bundle
         run: pnpm run build:main
 
@@ -47,7 +44,8 @@ jobs:
         continue-on-error: true
 
       - name: Test with coverage
-        run: pnpm test -- --coverage
+        # [20260905_Fix_CoverageForwarding] pnpm 11 forwards `--` literally
+        run: pnpm run test:coverage
 
   build-mac:
     needs: test
@@ -71,24 +69,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      # [20260816_Fix_MacCiNodeAbi] The old `npx electron-builder
-      # install-app-deps` step silently no-opped on CI (~0.2s "finished"):
-      # pnpm's onlyBuiltDependencies allowlist let better-sqlite3's own
-      # install script download a system-Node prebuild (ABI 137), and the
-      # unforced rebuild never replaced it — the shipped v1.3.0 macOS dmg
-      # crashed at launch under Electron 39 (ABI 140). -f forces a real
-      # Electron-ABI rebuild every time.
-      - name: Rebuild native modules for Electron
-        run: npx @electron/rebuild -f -w better-sqlite3
-
-      # [20260816_Fix_MacCiNodeAbi] Gate: the native module must actually
-      # open a database under the bundled Electron runtime before we are
-      # allowed to package. ELECTRON_RUN_AS_NODE runs Electron's own Node
-      # (ABI 140); a node-ABI binary exits non-zero here.
-      - name: Verify native sqlite ABI under Electron (packaging gate)
+      # [20260905_Feat_NodeSqlite] The forced @electron/rebuild step and the
+      # native-addon ABI gate are obsolete: better-sqlite3 was replaced by
+      # node:sqlite (spec #226), which ships inside both Node and Electron,
+      # so there is no native binary to rebuild or mis-ABI. The gate is NOT
+      # downgraded — packaging still requires a real database open under the
+      # bundled Electron runtime, now via the built-in module.
+      - name: Verify sqlite opens under Electron (packaging gate)
         run: |
-          ELECTRON_RUN_AS_NODE=1 npx electron -e "const D=require('better-sqlite3'); new D(':memory:').prepare('select 1 as ok').get(); console.log('native ABI gate passed')"
-      # [20260816_Fix_MacCiNodeAbi] END
+          ELECTRON_RUN_AS_NODE=1 npx electron -e "const {DatabaseSync}=require('node:sqlite'); new DatabaseSync(':memory:').prepare('select 1 as ok').get(); console.log('sqlite gate passed')"
+      # [20260905_Feat_NodeSqlite] END
       # [20260818_T3_PythonPackagingGate] Ticket #184: cache the embedded
       # Python env (torch/funasr wheels are the slow, disk-hungry part) and
       # HARD-gate the package on it. This combo replaces the old
@@ -257,23 +247,21 @@ jobs:
       - name: Install dependencies (skip postinstall)
         run: pnpm install --ignore-scripts
 
-      - name: Rebuild native modules for Electron
-        run: npx @electron/rebuild -f -w better-sqlite3
+      # [20260905_Feat_NodeSqlite] no native module to rebuild (node:sqlite
+      # is built in; spec #226) — the pnpm-on-Windows workaround above keeps
+      # guarding the install path itself.
       # [20260802_Fix_WinCiPnpmPostinstall] END
 
-      # [20260816_Fix_MacCiNodeAbi] Same ABI gate as build-mac: prove the
-      # native sqlite module opens a database under the bundled Electron
-      # before packaging, so a wrong-ABI binary can never reach an installer.
-      # This job installs with --ignore-scripts, so electron's own postinstall
-      # never extracted its binary — run it here first. The zip is already in
-      # the @electron/get cache warmed by @electron/rebuild, so it only
-      # extracts (no second download).
-      - name: Verify native sqlite ABI under Electron (packaging gate)
+      # [20260905_Feat_NodeSqlite] Same gate as build-mac, engine-swapped:
+      # prove sqlite opens a database under the bundled Electron before
+      # packaging. This job installs with --ignore-scripts, so electron's own
+      # postinstall never extracted its binary — run it here first.
+      - name: Verify sqlite opens under Electron (packaging gate)
         shell: bash
         run: |
           node node_modules/electron/install.js
-          ELECTRON_RUN_AS_NODE=1 npx electron -e "const D=require('better-sqlite3'); new D(':memory:').prepare('select 1 as ok').get(); console.log('native ABI gate passed')"
-      # [20260816_Fix_MacCiNodeAbi] END
+          ELECTRON_RUN_AS_NODE=1 npx electron -e "const {DatabaseSync}=require('node:sqlite'); new DatabaseSync(':memory:').prepare('select 1 as ok').get(); console.log('sqlite gate passed')"
+      # [20260905_Feat_NodeSqlite] END
       # [20260818_T3_PythonPackagingGate] Ticket #184: the old
       # continue-on-error here (torch/funasr pip may exceed CI time/disk)
       # shipped v1.2.0-v1.3.2 Windows installers whose Python env was

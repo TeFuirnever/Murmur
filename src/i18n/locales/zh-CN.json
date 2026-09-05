@@ -40,13 +40,15 @@
       "appearance": "外观",
       "permissions": "权限管理",
       "language": "语言",
-      "about": "关于 Murmur"
+      "about": "关于 Murmur",
+      "bot": "Bot 吉祥物"
     },
     "sidebar": {
       "general": "通用",
       "permissions": "权限",
       "ai": "AI 配置",
-      "about": "关于"
+      "about": "关于",
+      "bot": "Bot 吉祥物"
     },
     "general": {
       "alwaysOnTopDesc": "将应用窗口保持在最前面",
@@ -177,6 +179,52 @@
       "downloadSize": "{{size}} MB",
       "newVersionFound": "发现新版本",
       "newVersionDesc": "v{{version}} 已发布"
+    },
+    "bot": {
+      "description": "标题栏的 Bot 吉祥物。颜色默认跟随明暗主题,也可自行指定。",
+      "autoColor": "跟随主题",
+      "shape": {
+        "circle": "圆形",
+        "pebble": "鹅卵石",
+        "squircle": "方圆",
+        "capsule": "胶囊",
+        "triangle": "三角",
+        "hexagon": "六边",
+        "cloud": "云朵",
+        "droplet": "水滴"
+      },
+      "color": {
+        "ink": "墨黑",
+        "brown": "棕",
+        "red": "红",
+        "orange": "橙",
+        "amber": "琥珀",
+        "green": "绿",
+        "turquoise": "青",
+        "blue": "蓝",
+        "violet": "紫",
+        "rose": "玫红",
+        "gray": "灰",
+        "cream": "奶油白"
+      },
+      "expression": {
+        "neutral": "平静",
+        "attentive": "专注",
+        "surprised": "惊讶",
+        "excited": "兴奋",
+        "happy": "开心",
+        "gleeful": "狂喜",
+        "angry": "生气",
+        "sad": "难过",
+        "scared": "害怕",
+        "wary": "怀疑",
+        "confused": "困惑",
+        "curious": "好奇",
+        "proud": "得意",
+        "shy": "害羞",
+        "jaded": "厌倦",
+        "drowsy": "瞌睡"
+      }
     }
   },
   "history": {
@@ -210,5 +258,8 @@
     "error": "错误",
     "success": "成功",
     "unknown": "未知"
+  },
+  "bot": {
+    "ariaLabel": "Murmur 吉祥物"
   }
 }

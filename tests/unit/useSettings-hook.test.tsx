@@ -54,6 +54,11 @@ const MOCK_SETTINGS = {
   auto_paste: "paste",
   close_behavior: "hide",
   theme: "dark",
+  // [20260905_Test_BotBranchRecovery] populated so loadSettings exercises
+  // the stored-value arms of the bot catalogue mappings (spec #224 ticket 5)
+  bot_shape: "droplet",
+  bot_color: "blue",
+  bot_expression: "happy",
 };
 
 // [20260729_Test_UseSettingsHook] Window shape this test manipulates: the
@@ -242,9 +247,10 @@ describe("useSettings hook — save / test / presets / updates", () => {
     expect(keys).toContain("theme");
     expect(keys).toContain("ai_max_tokens");
     expect(keys).not.toContain(undefined);
-    // 11 settings keys total (post effects removal, + hotwords): 1 special-cased + 10 in the loop.
+    // [20260905_Feat_BloubSettings] count updated for the 3 bot keys (14):
+    // 1 special-cased (masked api_key) + 13 in the loopecial-cased + 10 in the loop.
     // [20260820_T14_Hotwords] count updated for the new key.
-    expect(calls).toHaveLength(11);
+    expect(calls).toHaveLength(14);
   });
 
   it("saveSettings skips re-sending a masked api_key but still saves the rest", async () => {
@@ -261,7 +267,7 @@ describe("useSettings hook — save / test / presets / updates", () => {
     });
     const calls = (api().setSetting as ReturnType<typeof vi.fn>).mock.calls;
     expect(calls.find((c) => c[0] === "ai_api_key")).toBeUndefined();
-    expect(calls).toHaveLength(10); // [20260820_T14_Hotwords] 10 loop keys after hotwords
+    expect(calls).toHaveLength(13); // [20260905_Feat_BloubSettings] 13 loop (10 + 3 bot keys). [20260820_T14_Hotwords] 10 loop keys after hotwords
   });
 
   it("saveSettings returns false and toasts on IPC failure", async () => {

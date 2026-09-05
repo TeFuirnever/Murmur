@@ -1,8 +1,14 @@
 import type React from "react";
-import { Settings, Shield, Bot, Info } from "lucide-react";
+import { Settings, Shield, Bot, Info, Sparkles } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-export type SettingsSection = "general" | "permissions" | "ai" | "about";
+// [20260905_Feat_BloubSettings] "bot" section added (spec #224 ticket 5)
+export type SettingsSection =
+  | "general"
+  | "bot"
+  | "permissions"
+  | "ai"
+  | "about";
 
 interface SettingsSidebarProps {
   activeSection: SettingsSection;
@@ -15,6 +21,8 @@ const SECTIONS: {
   labelKey: string;
 }[] = [
   { id: "general", icon: Settings, labelKey: "settings.sidebar.general" },
+  // [20260905_Feat_BloubSettings] bot mascot section
+  { id: "bot", icon: Sparkles, labelKey: "settings.sidebar.bot" },
   { id: "permissions", icon: Shield, labelKey: "settings.sidebar.permissions" },
   { id: "ai", icon: Bot, labelKey: "settings.sidebar.ai" },
   { id: "about", icon: Info, labelKey: "settings.sidebar.about" },
@@ -25,6 +33,7 @@ const SECTIONS: {
 // Chinese remains in this file.
 const sectionLabelFallbacks: Record<SettingsSection, string> = {
   general: "General",
+  bot: "Bot", // [20260905_Feat_BloubSettings]
   permissions: "Permissions",
   ai: "AI Config",
   about: "About",

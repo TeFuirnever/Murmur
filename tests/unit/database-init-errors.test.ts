@@ -1,9 +1,12 @@
-// [20260816_Test_BranchPush] Branch tests for DatabaseManager.initialize error
-// and pragma paths that the real better-sqlite3 driver cannot produce
-// deterministically: the NODE_MODULE_VERSION ABI-mismatch wrap, the generic
-// rethrow, a failed integrity_check, and schema-migration exec failures
-// (with and without a logger attached). better-sqlite3 is replaced by a
-// configurable fake driven by module-level knobs read at call time.
+// [20260816_Test_BranchPush] Branch tests for DatabaseManager.initialize
+// error paths that the real driver cannot produce deterministically: the
+// generic constructor rethrow, a failed integrity_check, and schema-migration
+// exec failures (with and without a logger attached).
+// [20260905_Feat_NodeSqlite] Migrated with the engine swap (spec #226): the
+// fake now replaces node:sqlite's DatabaseSync. The NODE_MODULE_VERSION
+// rewrite case was deleted — that branch existed only for the better-sqlite3
+// native addon and is gone with it; node:sqlite ships inside the runtime, so
+// the ABI-mismatch failure mode no longer exists.
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import path from "path";
 import fs from "fs";
@@ -11,36 +14,32 @@ import os from "os";
 
 // Knobs read inside the fake's methods (NOT at vi.mock factory time, so the
 // hoisted factory never touches these before initialization).
-let ctorBehavior: "ok" | "node-module-version" | "generic-error" = "ok";
+let ctorBehavior: "ok" | "generic-error" = "ok";
 let integrityStatus = "ok";
 let alterFails = false;
 
-vi.mock("better-sqlite3", () => ({
-  default: class FakeSqlite {
+vi.mock("node:sqlite", () => ({
+  DatabaseSync: class FakeSqlite {
     constructor() {
-      if (ctorBehavior === "node-module-version") {
-        throw new Error(
-          "was compiled against a different Node.js version using NODE_MODULE_VERSION 115. This version requires 108.",
-        );
-      }
       if (ctorBehavior === "generic-error") {
         throw new Error("SQLITE_CANTOPEN");
       }
     }
 
     close = vi.fn();
-    pragma(name: string): unknown {
-      if (name === "integrity_check") {
-        return [{ integrity_check: integrityStatus }];
-      }
-      return null;
-    }
     exec(sql: string): void {
       if (alterFails && sql.includes("ALTER TABLE")) {
         throw new Error("duplicate column name: source_type");
       }
     }
-    prepare() {
+    prepare(sql: string) {
+      if (sql.includes("integrity_check")) {
+        return {
+          run: () => ({ changes: 0, lastInsertRowid: 0 }),
+          all: () => [{ integrity_check: integrityStatus }],
+          get: () => undefined,
+        };
+      }
       // _migrateSchema's PRAGMA table_info(...).all() reports no columns, so
       // the ALTER statements always "need" to run.
       return {
@@ -87,14 +86,6 @@ describe("[20260816_Test_BranchPush] DatabaseManager.initialize error paths", ()
       /* db handle never opened */
     }
     fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  it("rewrites a NODE_MODULE_VERSION constructor failure", () => {
-    ctorBehavior = "node-module-version";
-    expect(() => db.initialize(tmpDir)).toThrow(
-      /SQLite 原生模块版本不匹配[\s\S]*NODE_MODULE_VERSION/,
-    );
-    expect(() => db.initialize(tmpDir)).toThrow(/electron-rebuild/);
   });
 
   it("rethrows a generic constructor failure unchanged", () => {

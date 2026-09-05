@@ -57,36 +57,21 @@ function run(cmd, label) {
 }
 
 // [20260816_DevSmokeGate] pnpm run dev gate: launches the dev stack
-// (electron-rebuild + build:preload + concurrently: vite dev server + electron
-// main) in the background and waits for the renderer to be reachable on the
-// vite port, or for the main process to emit a fatal error. The gate exists
-// because the app booted with a stale better-sqlite3 ABI and crashed at
-// startup — a state no build/test gate catches.
+// (build:preload + concurrently: vite dev server + electron main) in the
+// background and waits for the renderer to be reachable on the vite port, or
+// for the main process to emit a fatal error. The gate exists because the app
+// once booted with a stale native-sqlite ABI and crashed at startup — a state
+// no build/test gate catches. [20260905_Feat_NodeSqlite] the ABI class itself
+// is gone with better-sqlite3; the crash fast-detect stays as a cheap guard.
 // Ports mirror src/vite.config.js server.port; VITE_DEV_PORT overrides.
 const DEV_VITE_PORT = process.env.VITE_DEV_PORT || "5173";
 const DEV_READY_TIMEOUT_MS = 120_000;
 
 async function runDevSmoke() {
   const start = performance.now();
-  // [20260816_DevSmokeGate] The unit-test phase runs better-sqlite3 under the
-  // system node ABI (pretest asserts it). pnpm run dev needs the ELECTRON ABI,
-  // so rebuild for electron first — exactly what `pnpm dev`'s predev hook does.
-  try {
-    execSync("npx electron-rebuild -f -w better-sqlite3", {
-      cwd: ROOT,
-      stdio: ["ignore", "ignore", "pipe"],
-      timeout: 120_000,
-    });
-  } catch (e) {
-    return {
-      step: "dev smoke (pnpm run dev)",
-      ok: false,
-      duration: "0.0",
-      output:
-        "electron-rebuild failed:\n" + String((e.stderr || "").slice(0, 400)),
-    };
-  }
-
+  // [20260905_Feat_NodeSqlite] The electron-rebuild step is gone with
+  // better-sqlite3 (spec #226): node:sqlite is built into both runtimes, so
+  // there is no ABI to flip before launching the dev stack.
   const child = spawn("pnpm", ["run", "dev"], {
     cwd: ROOT,
     stdio: ["ignore", "pipe", "pipe"],
@@ -96,7 +81,7 @@ async function runDevSmoke() {
   const onData = (buf) => {
     const text = buf.toString();
     output += text;
-    // A main-process crash (e.g. better-sqlite3 ABI mismatch) aborts the run
+    // A main-process crash aborts the run
     // early so the gate fails fast instead of waiting out the timeout.
     if (/SQLite 原生模块版本不匹配|NODE_MODULE_VERSION/.test(text)) {
       fatal = text.slice(0, 300);
@@ -145,13 +130,9 @@ async function runDevSmoke() {
         output.slice(-1200),
     };
   }
-  // [20260816_DevSmokeGate] IMPORTANT: no ABI restore here. The gate must
-  // leave the native binary in the ELECTRON-ABI state that `pnpm run dev`
-  // needs — a restore-to-node step here is exactly what broke the user's
-  // next `pnpm run dev` (binary left at ABI 137 while Electron needs 140).
-  // The node-ABI/test state is the responsibility of `pnpm rebuild
-  // better-sqlite3` (or the pretest ABI check's hint), and predev already
-  // rebuilds for electron before every dev run.
+  // [20260905_Feat_NodeSqlite] The ABI restore note is obsolete with the
+  // engine swap (spec #226): no native sqlite binary exists to leave in any
+  // particular state.
   return result;
 }
 
@@ -279,7 +260,11 @@ async function main() {
   // [20260724_TS_BigBang_BuildPipeline] END
   const stage2a = run("pnpm run build:preload", "build:preload");
   printResult(stage2a);
-  const stage2b = run("pnpm test -- --coverage", "test + coverage");
+  // [20260905_Fix_CoverageForwarding] pnpm 11 forwards `--` LITERALLY to the
+  // script (verified: `pnpm test -- --coverage` runs `vitest run -- --coverage`,
+  // which vitest treats as file filters — coverage silently never ran and the
+  // thresholds never enforced). Invoke vitest directly with the flag.
+  const stage2b = run("pnpm exec vitest run --coverage", "test + coverage");
   printResult(stage2b);
 
   // Stage 3: build renderer
@@ -290,7 +275,7 @@ async function main() {
   // removed with the visual-effects feature (ogl/motion deps deleted).
 
   // [20260816_DevSmokeGate] pnpm run dev gate: verifies the dev stack boots
-  // end-to-end (electron-rebuild ABI, preload build, vite dev server, main
+  // end-to-end (preload build, vite dev server, main
   // process) and the renderer becomes reachable — a regression the static
   // gates cannot see.
   const stageDev = await runDevSmoke();

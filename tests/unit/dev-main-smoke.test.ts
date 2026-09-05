@@ -4,8 +4,9 @@
 // now spawns `electron .` and asserts [main:canary] (main.ts:12, preserved by
 // esbuild) fires. Catches any regression where the main entry never loads
 // (wrong main field, broken build, app-path resolution). The canary fires
-// before DatabaseManager.initialize, so this is independent of the
-// better-sqlite3 ABI state (dev-135 vs test-137).
+// before DatabaseManager.initialize, so it is independent of the sqlite
+// engine state (historically the better-sqlite3 ABI; node:sqlite since
+// spec #226 has no ABI).
 import { describe, it } from "vitest";
 import { spawn, execSync, type ChildProcess } from "child_process";
 import { createRequire } from "module";

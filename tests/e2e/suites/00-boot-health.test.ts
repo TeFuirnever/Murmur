@@ -194,6 +194,22 @@ test.describe.serial("Suite 0: Boot Health (Phase A-E)", () => {
     expect(installed).toBe(true);
   });
 
+  // 0.7a — [20260905_Feat_BloubMascotWiring] the title-bar bot mascot
+  // (spec #224) must mount AND paint in the real app: the shell sets
+  // data-bot-state imperatively from its rAF loop, so a non-empty value
+  // proves renderer wiring + engine + paint loop all survived boot.
+  test("0.7a title-bar mascot is mounted and painted", async () => {
+    const mascot = window.locator("svg[data-bot-state]");
+    await expect(mascot).toBeAttached();
+    await expect
+      .poll(async () => await mascot.getAttribute("data-bot-state"), {
+        timeout: 5_000,
+      })
+      .toMatch(
+        /^(idle|wide|thinking|orbit|sleep|alert|exclaim|comet|burst|wink)$/,
+      );
+  });
+
   // 0.7 — Phase E3: graceful shutdown. will-quit race timeout is 5s
   // (main.ts will-quit handler); 6s gives 1s of slack. If this fails, a
   // manager's before-quit hook is hanging — typically FunASR Python spawn
