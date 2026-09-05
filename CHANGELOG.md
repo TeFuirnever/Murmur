@@ -5,7 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.5.0] - 2026-09-05
+
+### Fixed
+
+- **Windows 下载模型后仍提示"模型未下载"、进度条始终 0%**（issues #216 #212）：三个叠加缺陷。其一，新版 modelscope（≥1.19）的下载落盘路径多一层 `models` 目录，服务端的磁盘检查只认旧布局——模型下载 100% 成功后服务端仍判定缺失。其二，服务端进程固定使用启动时解析的模型根路径，下载完成后无人通知它。其三，下载脚本整个传输期不输出进度，且主进程读取的进度字段名与脚本实际发送的不一致——界面从 0% 永远不动，触发"下载→超时→重试"循环。修复：目录解析兼容新旧布局；下载成功后自动以正确路径重启服务端；下载进度改为真实字节级百分比并按文件大小节流刷新；下载器改用纯文件下载（不再白白在内存中构建整个模型）。
+- **macOS 升级后首次启动可能"点了图标没反应"**（issue #211）：每次构建的签名身份变化会让 macOS 在启动时弹出钥匙串授权对话框，而旧代码在窗口创建之前同步执行该检查——对话框弹在一个不可见的应用上（锁屏时则无限期隐形挂起）。现在应用窗口先创建，对话框弹在可见窗口之上；点「始终允许」后界面随即加载。若误点「拒绝」应用仍可用，但已保存的 AI API Key 需在设置中重新录入。
 
 ### Added
 
