@@ -8,6 +8,7 @@ FunASR模型服务器
 import sys
 import json
 import os
+import re
 import logging
 import traceback
 import signal
@@ -352,6 +353,35 @@ class FunASRServer:
             if os.path.isdir(candidate):
                 return candidate
         return os.path.join(base, "models", "damo")
+
+    # [20260905_Fix_255_RepoReadyShardGlob] Promoted from a nested run()
+    # helper so the readiness gate is directly testable, and hardened for
+    # issue #255: ModelScope's downloader leaves SHARD part-files in the
+    # repo dir mid-download (e.g. vocab.txt_0_167772159 — a byte-range temp
+    # name). The "vocab*" glob matched them, so a server (re)start during a
+    # download misread the repo as ready and AutoModel died with a confusing
+    # error instead of the clean models_not_downloaded path. Matching files
+    # whose name ends in a _<start>_<end> byte-range suffix never satisfy
+    # the gate; real anchors (config/weights/complete vocab) still do.
+    _SHARD_SUFFIX_RE = re.compile(r"_\d+_\d+$")
+
+    @staticmethod
+    def _repo_ready(repo_dir):
+        """目录存在且包含非分片的常见权重/配置文件即认为已就绪"""
+        if not os.path.isdir(repo_dir):
+            return False
+        patterns = [
+            "model.pt", "pytorch_model.bin", "*.onnx",
+            "config.json", "configuration.json", "model.yaml", "vocab*"
+        ]
+        for pat in patterns:
+            matches = [
+                m for m in glob.glob(os.path.join(repo_dir, pat))
+                if not FunASRServer._SHARD_SUFFIX_RE.search(os.path.basename(m))
+            ]
+            if matches:
+                return True
+        return False
 
     def _load_asr_model(self):
         """加载ASR模型（SeACo 优先，旧模型回退）"""
@@ -1476,24 +1506,13 @@ class FunASRServer:
         ]
         # ASR (either generation) + VAD are required; punc is optional.
 
-        def _repo_ready(repo_dir):
-            # 目录存在且包含任意常见权重/配置文件即认为已就绪
-            if not os.path.isdir(repo_dir):
-                return False
-            patterns = [
-                "model.pt", "pytorch_model.bin", "*.onnx",
-                "config.json", "configuration.json", "model.yaml", "vocab*"
-            ]
-            for pat in patterns:
-                if glob.glob(os.path.join(repo_dir, pat)):
-                    return True
-            return False
-
+        # [20260905_Fix_255_RepoReadyShardGlob] Readiness gate promoted to
+        # FunASRServer._repo_ready (staticmethod, shard-aware, testable).
         asr_satisfied = any(
-            _repo_ready(os.path.join(cache_path, r)) for r in asr_repos
+            self._repo_ready(os.path.join(cache_path, r)) for r in asr_repos
         )
         missing_required = [] if asr_satisfied else asr_repos[:1]
-        if not _repo_ready(os.path.join(cache_path, vad_repo)):
+        if not self._repo_ready(os.path.join(cache_path, vad_repo)):
             missing_required.append(vad_repo)
 
         if not missing_required:
