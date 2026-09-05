@@ -46,6 +46,17 @@ let globalModelCheckCache: ModelCheckResult | null = null;
 let globalModelCheckTime = 0;
 const GLOBAL_CACHE_TIME = 2000;
 
+// [20260905_Fix_254_DownloadStallTimeout] Issue #254: the old watchdog was a
+// 10-minute ABSOLUTE cap, killing slow-network downloads of >1.2GB models
+// mid-flight even while bytes kept flowing (#212 symptom chain
+// "下载→到点→重来"). snapshot_download resumes from partial state, so the
+// watchdog is now STALL-based: only a window with zero forward progress
+// trips it, and the timeout error tells the user the partial download is
+// kept and a retry resumes. The window keeps the familiar 10-minute budget.
+const DOWNLOAD_STALL_TIMEOUT_MS = 10 * 60 * 1000;
+const DOWNLOAD_STALL_TIMEOUT_MESSAGE =
+  "模型下载超时（10 分钟无进度）。已下载部分已保留，重试将自动断点续传";
+
 class ModelManager {
   private logger: Logger;
   modelsDownloaded: boolean | null;
@@ -337,6 +348,26 @@ class ModelManager {
       );
 
       let hasError = false;
+      // [20260905_Fix_254_DownloadStallTimeout] Stall watchdog state: the
+      // timer re-arms only on STRICT progress growth (a repeated percentage
+      // is a heartbeat, not progress), so idle time is what counts.
+      let lastProgressValue = -1;
+      let stallTimer: ReturnType<typeof setTimeout> | null = null;
+      const clearStallTimer = () => {
+        if (stallTimer !== null) {
+          clearTimeout(stallTimer);
+          stallTimer = null;
+        }
+      };
+      const armStallWatchdog = () => {
+        clearStallTimer();
+        stallTimer = setTimeout(() => {
+          hasError = true;
+          downloadProcess.kill();
+          reject(new Error(DOWNLOAD_STALL_TIMEOUT_MESSAGE));
+        }, DOWNLOAD_STALL_TIMEOUT_MS);
+      };
+      armStallWatchdog();
 
       downloadProcess.stdout.on("data", (data: Buffer) => {
         const lines = data
@@ -354,8 +385,22 @@ class ModelManager {
             };
             if (result.error) {
               hasError = true;
+              clearStallTimer();
               reject(new Error(result.error));
               return;
+            }
+            // [20260905_Fix_254_DownloadStallTimeout] Growth check runs for
+            // every progress-bearing event, independent of the callback —
+            // forward progress is what proves the pipeline is alive.
+            const overall =
+              typeof result.overall_progress === "number"
+                ? result.overall_progress
+                : typeof result.progress === "number"
+                  ? result.progress
+                  : null;
+            if (overall !== null && overall > lastProgressValue) {
+              lastProgressValue = overall;
+              armStallWatchdog();
             }
             if (result.stage && progressCallback) {
               // [20260905_Fix_216_DownloadRecovery] download_models.py sends
@@ -363,20 +408,15 @@ class ModelManager {
               // `percentage`. The old mapper read `result.percentage || 0`,
               // so every event reached the UI as 0% for the whole download
               // (issue #212's "一直未见有进度").
-              const overall =
-                typeof result.overall_progress === "number"
-                  ? result.overall_progress
-                  : typeof result.progress === "number"
-                    ? result.progress
-                    : 0;
               progressCallback({
                 stage: result.stage,
-                percentage: overall,
-                overall_progress: overall,
-                progress: overall,
+                percentage: overall ?? 0,
+                overall_progress: overall ?? 0,
+                progress: overall ?? 0,
               });
             }
             if (result.success !== undefined) {
+              clearStallTimer();
               if (result.success) {
                 this.modelsDownloaded = true;
                 this.clearCache();
@@ -397,6 +437,7 @@ class ModelManager {
       });
 
       downloadProcess.on("close", (code: number | null) => {
+        clearStallTimer();
         if (!hasError) {
           if (code === 0) {
             this.modelsDownloaded = true;
@@ -409,25 +450,11 @@ class ModelManager {
       });
 
       downloadProcess.on("error", (error: Error) => {
+        clearStallTimer();
         if (!hasError) {
           reject(new Error(`启动下载进程失败: ${error.message}`));
         }
       });
-
-      // [20260905_Fix_216_DownloadRecovery] Clear the watchdog once the
-      // process exits — the timer previously kept the event loop alive for
-      // the full 10 minutes even after a successful download.
-      const watchdog = setTimeout(
-        () => {
-          hasError = true;
-          downloadProcess.kill();
-          reject(new Error("模型下载超时（10分钟）"));
-        },
-        10 * 60 * 1000,
-      );
-      const clearWatchdog = () => clearTimeout(watchdog);
-      downloadProcess.once("close", clearWatchdog);
-      downloadProcess.once("error", clearWatchdog);
     });
   }
 
