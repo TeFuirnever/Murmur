@@ -304,10 +304,13 @@ class ModelManager {
   async downloadModels(
     progressCallback: ProgressCallback | null = null,
     pythonCmd: string,
-  ): Promise<{ success: boolean; message?: string }> {
+  ): Promise<{ success: boolean; message?: string; skipped?: boolean }> {
     const checkResult = await this.checkModelFiles();
     if (checkResult.models_downloaded) {
-      return { success: true, message: "模型文件已下载" };
+      // [20260905_Fix_216_DownloadRecovery] skipped flags the host that no
+      // fetch ran — funasrManager must not restart a healthy server on this
+      // path (review MAJOR: it bounced an already-ready server for nothing).
+      return { success: true, message: "模型文件已下载", skipped: true };
     }
 
     const hasPartial =
@@ -345,7 +348,8 @@ class ModelManager {
             const result = JSON.parse(line) as {
               error?: string;
               stage?: string;
-              percentage?: number;
+              progress?: number;
+              overall_progress?: number;
               success?: boolean;
             };
             if (result.error) {
@@ -354,11 +358,22 @@ class ModelManager {
               return;
             }
             if (result.stage && progressCallback) {
+              // [20260905_Fix_216_DownloadRecovery] download_models.py sends
+              // `progress` (per-model) and `overall_progress` — never
+              // `percentage`. The old mapper read `result.percentage || 0`,
+              // so every event reached the UI as 0% for the whole download
+              // (issue #212's "一直未见有进度").
+              const overall =
+                typeof result.overall_progress === "number"
+                  ? result.overall_progress
+                  : typeof result.progress === "number"
+                    ? result.progress
+                    : 0;
               progressCallback({
                 stage: result.stage,
-                percentage: result.percentage || 0,
-                overall_progress: result.percentage || 0,
-                progress: result.percentage || 0,
+                percentage: overall,
+                overall_progress: overall,
+                progress: overall,
               });
             }
             if (result.success !== undefined) {
@@ -399,7 +414,10 @@ class ModelManager {
         }
       });
 
-      setTimeout(
+      // [20260905_Fix_216_DownloadRecovery] Clear the watchdog once the
+      // process exits — the timer previously kept the event loop alive for
+      // the full 10 minutes even after a successful download.
+      const watchdog = setTimeout(
         () => {
           hasError = true;
           downloadProcess.kill();
@@ -407,6 +425,9 @@ class ModelManager {
         },
         10 * 60 * 1000,
       );
+      const clearWatchdog = () => clearTimeout(watchdog);
+      downloadProcess.once("close", clearWatchdog);
+      downloadProcess.once("error", clearWatchdog);
     });
   }
 

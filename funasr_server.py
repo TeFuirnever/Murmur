@@ -319,15 +319,39 @@ class FunASRServer:
     # ASR loader's disk-presence gate needs the same resolution.
     @staticmethod
     def _default_damo_root():
-        """解析默认模型根目录（MODELSCOPE_CACHE 兼容两种布局）"""
+        """解析默认模型根目录（MODELSCOPE_CACHE + 新旧两种 modelscope 布局）
+
+        [20260905_Fix_216_DamoRootLayout] modelscope >= 1.19 downloads into
+        a NEW layout with an extra `models` layer — verified against 1.37:
+            <cache>/models/damo/<repo>
+        while older caches use <cache>/damo/<repo>. The old resolver only
+        knew the legacy shapes, so a machine whose models live in the new
+        layout failed the disk-presence gate forever with
+        models_not_downloaded (issue #216). Candidates are probed in order
+        (new layout first — fresh downloads land there) and the no-cache
+        default is the new-layout path so a fresh download is found on the
+        next gate run.
+        """
+        new_layers = ("models/damo", "hub/models/damo")
+        legacy_layers = ("damo", "hub/damo")
         root = os.environ.get("MODELSCOPE_CACHE")
         if root:
-            if os.path.isdir(os.path.join(root, "damo")):
-                return os.path.join(root, "damo")
-            if os.path.isdir(os.path.join(root, "hub", "damo")):
-                return os.path.join(root, "hub", "damo")
+            for layer in new_layers + legacy_layers:
+                candidate = os.path.join(root, *layer.split("/"))
+                if os.path.isdir(candidate):
+                    return candidate
+            # [20260905_Fix_Review_EnvCacheDefault] An explicitly configured
+            # cache must not fall through to the home directory when it has
+            # no models yet — modelscope will download INTO it, so the gate
+            # has to look there too.
+            return os.path.join(root, "models", "damo")
         home_dir = os.path.expanduser("~")
-        return os.path.join(home_dir, ".cache", "modelscope", "hub", "damo")
+        base = os.path.join(home_dir, ".cache", "modelscope", "hub")
+        for layer in new_layers + legacy_layers:
+            candidate = os.path.join(base, *layer.split("/"))
+            if os.path.isdir(candidate):
+                return candidate
+        return os.path.join(base, "models", "damo")
 
     def _load_asr_model(self):
         """加载ASR模型（SeACo 优先，旧模型回退）"""

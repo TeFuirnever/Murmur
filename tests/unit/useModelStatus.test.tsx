@@ -249,8 +249,12 @@ describe("useModelStatus hook", () => {
 
     expect(res.success).toBe(true);
     expect(downloadModels).toHaveBeenCalledTimes(1);
-    // After a successful download the hook restarts FunASR and enters loading.
-    expect(restartFunasrServer).toHaveBeenCalledTimes(1);
+    // [20260905_Fix_216_DownloadRecovery] The post-download server restart
+    // is owned by the MAIN process now; the renderer must NOT call
+    // restartFunasrServer itself (it raced the main-process restart into a
+    // double full-model load). The hook just flips to loading and lets the
+    // status poll observe the restart.
+    expect(restartFunasrServer).not.toHaveBeenCalled();
     await waitFor(() => {
       expect(result.current.stage).toBe("loading");
     });
@@ -516,10 +520,15 @@ describe("useModelStatus hook — errors, listeners, downloads", () => {
     errSpy.mockRestore();
   });
 
-  it("surfaces a FunASR restart failure after a successful download", async () => {
+  it("enters loading without a renderer-side restart after a successful download", async () => {
+    // [20260905_Fix_216_DownloadRecovery] Rewritten: a renderer restart
+    // failure path no longer exists — the main process owns the restart.
+    // Even if the bridge exposes a broken restartFunasrServer, the
+    // renderer must never call it and must land in the loading stage.
+    const restartSpy = vi.fn().mockRejectedValue(new Error("spawn fail"));
     (globalThis.window as TestWindow).electronAPI = makeElectronAPIStub({
       downloadModels: vi.fn().mockResolvedValue({ success: true }),
-      restartFunasrServer: vi.fn().mockRejectedValue(new Error("spawn fail")),
+      restartFunasrServer: restartSpy,
     });
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
@@ -529,8 +538,9 @@ describe("useModelStatus hook — errors, listeners, downloads", () => {
     await act(async () => {
       await result.current.downloadModels();
     });
-    expect(result.current.stage).toBe("error");
-    expect(result.current.error).toContain("重启服务器失败");
+    expect(restartSpy).not.toHaveBeenCalled();
+    expect(result.current.stage).toBe("loading");
+    expect(result.current.error).toBeNull();
     errSpy.mockRestore();
     logSpy.mockRestore();
   });
