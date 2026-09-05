@@ -182,6 +182,11 @@ function BloubBotImpl(
   const maskBodyRef = useRef<SVGPathElement | null>(null);
   const paperBodyRef = useRef<SVGPathElement | null>(null);
   const bodyGroupRef = useRef<SVGGElement | null>(null);
+  // [20260905_Fix_InkRectRepaint] the ink rect's fill is ref-owned: a colour
+  // prop change resolves in a post-render effect, so the JSX one-shot bind
+  // goes stale (theme flips only worked because the class observer forces a
+  // re-render). Paint owns it like every other attribute.
+  const inkRectRef = useRef<SVGRectElement | null>(null);
   const eyeRefs = useRef<Array<SVGPathElement | null>>([null, null]);
   const notchRef = useRef<SVGCircleElement | null>(null);
   const notifRef = useRef<SVGCircleElement | null>(null);
@@ -255,6 +260,7 @@ function BloubBotImpl(
       const inkHex = inkRef.current;
       const paperHex = paperRef.current;
       svgRef.current?.setAttribute("data-bot-state", displayRef.current.state);
+      if (inkRectRef.current) inkRectRef.current.setAttribute("fill", inkHex);
       if (maskBodyRef.current)
         maskBodyRef.current.setAttribute("d", frame.bodyPath);
       if (paperBodyRef.current)
@@ -630,6 +636,7 @@ function BloubBotImpl(
         <path ref={paperBodyRef} fill={paperRef.current} />
         <g mask={`url(#${maskId})`}>
           <rect
+            ref={inkRectRef}
             x={-VB}
             y={-VB}
             width={VB * 2}

@@ -85,17 +85,14 @@ jobs:
         with:
           fail-on-severity: high
 
-      # [20260728_AbiSplit] Install leaves better-sqlite3 at the Electron ABI
-      # (postinstall = electron-builder install-app-deps, for dev/e2e). Unit
-      # tests run under the system Node from actions/setup-node, which needs
-      # the system ABI. Rebuild to system Node here so `pnpm test` (and its
-      # pretest probe scripts/check-native-abi.js) pass. e2e steps below are
-      # non-blocking and tolerate the mismatch. Companion to commit 5f7f005.
-      - name: Rebuild better-sqlite3 for system Node (unit-test ABI)
-        run: pnpm rebuild better-sqlite3
+      # [20260905_Feat_NodeSqlite] The ABI-split rebuild is obsolete: sqlite
+      # now comes from node:sqlite, built into both runtimes (spec #226).
+      # Unit tests and e2e share the same install with nothing to flip.
 
       - name: Test with coverage
-        run: pnpm test -- --coverage
+        # [20260905_Fix_CoverageForwarding] pnpm 11 forwards `--` literally;
+        # use the script form so coverage actually runs.
+        run: pnpm run test:coverage
 
       # [20260817_T4_CiMatrix] Mirror of the local ci-check stage1 entry:
       # stdlib-unittest suite (protocol contract + numpy smoke) via the

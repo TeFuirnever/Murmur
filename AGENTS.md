@@ -118,7 +118,7 @@ Murmur targets **Windows** and **macOS**. See `CLAUDE.md` → _Cross-Platform Su
 
 - Use `process.platform === "win32"` for platform checks, not `os.platform()` or feature detection.
 - Windows paths use backslashes; UNC paths (`\\server\share`) are rejected by `audioPathValidator`.
-- Native modules (`better-sqlite3`) need Electron ABI. Hazard: `electron-builder install-app-deps` can silently no-op while pnpm's build allowlist fetches a system-Node-ABI prebuild — release CI forces `@electron/rebuild -f` and gates packaging on a real DB open under Electron (details in `CLAUDE.md` → Cross-Platform Support).
+- SQLite is `node:sqlite` (built into Node ≥22.5 / Electron 39, spec #226) — no native addon, no ABI choreography between test and dev. If a native addon is ever reintroduced, restore the forced-rebuild + packaged-DB-open gates (see `CLAUDE.md` → Cross-Platform Support).
 - Embedded Python (`prepare-embedded-python.js`) supports both macOS (`-apple-darwin`) and Windows (`-pc-windows-msvc-shared`) downloads.
 - Add `it.skipIf(process.platform === "win32")` for Unix-only test behavior.
 

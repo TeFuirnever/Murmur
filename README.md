@@ -137,7 +137,7 @@
 
 ### 环境要求
 
-- **Node.js** 18+ 和 [pnpm](https://pnpm.io)
+- **Node.js** 22.5+ 和 [pnpm](https://pnpm.io)
 - **Python** 3.8+（用于 FunASR）
 
 ### 快速开始
@@ -179,7 +179,7 @@ pnpm ci:check     # 本地运行所有 CI 门禁
 | 前端     | React 19, Tailwind CSS 4, Vite                        |
 | 语音识别 | FunASR (Paraformer-large + FSMN-VAD + CT-Transformer) |
 | AI 优化  | 11+ OpenAI 兼容模型 + 自定义 Prompt 模板              |
-| 数据存储 | SQLite (better-sqlite3, safeStorage 加密)             |
+| 数据存储 | SQLite (node:sqlite, safeStorage 加密)                |
 
 ## 📋 路线图
 
@@ -321,7 +321,7 @@ pnpm dev
 | Frontend | React 19, Tailwind CSS 4, Vite                         |
 | Speech   | FunASR (Paraformer-large + FSMN-VAD + CT-Transformer)  |
 | AI       | 11+ OpenAI-compatible models + custom prompt templates |
-| Storage  | SQLite (better-sqlite3, safeStorage encryption)        |
+| Storage  | SQLite (node:sqlite, safeStorage encryption)           |
 
 ## Roadmap
 

@@ -136,7 +136,7 @@ chore: 升级 Electron 到 v36
 
 打包产物在发布前必须通过以下门禁（2026-08-16 v1.3.2 前后陆续引入，此前流水线产出的安装包全部不可用）：
 
-1. **Native ABI gate** — 打包前必须在 Electron 运行时（`ELECTRON_RUN_AS_NODE`）下用 better-sqlite3 真实打开内存库（拦截系统 Node ABI 的 sqlite 二进制，v1.3.0 macOS 事故）
+1. **SQLite gate**（[20260905_Feat_NodeSqlite] 引擎已换 node:sqlite，spec #226）— 打包前必须在 Electron 运行时（`ELECTRON_RUN_AS_NODE`）下用 `node:sqlite` 真实打开内存库（历史：better-sqlite3 时代拦截系统 Node ABI 二进制，v1.3.0 macOS 事故；引擎内置后无 ABI 可错，门禁保留为打包前真实开库验证）
 2. **Preload presence gate** — `dist-preload/preload.js` 不存在则拒绝打包（electron-builder files 通配会静默跳过缺失文件，v1.3.1 及更早全部缺 preload）
 3. **Python packaging gate** — 嵌入式 Python 环境准备是硬性步骤（actions/cache 缓存环境本体，准备失败即中止打包，取代旧版 Windows `continue-on-error`——正是它让 v1.2.0–v1.3.2 的 Windows 包静默缺 Python 环境而构建保持全绿，spec #177 B-0 / issues #176 #196）；打包前必须用该环境真实 import numpy/soundfile/funasr
 4. **Packaged boot smoke（mac）** — 挂载刚构建的 DMG、真实启动 app，轮询断言启动日志含"主窗口创建成功/应用启动完成/注册成功/Python链路自检通过"（热键注册来自渲染进程 IPC 证明 preload 桥；Python 自检是独立 spawn 嵌入式解释器跑 `import funasr`，证明解释器解析 + 依赖栈整体可用），且无致命模式（`NODE_MODULE_VERSION` / `Uncaught Exception` / `Unhandled Rejection` / preload 失败 / Python自检失败）
@@ -192,7 +192,7 @@ FunASR 以 Python 子进程方式运行，生命周期由 `FunASRManager`（`src
 
 ### 数据库 Schema
 
-使用 SQLite（`better-sqlite3`），数据库文件位于 `src/helpers/database.js` 管理：
+使用 SQLite（`node:sqlite`，spec #226 迁移自 better-sqlite3），数据库文件位于 `src/helpers/database.ts` 管理：
 
 **transcriptions 表**：
 | 字段 | 类型 | 说明 |

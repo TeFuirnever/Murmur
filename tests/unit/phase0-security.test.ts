@@ -149,17 +149,15 @@ describe("Phase 0: Ghost dependencies removed from package.json", () => {
   });
 });
 
-// [20260612_Fix_BindingsPackaging] Ensure native sqlite runtime helper is packaged.
+// [20260612_Fix_BindingsPackaging]→[20260905_Feat_NodeSqlite] The native
+// sqlite runtime helpers are RETIRED with better-sqlite3 (spec #226): sqlite
+// now comes from node:sqlite inside the runtime, so the loader pair must
+// stay OUT of production dependencies (they previously shipped in every
+// installer as the addon's loader).
 describe("Phase 0: Native sqlite runtime dependencies", () => {
-  it("should keep bindings as a direct production dependency", () => {
-    expect(pkg.dependencies).toHaveProperty("bindings");
-  });
-
-  // [20260816_Fix_WinBindingsHelper] bindings' top-level require of this
-  // helper crashed packaged Windows installs (issue #157); pin it as a
-  // direct dependency so electron-builder always packages it.
-  it("should keep the bindings helper as a direct production dependency", () => {
-    expect(pkg.dependencies).toHaveProperty("file-uri-to-path", "1.0.0");
+  it("keeps the retired native loader pair out of production dependencies", () => {
+    expect(pkg.dependencies).not.toHaveProperty("bindings");
+    expect(pkg.dependencies).not.toHaveProperty("file-uri-to-path");
   });
 });
 // [20260612_Fix_BindingsPackaging] END

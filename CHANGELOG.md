@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **数据库引擎迁移到 node:sqlite(根治 ABI 状态机)**(spec #226):`better-sqlite3`(dependencies 中唯一的原生插件)被 Node ≥22.5 / Electron 39 内置的 `node:sqlite` 取代。历史上所有"测试后 dev 起不来 / dev 后测试红 / v1.3.0 打包崩"的事故共享同一根因——磁盘上一份 `better_sqlite3.node` 要在系统 Node 与 Electron 两个 ABI 间人工翻面,且翻面工具会静默跳过。引擎内置后该类问题结构性消失:`predev`/`pretest`/`postinstall` 的 rebuild 链与 `scripts/check-native-abi.js` 删除,发版门禁的 native ABI 门等价改写为 node:sqlite 真实开库门(不降级)。行为不变:同 schema、同 WAL、同 safeStorage 加密语义;1661 用例零 ABI 翻面全绿。注意:Node 22.5+ 成为运行与构建的硬要求。
+
 - **bloub 吉祥物**:标题栏新增会动的 Bot 头像(spec #224,决策过程见 wayfinder 总图 #217)。移植自 [bloub](https://github.com/jeremy-prt/bloub)(MIT,`src/bot/` 引擎零框架、纯时间函数,测量常数逐帧取自参考视频、零漂移校验)。吉祥物按应用状态变形:待机呼吸、录音睁眼、识别思考点、润色/模型下载/文件转写旋环、错误分级惊叹号;复制成功眨眼、转写完成彗星。设置窗新增「Bot」区,可自选 8 形状/12 颜色(默认跟随明暗主题)/16 表情。设置键 `bot_shape`/`bot_color`/`bot_expression`。注意:本特性与已移除的旧视觉特效系统(ogl/motion)无关,不依赖也不重启该栈。
 
 ## [1.4.0] - 2026-08-20

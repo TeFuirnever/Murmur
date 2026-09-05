@@ -54,6 +54,11 @@ const MOCK_SETTINGS = {
   auto_paste: "paste",
   close_behavior: "hide",
   theme: "dark",
+  // [20260905_Test_BotBranchRecovery] populated so loadSettings exercises
+  // the stored-value arms of the bot catalogue mappings (spec #224 ticket 5)
+  bot_shape: "droplet",
+  bot_color: "blue",
+  bot_expression: "happy",
 };
 
 // [20260729_Test_UseSettingsHook] Window shape this test manipulates: the

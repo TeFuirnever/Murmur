@@ -29,15 +29,19 @@ vi.mock("../../src/hooks/useRecording", () => ({
   determineProcessingMode: vi.fn(() => "optimize"),
 }));
 
+let hotkeyToggle: (() => void) | null = null;
+
+const modelStatusState = {
+  stage: "ready" as string,
+  isReady: true,
+  downloadProgress: 0,
+  error: null as string | null,
+  downloadModels: vi.fn(),
+  checkModelStatus: vi.fn(),
+};
+
 vi.mock("../../src/hooks/useModelStatus", () => ({
-  useModelStatus: () => ({
-    stage: "ready",
-    isReady: true,
-    downloadProgress: 0,
-    error: null,
-    downloadModels: vi.fn(),
-    checkModelStatus: vi.fn(),
-  }),
+  useModelStatus: () => modelStatusState,
   ModelStatusProvider: ({ children }: { children: React.ReactNode }) =>
     children,
 }));
@@ -62,12 +66,20 @@ vi.mock("../../src/hooks/useWindowDrag", () => ({
 }));
 
 beforeEach(() => {
+  modelStatusState.stage = "ready";
+  modelStatusState.isReady = true;
+  modelStatusState.error = null;
+  hotkeyToggle = null;
   const handlers: Record<string, unknown> = {
     getSetting: vi.fn().mockResolvedValue("paste"),
     setSetting: vi.fn().mockResolvedValue(undefined),
     getAllSettings: vi.fn().mockResolvedValue({}),
     copyText: vi.fn().mockResolvedValue(undefined),
-    onHotkeyTriggered: vi.fn(() => () => {}),
+    // capture the toggle callback the same way the real preload bridge would
+    onHotkeyTriggered: vi.fn((cb: () => void) => {
+      hotkeyToggle = cb;
+      return () => {};
+    }),
     onWindowMaximizeChange: vi.fn(() => () => {}),
     onSettingsUpdate: vi.fn(() => () => {}),
     onModelStatusUpdate: vi.fn(() => () => {}),
@@ -109,5 +121,40 @@ describe("[20260905_Feat_BloubFileLift] App injects the lifted controller", () =
       ).not.toBeNull(),
     );
     expect(screen.getByText("取消转录")).toBeInTheDocument();
+  });
+
+  // [20260905_Test_BotBranchRecovery] model-stage -> mascot mapping pins
+  // (decision #219): need_download/unloaded -> sleep, checking -> thinking.
+  // The mic is disabled while the model is not ready, so the bot's pose is
+  // the only visible mirror of the model stage.
+  it("the hotkey toggle short-circuits with a toast while the model is busy", () => {
+    // one mount per stage: each arm (need_download/downloading/loading) runs
+    for (const stage of ["need_download", "downloading", "loading"]) {
+      modelStatusState.stage = stage;
+      modelStatusState.isReady = false;
+      const { unmount } = render(React.createElement(App));
+      expect(hotkeyToggle).toBeTruthy();
+      expect(() => hotkeyToggle!()).not.toThrow();
+      unmount();
+    }
+    modelStatusState.stage = "ready";
+    modelStatusState.isReady = true;
+  });
+
+  it.each([
+    ["need_download", "sleep"],
+    ["unloaded", "sleep"],
+    ["checking", "thinking"],
+    ["loading", "thinking"],
+    ["downloading", "orbit"],
+  ] as const)("model stage %s shows mascot %s", async (stage, pose) => {
+    modelStatusState.stage = stage;
+    modelStatusState.isReady = false;
+    render(React.createElement(App));
+    await waitFor(() =>
+      expect(
+        document.querySelector(`svg[data-bot-state="${pose}"]`),
+      ).not.toBeNull(),
+    );
   });
 });
