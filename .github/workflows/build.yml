@@ -153,19 +153,28 @@ jobs:
           cp -R "/Volumes/$VOL/Murmur.app" /tmp/murmur-smoke/
           hdiutil detach "/Volumes/$VOL" -quiet || true
           rm -f "$HOME/Library/Application Support/Murmur/logs/app.log"
+          # [20260905_Fix_150SmokeColdCache] Warm the embedded python's page
+          # cache before booting the app. On a cache-hit run the unpacked
+          # environment is freshly extracted (cold disk): `import funasr`
+          # pulls several hundred MB of torch through the filesystem and on
+          # the runner exceeded the whole 180s smoke window — twice, while
+          # the same import took ~5s when warm. Warming is not a gate
+          # relaxation: every milestone assertion below still applies, the
+          # self-check still has to genuinely pass on top of a warm cache.
+          /tmp/murmur-smoke/Murmur.app/Contents/Resources/app.asar.unpacked/python/bin/python3.11 -c "import funasr" || true
           /tmp/murmur-smoke/Murmur.app/Contents/MacOS/Murmur > /tmp/murmur-smoke/stdout.log 2>&1 &
           APP_PID=$!
           LOG="$HOME/Library/Application Support/Murmur/logs/app.log"
           # [20260818_T3_PythonSelfCheckMilestone] Poll for milestones instead
           # of a fixed sleep: the python self-check spawns `import funasr`
           # (cold torch load) which can exceed a fixed 60s window on a cold
-          # runner disk. Poll up to 180s, break as soon as all are present.
+          # runner disk. Poll up to 360s, break as soon as all are present.
           # Review fixup: a missing app.log must count as NOT present — the
           # first draft broke out after one 5s tick when the log had not been
           # created yet, shrinking the old 60s grace window to 5s.
           MILESTONES=("主窗口创建成功" "应用启动完成" "注册成功" "Python链路自检通过")
           ALL_PRESENT=1
-          for _ in $(seq 1 36); do
+          for _ in $(seq 1 72); do
             sleep 5
             ALL_PRESENT=1
             if [ ! -f "$LOG" ]; then
@@ -179,7 +188,7 @@ jobs:
           done
           test -f "$LOG" || { echo "::error::app.log never appeared"; cat /tmp/murmur-smoke/stdout.log | tail -20; exit 1; }
           if [ "$ALL_PRESENT" != "1" ]; then
-            echo "::error::boot milestones incomplete after 180s"
+            echo "::error::boot milestones incomplete after 360s"
             for milestone in "${MILESTONES[@]}"; do
               grep -q "$milestone" "$LOG" || echo "missing: $milestone"
             done
@@ -345,15 +354,21 @@ jobs:
           if (-not (Test-Path $appExe)) { throw "installed app not found at $appExe" }
           $logDir = Join-Path $env:APPDATA 'Murmur\logs'
           Remove-Item (Join-Path $logDir 'app.log') -ErrorAction SilentlyContinue
+          # [20260905_Fix_150SmokeColdCache] Warm the embedded python page
+          # cache (parity with the mac smoke): a cache-hit unpack is cold on
+          # disk and `import funasr` pulls several hundred MB of torch.
+          # Milestone assertions below still apply in full.
+          $warmPy = Join-Path $env:LOCALAPPDATA 'Programs\murmur\resources\app.asar.unpacked\python\python.exe'
+          if (Test-Path $warmPy) { & $warmPy -c "import funasr" 2>$null }
           Start-Process -FilePath $appExe
           $log = Join-Path $logDir 'app.log'
           # [20260818_T3_PythonSelfCheckMilestone] Poll for milestones
           # instead of a fixed sleep — cold `import funasr` (torch) can
-          # outrun a fixed window. Poll up to 240s, break when all present.
+          # outrun a fixed window. Poll up to 360s, break when all present.
           $milestones = @('主窗口创建成功','应用启动完成','注册成功','Python链路自检通过')
           $missing = @($milestones)
           $allPresent = $false
-          for ($i = 0; $i -lt 48; $i++) {
+          for ($i = 0; $i -lt 72; $i++) {
             Start-Sleep -Seconds 5
             if (Test-Path $log) {
               $content = Get-Content $log -Raw -Encoding UTF8
@@ -365,7 +380,7 @@ jobs:
           if (-not $allPresent) {
             Write-Host "missing milestones: $($missing -join ', ')"
             Get-Content $log -Tail 20
-            throw "boot milestones incomplete after 240s"
+            throw "boot milestones incomplete after 360s"
           }
           # Review fixup: re-read so fatal patterns written AFTER the
           # break-early snapshot are still caught (parity with mac's live
