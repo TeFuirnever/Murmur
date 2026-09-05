@@ -39,6 +39,14 @@ class ProtocolProgressCallback:
     def __init__(self, filename, file_size, state, model_type):
         self._state = state
         self._model_type = model_type
+        # [20260905_Fix_Review_TotalBytes] Register each file's size into the
+        # model slot so the percent math has a denominator. modelscope
+        # instantiates one callback per file; without this accumulation the
+        # slot's total stays 0 and progress pins at the indeterminate 1.0
+        # (review MAJOR on the #212 fix, proven empirically).
+        with _LOCK:
+            if file_size and file_size > 0:
+                self._state["total_bytes"] += file_size
         self._file_size = file_size if file_size and file_size > 0 else 0
 
     def update(self, size: int):

@@ -103,11 +103,52 @@ describe("[20260905_Fix_216_DownloadRecovery] funasrManager.downloadModels", () 
     manager.modelManager.downloadModels.mockResolvedValue({
       success: true,
     });
-    manager.restartServer.mockRejectedValue(new Error("重启失败"));
+    // restartServer never rejects in production — its own catch-all
+    // resolves {success:false} (review MINOR). The download must still
+    // resolve success.
+    manager.restartServer.mockResolvedValue({
+      success: false,
+      error: "模型文件未下载，无法启动服务器",
+    });
 
     await expect(manager.downloadModels(null)).resolves.toEqual({
       success: true,
     });
+    expect(manager.restartServer).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips the restart when modelManager early-returned (models already present)", async () => {
+    const manager = makeManager();
+    // Early-return path: checkModelFiles said "already there" — no fetch
+    // ran, so a healthy running server must not be bounced (review MAJOR).
+    manager.modelManager.downloadModels.mockResolvedValue({
+      success: true,
+      skipped: true,
+    });
+
+    await manager.downloadModels(null);
+
+    expect(manager.restartServer).not.toHaveBeenCalled();
+  });
+
+  it("collapses concurrent download invocations onto one in-flight promise", async () => {
+    const manager = makeManager();
+    let release!: (v: unknown) => void;
+    manager.modelManager.downloadModels.mockReturnValue(
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+    );
+
+    const first = manager.downloadModels(null);
+    const second = manager.downloadModels(null);
+
+    release({ success: true });
+    await Promise.all([first, second]);
+
+    // Both callers get the same download; modelManager ran exactly once.
+    expect(manager.modelManager.downloadModels).toHaveBeenCalledTimes(1);
+    expect(manager.restartServer).toHaveBeenCalledTimes(1);
   });
 
   it("forwards the progress callback to modelManager", async () => {

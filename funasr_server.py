@@ -340,6 +340,11 @@ class FunASRServer:
                 candidate = os.path.join(root, *layer.split("/"))
                 if os.path.isdir(candidate):
                     return candidate
+            # [20260905_Fix_Review_EnvCacheDefault] An explicitly configured
+            # cache must not fall through to the home directory when it has
+            # no models yet — modelscope will download INTO it, so the gate
+            # has to look there too.
+            return os.path.join(root, "models", "damo")
         home_dir = os.path.expanduser("~")
         base = os.path.join(home_dir, ".cache", "modelscope", "hub")
         for layer in new_layers + legacy_layers:

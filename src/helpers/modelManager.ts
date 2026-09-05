@@ -304,10 +304,13 @@ class ModelManager {
   async downloadModels(
     progressCallback: ProgressCallback | null = null,
     pythonCmd: string,
-  ): Promise<{ success: boolean; message?: string }> {
+  ): Promise<{ success: boolean; message?: string; skipped?: boolean }> {
     const checkResult = await this.checkModelFiles();
     if (checkResult.models_downloaded) {
-      return { success: true, message: "模型文件已下载" };
+      // [20260905_Fix_216_DownloadRecovery] skipped flags the host that no
+      // fetch ran — funasrManager must not restart a healthy server on this
+      // path (review MAJOR: it bounced an already-ready server for nothing).
+      return { success: true, message: "模型文件已下载", skipped: true };
     }
 
     const hasPartial =
@@ -411,7 +414,10 @@ class ModelManager {
         }
       });
 
-      setTimeout(
+      // [20260905_Fix_216_DownloadRecovery] Clear the watchdog once the
+      // process exits — the timer previously kept the event loop alive for
+      // the full 10 minutes even after a successful download.
+      const watchdog = setTimeout(
         () => {
           hasError = true;
           downloadProcess.kill();
@@ -419,6 +425,9 @@ class ModelManager {
         },
         10 * 60 * 1000,
       );
+      const clearWatchdog = () => clearTimeout(watchdog);
+      downloadProcess.once("close", clearWatchdog);
+      downloadProcess.once("error", clearWatchdog);
     });
   }
 

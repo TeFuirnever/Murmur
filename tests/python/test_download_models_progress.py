@@ -120,6 +120,19 @@ class TestDownloadModelsProgress(unittest.TestCase):
             f"no advancing progress event in {progress_events}",
         )
 
+    def test_per_model_mid_download_percent_is_real(self):
+        # [20260905_Fix_Review_TotalBytes] Review MAJOR: total_bytes was
+        # never populated, so per-model percent pinned at the indeterminate
+        # 1.0 for the whole multi-GB fetch. The fake wires file_size=1000
+        # and streams 800 bytes before end — a mid-download event must show
+        # a real fraction (0 < p < 100), not the 1.0 placeholder.
+        progress_events, _, _ = self._run_main()
+        asr_events = [e for e in progress_events if e["model"] == "asr"]
+        self.assertTrue(
+            any(0 < e["progress"] < 100 for e in asr_events),
+            f"per-model progress never left the placeholder: {asr_events}",
+        )
+
     def test_completed_events_reach_100(self):
         _, completed, final = self._run_main()
         self.assertEqual(len(completed), 3)

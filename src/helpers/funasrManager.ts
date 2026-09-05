@@ -118,12 +118,30 @@ class FunASRManager {
   checkModelFiles(): Promise<unknown> {
     return this.modelManager.checkModelFiles();
   }
+  // [20260905_Fix_216_DownloadRecovery] Concurrent MODELS.DOWNLOAD invokes
+  // would race two python download processes over the same modelscope cache
+  // and interleave server restarts — collapse them onto the first promise.
+  private _downloadInFlight: Promise<unknown> | null = null;
+
   async downloadModels(
+    cb: ((progress: Record<string, unknown>) => void) | null,
+  ): Promise<unknown> {
+    if (this._downloadInFlight) {
+      return this._downloadInFlight;
+    }
+    this._downloadInFlight = this._downloadModelsInner(cb).finally(() => {
+      this._downloadInFlight = null;
+    });
+    return this._downloadInFlight;
+  }
+
+  private async _downloadModelsInner(
     cb: ((progress: Record<string, unknown>) => void) | null,
   ): Promise<unknown> {
     const pythonCmd = await this.pythonEnv.findPythonExecutable();
     const result = (await this.modelManager.downloadModels(cb, pythonCmd)) as {
       success?: boolean;
+      skipped?: boolean;
     };
 
     // [20260905_Fix_216_DownloadRecovery] The server is launched with
@@ -132,15 +150,28 @@ class FunASRManager {
     // modelscope's own cache — so the RUNNING server keeps reporting
     // models_not_downloaded even though Node's check now sees them
     // (issue #216). Restart it so it boots with the freshly-resolved root.
-    // Failure to restart must not fail an otherwise-successful download —
-    // the user can still restart via the hotkey/reload path.
-    if (result?.success) {
-      try {
-        await this.restartServer();
-      } catch (error) {
-        this.logger.warn &&
-          this.logger.warn("下载完成后重启服务器失败（非致命）:", error);
-      }
+    //
+    // Fire-and-forget on purpose: restartServer loads the ~1GB model, and
+    // blocking the MODELS.DOWNLOAD IPC response on it would freeze the
+    // renderer's downloading state for minutes. The renderer's status poll
+    // (3s) picks up the server state once this settles. skipped=true means
+    // modelManager early-returned (models already present) — no fetch
+    // happened, so a healthy server must not be bounced.
+    //
+    // restartServer never rejects (its own catch-all resolves
+    // {success:false}), so the failure signal is the result field, not an
+    // exception.
+    if (result?.success && !result.skipped) {
+      void this.restartServer().then((r) => {
+        const restart = r as { success?: boolean; error?: string };
+        if (!restart?.success) {
+          this.logger.warn &&
+            this.logger.warn(
+              "下载完成后重启服务器失败（非致命，等待状态轮询恢复）:",
+              restart?.error,
+            );
+        }
+      });
     }
 
     return result;

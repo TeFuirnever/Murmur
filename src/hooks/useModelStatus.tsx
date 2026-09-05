@@ -236,23 +236,15 @@ export function ModelStatusProvider({
           isLoading: true,
         }));
 
-        try {
-          console.log("模型下载完成，重启FunASR服务器...");
-          await window.electronAPI.restartFunasrServer();
-          console.log("FunASR服务器重启完成");
-
-          setTimeout(() => {
-            checkModelStatus();
-          }, 3000);
-        } catch (restartError) {
-          console.error("重启FunASR服务器失败:", restartError);
-          setModelStatus((prev) => ({
-            ...prev,
-            isLoading: false,
-            error: "重启服务器失败: " + (restartError as Error).message,
-            stage: "error",
-          }));
-        }
+        // [20260905_Fix_216_DownloadRecovery] The server restart after a
+        // successful download is now owned by the MAIN process
+        // (funasrManager.downloadModels fires restartServer itself). The
+        // renderer-side restart here raced it into a double full-model
+        // load (review MAJOR); the status poll below picks up the server
+        // state once the main-process restart settles.
+        setTimeout(() => {
+          checkModelStatus();
+        }, 3000);
 
         return { success: true };
       } else {

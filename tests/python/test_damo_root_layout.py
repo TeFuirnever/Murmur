@@ -113,6 +113,14 @@ class TestDefaultDamoRootLayouts(unittest.TestCase):
         os.environ["MODELSCOPE_CACHE"] = self.mc
         self.assertEqual(FunASRServer._default_damo_root(), expected)
 
+    def test_env_set_but_empty_stays_under_env(self):
+        # [20260905_Fix_Review_EnvCacheDefault] A configured-but-empty cache
+        # must not fall through to the home directory: modelscope downloads
+        # INTO $MODELSCOPE_CACHE, so the gate has to look there too.
+        os.environ["MODELSCOPE_CACHE"] = self.mc
+        expected = os.path.join(self.mc, "models", "damo")
+        self.assertEqual(FunASRServer._default_damo_root(), expected)
+
 
 if __name__ == "__main__":
     unittest.main()
