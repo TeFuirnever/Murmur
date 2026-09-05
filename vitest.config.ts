@@ -64,6 +64,10 @@ export default defineConfig({
       //      matrix, database/validator/formatter/installer guards, four hooks'
       //      error paths). Final actuals: 96.6 S / 92.8 B / 94.5 F / 97.1 L —
       //      thresholds sit just below as the regression floor.
+      // [20260905_Fix_CoveragePlatformScope] these floors are authored from
+      // macOS measurements and are enforced on the macOS CI leg only (ci.yml):
+      // platform-conditional branches make the Windows percentage
+      // non-comparable (first honest win measurement: 91.53 branch).
       thresholds: {
         statements: 96,
         branches: 92,
