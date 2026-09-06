@@ -15,9 +15,11 @@
 //   audioFileHelpers which/where ffmpeg   HERE (previously uncovered)
 //   systemHandlers darwin-gated perms     HERE (previously uncovered)
 //
-// Every assertion here runs under BOTH platform identities on every CI leg,
-// so neither platform's semantics depend on the other leg catching a
-// regression first.
+// process.platform BRANCHES are dual-asserted here; the fs/path MODULES
+// stay host-bound (a win CI leg resolves paths with win32 semantics), so
+// the two assertions that depend on posix filename semantics are gated
+// with it.skipIf(process.platform === "win32") — they run on the mac leg
+// and skip on the win leg, mirroring audioPathValidator-branches.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import fs from "fs";
 import os from "os";
@@ -68,8 +70,8 @@ describe("[20260906_Test_PlatformArms] audioFileHelpers ffmpeg detection", () =>
 
   it("win32 arm probes with `where ffmpeg` and takes the first hit", () => {
     setPlatform("win32");
-    vi.mocked(execSync).mockReturnValue(
-      "C:\\tools\\ffmpeg.exe\nC:\\other\\ffmpeg.exe\n" as never,
+    vi.mocked(execSync).mockImplementation(
+      () => "C:\\tools\\ffmpeg.exe\nC:\\other\\ffmpeg.exe\n",
     );
     expect(audioFileHelpers.getFFmpegPath()).toBe("C:\\tools\\ffmpeg.exe");
     expect(execSync).toHaveBeenCalledWith("where ffmpeg", expect.any(Object));
@@ -77,7 +79,7 @@ describe("[20260906_Test_PlatformArms] audioFileHelpers ffmpeg detection", () =>
 
   it("posix arm probes with `which ffmpeg` and takes the first hit", () => {
     setPlatform("darwin");
-    vi.mocked(execSync).mockReturnValue("/opt/homebrew/bin/ffmpeg\n" as never);
+    vi.mocked(execSync).mockImplementation(() => "/opt/homebrew/bin/ffmpeg\n");
     expect(audioFileHelpers.getFFmpegPath()).toBe("/opt/homebrew/bin/ffmpeg");
     expect(execSync).toHaveBeenCalledWith("which ffmpeg", expect.any(Object));
   });
@@ -181,22 +183,24 @@ describe("[20260906_Test_PlatformArms] audioPathValidator UNC pairing", () => {
     });
   });
 
-  it("posix identity has no UNC concept: the same string is a plain filename ruled by allowed roots", () => {
-    // On darwin, backslashes are ordinary filename characters. A file with
-    // that literal name inside an allowed root (tmpdir) is legitimately
-    // readable — so the validator accepts it there. This documents WHY the
-    // UNC rejection is win32-gated: applying it on posix would be a no-op
-    // guard with false-rejection risk for legal (if unusual) filenames.
-    setPlatform("darwin");
-    const target = path.join(os.tmpdir(), "\\\\server\\share\\audio.wav");
-    fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.writeFileSync(target, "x");
-    try {
-      expect(validateAudioPath(target).valid).toBe(true);
-    } finally {
-      fs.rmSync(target, { force: true });
-    }
-  });
+  // Host-bound fs semantics: on a posix host backslashes are ordinary
+  // filename characters, so this exercises the allowed-roots path for a
+  // UNC-looking literal. Skipped on win hosts where path.join collapses
+  // the backslashes into subdirectories and the premise disappears.
+  it.skipIf(process.platform === "win32")(
+    "posix identity has no UNC concept: the same string is a plain filename ruled by allowed roots",
+    () => {
+      setPlatform("darwin");
+      const target = path.join(os.tmpdir(), "\\\\server\\share\\audio.wav");
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, "x");
+      try {
+        expect(validateAudioPath(target).valid).toBe(true);
+      } finally {
+        fs.rmSync(target, { force: true });
+      }
+    },
+  );
 
   it("a legitimate tmpdir audio file is accepted under BOTH identities", () => {
     const target = path.join(os.tmpdir(), `murmur-arms-${Date.now()}.wav`);
@@ -211,10 +215,11 @@ describe("[20260906_Test_PlatformArms] audioPathValidator UNC pairing", () => {
     }
   });
 
-  it("windows system-tree blacklist is win32-semantic: rejects on win32, plain-name on posix", () => {
+  it("windows system-tree blacklist is win32-semantic: rejects on win32", () => {
     // A posix host's path.resolve never yields a drive-letter path, so the
     // win32 arm is reached the same way audioPathValidator-branches reaches
-    // it: stub realpathSync to return the canonicalized Windows path.
+    // it: stub realpathSync to return the canonicalized Windows path. The
+    // stub keeps this assertion host-independent.
     const spy = vi
       .spyOn(fs, "realpathSync")
       .mockReturnValue("C:\\Windows\\Media\\alarm.wav");
@@ -228,9 +233,22 @@ describe("[20260906_Test_PlatformArms] audioPathValidator UNC pairing", () => {
       vi.restoreAllMocks();
       fs.rmSync(target, { force: true });
     }
-    setPlatform("darwin");
-    // posix resolves the same string as a relative filename under the cwd
-    // (which sits inside homedir in this repo) → allowed by roots policy.
-    expect(validateAudioPath("C:\\Windows\\Media\\alarm.wav").valid).toBe(true);
   });
+
+  // [20260906_Test_PlatformArms_ReviewFix] Host-bound path semantics: what
+  // "C:\Windows\..." resolves to depends on the HOST's path module, not the
+  // process.platform stub — on a posix host it is a relative filename under
+  // the cwd (inside homedir → allowed), while a win host resolves a real
+  // drive-letter path (system tree → rejected). Run only where the posix
+  // premise holds; same pattern as the skipIf cases in
+  // audioPathValidator-branches.test.ts.
+  it.skipIf(process.platform === "win32")(
+    "posix host treats the system-tree string as a plain relative filename",
+    () => {
+      setPlatform("darwin");
+      expect(validateAudioPath("C:\\Windows\\Media\\alarm.wav").valid).toBe(
+        true,
+      );
+    },
+  );
 });
