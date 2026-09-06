@@ -131,6 +131,23 @@ const HistoryContent = ({
     loadTranscriptions();
   }, [loadTranscriptions]);
 
+  // [20260905_Fix_249_ReviewMinor] Live language propagation: the settings
+  // window broadcasts SETTINGS_UPDATE {key:"language"} through the main
+  // process; this window follows immediately instead of at next start.
+  React.useEffect(() => {
+    if (!window.electronAPI?.onSettingsUpdate) return;
+    const unsub = window.electronAPI.onSettingsUpdate((data) => {
+      if (data.key === "language") {
+        const language =
+          (data as { value?: string }).value ??
+          localStorage.getItem("language") ??
+          "zh-CN";
+        i18n.changeLanguage(language);
+      }
+    });
+    return unsub;
+  }, [i18n]);
+
   // [20260905_Fix_248_HistoryClearExport] Bulk export with a user-chosen
   // format; the main-process handler resolves the formatter and the save
   // dialog. Cancelled dialogs stay silent.

@@ -19,6 +19,12 @@ const { toast } = vi.hoisted(() => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
 }));
 
+// [20260905_Fix_249_ReviewMinor] Observable changeLanguage for the live
+// language-propagation tests below.
+const i18nMocks = vi.hoisted(() => ({
+  changeLanguage: vi.fn<(lng: string) => void>(),
+}));
+
 // [20260905_Fix_247_I18nMainHistory] App.tsx now translates through
 // react-i18next (with interpolation variables like {{error}} / {{progress}}).
 // The real i18next instance is uninitialized in unit tests and would return
@@ -64,11 +70,19 @@ const translate = (
   );
 };
 
+// [20260905_Fix_249_ReviewMinor] Stable i18n identity — a per-render
+// literal would re-run every effect that depends on [i18n] and override
+// the listener capture in this mock (hotkey/language effects re-register).
+const mockI18n = {
+  language: "zh-CN",
+  changeLanguage: i18nMocks.changeLanguage,
+};
+
 vi.mock("react-i18next", () => ({
   initReactI18next: { type: "3rdParty", init: () => undefined },
   useTranslation: () => ({
     t: translate,
-    i18n: { language: "zh-CN" },
+    i18n: mockI18n,
   }),
 }));
 
@@ -213,7 +227,10 @@ vi.mock("../../src/components/ui/model-status-indicator", () => ({
 import App from "../../src/App";
 
 type Listener = (...args: unknown[]) => void;
-const listeners: Record<string, Listener | undefined> = {};
+const listeners: {
+  settings?: Listener;
+  settingsList?: Listener[];
+} & Record<string, Listener | undefined> = {};
 const apiMocks = {
   getSetting: vi.fn((key: string, d?: unknown) =>
     Promise.resolve(
@@ -238,6 +255,11 @@ const apiMocks = {
     return () => {};
   }),
   onSettingsUpdate: vi.fn((cb: Listener) => {
+    // Collect every registration: App subscribes multiple effects to the
+    // same channel (hotkey re-apply + settings-cache refresh), and the last
+    // one wins the legacy single-slot `listeners.settings`.
+    listeners.settingsList = listeners.settingsList || [];
+    listeners.settingsList.push(cb);
     listeners.settings = cb;
     return () => {};
   }),
@@ -494,6 +516,28 @@ describe("[20260816_Test_AppBehaviors] App behavior matrix", () => {
     });
   });
 
+  it("applies a language change from SETTINGS_UPDATE live", async () => {
+    // [20260905_Fix_249_ReviewMinor] Switching language in the settings
+    // window must reach the main window's i18n instance immediately, not
+    // only at next start. The broadcast carries {key, value} on the
+    // language path (localStorage is the fallback for the other windows).
+    Object.assign(modelCtl, {
+      stage: "ready",
+      isReady: true,
+      isLoading: false,
+    });
+    await mountApp();
+    act(() => {
+      for (const cb of listeners.settingsList ?? []) {
+        (cb as (d: { key: string; value?: string }) => void)({
+          key: "language",
+          value: "en",
+        });
+      }
+    });
+    expect(i18nMocks.changeLanguage).toHaveBeenCalledWith("en");
+  });
+
   it("reloads cached settings when the settings-update event fires", async () => {
     Object.assign(modelCtl, {
       stage: "ready",
@@ -505,7 +549,12 @@ describe("[20260816_Test_AppBehaviors] App behavior matrix", () => {
     act(() => {
       // Realistic SETTINGS_UPDATE payload ({key, value}) per the preload
       // contract — App reads data.key to decide re-application targets.
-      listeners.settings?.({ key: "theme", value: "dark" });
+      for (const cb of listeners.settingsList ?? []) {
+        (cb as (d: { key: string; value?: string }) => void)({
+          key: "theme",
+          value: "dark",
+        });
+      }
     });
     expect(apiMocks.getSetting.mock.calls.length).toBeGreaterThan(before);
   });

@@ -279,6 +279,43 @@ export function useSettings() {
   // settings (effects_enabled, theme, auto_paste, close_behavior) were stuck
   // in React state and lost when the settings window was destroyed (Alt+F4).
   const handleInputChange = useCallback((key: string, value: unknown) => {
+    // [20260905_Fix_249_ReviewMajor] enable_ai_optimization and default_mode
+    // are two views of one knob. They used to diverge when the AI Config
+    // toggle was flipped after load: saveSettings then persisted the stale
+    // derived "auto" alongside the boolean, and the read-side migration
+    // (which only runs when default_mode is null) never saw it — the toggle
+    // showed off while AI kept running. Sync both directions here so the
+    // auto-persist and the save loop always stay consistent.
+    if (key === "enable_ai_optimization") {
+      const enabled = value !== false;
+      setSettings((prev) => ({
+        ...prev,
+        enable_ai_optimization: enabled,
+        default_mode: enabled
+          ? prev.default_mode === "off"
+            ? "auto"
+            : prev.default_mode
+          : "off",
+      }));
+      if (window.electronAPI?.setSetting) {
+        window.electronAPI.setSetting(key, enabled);
+        window.electronAPI.setSetting("default_mode", enabled ? "auto" : "off");
+      }
+      return;
+    }
+    if (key === "default_mode") {
+      const mode = typeof value === "string" ? value : "auto";
+      setSettings((prev) => ({
+        ...prev,
+        default_mode: mode,
+        enable_ai_optimization: mode !== "off",
+      }));
+      if (window.electronAPI?.setSetting) {
+        window.electronAPI.setSetting(key, mode);
+        window.electronAPI.setSetting("enable_ai_optimization", mode !== "off");
+      }
+      return;
+    }
     setSettings((prev) => ({ ...prev, [key]: value }));
     if (window.electronAPI?.setSetting) {
       window.electronAPI.setSetting(key, value);

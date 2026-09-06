@@ -72,14 +72,26 @@ const translate = (
   );
 };
 
+// [20260905_Fix_249_ReviewMinor] Stable i18n identity — a per-render
+// literal would re-run every effect that depends on [i18n] and override
+// the listener capture in this mock (hotkey/language effects re-register).
+const mockI18n = {
+  language: "zh-CN",
+  changeLanguage: historyI18nMocks.changeLanguage,
+};
+
 vi.mock("react-i18next", () => ({
   // src/history.tsx imports ./i18n, which calls i18n.use(initReactI18next) —
   // the mock must provide the plugin symbol too.
   initReactI18next: { type: "3rdParty", init: () => undefined },
   useTranslation: () => ({
     t: translate,
-    i18n: { language: "zh-CN" },
+    i18n: mockI18n,
   }),
+}));
+
+const historyI18nMocks = vi.hoisted(() => ({
+  changeLanguage: vi.fn<(lng: string) => void>(),
 }));
 
 type TestWindow = Omit<Window, "electronAPI"> & {
@@ -112,6 +124,7 @@ const makeRecord = (
 });
 
 const apiMocks = {
+  onSettingsUpdate: vi.fn(() => () => {}),
   getTranscriptions: vi.fn(),
   deleteTranscription: vi.fn(),
   copyText: vi.fn(),
@@ -131,6 +144,7 @@ async function mountHistory() {
     exportTranscriptions: apiMocks.exportTranscriptions,
     clearAllTranscriptions: apiMocks.clearAllTranscriptions,
     closeHistoryWindow: apiMocks.closeHistoryWindow,
+    onSettingsUpdate: apiMocks.onSettingsUpdate,
     getAllSettings: vi.fn().mockResolvedValue({}),
   } as TestWindow["electronAPI"];
   await import("../../src/history");
@@ -383,6 +397,20 @@ describe("[20260816_Test_HistoryPage] history window entry", () => {
     } finally {
       confirmSpy.mockRestore();
     }
+  });
+
+  it("applies a language change broadcast to the history window", async () => {
+    // [20260905_Fix_249_ReviewMinor] The settings window's language switch
+    // must reach the history window's i18n instance live.
+    await mountHistory();
+    const unsub = apiMocks.onSettingsUpdate as unknown as ReturnType<
+      typeof vi.fn
+    >;
+    const cb = unsub.mock.calls[0]?.[0] as
+      | ((d: { key: string; value?: string }) => void)
+      | undefined;
+    cb?.({ key: "language", value: "en" });
+    expect(historyI18nMocks.changeLanguage).toHaveBeenCalledWith("en");
   });
 
   it("closes the window via the header button", async () => {

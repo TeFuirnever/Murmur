@@ -146,6 +146,40 @@ describe("useSettings hook", () => {
     expect(result.current.settings.theme).toBe("dark");
   });
 
+  // [20260905_Fix_249_ReviewMajor] The legacy AI boolean and default_mode
+  // are two views of one knob: toggling the switch off and then saving used
+  // to persist a stale derived "auto", which bypassed the read-side
+  // migration and ran AI despite the switch showing off.
+  it("keeps default_mode in sync when the AI optimization toggle flips", async () => {
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() => {
+      result.current.handleInputChange("enable_ai_optimization", false);
+    });
+    expect(result.current.settings.default_mode).toBe("off");
+
+    act(() => {
+      result.current.handleInputChange("enable_ai_optimization", true);
+    });
+    expect(result.current.settings.default_mode).toBe("auto");
+  });
+
+  it("keeps the AI toggle in sync when default_mode is changed", async () => {
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() => {
+      result.current.handleInputChange("default_mode", "correct");
+    });
+    expect(result.current.settings.enable_ai_optimization).toBe(true);
+
+    act(() => {
+      result.current.handleInputChange("default_mode", "off");
+    });
+    expect(result.current.settings.enable_ai_optimization).toBe(false);
+  });
+
   it("updates settings state when handleInputChange toggles theme", async () => {
     const { result } = renderHook(() => useSettings());
 

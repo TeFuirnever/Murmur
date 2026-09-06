@@ -86,7 +86,7 @@ export default function App() {
   const { handleMouseDown, handleMouseMove, handleMouseUp, handleClick } =
     useWindowDrag();
   const modelStatus = useModelStatus();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   const handleRecordingCompleteRef = useRef<
     ((result: string | Record<string, unknown>) => void) | null
@@ -436,9 +436,21 @@ export default function App() {
       if (data.key === "hotkey") {
         applyHotkeySetting();
       }
+      // [20260905_Fix_249_ReviewMinor] Language switches from the settings
+      // window apply live in this window too (i18n instance is shared per
+      // window; only its language state needs to follow the broadcast).
+      if (data.key === "language") {
+        i18n.changeLanguage(
+          (data as { value?: string }).value ??
+            (typeof localStorage !== "undefined"
+              ? localStorage.getItem("language")
+              : null) ??
+            "zh-CN",
+        );
+      }
     });
     return unsub;
-  }, [applyHotkeySetting]);
+  }, [applyHotkeySetting, i18n]);
 
   // 处理关闭窗口
   const handleClose = () => {

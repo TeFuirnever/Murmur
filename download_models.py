@@ -68,6 +68,14 @@ class ProtocolProgressCallback:
             # total unknown (server did not send content-length): show an
             # indeterminate but non-zero value so the UI does not look hung.
             percent = 1.0 if downloaded > 0 else 0.0
+        # [20260905_Fix_249_ReviewMinor] total_bytes grows as later-file
+        # callbacks register, so the same downloaded count can yield a LOWER
+        # percent after a sibling joins. The host watchdog re-arms only on
+        # STRICT growth — a dip would delay re-crossing the old peak and can
+        # kill a live download on a slow network. Clamp to the last emitted
+        # value: never regress the progress signal.
+        if percent < state["last_percent"]:
+            percent = state["last_percent"]
         now = time.monotonic()
         if not force and (
             percent - state["last_percent"] < 1.0

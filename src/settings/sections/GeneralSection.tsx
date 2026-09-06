@@ -217,6 +217,10 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
             i18n.changeLanguage(e.target.value);
             localStorage.setItem("language", e.target.value);
             document.documentElement.lang = e.target.value;
+            // [20260905_Fix_249_ReviewMinor] Go through the setting pipeline
+            // so the main/history windows can follow the language switch live
+            // (SETTINGS_UPDATE broadcast), not only at next start.
+            onInputChange("language", e.target.value);
           }}
           className="text-sm px-3 py-2 border border-[#d2d2d7] dark:border-[#3a3a3c] rounded-lg bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7] focus:ring-2 focus:ring-[#0071e3] focus:border-transparent"
         >
@@ -283,6 +287,11 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
           <button
             type="button"
             data-testid="hotkey-record"
+            // [20260905_Fix_249_ReviewMinor] The capture zone's onBlur ends
+            // recording — clicking the button would focus it first (blur →
+            // false) and then toggle back to true, so 取消 re-entered capture.
+            // Keeping focus on the button lets onClick end it cleanly.
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => setRecording((prev) => !prev)}
             className="px-3 py-1.5 text-sm rounded-lg bg-[#0071e3] text-white hover:bg-[#0077ed] focus:outline-none focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-2"
           >

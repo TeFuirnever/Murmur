@@ -96,6 +96,8 @@ describe("[20260816_Test_GeneralSection] GeneralSection", () => {
   });
 
   it("switching the language persists it and updates the document lang", () => {
+    // [20260905_Fix_249_ReviewMinor] The choice also goes through
+    // onInputChange("language") so the main/history windows can follow live.
     window.localStorage.clear();
     render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
     fireEvent.change(screen.getByDisplayValue("中文"), {
@@ -103,6 +105,7 @@ describe("[20260816_Test_GeneralSection] GeneralSection", () => {
     });
     expect(window.localStorage.getItem("language")).toBe("en");
     expect(document.documentElement.lang).toBe("en");
+    expect(onInputChange).toHaveBeenCalledWith("language", "en");
   });
 
   it("changing close behavior reports the selected mode", () => {
@@ -150,6 +153,22 @@ describe("[20260816_Test_GeneralSection] GeneralSection", () => {
       />,
     );
     expect(screen.getByRole("switch")).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("cancels the hotkey capture when the cancel button is clicked", () => {
+    // [20260905_Fix_249_ReviewMinor] Clicking 取消 used to blur the capture
+    // zone first (→ setRecording(false)) and THEN toggle back to true, so the
+    // button re-entered capture instead of ending it. onMouseDown keeps the
+    // focus on the button, letting onClick end the capture cleanly.
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+    fireEvent.click(screen.getByTestId("hotkey-record"));
+    expect(screen.getByTestId("hotkey-capture")).toBeInTheDocument();
+
+    fireEvent.mouseDown(screen.getByTestId("hotkey-record"));
+    fireEvent.click(screen.getByTestId("hotkey-record"));
+
+    expect(screen.queryByTestId("hotkey-capture")).not.toBeInTheDocument();
+    expect(screen.getByTestId("hotkey-record")).toHaveTextContent("更改");
   });
 
   it("cancels the hotkey capture when the zone loses focus", () => {

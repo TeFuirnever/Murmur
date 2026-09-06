@@ -519,8 +519,19 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
   // handlers were removed — zero renderer callers; getTranscriptionById
   // stays (the AI_REVIEW/DIARIZE handlers use it).
 
+  // [20260905_Fix_249_ReviewNit] Wrap the raw RunResult into OperationResult
+  // like CLEAR does — DELETE is the last transcription handler still leaking
+  // node:sqlite's {changes, lastInsertRowid} past the declared contract.
   ipcMain.handle(C.TRANSCRIPTION.DELETE, (_event, id: number) => {
-    return databaseManager.deleteTranscription(id);
+    try {
+      const result = databaseManager.deleteTranscription(id) as {
+        changes?: number;
+      };
+      return { success: true, changes: result.changes ?? 0 };
+    } catch (error) {
+      logger.error?.("删除转录记录失败:", error);
+      return { success: false, error: (error as Error).message };
+    }
   });
 
   // [20260905_Fix_248_ReviewClearContract] Wrap the raw node:sqlite RunResult

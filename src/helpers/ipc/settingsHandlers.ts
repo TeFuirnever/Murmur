@@ -11,6 +11,9 @@ interface DatabaseManager {
 
 interface WindowManager {
   mainWindow: Electron.BrowserWindow | null;
+  // [20260905_Fix_249_ReviewMinor] History window listens too — the language
+  // switch must reach it live, not only at next start.
+  historyWindow?: Electron.BrowserWindow | null;
 }
 
 interface Managers {
@@ -80,6 +83,12 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
     const mw = windowManager?.mainWindow;
     if (mw && !mw.isDestroyed()) {
       mw.webContents.send(C.EVENTS.SETTINGS_UPDATE, { key });
+    }
+    // [20260905_Fix_249_ReviewMinor] Also reach the history window — without
+    // this the language switch stayed stale there until the window re-opened.
+    const hw = windowManager?.historyWindow;
+    if (hw && !hw.isDestroyed()) {
+      hw.webContents.send(C.EVENTS.SETTINGS_UPDATE, { key });
     }
   };
 
