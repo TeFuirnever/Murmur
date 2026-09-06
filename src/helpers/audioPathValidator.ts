@@ -91,6 +91,33 @@ function validateAudioPath(filePath: string): AudioPathResult {
   return { valid: true, ext, resolved };
 }
 
+// [20260905_Fix_195_DriveLetterPolicy] Issue #195 design decision (options
+// 1 + 3 combined). The drive-letter fast-accept below is INTENTIONAL, not an
+// oversight: allowed-roots (homedir/tmpdir/Volumes) is a macOS-centric
+// concept, Windows users keep audio on arbitrary drives, and tightening to
+// user-profile subdirectories would reject legitimate files (the issue
+// itself flags the compatibility risk). To keep the "no arbitrary path
+// read" defense meaningful on win32, the highest-value exfiltration
+// targets — the Windows system trees — are rejected explicitly. Zero
+// compatibility cost (audio never legitimately lives there), and UNC paths
+// stay rejected. User directories on any drive remain accepted.
+// [20260905_Fix_195_ReviewBlacklistHardening] Also catch Win32 8.3 short
+// names (PROGRA~1) and per-segment trailing dots/spaces — these slip past
+// the regex on the non-existent-path branch, where realpath cannot
+// canonicalize the raw string first (security review finding 1, MEDIUM).
+const WIN_SYSTEM_DIR_RE =
+  /^[a-z]:[\\/](?:windows|program files(?: \(x86\))?|programdata|progra~\d)(?:[\\/]|$)/i;
+
+function isWindowsSystemPath(candidate: string): boolean {
+  // Win32 treats a trailing dot/space in each path segment as a separator
+  // artifact ("C:\Windows.\x.wav" == "C:\Windows\x.wav"), so normalize the
+  // raw candidate before matching — mirroring the text the OS would resolve.
+  const normalized = candidate
+    .replace(/[. ]+([\\/])/g, "$1")
+    .replace(/[. ]+$/g, "");
+  return WIN_SYSTEM_DIR_RE.test(normalized);
+}
+
 /**
  * Decide whether `candidate` is inside one of the allowed root prefixes.
  *
@@ -112,8 +139,10 @@ function isPathAllowed(
   homedir: string,
   tmpdir: string,
 ): boolean {
-  if (/^[A-Za-z]:\\/.test(candidate)) {
-    return true;
+  // Fast-accept every drive-letter path EXCEPT the Windows system trees —
+  // see [20260905_Fix_195_DriveLetterPolicy] above for the design decision.
+  if (/^[A-Za-z]:[\\/]/.test(candidate)) {
+    return !isWindowsSystemPath(candidate);
   }
   const canonicalCandidate = canonicalizeCandidate(candidate);
   const roots = canonicalizeRoots([homedir, tmpdir, "/Volumes/"]);

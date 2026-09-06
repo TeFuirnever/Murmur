@@ -9,6 +9,7 @@
 import "../setup/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
+import { DEFAULT_HOTKEY } from "../../src/settings/hotkeyRecorder";
 import { useSettings } from "../../src/settings/useSettings";
 import type { ElectronAPI } from "../../src/electronAPI";
 // [20260816_Test_BranchPush] Toast assertions for the load/save failure paths.
@@ -146,6 +147,84 @@ describe("useSettings hook", () => {
     expect(result.current.settings.theme).toBe("dark");
   });
 
+  // [20260905_Fix_249_ReviewMajor] The legacy AI boolean and default_mode
+  // are two views of one knob: toggling the switch off and then saving used
+  // to persist a stale derived "auto", which bypassed the read-side
+  // migration and ran AI despite the switch showing off.
+  it("keeps default_mode in sync when the AI optimization toggle flips", async () => {
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() => {
+      result.current.handleInputChange("enable_ai_optimization", false);
+    });
+    expect(result.current.settings.default_mode).toBe("off");
+
+    act(() => {
+      result.current.handleInputChange("enable_ai_optimization", true);
+    });
+    expect(result.current.settings.default_mode).toBe("auto");
+  });
+
+  it("restores auto (not the stale choice) when the AI toggle re-enables", async () => {
+    // [20260905_Fix_249_ReviewCoverage] Once the toggle flips off, the mode
+    // is "off" and the previous explicit choice is intentionally dropped —
+    // re-enabling lands on the safe "auto" (restoring the exact prior mode
+    // would need extra memory; the read side treats "auto" as the default).
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() => {
+      result.current.handleInputChange("default_mode", "correct");
+    });
+    act(() => {
+      result.current.handleInputChange("enable_ai_optimization", false);
+    });
+    expect(result.current.settings.default_mode).toBe("off");
+    act(() => {
+      result.current.handleInputChange("enable_ai_optimization", true);
+    });
+    expect(result.current.settings.default_mode).toBe("auto");
+    expect(result.current.settings.enable_ai_optimization).toBe(true);
+  });
+
+  it("tolerates a missing electronAPI on the sync paths", async () => {
+    // [20260905_Fix_249_ReviewCoverage] The setSetting-optional arms: with
+    // the bridge gone, handleInputChange must still update React state.
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    const win = globalThis.window as TestWindow;
+    delete win.electronAPI;
+
+    act(() => {
+      result.current.handleInputChange("enable_ai_optimization", false);
+    });
+    expect(result.current.settings.default_mode).toBe("off");
+    act(() => {
+      result.current.handleInputChange("default_mode", "summarize");
+    });
+    expect(result.current.settings.enable_ai_optimization).toBe(true);
+    act(() => {
+      result.current.handleInputChange("theme", "dark");
+    });
+    expect(result.current.settings.theme).toBe("dark");
+  });
+
+  it("keeps the AI toggle in sync when default_mode is changed", async () => {
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() => {
+      result.current.handleInputChange("default_mode", "correct");
+    });
+    expect(result.current.settings.enable_ai_optimization).toBe(true);
+
+    act(() => {
+      result.current.handleInputChange("default_mode", "off");
+    });
+    expect(result.current.settings.enable_ai_optimization).toBe(false);
+  });
+
   it("updates settings state when handleInputChange toggles theme", async () => {
     const { result } = renderHook(() => useSettings());
 
@@ -193,6 +272,60 @@ describe("useSettings hook", () => {
       expect(result.current.loading).toBe(false);
     });
     expect(result.current.settings.ai_max_tokens).toBe(8192);
+  });
+
+  // [20260905_Fix_249_DefaultModeUi] default_mode gets a write path (issue
+  // #249). loadSettings must MIGRATE, not blindly default: a user with the
+  // legacy enable_ai_optimization=false must load "off" — otherwise opening
+  // settings would auto-persist "auto" and silently re-enable AI processing.
+  it("migrates default_mode off the legacy boolean when unset", async () => {
+    const api = (globalThis.window as TestWindow).electronAPI!;
+    (api.getAllSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      enable_ai_optimization: false,
+    });
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.settings.default_mode).toBe("off");
+  });
+
+  it("migrates default_mode to auto when the legacy boolean is on", async () => {
+    const api = (globalThis.window as TestWindow).electronAPI!;
+    (api.getAllSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      enable_ai_optimization: true,
+    });
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.settings.default_mode).toBe("auto");
+  });
+
+  it("falls back to the default hotkey when the stored value is not a usable string", async () => {
+    // [20260905_Fix_249_ReviewCoverage] The two fallback arms of the hotkey
+    // loader: non-string stored values and empty strings both yield
+    // DEFAULT_HOTKEY.
+    const api = (globalThis.window as TestWindow).electronAPI!;
+    (api.getAllSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      hotkey: 42,
+    });
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.settings.hotkey).toBe(DEFAULT_HOTKEY);
+
+    (api.getAllSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      hotkey: "",
+    });
+    const { result: result2 } = renderHook(() => useSettings());
+    await waitFor(() => expect(result2.current.loading).toBe(false));
+    expect(result2.current.settings.hotkey).toBe(DEFAULT_HOTKEY);
+  });
+
+  it("keeps a persisted default_mode value as-is", async () => {
+    const api = (globalThis.window as TestWindow).electronAPI!;
+    (api.getAllSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      default_mode: "correct",
+    });
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.settings.default_mode).toBe("correct");
   });
 });
 
@@ -247,10 +380,10 @@ describe("useSettings hook — save / test / presets / updates", () => {
     expect(keys).toContain("theme");
     expect(keys).toContain("ai_max_tokens");
     expect(keys).not.toContain(undefined);
-    // [20260905_Feat_BloubSettings] count updated for the 3 bot keys (14):
-    // 1 special-cased (masked api_key) + 13 in the loopecial-cased + 10 in the loop.
-    // [20260820_T14_Hotwords] count updated for the new key.
-    expect(calls).toHaveLength(14);
+    // [20260905_Fix_249_DefaultModeUi] count updated for default_mode:
+    // 1 special-cased (unmasked api_key) + 15 in the loop.
+    // [20260905_Fix_246_HotkeySettingsUi] count updated for the hotkey key.
+    expect(calls).toHaveLength(16);
   });
 
   it("saveSettings skips re-sending a masked api_key but still saves the rest", async () => {
@@ -267,7 +400,7 @@ describe("useSettings hook — save / test / presets / updates", () => {
     });
     const calls = (api().setSetting as ReturnType<typeof vi.fn>).mock.calls;
     expect(calls.find((c) => c[0] === "ai_api_key")).toBeUndefined();
-    expect(calls).toHaveLength(13); // [20260905_Feat_BloubSettings] 13 loop (10 + 3 bot keys). [20260820_T14_Hotwords] 10 loop keys after hotwords
+    expect(calls).toHaveLength(15); // [20260905_Fix_249_DefaultModeUi] 15 loop keys after default_mode. [20260905_Fix_246_HotkeySettingsUi] +hotkey. [20260820_T14_Hotwords] 10 loop keys after hotwords
   });
 
   it("saveSettings returns false and toasts on IPC failure", async () => {

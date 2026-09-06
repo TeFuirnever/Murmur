@@ -10,6 +10,12 @@ import type {
   UpdateProgressData,
   UpdateCompleteData,
 } from "../types/ipc";
+// [20260905_Fix_246_HotkeySettingsUi] Single renderer-side default for the
+// recording hotkey setting (issue #246: the setting existed in storage and
+// the allowlist but nothing read or wrote it).
+import { DEFAULT_HOTKEY } from "./hotkeyRecorder";
+
+export { DEFAULT_HOTKEY };
 
 export interface SettingsState {
   ai_api_key: string;
@@ -18,10 +24,20 @@ export interface SettingsState {
   ai_temperature: number;
   ai_max_tokens: number;
   enable_ai_optimization: boolean;
+  // [20260905_Fix_249_DefaultModeUi] Default AI processing mode the recording
+  // and file-transcription pipelines apply automatically (issue #249: the
+  // read side honored it but nothing could write it). One of "auto" (pick by
+  // text length), "off", or a built-in/template mode name.
+  default_mode: string;
   window_always_on_top: boolean;
   auto_paste: string;
   close_behavior: string;
   theme: string;
+  // [20260905_Fix_246_HotkeySettingsUi] Global recording hotkey as an
+  // Electron accelerator string ("CommandOrControl+Shift+Space"). Edited in
+  // the settings window's General tab recorder; the main window re-registers
+  // on SETTINGS_UPDATE.
+  hotkey: string;
   // [20260820_T14_Hotwords] Hotword list, one entry per line; sanitized at
   // the save and injection boundaries (src/helpers/hotwords.ts).
   hotwords: string;
@@ -74,7 +90,9 @@ export function isMaskedKey(key: string): boolean {
   return key.startsWith("****");
 }
 
-const DEFAULT_SETTINGS: SettingsState = {
+// [20260905_Fix_246_HotkeySettingsUi] Exported so tests can pin the settings
+// contract (defaults shape) without reaching into module internals.
+export const DEFAULT_SETTINGS: SettingsState = {
   ai_api_key: "",
   ai_base_url: "https://api.openai.com/v1",
   ai_model: DEFAULT_MODEL,
@@ -84,10 +102,16 @@ const DEFAULT_SETTINGS: SettingsState = {
   // budget and return empty content (see 20260815_Fix_AiEmptyContent).
   ai_max_tokens: 8192,
   enable_ai_optimization: true,
+  // [20260905_Fix_249_DefaultModeUi] Read-side vocabulary: "auto" delegates
+  // to determineProcessingMode (length-based optimize/optimize_long).
+  default_mode: "auto",
   window_always_on_top: true,
   auto_paste: "paste",
   close_behavior: "hide",
   theme: "system",
+  // [20260905_Fix_246_HotkeySettingsUi] Exported for the settings contract
+  // test and the General-section recorder default.
+  hotkey: DEFAULT_HOTKEY,
   hotwords: "",
   // [20260905_Feat_BloubSettings] faithful-replica defaults; "auto" colour
   // means theme-aware (light -> ink, dark -> cream) at the mascot
@@ -153,10 +177,29 @@ export function useSettings() {
           ai_max_tokens:
             parseInt(allSettings.ai_max_tokens as string, 10) || 8192,
           enable_ai_optimization: allSettings.enable_ai_optimization !== false,
+          // [20260905_Fix_249_DefaultModeUi] MIGRATE, don't blindly default:
+          // when default_mode was never written, derive it from the legacy
+          // enable_ai_optimization boolean (same migration the read side in
+          // useRecording/useFileTranscription applies). A blind "auto" here
+          // would auto-persist "auto" on any settings save and silently
+          // re-enable AI for users who turned it off.
+          default_mode:
+            typeof allSettings.default_mode === "string" &&
+            allSettings.default_mode
+              ? allSettings.default_mode
+              : allSettings.enable_ai_optimization === false
+                ? "off"
+                : "auto",
           window_always_on_top: allSettings.window_always_on_top !== false,
           auto_paste: (allSettings.auto_paste || "paste") as string,
           close_behavior: (allSettings.close_behavior || "hide") as string,
           theme: (allSettings.theme || "system") as string,
+          // [20260905_Fix_246_HotkeySettingsUi] Hotkey accelerator; falls
+          // back to the historical default when absent or non-string.
+          hotkey:
+            typeof allSettings.hotkey === "string" && allSettings.hotkey
+              ? allSettings.hotkey
+              : DEFAULT_HOTKEY,
           // [20260820_T14_Hotwords] Stored raw (multi-line, save boundary
           // = allowlist + generic length cap); FULL sanitization happens
           // once, at the injection boundary (src/helpers/hotwords.ts).
@@ -236,6 +279,43 @@ export function useSettings() {
   // settings (effects_enabled, theme, auto_paste, close_behavior) were stuck
   // in React state and lost when the settings window was destroyed (Alt+F4).
   const handleInputChange = useCallback((key: string, value: unknown) => {
+    // [20260905_Fix_249_ReviewMajor] enable_ai_optimization and default_mode
+    // are two views of one knob. They used to diverge when the AI Config
+    // toggle was flipped after load: saveSettings then persisted the stale
+    // derived "auto" alongside the boolean, and the read-side migration
+    // (which only runs when default_mode is null) never saw it — the toggle
+    // showed off while AI kept running. Sync both directions here so the
+    // auto-persist and the save loop always stay consistent.
+    if (key === "enable_ai_optimization") {
+      const enabled = value !== false;
+      setSettings((prev) => ({
+        ...prev,
+        enable_ai_optimization: enabled,
+        default_mode: enabled
+          ? prev.default_mode === "off"
+            ? "auto"
+            : prev.default_mode
+          : "off",
+      }));
+      if (window.electronAPI?.setSetting) {
+        window.electronAPI.setSetting(key, enabled);
+        window.electronAPI.setSetting("default_mode", enabled ? "auto" : "off");
+      }
+      return;
+    }
+    if (key === "default_mode") {
+      const mode = typeof value === "string" ? value : "auto";
+      setSettings((prev) => ({
+        ...prev,
+        default_mode: mode,
+        enable_ai_optimization: mode !== "off",
+      }));
+      if (window.electronAPI?.setSetting) {
+        window.electronAPI.setSetting(key, mode);
+        window.electronAPI.setSetting("enable_ai_optimization", mode !== "off");
+      }
+      return;
+    }
     setSettings((prev) => ({ ...prev, [key]: value }));
     if (window.electronAPI?.setSetting) {
       window.electronAPI.setSetting(key, value);

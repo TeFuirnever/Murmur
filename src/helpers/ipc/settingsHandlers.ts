@@ -11,6 +11,9 @@ interface DatabaseManager {
 
 interface WindowManager {
   mainWindow: Electron.BrowserWindow | null;
+  // [20260905_Fix_249_ReviewMinor] History window listens too — the language
+  // switch must reach it live, not only at next start.
+  historyWindow?: Electron.BrowserWindow | null;
 }
 
 interface Managers {
@@ -25,6 +28,10 @@ const ALLOWED_SETTING_KEYS = new Set<string>([
   "ai_temperature",
   "ai_max_tokens",
   "enable_ai_optimization",
+  // [20260905_Fix_249_DefaultModeUi] Default AI processing mode — the read
+  // side (useRecording/useFileTranscription) already honored it; now writable
+  // (issue #249).
+  "default_mode",
   "window_always_on_top",
   "auto_paste",
   "close_behavior",
@@ -76,6 +83,12 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
     const mw = windowManager?.mainWindow;
     if (mw && !mw.isDestroyed()) {
       mw.webContents.send(C.EVENTS.SETTINGS_UPDATE, { key });
+    }
+    // [20260905_Fix_249_ReviewMinor] Also reach the history window — without
+    // this the language switch stayed stale there until the window re-opened.
+    const hw = windowManager?.historyWindow;
+    if (hw && !hw.isDestroyed()) {
+      hw.webContents.send(C.EVENTS.SETTINGS_UPDATE, { key });
     }
   };
 

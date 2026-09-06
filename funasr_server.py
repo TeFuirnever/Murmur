@@ -8,6 +8,7 @@ FunASR模型服务器
 import sys
 import json
 import os
+import re
 import logging
 import traceback
 import signal
@@ -99,6 +100,25 @@ def suppress_stdout():
                     _SUPPRESS_STDOUT_SINK.close()
                     _SUPPRESS_STDOUT_SINK = None
 # [20260820_Fix_SuppressStdoutRace] END
+
+
+# [20260905_Fix_208_ProtocolStreamImmune] Issue #208: protocol output must be
+# immune to suppress_stdout() windows. print() resolves sys.stdout
+# dynamically, so a protocol line emitted while any loader thread is inside a
+# suppression window (reload progress dequeued by _output_worker, command
+# responses on the main thread) landed in the shared devnull sink and was
+# silently dropped — #207 removed the closed-devnull crash, but the swallow
+# path remained. The protocol channel therefore writes to the stream captured
+# at process start (the original host pipe), never to the redirectable
+# global. Captured at import time, before any suppression can run.
+_PROTOCOL_STDOUT = sys.stdout
+
+
+def _protocol_print(payload):
+    """Write a protocol JSON line to the host pipe via the startup stream."""
+    _PROTOCOL_STDOUT.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    _PROTOCOL_STDOUT.flush()
+# [20260905_Fix_208_ProtocolStreamImmune] END
 
 
 # [20260819_T8_ThreadAdapt] Ticket #187 (spec #177 T8): inference thread
@@ -353,6 +373,35 @@ class FunASRServer:
                 return candidate
         return os.path.join(base, "models", "damo")
 
+    # [20260905_Fix_255_RepoReadyShardGlob] Promoted from a nested run()
+    # helper so the readiness gate is directly testable, and hardened for
+    # issue #255: ModelScope's downloader leaves SHARD part-files in the
+    # repo dir mid-download (e.g. vocab.txt_0_167772159 — a byte-range temp
+    # name). The "vocab*" glob matched them, so a server (re)start during a
+    # download misread the repo as ready and AutoModel died with a confusing
+    # error instead of the clean models_not_downloaded path. Matching files
+    # whose name ends in a _<start>_<end> byte-range suffix never satisfy
+    # the gate; real anchors (config/weights/complete vocab) still do.
+    _SHARD_SUFFIX_RE = re.compile(r"_\d+_\d+$")
+
+    @staticmethod
+    def _repo_ready(repo_dir):
+        """目录存在且包含非分片的常见权重/配置文件即认为已就绪"""
+        if not os.path.isdir(repo_dir):
+            return False
+        patterns = [
+            "model.pt", "pytorch_model.bin", "*.onnx",
+            "config.json", "configuration.json", "model.yaml", "vocab*"
+        ]
+        for pat in patterns:
+            matches = [
+                m for m in glob.glob(os.path.join(repo_dir, pat))
+                if not FunASRServer._SHARD_SUFFIX_RE.search(os.path.basename(m))
+            ]
+            if matches:
+                return True
+        return False
+
     def _load_asr_model(self):
         """加载ASR模型（SeACo 优先，旧模型回退）"""
         from funasr import AutoModel
@@ -361,11 +410,16 @@ class FunASRServer:
         # on local disk must be skipped WITHOUT calling AutoModel — funasr
         # auto-downloads ~1GB from modelscope on cache miss, silently
         # defeating the rollback (or blowing the 300s init timeout).
+        # [20260905_Fix_255_ReviewFixup] The readiness gate (not just
+        # isdir) applies here too: this path also serves reload/lazy-init,
+        # which bypasses run()'s startup gate — an isdir-only check let a
+        # mid-download dir holding only shard part-files through to
+        # AutoModel (the confusing failure #255 fixed on the startup path).
         cache_path = self.damo_root or self._default_damo_root()
         candidates = [
             m
             for m in (self.ASR_MODEL_SEACO, self.ASR_MODEL_FALLBACK)
-            if os.path.isdir(os.path.join(cache_path, m.split("/", 1)[1]))
+            if self._repo_ready(os.path.join(cache_path, m.split("/", 1)[1]))
         ]
         for model_name in candidates:
             try:
@@ -1280,8 +1334,10 @@ class FunASRServer:
         while self.running:
             try:
                 msg = self.response_queue.get(timeout=0.5)
-                print(json.dumps(msg, ensure_ascii=False))
-                sys.stdout.flush()
+                # [20260905_Fix_208_ProtocolStreamImmune] Startup stream, not
+                # print(): a dequeue during a suppress_stdout() window must
+                # still reach the host (#208).
+                _protocol_print(msg)
             except queue.Empty:
                 continue
 
@@ -1476,24 +1532,13 @@ class FunASRServer:
         ]
         # ASR (either generation) + VAD are required; punc is optional.
 
-        def _repo_ready(repo_dir):
-            # 目录存在且包含任意常见权重/配置文件即认为已就绪
-            if not os.path.isdir(repo_dir):
-                return False
-            patterns = [
-                "model.pt", "pytorch_model.bin", "*.onnx",
-                "config.json", "configuration.json", "model.yaml", "vocab*"
-            ]
-            for pat in patterns:
-                if glob.glob(os.path.join(repo_dir, pat)):
-                    return True
-            return False
-
+        # [20260905_Fix_255_RepoReadyShardGlob] Readiness gate promoted to
+        # FunASRServer._repo_ready (staticmethod, shard-aware, testable).
         asr_satisfied = any(
-            _repo_ready(os.path.join(cache_path, r)) for r in asr_repos
+            self._repo_ready(os.path.join(cache_path, r)) for r in asr_repos
         )
         missing_required = [] if asr_satisfied else asr_repos[:1]
-        if not _repo_ready(os.path.join(cache_path, vad_repo)):
+        if not self._repo_ready(os.path.join(cache_path, vad_repo)):
             missing_required.append(vad_repo)
 
         if not missing_required:
@@ -1506,8 +1551,9 @@ class FunASRServer:
                 "error": "模型文件未下载，请先下载模型",
                 "type": "models_not_downloaded"
             }
-        print(json.dumps(init_result, ensure_ascii=False))
-        sys.stdout.flush()
+        # [20260905_Fix_208_ProtocolStreamImmune] Startup stream: reload
+        # re-initialization can be in flight while this init result prints.
+        _protocol_print(init_result)
 
         # 启动推理线程和输出线程
         self._inference_thread = threading.Thread(target=self._inference_worker, daemon=True)
@@ -1530,8 +1576,8 @@ class FunASRServer:
                     command = json.loads(line)
                 except json.JSONDecodeError:
                     result = {"success": False, "error": "无效的JSON命令"}
-                    print(json.dumps(result, ensure_ascii=False))
-                    sys.stdout.flush()
+                    # [20260905_Fix_208_ProtocolStreamImmune]
+                    _protocol_print(result)
                     continue
 
                 # 提取 request_id 用于响应关联
@@ -1548,8 +1594,8 @@ class FunASRServer:
                 if result is not None:
                     if request_id:
                         result["request_id"] = request_id
-                    print(json.dumps(result, ensure_ascii=False))
-                    sys.stdout.flush()
+                    # [20260905_Fix_208_ProtocolStreamImmune]
+                    _protocol_print(result)
 
                 if not keep_running:
                     break
@@ -1562,8 +1608,8 @@ class FunASRServer:
                     "error": str(e),
                     "traceback": traceback.format_exc(),
                 }
-                print(json.dumps(error_result, ensure_ascii=False))
-                sys.stdout.flush()
+                # [20260905_Fix_208_ProtocolStreamImmune]
+                _protocol_print(error_result)
 
         logger.info("FunASR服务器退出")
 

@@ -15,7 +15,10 @@ vi.mock("react-i18next", () => ({
 }));
 
 import { GeneralSection } from "../../src/settings/sections/GeneralSection";
-import type { SettingsState } from "../../src/settings/useSettings";
+import {
+  DEFAULT_SETTINGS,
+  type SettingsState,
+} from "../../src/settings/useSettings";
 
 const BASE: SettingsState = {
   ai_api_key: "",
@@ -28,6 +31,10 @@ const BASE: SettingsState = {
   auto_paste: "paste",
   close_behavior: "hide",
   theme: "system",
+  // [20260905_Fix_246_HotkeySettingsUi] new settings key
+  hotkey: "CommandOrControl+Shift+Space",
+  // [20260905_Fix_249_DefaultModeUi] new settings key
+  default_mode: "auto",
   hotwords: "",
   bot_shape: "circle",
   bot_color: "auto",
@@ -89,6 +96,8 @@ describe("[20260816_Test_GeneralSection] GeneralSection", () => {
   });
 
   it("switching the language persists it and updates the document lang", () => {
+    // [20260905_Fix_249_ReviewMinor] The choice also goes through
+    // onInputChange("language") so the main/history windows can follow live.
     window.localStorage.clear();
     render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
     fireEvent.change(screen.getByDisplayValue("中文"), {
@@ -96,6 +105,7 @@ describe("[20260816_Test_GeneralSection] GeneralSection", () => {
     });
     expect(window.localStorage.getItem("language")).toBe("en");
     expect(document.documentElement.lang).toBe("en");
+    expect(onInputChange).toHaveBeenCalledWith("language", "en");
   });
 
   it("changing close behavior reports the selected mode", () => {
@@ -104,5 +114,78 @@ describe("[20260816_Test_GeneralSection] GeneralSection", () => {
       target: { value: "quit" },
     });
     expect(onInputChange).toHaveBeenCalledWith("close_behavior", "quit");
+  });
+
+  // [20260905_Fix_249_DefaultModeUi] Issue #249: "default_mode" was read by
+  // useRecording/useFileTranscription but had no write path (not even in
+  // ALLOWED_SETTING_KEYS), so the user's choice never persisted. The General
+  // tab gets a select over the read-side vocabulary (auto / off / mode names).
+  it("renders the default AI mode select reflecting the setting", () => {
+    render(
+      <GeneralSection
+        settings={{ ...BASE, default_mode: "correct" }}
+        onInputChange={onInputChange}
+      />,
+    );
+    expect(screen.getByDisplayValue("校对纠错")).toBeInTheDocument();
+  });
+
+  it("changing the default AI mode reports the selected mode", () => {
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+    fireEvent.change(screen.getByTestId("default-mode"), {
+      target: { value: "off" },
+    });
+    expect(onInputChange).toHaveBeenCalledWith("default_mode", "off");
+  });
+
+  it("defaults the contract default_mode to auto", () => {
+    expect(DEFAULT_SETTINGS.default_mode).toBe("auto");
+  });
+
+  // [20260905_Fix_249_CoveragePush] Branch arms added with the default-mode
+  // and hotkey-recorder UI: the always-on-top OFF render arm, the recorder's
+  // blur-cancels-capture behavior, and the hotwords input path.
+  it("renders the always-on-top switch unchecked when the setting is off", () => {
+    render(
+      <GeneralSection
+        settings={{ ...BASE, window_always_on_top: false }}
+        onInputChange={onInputChange}
+      />,
+    );
+    expect(screen.getByRole("switch")).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("cancels the hotkey capture when the cancel button is clicked", () => {
+    // [20260905_Fix_249_ReviewMinor] Clicking 取消 used to blur the capture
+    // zone first (→ setRecording(false)) and THEN toggle back to true, so the
+    // button re-entered capture instead of ending it. onMouseDown keeps the
+    // focus on the button, letting onClick end the capture cleanly.
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+    fireEvent.click(screen.getByTestId("hotkey-record"));
+    expect(screen.getByTestId("hotkey-capture")).toBeInTheDocument();
+
+    fireEvent.mouseDown(screen.getByTestId("hotkey-record"));
+    fireEvent.click(screen.getByTestId("hotkey-record"));
+
+    expect(screen.queryByTestId("hotkey-capture")).not.toBeInTheDocument();
+    expect(screen.getByTestId("hotkey-record")).toHaveTextContent("更改");
+  });
+
+  it("cancels the hotkey capture when the zone loses focus", () => {
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+    fireEvent.click(screen.getByTestId("hotkey-record"));
+    const capture = screen.getByTestId("hotkey-capture");
+    fireEvent.blur(capture);
+    // Recording ended — the capture zone is gone and the button resets.
+    expect(screen.queryByTestId("hotkey-capture")).not.toBeInTheDocument();
+    expect(screen.getByTestId("hotkey-record")).toHaveTextContent("更改");
+  });
+
+  it("reports hotword list edits", () => {
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+    fireEvent.change(screen.getByLabelText("热词"), {
+      target: { value: "张晗玥" },
+    });
+    expect(onInputChange).toHaveBeenCalledWith("hotwords", "张晗玥");
   });
 });

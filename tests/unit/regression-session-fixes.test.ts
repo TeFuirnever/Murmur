@@ -856,3 +856,66 @@ describe("TRANSCRIBE_FILE result.id regression", () => {
     expect(result.id).toBe(99);
   });
 });
+
+// [20260905_Fix_249_ReviewMinor] The SETTINGS_UPDATE broadcast must reach
+// the history window too (live language switch), not only the main window.
+describe("SETTINGS_UPDATE history-window broadcast", () => {
+  function createManagersWithHistory() {
+    const hwSend = vi.fn();
+    return {
+      managers: {
+        databaseManager: {
+          getSetting: vi.fn(() => "val"),
+          setSetting: vi.fn(() => true),
+          getAllSettings: vi.fn(() => ({})),
+          resetSettings: vi.fn(() => true),
+          syncToFileConfig: vi.fn(),
+        },
+        logger: { error: vi.fn() },
+        windowManager: {
+          mainWindow: {
+            isDestroyed: vi.fn(() => false),
+            webContents: { send: vi.fn() },
+          },
+          historyWindow: {
+            isDestroyed: vi.fn(() => false),
+            webContents: { send: hwSend },
+          },
+        },
+      },
+      hwSend,
+    };
+  }
+
+  it("sends SETTINGS_UPDATE to the history window on set-setting", async () => {
+    const { register } = settingsHandlers;
+    const ipcMain = createIpcMain();
+    const { managers, hwSend } = createManagersWithHistory();
+    register(
+      ipcMain as unknown as Parameters<typeof register>[0],
+      managers as unknown as Parameters<typeof register>[1],
+    );
+    await ipcMain._handlers[C.SETTINGS.SET]!({}, "language", "en");
+    expect(hwSend).toHaveBeenCalledWith(
+      C.EVENTS.SETTINGS_UPDATE,
+      expect.objectContaining({ key: "language" }),
+    );
+  });
+
+  it("skips a destroyed history window", async () => {
+    const { register } = settingsHandlers;
+    const ipcMain = createIpcMain();
+    const { managers, hwSend } = createManagersWithHistory();
+    (
+      managers.windowManager.historyWindow as {
+        isDestroyed: ReturnType<typeof vi.fn>;
+      }
+    ).isDestroyed.mockReturnValue(true);
+    register(
+      ipcMain as unknown as Parameters<typeof register>[0],
+      managers as unknown as Parameters<typeof register>[1],
+    );
+    await ipcMain._handlers[C.SETTINGS.SET]!({}, "theme", "dark");
+    expect(hwSend).not.toHaveBeenCalled();
+  });
+});

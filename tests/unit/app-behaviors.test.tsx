@@ -19,6 +19,73 @@ const { toast } = vi.hoisted(() => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
 }));
 
+// [20260905_Fix_249_ReviewMinor] Observable changeLanguage for the live
+// language-propagation tests below.
+const i18nMocks = vi.hoisted(() => ({
+  changeLanguage: vi.fn<(lng: string) => void>(),
+}));
+
+// [20260905_Fix_247_I18nMainHistory] App.tsx now translates through
+// react-i18next (with interpolation variables like {{error}} / {{progress}}).
+// The real i18next instance is uninitialized in unit tests and would return
+// the raw fallback templates uninterpolated — resolve t() against the shipped
+// zh-CN locale with variable substitution instead (settings-page pattern).
+import zhCN from "../../src/i18n/locales/zh-CN.json";
+
+function flattenLocale(
+  obj: Record<string, unknown>,
+  prefix = "",
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    const key = prefix ? `${prefix}.${k}` : k;
+    if (v !== null && typeof v === "object") {
+      Object.assign(out, flattenLocale(v as Record<string, unknown>, key));
+    } else {
+      out[key] = String(v);
+    }
+  }
+  return out;
+}
+const APP_LOCALE = flattenLocale(zhCN as Record<string, unknown>);
+
+// Stable identity across renders — the real useTranslation returns a
+// referentially stable t, and App's applyHotkeySetting depends on it.
+const translate = (
+  key: string,
+  fallbackOrOpts?: string | Record<string, unknown>,
+  opts?: Record<string, unknown>,
+): string => {
+  const template =
+    APP_LOCALE[key] ??
+    (typeof fallbackOrOpts === "string" ? fallbackOrOpts : key);
+  const vars =
+    opts ??
+    (typeof fallbackOrOpts === "object" && fallbackOrOpts !== null
+      ? fallbackOrOpts
+      : undefined);
+  if (!vars) return template;
+  return template.replace(/{{(\w+)}}/g, (_m, name: string) =>
+    vars[name] === undefined ? `{{${name}}}` : String(vars[name]),
+  );
+};
+
+// [20260905_Fix_249_ReviewMinor] Stable i18n identity — a per-render
+// literal would re-run every effect that depends on [i18n] and override
+// the listener capture in this mock (hotkey/language effects re-register).
+const mockI18n = {
+  language: "zh-CN",
+  changeLanguage: i18nMocks.changeLanguage,
+};
+
+vi.mock("react-i18next", () => ({
+  initReactI18next: { type: "3rdParty", init: () => undefined },
+  useTranslation: () => ({
+    t: translate,
+    i18n: mockI18n,
+  }),
+}));
+
 vi.mock("sonner", () => ({
   toast,
   Toaster: () =>
@@ -160,7 +227,10 @@ vi.mock("../../src/components/ui/model-status-indicator", () => ({
 import App from "../../src/App";
 
 type Listener = (...args: unknown[]) => void;
-const listeners: Record<string, Listener | undefined> = {};
+const listeners: {
+  settings?: Listener;
+  settingsList?: Listener[];
+} & Record<string, Listener | undefined> = {};
 const apiMocks = {
   getSetting: vi.fn((key: string, d?: unknown) =>
     Promise.resolve(
@@ -185,6 +255,11 @@ const apiMocks = {
     return () => {};
   }),
   onSettingsUpdate: vi.fn((cb: Listener) => {
+    // Collect every registration: App subscribes multiple effects to the
+    // same channel (hotkey re-apply + settings-cache refresh), and the last
+    // one wins the legacy single-slot `listeners.settings`.
+    listeners.settingsList = listeners.settingsList || [];
+    listeners.settingsList.push(cb);
     listeners.settings = cb;
     return () => {};
   }),
@@ -441,6 +516,33 @@ describe("[20260816_Test_AppBehaviors] App behavior matrix", () => {
     });
   });
 
+  it("applies a language change from SETTINGS_UPDATE live via the DB value", async () => {
+    // [20260905_Fix_249_ReviewMinor] The broadcast carries only {key} — the
+    // persisted VALUE is read back through getSetting (this window's
+    // localStorage is never written for language).
+    apiMocks.getSetting.mockImplementation(async (key: string) =>
+      key === "language" ? "en" : "paste",
+    );
+    Object.assign(modelCtl, {
+      stage: "ready",
+      isReady: true,
+      isLoading: false,
+    });
+    await mountApp();
+    act(() => {
+      for (const cb of listeners.settingsList ?? []) {
+        (cb as (d: { key: string }) => void)({ key: "language" });
+      }
+    });
+    await waitFor(() => {
+      expect(apiMocks.getSetting).toHaveBeenCalledWith(
+        "language",
+        expect.anything(),
+      );
+    });
+    expect(i18nMocks.changeLanguage).toHaveBeenCalledWith("en");
+  });
+
   it("reloads cached settings when the settings-update event fires", async () => {
     Object.assign(modelCtl, {
       stage: "ready",
@@ -450,7 +552,14 @@ describe("[20260816_Test_AppBehaviors] App behavior matrix", () => {
     await mountApp();
     const before = apiMocks.getSetting.mock.calls.length;
     act(() => {
-      listeners.settings?.();
+      // Realistic SETTINGS_UPDATE payload ({key, value}) per the preload
+      // contract — App reads data.key to decide re-application targets.
+      for (const cb of listeners.settingsList ?? []) {
+        (cb as (d: { key: string; value?: string }) => void)({
+          key: "theme",
+          value: "dark",
+        });
+      }
     });
     expect(apiMocks.getSetting.mock.calls.length).toBeGreaterThan(before);
   });
@@ -1135,11 +1244,18 @@ describe("[20260816_Test_BranchPush] App branch matrix", () => {
 
   // --- hook wiring edge cases ---
 
-  it("stays quiet when hotkey registration resolves false (value is not branched on)", async () => {
+  it("warns when hotkey registration resolves false (settings entry exists now)", async () => {
+    // [20260905_Fix_246_HotkeySettingsUi] The old contract kept quiet on
+    // success=false because the failure toast pointed at a nonexistent
+    // settings entry. With the entry shipped (#246), a failed registration
+    // warns the user and points at the (now real) setting.
     hotkeyCtl.registerHotkey.mockResolvedValueOnce(false);
     await mountApp();
     await act(async () => {});
-    expect(toast.warning).not.toHaveBeenCalled();
+    expect(toast.warning).toHaveBeenCalledTimes(1);
+    expect(toast.warning).toHaveBeenCalledWith(
+      expect.stringContaining("快捷键注册失败"),
+    );
   });
 
   it("tolerates a missing syncRecordingState hook member", async () => {

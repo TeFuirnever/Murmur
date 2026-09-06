@@ -1,6 +1,10 @@
 import { useTranslation } from "react-i18next";
+import { useState } from "react";
 import type React from "react";
 import type { SettingsState } from "../useSettings";
+// [20260905_Fix_246_HotkeySettingsUi] Hotkey recorder (issue #246: the
+// settings entry the main-window failure toast pointed at did not exist).
+import { buildAccelerator, formatAccelerator } from "../hotkeyRecorder";
 
 interface GeneralSectionProps {
   settings: SettingsState;
@@ -12,6 +16,29 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
   onInputChange,
 }) => {
   const { t, i18n } = useTranslation();
+  // [20260905_Fix_246_HotkeySettingsUi] Recording state for the hotkey
+  // capture zone. The captured combo is persisted immediately through
+  // onInputChange("hotkey", ...) — the main window re-registers on
+  // SETTINGS_UPDATE (App.tsx).
+  const [recording, setRecording] = useState(false);
+
+  const handleCaptureKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    // The capture zone only renders while recording, so no !recording guard
+    // is needed here (an unreachable branch would just rot).
+    event.preventDefault();
+    event.stopPropagation();
+    // Escape is the recorder's cancel key (buildAccelerator rejects it).
+    if (event.key === "Escape") {
+      setRecording(false);
+      return;
+    }
+    const combo = buildAccelerator(event.nativeEvent);
+    if (combo !== null) {
+      onInputChange("hotkey", combo);
+      setRecording(false);
+    }
+    // Modifier-only and modifier-less presses (null) keep recording.
+  };
 
   return (
     <div className="space-y-6">
@@ -87,6 +114,51 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
         </p>
       </div>
 
+      {/* [20260905_Fix_249_DefaultModeUi] Default AI processing mode for the
+          recording / file-transcription pipelines (issue #249: the read side
+          honored "default_mode" but nothing could write it). "auto" picks by
+          text length, "off" disables, the rest map to built-in modes. */}
+      <div>
+        <label
+          htmlFor="default-mode"
+          className="block text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7] mb-1"
+        >
+          {t("settings.general.defaultModeLabel", "默认 AI 处理模式")}
+        </label>
+        <select
+          id="default-mode"
+          data-testid="default-mode"
+          value={settings.default_mode}
+          onChange={(e) => onInputChange("default_mode", e.target.value)}
+          className="w-full px-3 py-2 text-sm border border-[#d2d2d7] dark:border-[#3a3a3c] rounded-lg focus:ring-2 focus:ring-[#0071e3] focus:border-transparent bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7]"
+        >
+          <option value="auto">
+            {t("settings.general.defaultModeAuto", "智能判断（按文本长度）")}
+          </option>
+          <option value="optimize">
+            {t("settings.general.defaultModeOptimize", "智能润色")}
+          </option>
+          <option value="optimize_long">
+            {t("settings.general.defaultModeOptimizeLong", "长文本整理")}
+          </option>
+          <option value="correct">
+            {t("settings.general.defaultModeCorrect", "校对纠错")}
+          </option>
+          <option value="summarize">
+            {t("settings.general.defaultModeSummarize", "摘要总结")}
+          </option>
+          <option value="off">
+            {t("settings.general.defaultModeOff", "关闭 AI 处理")}
+          </option>
+        </select>
+        <p className="mt-1 text-xs text-[#86868b]">
+          {t(
+            "settings.general.defaultModeDesc",
+            "录音与文件导入完成后自动应用的 AI 处理方式；单次结果面板仍可临时切换。",
+          )}
+        </p>
+      </div>
+
       {/* 关闭行为 */}
       <div>
         <label className="block text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7] mb-1">
@@ -145,6 +217,10 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
             i18n.changeLanguage(e.target.value);
             localStorage.setItem("language", e.target.value);
             document.documentElement.lang = e.target.value;
+            // [20260905_Fix_249_ReviewMinor] Go through the setting pipeline
+            // so the main/history windows can follow the language switch live
+            // (SETTINGS_UPDATE broadcast), not only at next start.
+            onInputChange("language", e.target.value);
           }}
           className="text-sm px-3 py-2 border border-[#d2d2d7] dark:border-[#3a3a3c] rounded-lg bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7] focus:ring-2 focus:ring-[#0071e3] focus:border-transparent"
         >
@@ -183,6 +259,65 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
         <p id="hotwords-hint" className="text-xs text-[#86868b] mt-1">
           {t("settings.general.hotwordsLimit", "最多 200 行,每行 32 字")}
         </p>
+      </div>
+
+      {/* [20260905_Fix_246_HotkeySettingsUi] Recording-hotkey recorder. The
+          captured combo is persisted immediately (onInputChange) — the main
+          window re-registers the global shortcut on SETTINGS_UPDATE. */}
+      <div>
+        <label className="block text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7] mb-1">
+          {t("settings.general.hotkeyLabel", "录音快捷键")}
+        </label>
+        <p className="text-xs text-[#86868b] mb-2">
+          {t(
+            "settings.general.hotkeyDesc",
+            "全局快捷键,任意界面按下即可开始/停止录音。",
+          )}
+        </p>
+        <div className="flex items-center gap-3">
+          <span
+            data-testid="hotkey-current"
+            className="px-3 py-1.5 text-sm font-mono border border-[#d2d2d7] dark:border-[#3a3a3c] rounded-lg bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7]"
+          >
+            {formatAccelerator(
+              settings.hotkey,
+              t("settings.general.hotkeySpace", "空格"),
+            )}
+          </span>
+          <button
+            type="button"
+            data-testid="hotkey-record"
+            // [20260905_Fix_249_ReviewMinor] The capture zone's onBlur ends
+            // recording — clicking the button would focus it first (blur →
+            // false) and then toggle back to true, so 取消 re-entered capture.
+            // Keeping focus on the button lets onClick end it cleanly.
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => setRecording((prev) => !prev)}
+            className="px-3 py-1.5 text-sm rounded-lg bg-[#0071e3] text-white hover:bg-[#0077ed] focus:outline-none focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-2"
+          >
+            {recording
+              ? t("settings.general.hotkeyCancel", "取消")
+              : t("settings.general.hotkeyStart", "更改")}
+          </button>
+        </div>
+        {recording && (
+          <div
+            data-testid="hotkey-capture"
+            tabIndex={0}
+            onKeyDown={handleCaptureKeyDown}
+            // [20260905_Fix_246_HotkeyRecorderBlur] Clicking elsewhere must
+            // end the capture — otherwise the UI keeps showing "press a key"
+            // while nothing is captured until refocus.
+            onBlur={() => setRecording(false)}
+            autoFocus
+            className="mt-2 px-3 py-2 text-sm border-2 border-[#0071e3] rounded-lg bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7] focus:outline-none"
+          >
+            {t(
+              "settings.general.hotkeyRecording",
+              "请按下新的快捷键组合(Esc 取消)…",
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

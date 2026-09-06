@@ -144,6 +144,41 @@ class TestDownloadModelsProgress(unittest.TestCase):
         _, _, final = self._run_main()
         self.assertEqual(final.get("cache_root"), "/fake/cache/models")
 
+    def test_percent_is_monotonic_when_late_files_register(self):
+        # [20260905_Fix_249_ReviewMinor] total_bytes grows as later file
+        # callbacks register, so the same downloaded byte count yields a
+        # LOWER percent after a sibling joins. The host watchdog re-arms only
+        # on STRICT growth, so a dip would delay re-crossing the old peak and
+        # could kill a live download ("dip-then-recover"). Contract: emitted
+        # per-model percent never decreases.
+        state = {
+            "downloaded": 0,
+            "total_bytes": 0,
+            "last_percent": 0.0,
+            "last_emit": 0.0,
+        }
+        captured = []
+        from download_models import ProtocolProgressCallback, PROGRESS_EMIT_INTERVAL
+
+        def emit_override(model, stage, percent, error=None):
+            captured.append(percent)
+
+        with mock.patch("download_models.emit_progress", side_effect=emit_override):
+            cb1 = ProtocolProgressCallback("a.pt", 1000, state, "asr")
+            cb1.update(800)  # 80.0%
+            # Backdate the throttle clock so the dip passes the 1s gate and
+            # is actually emitted (a slow network is exactly this case).
+            state["last_emit"] -= PROGRESS_EMIT_INTERVAL + 1
+            cb2 = ProtocolProgressCallback("b.pt", 1000, state, "asr")
+            cb2.update(100)  # total now 2000, downloaded 900 → 45.0% raw
+            cb1.update(0)
+
+        self.assertGreaterEqual(len(captured), 1)
+        prev = 0.0
+        for p in captured:
+            self.assertGreaterEqual(p, prev, f"percent dipped: {captured}")
+            prev = p
+
     def test_failure_reports_failed_models(self):
         progress_events, completed, final = self._run_main(fail_for={"vad"})
         self.assertFalse(final["success"])
