@@ -814,6 +814,7 @@ export default function App() {
             <Tooltip content={t("app.history", "历史记录")} position="bottom">
               <button
                 onClick={handleOpenHistory}
+                aria-label={t("app.history", "历史记录")}
                 className="p-3 hover:bg-[#f5f5f7] dark:hover:bg-[#2c2c2e] rounded-xl transition-colors shadow-sm"
               >
                 <History className="w-6 h-6 text-[#1d1d1f]/80 dark:text-[#f5f5f7]/80" />
@@ -822,6 +823,7 @@ export default function App() {
             <Tooltip content={t("app.settings", "设置")} position="bottom">
               <button
                 onClick={handleOpenSettings}
+                aria-label={t("app.settings", "设置")}
                 className="p-3 hover:bg-[#f5f5f7] dark:hover:bg-[#2c2c2e] rounded-xl transition-colors shadow-sm"
               >
                 <Settings className="w-6 h-6 text-[#1d1d1f]/80 dark:text-[#f5f5f7]/80" />
@@ -846,7 +848,7 @@ export default function App() {
                   ? "bg-white dark:bg-[#3a3a3c] text-gray-900 dark:text-gray-100 shadow-sm"
                   : isRecording || isRecordingProcessing
                     ? "text-gray-400 dark:text-gray-500 cursor-not-allowed"
-                    : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                    : "text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-300"
               }`}
               disabled={isRecording || isRecordingProcessing}
             >
@@ -857,7 +859,7 @@ export default function App() {
               className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
                 appMode === "file-import"
                   ? "bg-white dark:bg-[#3a3a3c] text-gray-900 dark:text-gray-100 shadow-sm"
-                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                  : "text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-300"
               }`}
             >
               {t("app.modeFileImport", "文件导入")}
