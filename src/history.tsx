@@ -133,19 +133,44 @@ const HistoryContent = ({
 
   // [20260905_Fix_249_ReviewMinor] Live language propagation: the settings
   // window broadcasts SETTINGS_UPDATE {key:"language"} through the main
-  // process; this window follows immediately instead of at next start.
+  // process; this window follows immediately instead of at next start. The
+  // broadcast carries only the KEY — the value lives in the settings DB,
+  // read back via IPC.
   React.useEffect(() => {
     if (!window.electronAPI?.onSettingsUpdate) return;
     const unsub = window.electronAPI.onSettingsUpdate((data) => {
       if (data.key === "language") {
-        const language =
-          (data as { value?: string }).value ??
-          localStorage.getItem("language") ??
-          "zh-CN";
-        i18n.changeLanguage(language);
+        window.electronAPI
+          ?.getSetting?.("language", "zh-CN")
+          .then((value) => {
+            i18n.changeLanguage(
+              typeof value === "string" && value ? value : "zh-CN",
+            );
+          })
+          .catch(() => {
+            // Broadcast raced window teardown — nothing to apply.
+          });
       }
     });
     return unsub;
+  }, [i18n]);
+
+  // [20260905_Fix_247_LanguageOnMount] A freshly opened window boots with
+  // the navigator language (i18n init has no async IPC available); the
+  // user's persisted choice lives in the settings DB — apply it on mount so
+  // an opened-later window matches the language the user picked.
+  React.useEffect(() => {
+    if (!window.electronAPI?.getSetting) return;
+    window.electronAPI
+      .getSetting("language", "zh-CN")
+      .then((value) => {
+        i18n.changeLanguage(
+          typeof value === "string" && value ? value : "zh-CN",
+        );
+      })
+      .catch(() => {
+        // Settings read raced window teardown — keep navigator language.
+      });
   }, [i18n]);
 
   // [20260905_Fix_248_HistoryClearExport] Bulk export with a user-chosen

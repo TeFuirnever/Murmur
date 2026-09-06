@@ -437,16 +437,20 @@ export default function App() {
         applyHotkeySetting();
       }
       // [20260905_Fix_249_ReviewMinor] Language switches from the settings
-      // window apply live in this window too (i18n instance is shared per
-      // window; only its language state needs to follow the broadcast).
+      // window apply live in this window too. The broadcast carries only the
+      // KEY — the persisted VALUE lives in the settings DB (this window's
+      // localStorage is never written for language), so read it back via IPC.
       if (data.key === "language") {
-        i18n.changeLanguage(
-          (data as { value?: string }).value ??
-            (typeof localStorage !== "undefined"
-              ? localStorage.getItem("language")
-              : null) ??
-            "zh-CN",
-        );
+        window.electronAPI
+          ?.getSetting?.("language", "zh-CN")
+          .then((value) => {
+            i18n.changeLanguage(
+              typeof value === "string" && value ? value : "zh-CN",
+            );
+          })
+          .catch(() => {
+            // Broadcast raced app shutdown — nothing to apply.
+          });
       }
     });
     return unsub;

@@ -516,11 +516,13 @@ describe("[20260816_Test_AppBehaviors] App behavior matrix", () => {
     });
   });
 
-  it("applies a language change from SETTINGS_UPDATE live", async () => {
-    // [20260905_Fix_249_ReviewMinor] Switching language in the settings
-    // window must reach the main window's i18n instance immediately, not
-    // only at next start. The broadcast carries {key, value} on the
-    // language path (localStorage is the fallback for the other windows).
+  it("applies a language change from SETTINGS_UPDATE live via the DB value", async () => {
+    // [20260905_Fix_249_ReviewMinor] The broadcast carries only {key} — the
+    // persisted VALUE is read back through getSetting (this window's
+    // localStorage is never written for language).
+    apiMocks.getSetting.mockImplementation(async (key: string) =>
+      key === "language" ? "en" : "paste",
+    );
     Object.assign(modelCtl, {
       stage: "ready",
       isReady: true,
@@ -529,11 +531,14 @@ describe("[20260816_Test_AppBehaviors] App behavior matrix", () => {
     await mountApp();
     act(() => {
       for (const cb of listeners.settingsList ?? []) {
-        (cb as (d: { key: string; value?: string }) => void)({
-          key: "language",
-          value: "en",
-        });
+        (cb as (d: { key: string }) => void)({ key: "language" });
       }
+    });
+    await waitFor(() => {
+      expect(apiMocks.getSetting).toHaveBeenCalledWith(
+        "language",
+        expect.anything(),
+      );
     });
     expect(i18nMocks.changeLanguage).toHaveBeenCalledWith("en");
   });

@@ -136,7 +136,7 @@ const apiMocks = {
   closeHistoryWindow: vi.fn(),
 };
 
-async function mountHistory() {
+async function mountHistory(apiOverrides: Record<string, unknown> = {}) {
   // Fresh module graph per test so the mount guard re-runs.
   vi.resetModules();
   document.body.innerHTML = '<div id="history-root"></div>';
@@ -149,7 +149,8 @@ async function mountHistory() {
     closeHistoryWindow: apiMocks.closeHistoryWindow,
     onSettingsUpdate: apiMocks.onSettingsUpdate,
     getAllSettings: vi.fn().mockResolvedValue({}),
-  } as TestWindow["electronAPI"];
+    ...apiOverrides,
+  } as unknown as TestWindow["electronAPI"];
   await import("../../src/history");
   await waitFor(() => {
     expect(screen.getByText("Murmur - 转录历史")).toBeInTheDocument();
@@ -431,18 +432,35 @@ describe("[20260816_Test_HistoryPage] history window entry", () => {
     }
   });
 
-  it("applies a language change broadcast to the history window", async () => {
-    // [20260905_Fix_249_ReviewMinor] The settings window's language switch
-    // must reach the history window's i18n instance live.
-    await mountHistory();
+  it("applies a language change broadcast to the history window via the DB value", async () => {
+    // [20260905_Fix_249_ReviewMinor] The broadcast carries only {key}; the
+    // value is read back through getSetting.
+    const getSetting = vi.fn(async (key: string) =>
+      key === "language" ? "en" : null,
+    );
+    await mountHistory({ getSetting });
     const unsub = apiMocks.onSettingsUpdate as unknown as ReturnType<
       typeof vi.fn
     >;
     const cb = unsub.mock.calls[0]?.[0] as
-      | ((d: { key: string; value?: string }) => void)
+      | ((d: { key: string }) => void)
       | undefined;
-    cb?.({ key: "language", value: "en" });
-    expect(historyI18nMocks.changeLanguage).toHaveBeenCalledWith("en");
+    cb?.({ key: "language" });
+    await waitFor(() => {
+      expect(historyI18nMocks.changeLanguage).toHaveBeenCalledWith("en");
+    });
+  });
+
+  it("applies the persisted language on mount", async () => {
+    // [20260905_Fix_247_LanguageOnMount] A freshly opened window boots with
+    // the navigator language; the persisted choice must win.
+    const getSetting = vi.fn(async (key: string) =>
+      key === "language" ? "en" : null,
+    );
+    await mountHistory({ getSetting });
+    await waitFor(() => {
+      expect(historyI18nMocks.changeLanguage).toHaveBeenCalledWith("en");
+    });
   });
 
   it("closes the window via the header button", async () => {

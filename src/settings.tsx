@@ -42,9 +42,28 @@ const sectionTitleDefaults: Record<SettingsSection, string> = {
 };
 
 const SettingsPage = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [activeSection, setActiveSection] =
     useState<SettingsSection>("general");
+
+  // [20260905_Fix_247_LanguageOnMount] The window booted with the navigator
+  // language (i18n init has no async IPC at import); the user's persisted
+  // choice lives in the settings DB — apply it on mount. Without this the
+  // settings window could render a different language than the one the user
+  // picked in a previous session.
+  React.useEffect(() => {
+    if (!window.electronAPI?.getSetting) return;
+    window.electronAPI
+      .getSetting("language", "zh-CN")
+      .then((value) => {
+        i18n.changeLanguage(
+          typeof value === "string" && value ? value : "zh-CN",
+        );
+      })
+      .catch(() => {
+        // Settings read raced window teardown — keep navigator language.
+      });
+  }, [i18n]);
 
   const {
     settings,
