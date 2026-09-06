@@ -102,9 +102,23 @@ jobs:
         if: runner.os == 'macOS'
         run: pnpm run test:coverage
 
-      - name: Test (full suite; coverage floor is macOS-scoped)
+      # [20260906_Test_CoverageSignal] Spec #266 T05: the Windows leg has no
+      # threshold (see vitest.config.ts platform-scope note — platform-
+      # conditional branches make the percentages non-comparable), which made
+      # cross-leg divergence invisible (first honest win measurement:
+      # 91.53 branch vs 92.19 mac). Run coverage with a text reporter so
+      # both legs' numbers land in the CI log for comparison. The four
+      # threshold=0 flags neutralize the global thresholds from
+      # vitest.config.ts for THIS step only (the macOS leg keeps enforcing
+      # them) — report-only, non-blocking by construction.
+      - name: Test (full suite) with coverage report (no threshold on win)
         if: runner.os == 'Windows'
-        run: pnpm run test
+        run: >-
+          pnpm exec vitest run --coverage --coverage.reporter=text
+          --coverage.thresholds.statements=0
+          --coverage.thresholds.branches=0
+          --coverage.thresholds.functions=0
+          --coverage.thresholds.lines=0
 
       # [20260817_T4_CiMatrix] Mirror of the local ci-check stage1 entry:
       # stdlib-unittest suite (protocol contract + numpy smoke) via the
