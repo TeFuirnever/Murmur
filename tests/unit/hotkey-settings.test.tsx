@@ -121,6 +121,51 @@ function makeElectronAPIStub(
   } as unknown as ElectronAPI;
 }
 
+// [20260905_Fix_249_ReviewCoverage] Error-arm coverage for the hook: IPC
+// rejections are logged when the log bridge exists, and tolerated silently
+// when it does not.
+describe("[20260905_Fix_249_ReviewCoverage] useHotkey error arms", () => {
+  it("logs a rejected getCurrentHotkey", async () => {
+    const logIpc = vi.fn().mockResolvedValue(undefined);
+    (globalThis.window as TestWindow).electronAPI = makeElectronAPIStub({
+      getCurrentHotkey: vi.fn().mockRejectedValue(new Error("bridge")),
+      log: logIpc,
+    });
+    renderHook(() => useHotkey());
+    await vi.waitFor(() => {
+      expect(logIpc).toHaveBeenCalledWith(
+        "warn",
+        "获取当前热键失败:",
+        expect.any(Error),
+      );
+    });
+  });
+
+  it("stays silent when getCurrentHotkey rejects without a log bridge", async () => {
+    (globalThis.window as TestWindow).electronAPI = makeElectronAPIStub({
+      getCurrentHotkey: vi.fn().mockRejectedValue(new Error("bridge")),
+    });
+    expect(() => renderHook(() => useHotkey())).not.toThrow();
+  });
+
+  it("logs a rejected syncRecordingState", async () => {
+    const logIpc = vi.fn().mockResolvedValue(undefined);
+    (globalThis.window as TestWindow).electronAPI = makeElectronAPIStub({
+      setRecordingState: vi.fn().mockRejectedValue(new Error("bridge")),
+      log: logIpc,
+    });
+    const { result } = renderHook(() => useHotkey());
+    await act(async () => {
+      await result.current.syncRecordingState(true);
+    });
+    expect(logIpc).toHaveBeenCalledWith(
+      "error",
+      "同步录音状态失败:",
+      expect.any(Error),
+    );
+  });
+});
+
 describe("[20260905_Fix_246_HotkeySettingsUi] useHotkey hotkey change", () => {
   let originalAPI: ElectronAPI | undefined;
   beforeEach(() => {
@@ -213,6 +258,36 @@ describe("[20260905_Fix_246_HotkeySettingsUi] useHotkey hotkey change", () => {
 
 // [20260905_Fix_249_CoveragePush] Pure display formatter arms: the default
 // Space label and separator rendering for non-space accelerators.
+// [20260905_Fix_249_ReviewCoverage] platform probe arms: userAgentData
+// platform, bare navigator.userAgent mac detection, and the default-space
+// label path.
+describe("[20260905_Fix_249_ReviewCoverage] isMacLike / formatAccelerator arms", () => {
+  function withUA(ua: string, uaData?: { platform?: string }) {
+    Object.defineProperty(navigator, "userAgent", {
+      value: ua,
+      configurable: true,
+    });
+    Object.defineProperty(navigator, "userAgentData", {
+      value: uaData,
+      configurable: true,
+    });
+  }
+
+  it("uses userAgentData platform when present", () => {
+    withUA("Mozilla/5.0", { platform: "Windows" });
+    expect(formatAccelerator("CommandOrControl+Space")).toMatch(/^Ctrl/);
+    withUA("", { platform: "macOS" });
+    expect(formatAccelerator("CommandOrControl+Space")).toMatch(/^⌘/);
+  });
+
+  it("falls back to userAgent sniffing without userAgentData", () => {
+    withUA("Mozilla/5.0 (Macintosh; Intel Mac OS X)");
+    expect(formatAccelerator("CommandOrControl+Space")).toMatch(/^⌘/);
+    withUA("Mozilla/5.0 (Windows NT)");
+    expect(formatAccelerator("CommandOrControl+Space")).toMatch(/^Ctrl/);
+  });
+});
+
 describe("[20260905_Fix_249_CoveragePush] formatAccelerator", () => {
   it("defaults the Space label to the word Space", () => {
     expect(formatAccelerator("CommandOrControl+Shift+Space")).toContain(

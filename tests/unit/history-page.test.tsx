@@ -51,6 +51,13 @@ function flatten(
 }
 const LOCALE = flatten(zhCN as Record<string, unknown>);
 
+// [20260905_Fix_249_ReviewMinor] Hoisted BEFORE the vi.mock below — the
+// mock factory and mockI18n reference it, and TS/ESLint reject use-before-
+// declaration when the const sits after the mock block.
+const historyI18nMocks = vi.hoisted(() => ({
+  changeLanguage: vi.fn<(lng: string) => void>(),
+}));
+
 // Stable identity across renders — the real useTranslation returns a
 // referentially stable t; a per-render t would rebuild hooks that depend
 // on it (loadTranscriptions) and re-trigger their mount effects forever.
@@ -88,10 +95,6 @@ vi.mock("react-i18next", () => ({
     t: translate,
     i18n: mockI18n,
   }),
-}));
-
-const historyI18nMocks = vi.hoisted(() => ({
-  changeLanguage: vi.fn<(lng: string) => void>(),
 }));
 
 type TestWindow = Omit<Window, "electronAPI"> & {
@@ -157,6 +160,35 @@ describe("[20260816_Test_HistoryPage] history window entry", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     apiMocks.getTranscriptions.mockResolvedValue([]);
+  });
+
+  it("shows the loading indicator while records are being fetched", async () => {
+    // [20260905_Fix_249_ReviewCoverage] The loading branch arm.
+    let release!: (v: unknown) => void;
+    apiMocks.getTranscriptions.mockReturnValue(
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+    );
+    await mountHistory();
+    await waitFor(() => {
+      expect(screen.getByText("加载中...")).toBeInTheDocument();
+    });
+    release([]);
+  });
+
+  it("does not render when the history-root container is missing", async () => {
+    // [20260905_Fix_249_ReviewCoverage] The mount guard's container-missing
+    // arm: nothing renders, nothing throws.
+    document.body.innerHTML = "";
+    (globalThis.window as unknown as TestWindow).electronAPI = {
+      getTranscriptions: apiMocks.getTranscriptions,
+    } as unknown as TestWindow["electronAPI"];
+    vi.resetModules();
+    await import("../../src/history");
+    await waitFor(() => {
+      expect(document.body.querySelector("#history-root")).toBeNull();
+    });
   });
 
   it("mounts the page and shows the empty state when no records exist", async () => {

@@ -165,6 +165,50 @@ describe("useSettings hook", () => {
     expect(result.current.settings.default_mode).toBe("auto");
   });
 
+  it("restores auto (not the stale choice) when the AI toggle re-enables", async () => {
+    // [20260905_Fix_249_ReviewCoverage] Once the toggle flips off, the mode
+    // is "off" and the previous explicit choice is intentionally dropped —
+    // re-enabling lands on the safe "auto" (restoring the exact prior mode
+    // would need extra memory; the read side treats "auto" as the default).
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() => {
+      result.current.handleInputChange("default_mode", "correct");
+    });
+    act(() => {
+      result.current.handleInputChange("enable_ai_optimization", false);
+    });
+    expect(result.current.settings.default_mode).toBe("off");
+    act(() => {
+      result.current.handleInputChange("enable_ai_optimization", true);
+    });
+    expect(result.current.settings.default_mode).toBe("auto");
+    expect(result.current.settings.enable_ai_optimization).toBe(true);
+  });
+
+  it("tolerates a missing electronAPI on the sync paths", async () => {
+    // [20260905_Fix_249_ReviewCoverage] The setSetting-optional arms: with
+    // the bridge gone, handleInputChange must still update React state.
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    const win = globalThis.window as TestWindow;
+    delete win.electronAPI;
+
+    act(() => {
+      result.current.handleInputChange("enable_ai_optimization", false);
+    });
+    expect(result.current.settings.default_mode).toBe("off");
+    act(() => {
+      result.current.handleInputChange("default_mode", "summarize");
+    });
+    expect(result.current.settings.enable_ai_optimization).toBe(true);
+    act(() => {
+      result.current.handleInputChange("theme", "dark");
+    });
+    expect(result.current.settings.theme).toBe("dark");
+  });
+
   it("keeps the AI toggle in sync when default_mode is changed", async () => {
     const { result } = renderHook(() => useSettings());
     await waitFor(() => expect(result.current.loading).toBe(false));

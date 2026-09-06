@@ -278,7 +278,7 @@ describe("transcriptionHandlers", () => {
       const handler = registeredHandlers.get(C.TRANSCRIPTION.DELETE)!;
 
       await handler({}, 42);
-      expect(mockDb.deleteTranscription).toHaveBeenCalledWith(42);
+      expect(mockDb.deleteTranscription!).toHaveBeenCalledWith(42);
     });
   });
 
@@ -314,6 +314,27 @@ describe("transcriptionHandlers", () => {
 
       expect(result).toMatchObject({ success: false });
       expect(String(result.error)).toContain("db locked");
+    });
+  });
+
+  describe("TRANSCRIPTION.DELETE wraps RunResult (review NIT)", () => {
+    it("returns the declared OperationResult shape", async () => {
+      const C = await setup();
+      const handler = registeredHandlers.get(C.TRANSCRIPTION.DELETE)!;
+      mockDb.deleteTranscription!.mockReturnValue({ changes: 3 });
+      const result = (await handler({}, 42)) as Record<string, unknown>;
+      expect(mockDb.deleteTranscription).toHaveBeenCalledWith(42);
+      expect(result).toEqual({ success: true, changes: 3 });
+    });
+
+    it("returns success:false when the delete throws", async () => {
+      const C = await setup();
+      const handler = registeredHandlers.get(C.TRANSCRIPTION.DELETE)!;
+      mockDb.deleteTranscription!.mockImplementation(() => {
+        throw new Error("locked");
+      });
+      const result = (await handler({}, 42)) as Record<string, unknown>;
+      expect(result).toMatchObject({ success: false });
     });
   });
 
