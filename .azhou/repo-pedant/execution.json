@@ -1,60 +1,60 @@
 {
   "schema_version": "repo-pedant.execution.v1",
   "mode": "reconcile",
-  "scope": "/Users/guanxueliang/Desktop/oh-my-ai/Murmur",
+  "scope": "Murmur",
   "result": "passed",
   "checks": [
     {
       "id": "inventory",
       "status": "passed",
-      "evidence": "inventory_knowledge.py validate -> valid:true; 334 files classified, 0 unclassified, 2 holds (deep-test-design docs, owner user)"
+      "evidence": "inventory_knowledge.py snapshot -> 341 files enumerated (done-archive.md 补录); 全部分类(20 update / 1 memory hold / 4 vendored-skill size hold / 其余 verified 带清扫证据); inventory_knowledge.py validate -> valid:true, errors:[]"
     },
     {
       "id": "readback",
       "status": "passed",
-      "evidence": "grep readback: CHANGELOG carries the (#227) clause; notepad priority line reads 1709/1709 with #227 in the status list; project-memory customNote reads 1709 用例; all three parse/format checks passed via ci:check format gate"
+      "evidence": "grep 读回 6/6:CONTRIBUTING 含 'Spec #266 T01 起为合并门禁' 与 '1800+ 用例';README '1800+ tests';CHANGELOG '## [Unreleased]';checklist 'T03/#279 已交付';gap-analysis 顶部交付状态注;backlog 3 条 done 2026-09-07"
     },
     {
       "id": "tests",
       "status": "passed",
-      "evidence": "pnpm vitest run -> 1709/1709 (count claim verified live, not carried); pnpm ci:check -> All 11 checks passed"
+      "evidence": "pnpm test -> 152 files / 1823 tests 全绿;pnpm test:e2e -> 61/61 全绿(含 suite 14 axe 2 用例);pnpm ci:check -> All 11 checks passed(含 dev smoke 心跳)"
     },
     {
       "id": "links",
       "status": "passed",
-      "evidence": "audit doc committed with ratification section; issue #227 closed with implementation report; no new links created beyond the changelog clause"
+      "evidence": "locale-parity 2/2(新增 tray/settings.ai 键双语言成对);rg 已删 20 通道名在活文档(docs/qa、CONTRIBUTING、README、CHANGELOG、backlog)零残留——唯一命中为 dated research/plans 的历史语境,按规则保留"
     },
     {
       "id": "diff",
       "status": "passed",
-      "evidence": "post-sync diff: CHANGELOG.md (committed) + .omc/notepad.md + .omc/project-memory.json (tool state); backlog.md untouched (user's)"
+      "evidence": "reconcile 同步提交 412c7dc(8 文件:CONTRIBUTING/README/CHANGELOG/backlog/done-archive/checklist/gap-analysis/inventory);后续仅剩 .azhou 执行记录与本提交无关的未跟踪 asr 报告已 gitignore"
     },
     {
       "id": "coverage",
       "status": "passed",
-      "evidence": "audit closeout (ca4b57b: 4 doc assets + 2 research docs) and #227 (fdb1772: shell feature + 3 tests) fully mapped; changelog was the one doc drift, synced"
+      "evidence": "pnpm test + coverage 在 ci:check 内通过(阈值 96/92/94/96, macOS 腿强制);win 腿覆盖率文本报告步骤已由 T05 加入 ci.yml(报告不设卡)"
     }
   ],
   "events": [
     {
       "stage": "start",
-      "message": "🦊 阿舟 · Repo Pedant 启动｜mode=reconcile｜scope=/Users/guanxueliang/Desktop/oh-my-ai/Murmur"
+      "message": "🦊 阿舟 · Repo Pedant 启动｜mode=reconcile｜scope=Murmur"
     },
     {
       "stage": "scope",
-      "message": "🧭 范围锁定｜authority=git HEAD fdb1772｜projects=1"
+      "message": "🧭 范围锁定｜authority=维护者直接调用($repo-pedant,Spec #266 交付收尾)｜projects=1"
     },
     {
       "stage": "inventory",
-      "message": "🗂️ 清单完成｜files=334｜holds=2｜out_of_scope=325"
+      "message": "🗂️ 清单完成｜files=341｜holds=5｜out_of_scope=3"
     },
     {
       "stage": "impact",
-      "message": "🕸️ 影响确认｜surfaces=6｜consumers=3"
+      "message": "🕸️ 影响确认｜surfaces=9｜consumers=12"
     },
     {
       "stage": "sync",
-      "message": "🧹 同步完成｜changed=3"
+      "message": "🧹 同步完成｜changed=8"
     },
     {
       "stage": "verify_success",
