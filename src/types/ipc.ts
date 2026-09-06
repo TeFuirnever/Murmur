@@ -198,12 +198,8 @@ export interface PythonInstallResult {
   error?: string;
 }
 
-export interface FunASRInstallResult {
-  installed: boolean;
-  packages?: string[];
-  error?: string;
-}
-
+// [20260906_Refactor_DeadChannelCleanup] FunASRInstallResult removed —
+// pythonEnvironment declares its own; the IPC copy had zero importers.
 // ─── Update ───
 
 export interface UpdateCheckResult {
@@ -242,14 +238,6 @@ export interface UpdateErrorData {
   error: string;
 }
 
-// ─── Permissions ───
-
-export interface PermissionResult {
-  accessibility: boolean;
-  microphone: boolean;
-  [key: string]: boolean;
-}
-
 // ─── Hotkey ───
 
 export interface HotkeyRegistrationResult {
@@ -262,14 +250,8 @@ export interface HotkeyRegistrationResult {
 // in preload.ts (callback param + handler param) and src/electronAPI.d.ts
 // (callback param). Single source of truth for event payload shapes.
 
-/** Payload for the `processing-update` event (model status changes). */
-export interface ProcessingUpdateData {
-  status?: string;
-  progress?: number;
-  type?: string;
-  isLoading?: boolean;
-  isReady?: boolean;
-}
+// [20260906_Refactor_DeadChannelCleanup] ProcessingUpdateData removed with
+// its event (processing-update had a listener but no main-process sender).
 
 /** Payload for the `file-transcription-progress` event. */
 export interface FileTranscriptionProgressData {
