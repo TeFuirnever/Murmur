@@ -80,13 +80,16 @@ describe("charErrorRate", () => {
 describe("discoverGoldenCases", () => {
   it("pairs wavs with their utterance reference, base-only by default", () => {
     const dir = makeTmpGoldenSet();
-    const cases = discoverGoldenCases(dir);
-    expect(cases.map((c) => c.name)).toEqual(["s00_base", "s01_base"]);
-    expect(cases[0].reference).toContain("产品路线图");
+    try {
+      const cases = discoverGoldenCases(dir);
+      expect(cases.map((c) => c.name)).toEqual(["s00_base", "s01_base"]);
+      expect(cases[0]?.reference).toContain("产品路线图");
 
-    const all = discoverGoldenCases(dir, { includeVariants: true });
-    expect(all.map((c) => c.name)).toContain("s00_g010_clean");
-    fs.rmSync(dir, { recursive: true, force: true });
+      const all = discoverGoldenCases(dir, { includeVariants: true });
+      expect(all.map((c) => c.name)).toContain("s00_g010_clean");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 
@@ -128,28 +131,32 @@ describe("runGoldenSet (fake protocol server)", () => {
       reportPath,
     });
 
-    expect(report.cases).toHaveLength(2);
-    // s00 matches its reference exactly (punctuation aside) → CER 0.
-    expect(report.cases[0]).toMatchObject({
-      name: "s00_base",
-      cer: 0,
-      passed: true,
-    });
-    // s01 hypothesis is wrong → above threshold.
-    expect(report.cases[1].passed).toBe(false);
-    expect(report.passed).toBe(false);
-    expect(fs.existsSync(reportPath)).toBe(true);
-    // The fake server exits itself on {"action":"exit"} — give it a beat.
-    fs.rmSync(dir, { recursive: true, force: true });
-    fs.rmSync(fakeDir, { recursive: true, force: true });
+    try {
+      expect(report.cases).toHaveLength(2);
+      // s00 matches its reference exactly (punctuation aside) → CER 0.
+      expect(report.cases[0]).toMatchObject({
+        name: "s00_base",
+        cer: 0,
+        passed: true,
+      });
+      // s01 hypothesis is wrong → above threshold.
+      expect(report.cases[1]?.passed).toBe(false);
+      expect(report.passed).toBe(false);
+      expect(fs.existsSync(reportPath)).toBe(true);
+      expect(report.reportPath).toBe(reportPath);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+      fs.rmSync(fakeDir, { recursive: true, force: true });
+    }
   }, 15000);
 });
 
 describe("parseArgs", () => {
   it("accepts documented flags and rejects unknown ones", () => {
-    const { args } = parseArgs(["--all", "--threshold", "0.2"]);
-    expect(args.includeVariants).toBe(true);
-    expect(args.threshold).toBe(0.2);
+    const ok = parseArgs(["--all", "--threshold", "0.2"]);
+    expect(ok.error).toBeUndefined();
+    expect(ok.args?.includeVariants).toBe(true);
+    expect(ok.args?.threshold).toBe(0.2);
     expect(parseArgs(["--bogus"]).error).toBeTruthy();
     expect(parseArgs(["--threshold", "abc"]).error).toBeTruthy();
   });
@@ -163,7 +170,9 @@ describe("package surface", () => {
     expect(pkg.scripts["test:asr"]).toContain("asr-regression");
   });
 
-  it("golden_set corpus is present in the repo", () => {
+  // The wav payloads are dev-machine assets (gitignored); only the corpus
+  // directory and the server script are guaranteed on a fresh clone.
+  it("golden_set corpus directory and server script exist", () => {
     expect(
       fs.existsSync(path.resolve(__dirname, "../../scripts/golden_set")),
     ).toBe(true);

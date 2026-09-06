@@ -20,7 +20,6 @@
 
 const { spawn, spawnSync } = require("child_process");
 const fs = require("fs");
-const os = require("os");
 const path = require("path");
 
 const ROOT = path.resolve(__dirname, "..");
@@ -209,8 +208,11 @@ function runGoldenSet(options, callbacks = {}) {
       );
       graceTimer.unref?.();
       proc.stdout.removeAllListeners();
+      // [20260906_Test_AsrRegressionHarness_ReviewFix] Kill unconditionally:
+      // main() calls process.exit as soon as the promise resolves, so a
+      // polite stdin-only shutdown could orphan the torch process (~2GB).
+      killServerProcess(proc);
       if (error) {
-        killServerProcess(proc);
         reject(error);
         return;
       }
@@ -222,6 +224,7 @@ function runGoldenSet(options, callbacks = {}) {
         cases: scored,
         ...evaluateCases(scored, threshold),
         elapsedMs: Date.now() - startedAt,
+        reportPath,
       };
       try {
         fs.mkdirSync(path.dirname(reportPath), { recursive: true });

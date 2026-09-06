@@ -45,6 +45,22 @@ export declare interface RunGoldenSetOptions {
   reportPath?: string;
 }
 
+// [20260906_Test_AsrRegressionHarness_ReviewFix] Discriminated union: when
+// error is set, args is absent — callers can narrow without optional chains.
+export declare interface ParsedArgs {
+  includeVariants: boolean;
+  threshold: number;
+  goldenDir: string;
+  reportPath: string;
+  initTimeoutMs: number;
+  requestTimeoutMs: number;
+  damoRoot: string | null;
+}
+
+export declare type ParseArgsResult =
+  | { args: ParsedArgs; error?: never }
+  | { args?: undefined; error: string };
+
 declare const asr: {
   normalizeForCer(text: unknown): string;
   charErrorRate(reference: unknown, hypothesis: unknown): number;
@@ -72,7 +88,7 @@ declare const asr: {
       onCaseDone?: (scored: ScoredCase) => void;
     },
   ): Promise<AsrRegressionReport>;
-  parseArgs(argv: string[]): { args?: Record<string, unknown>; error?: string };
+  parseArgs(argv: string[]): ParseArgsResult;
   main(argv?: string[]): Promise<number>;
   DEFAULT_CER_THRESHOLD: number;
   DEFAULT_GOLDEN_DIR: string;
