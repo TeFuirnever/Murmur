@@ -106,6 +106,30 @@ describe("[20260906_Test_ClipboardBehavior] ClipboardManager", () => {
     spawned[1]!.emit("close", 0);
     await vi.advanceTimersByTimeAsync(100);
     await promise;
+    // [20260906_Test_ClipboardBehavior_Review] mac arm restores the original
+    // clipboard too (+100ms after close) — assert it like the win arm does.
+    expect(mockClipboard.writeText).toHaveBeenLastCalledWith("ORIGINAL");
+  });
+
+  it("mac arm timeout kills with SIGKILL, rejects, and never double-settles", async () => {
+    const promise = manager.pasteText("hello");
+    spawned[0]!.emit("close", 0); // permission granted
+    await vi.advanceTimersByTimeAsync(100);
+    const proc = spawned[1]!;
+
+    const guarded = promise
+      .then(() => "resolved")
+      .catch((err: Error) => `rejected: ${err.message}`);
+    await vi.advanceTimersByTimeAsync(3000);
+
+    expect(proc.kill).toHaveBeenCalledWith("SIGKILL");
+    const first = await guarded;
+    expect(first).toContain("粘贴操作超时");
+
+    // a late close event must not restore the clipboard after the timeout
+    proc.emit("close", 0);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(mockClipboard.writeText).not.toHaveBeenLastCalledWith("ORIGINAL");
   });
 
   it("mac arm without accessibility permission rejects with guidance", async () => {
