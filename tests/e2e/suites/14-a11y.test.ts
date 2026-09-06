@@ -9,7 +9,6 @@
 // violation requires pruning the baseline consciously.
 import { test, expect } from "@playwright/test";
 import fs from "fs";
-import path from "path";
 import {
   launchElectronApp,
   closeElectronApp,

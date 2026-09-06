@@ -1177,14 +1177,6 @@ describe("[20260816_Test_BranchPush] App branch matrix", () => {
   it("opens the history and settings windows from the title bar", async () => {
     readyModel();
     await mountApp();
-    // [20260905_Feat_BloubMascotWiring] the wordmark now sits inside a
-    // bot+wordmark wrapper, so the row is located by its own classes
-    const titleBar = screen
-      .getByText("Murmur")
-      .closest("div.items-center.justify-between");
-    const buttons = Array.from(
-      titleBar?.querySelectorAll("button") ?? [],
-    ) as HTMLButtonElement[];
     // [20260906_Test_AxeA11y] the history/settings buttons now carry
     // aria-labels (axe button-name gate) — select them by name.
     const historyButton = screen.getByRole("button", { name: "历史记录" });
