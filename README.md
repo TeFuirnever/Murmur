@@ -163,7 +163,7 @@ pnpm dev
 
 ```bash
 pnpm dev          # 启动开发模式
-pnpm test         # 运行测试（1400+ tests，覆盖率 ~97%）
+pnpm test         # 运行测试（1800+ tests，覆盖率 ~97%）
 pnpm lint         # 代码检查（0 warnings）
 pnpm typecheck    # TypeScript 类型检查
 pnpm ci:check     # 本地运行所有 CI 门禁

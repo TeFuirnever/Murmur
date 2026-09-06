@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **五级测试体系补全**（Spec #266，issues #277–#297）：按单元/集成/契约/E2E/验收五级补齐测试网。新增真实浏览器旅程 E2E（文件导入→转录→取消、热词持久化→说话人分离、检查更新→下载进度→SHA256 失败分支）、axe 无障碍门禁（真实窗口扫描，发现并修复 7 处真实缺陷）、托盘/热键/剪贴板管理器行为单测、平台臂同机对测（win/darwin 双语义同机断言）、覆盖率门禁 meta 钉、settings 四处同步规则 meta-test、磁盘满/DB busy 传播回归、导出内容读回断言（srt 时间轴 + docx 正文）。
+- **ASR 回归 harness**（`pnpm test:asr`，开发机专用）：以仓库自带 golden_set 语料驱动真实 FunASR server，按字错率阈值红绿；当前基线 6/6 通过、CER 0.0%。
+- **打包态 boot-health 探针**（发布流水线 mac/win）：以已安装产物为启动目标运行完整探针套件。
+- **QA 文档**：发版人工验收清单、LLM 供应商兼容走查单、探索性测试 charter（多显示器/读屏/浸泡）。
+
+### Fixed
+
+- **导出全部丢失分段时间轴**：export-all 向格式化器传原始行（segments 为 JSON 字符串）而格式化器读解析后的字段——历史记录"导出全部"的 srt/vtt 从未包含时间轴，已按单条导出口径逐行解析。
+- **7 处无障碍缺陷**（axe 扫描发现并修复）：主窗标题栏历史/设置图标按钮无 accessible name、设置窗模型下拉/语言下拉/两个开关无名称、侧栏 tab 缺 tablist 结构，及 7 处小字号描述文本对比度不足（#86868b → #6e6e73）。
+- **托盘菜单硬编码中文**：接入 i18n 并随语言设置实时重建菜单。
+
+### Changed
+
+- **清理 20 个渲染层孤儿 IPC 通道**（#250，依据 #252 实测黄名单）：契约/preload/类型声明/handler/限流表全链路删除，契约面净减约 500 行；orphans 测试升级为净零网（新增无调用者通道直接 CI 红）。
+- **CI e2e 获得门禁权**（#277）：boot-health 探针失败即阻塞合并（此前 52 条 E2E 全部 continue-on-error 从未拦截过回归）；dev smoke 升级为主进程启动里程碑心跳（#251），主进程崩溃不再被端口探活漏过。
+- **退役 phase3/phase5 文本断言套件**：分别被真实更新旅程 E2E 与 axe 扫描替代。
+
 ## [1.5.0] - 2026-09-05
 
 ### Fixed

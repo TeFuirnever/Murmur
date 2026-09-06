@@ -1,6 +1,7 @@
 # Murmur 五级测试体系 GAP 分析（2026-09-06）
 
 > 审计基线：branch `autopilot/p1p2p3`，HEAD `65262a7`（2026-09-06 12:05 +0800，"test: cover review-fix branches; push coverage past the 92% gate"）。v1.5.0 已于 2026-09-05 发布（`.omc/notepad.md` Priority Context）。
+> 状态更新（2026-09-07）：本文 GAP 为交付前基线；Spec #266（issues #277–#297、#250/#251/#252）已全部交付于分支 `feat/five-level-test-tickets`，文中 G1–G5 与各域 GAP 的处置见对应 ticket。
 > 审计性质：只读调查。未修改任何源码/测试。覆盖率数据读取自仓库现存产物 `coverage/coverage-final.json`（当前 HEAD 的 CI 覆盖率跑批产物），未重跑全量套件。
 > 方法：先通读既有 8 份测试策略文档（§9 索引）避免重复，再盘点功能面（`src/helpers/ipc-contracts.ts` + 全部 helper/renderer/打包入口）、测试资产（`tests/unit` 130 文件、`tests/e2e` 14 suite 52 用例、`tests/python` 12 文件、`scripts/ci-check.js`、`.github/workflows/{ci,build}.yml`），最后做五级矩阵 GAP 分析。
 
