@@ -5,8 +5,7 @@
  */
 import { test, expect } from "@playwright/test";
 import fs from "fs";
-import os from "os";
-import path from "path";
+import { writeTempSilentWav } from "../helpers/fixtures";
 import {
   launchElectronApp,
   closeElectronApp,
@@ -68,35 +67,13 @@ test.describe("Suite 5: File Import & Transcription", () => {
 
 // [20260906_Test_FileTranscriptionJourney] Spec #266 T09 (#286): the full
 // file-transcription journey with a REAL (runtime-generated) wav fixture.
-// Only the OS file dialog (import-audio-file) and the transcription engine
-// (transcribe-file) are mocked; validation and the rest of the stack run
-// for real. Covers the cancel branch via a hanging transcribe-file handler.
+// The OS dialog (import-audio-file) and the transcription engine
+// (transcribe-file — including its history persistence and export record
+// id, which the mock fakes) are mocked; validation runs for real. Covers the cancel branch via a hanging transcribe-file handler.
 test.describe("Suite 5b: File transcription journey", () => {
   let electronApp;
   let window;
   let wavPath;
-
-  // 1s of 16kHz mono 16-bit silence: canonical 44-byte WAV header + zeros.
-  // Generated at runtime so no binary fixture lands in the repo.
-  function makeSilentWav() {
-    const sampleRate = 16000;
-    const dataSize = sampleRate * 2; // mono, 16-bit, 1 second
-    const header = Buffer.alloc(44);
-    header.write("RIFF", 0);
-    header.writeUInt32LE(36 + dataSize, 4);
-    header.write("WAVE", 8);
-    header.write("fmt ", 12);
-    header.writeUInt32LE(16, 16);
-    header.writeUInt16LE(1, 20); // PCM
-    header.writeUInt16LE(1, 22); // mono
-    header.writeUInt32LE(sampleRate, 24);
-    header.writeUInt32LE(sampleRate * 2, 28); // byte rate
-    header.writeUInt16LE(2, 32); // block align
-    header.writeUInt16LE(16, 34); // bits per sample
-    header.write("data", 36);
-    header.writeUInt32LE(dataSize, 40);
-    return Buffer.concat([header, Buffer.alloc(dataSize)]);
-  }
 
   /** Select the fixture through the (dialog-replacing) import mock. */
   async function importFixture() {
@@ -113,8 +90,7 @@ test.describe("Suite 5b: File transcription journey", () => {
 
   test.beforeAll(async () => {
     ({ app: electronApp, window } = await launchElectronApp());
-    wavPath = path.join(os.tmpdir(), `murmur-e2e-silence-${Date.now()}.wav`);
-    fs.writeFileSync(wavPath, makeSilentWav());
+    wavPath = writeTempSilentWav("silence");
     await window.locator('button:has-text("文件导入")').click();
   });
 

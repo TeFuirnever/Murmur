@@ -1,3 +1,4 @@
+// [20260906_Test_HotwordDiarizeJourneys] Spec #266 T10 (#287)
 /**
  * Suite 12: Hotword persistence + speaker diarization journeys (Spec #266 T10)
  *
@@ -18,33 +19,12 @@ import {
 } from "../helpers/electron-launch";
 import { mockIpcHandler } from "../helpers/ipc-mock";
 import fs from "fs";
-import os from "os";
-import path from "path";
+import { writeTempSilentWav } from "../helpers/fixtures";
 
 test.describe("Suite 12: Hotwords + diarize journeys", () => {
   let electronApp;
   let window;
   let wavPath;
-
-  function makeSilentWav() {
-    const sampleRate = 16000;
-    const dataSize = sampleRate * 2;
-    const header = Buffer.alloc(44);
-    header.write("RIFF", 0);
-    header.writeUInt32LE(36 + dataSize, 4);
-    header.write("WAVE", 8);
-    header.write("fmt ", 12);
-    header.writeUInt32LE(16, 16);
-    header.writeUInt16LE(1, 20);
-    header.writeUInt16LE(1, 22);
-    header.writeUInt32LE(sampleRate, 24);
-    header.writeUInt32LE(sampleRate * 2, 28);
-    header.writeUInt16LE(2, 32);
-    header.writeUInt16LE(16, 34);
-    header.write("data", 36);
-    header.writeUInt32LE(dataSize, 40);
-    return Buffer.concat([header, Buffer.alloc(dataSize)]);
-  }
 
   async function importFixtureAndStart() {
     // a previous journey may have left the controller in done/cancelled
@@ -69,8 +49,7 @@ test.describe("Suite 12: Hotwords + diarize journeys", () => {
 
   test.beforeAll(async () => {
     ({ app: electronApp, window } = await launchElectronApp());
-    wavPath = path.join(os.tmpdir(), `murmur-e2e-hotword-${Date.now()}.wav`);
-    fs.writeFileSync(wavPath, makeSilentWav());
+    wavPath = writeTempSilentWav("hotword");
   });
 
   test.afterAll(async () => {
