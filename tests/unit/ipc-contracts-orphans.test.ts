@@ -117,7 +117,12 @@ describe("ipc-contracts renderer-caller dimension", () => {
     const rootDir = path.join(process.cwd(), "src");
     const files = walk(rootDir).filter(
       (f) =>
-        !f.includes(`${path.sep}helpers${path.sep}`) && !f.endsWith(".d.ts"),
+        !f.includes(`${path.sep}helpers${path.sep}`) &&
+        // src/dist holds gitignored vite build artifacts whose minified
+        // bundles bake in stale electronAPI calls — counting them would
+        // mask newly-orphaned channels on dev machines (review finding).
+        !f.includes(`${path.sep}dist${path.sep}`) &&
+        !f.endsWith(".d.ts"),
     );
     return files.map((f) => fs.readFileSync(f, "utf8")).join("\n");
   }

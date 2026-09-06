@@ -72,7 +72,7 @@ vi.mock("fs", async (importOriginal) => {
   return { ...actual, default: { ...actual, existsSync: vi.fn(() => true) } };
 });
 
-import { Tray, Menu, nativeImage, dialog, app } from "electron";
+import { Menu, nativeImage, dialog, app } from "electron";
 import TrayManager from "../../src/helpers/tray";
 
 const ORIG_PLATFORM = process.platform;
@@ -93,6 +93,13 @@ function setResourcesPath(value: string): void {
     writable: true,
   });
 }
+
+// [20260906_Test_TrayBehavior_ReviewFix] Single-point typed cast instead of
+// repeating double-casts at every call site.
+const asWindow = (win: MockWindow): Electron.BrowserWindow =>
+  win as unknown as Electron.BrowserWindow;
+
+const READY_TOOLTIP = "Murmur - 中文语音转文字";
 
 function makeWindow(overrides: Partial<MockWindow> = {}): MockWindow {
   return {
@@ -163,7 +170,7 @@ describe("[20260906_Test_TrayBehavior] TrayManager", () => {
       expect(trayInstances[0]?.icon).toEqual({
         fromPath: path.join("/test/app", "assets", "tray-icon-16.png"),
       });
-      expect(trayInstances[0]?.tooltip).toBe("Murmur - 中文语音转文字");
+      expect(trayInstances[0]?.tooltip).toBe(READY_TOOLTIP);
     });
 
     it("falls back to an empty image when the icon file is missing", async () => {
@@ -178,7 +185,7 @@ describe("[20260906_Test_TrayBehavior] TrayManager", () => {
     it("click toggles the main window: visible hides, hidden shows+focuses", async () => {
       const win = makeWindow();
       const manager = new TrayManager();
-      manager.setWindows(win as unknown as Electron.BrowserWindow);
+      manager.setWindows(asWindow(win));
       await manager.createTray();
 
       win.isVisible.mockReturnValue(true);
@@ -195,7 +202,7 @@ describe("[20260906_Test_TrayBehavior] TrayManager", () => {
     it("click is a no-op when the window is destroyed or unset", async () => {
       const win = makeWindow({ isDestroyed: vi.fn(() => true) });
       const manager = new TrayManager();
-      manager.setWindows(win as unknown as Electron.BrowserWindow);
+      manager.setWindows(asWindow(win));
       await manager.createTray();
       trayInstances[0]?.handlers.click?.();
       expect(win.hide).not.toHaveBeenCalled();
@@ -228,7 +235,7 @@ describe("[20260906_Test_TrayBehavior] TrayManager", () => {
     it("registers show / about / quit entries with working click effects", async () => {
       const win = makeWindow();
       const manager = new TrayManager();
-      manager.setWindows(win as unknown as Electron.BrowserWindow);
+      manager.setWindows(asWindow(win));
       await manager.createTray();
 
       const menu = trayInstances[0]?.contextMenu;
@@ -267,9 +274,9 @@ describe("[20260906_Test_TrayBehavior] TrayManager", () => {
       manager.setStatus("processing");
       expect(trayInstances[0]?.tooltip).toBe("Murmur - 正在处理...");
       manager.setStatus("ready");
-      expect(trayInstances[0]?.tooltip).toBe("Murmur - 中文语音转文字");
+      expect(trayInstances[0]?.tooltip).toBe(READY_TOOLTIP);
       manager.setStatus("anything-else");
-      expect(trayInstances[0]?.tooltip).toBe("Murmur - 中文语音转文字");
+      expect(trayInstances[0]?.tooltip).toBe(READY_TOOLTIP);
     });
 
     it("setStatus without a tray is a safe no-op", () => {
