@@ -173,6 +173,53 @@ describe("[20260816_Test_SettingsPage] settings entry mount", () => {
     });
   });
 
+  it("applies the persisted language on mount and tolerates rejections", async () => {
+    // [20260905_Fix_247_LanguageOnMount] The settings window boots with the
+    // navigator language; the persisted choice is applied on mount. The
+    // rejection arm must stay silent.
+    vi.resetModules();
+    vi.doMock("../../src/bootstrap/assertElectronAPI.js", () => ({
+      assertElectronAPI: vi.fn(() => true),
+    }));
+    const changeLanguage = vi.fn();
+    vi.doMock("react-i18next", async (importOriginal) => {
+      const actual = await importOriginal<Record<string, unknown>>();
+      return {
+        ...actual,
+        useTranslation: () => ({
+          t: (key: string, fallback?: string) => fallback ?? key,
+          i18n: { language: "zh-CN", changeLanguage },
+        }),
+      };
+    });
+    document.body.innerHTML = '<div id="settings-root"></div>';
+    const getSetting = vi.fn(async (key: string) =>
+      key === "language" ? "en" : null,
+    );
+    (window as unknown as { electronAPI: unknown }).electronAPI = {
+      getSetting,
+    };
+    await import("../../src/settings");
+    await new Promise((r) => setTimeout(r, 30));
+    expect(changeLanguage).toHaveBeenCalledWith("en");
+
+    // Rejection arm: silent.
+    changeLanguage.mockClear();
+    vi.resetModules();
+    vi.doMock("../../src/bootstrap/assertElectronAPI.js", () => ({
+      assertElectronAPI: vi.fn(() => true),
+    }));
+    document.body.innerHTML = '<div id="settings-root"></div>';
+    (window as unknown as { electronAPI: unknown }).electronAPI = {
+      getSetting: vi.fn(async () => {
+        throw new Error("gone");
+      }),
+    };
+    await import("../../src/settings");
+    await new Promise((r) => setTimeout(r, 30));
+    expect(changeLanguage).not.toHaveBeenCalled();
+  });
+
   it("leaves #settings-root empty when the preload bridge is missing", async () => {
     vi.resetModules();
     vi.doMock("../../src/bootstrap/assertElectronAPI.js", () => ({

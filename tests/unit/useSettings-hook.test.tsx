@@ -9,6 +9,7 @@
 import "../setup/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
+import { DEFAULT_HOTKEY } from "../../src/settings/hotkeyRecorder";
 import { useSettings } from "../../src/settings/useSettings";
 import type { ElectronAPI } from "../../src/electronAPI";
 // [20260816_Test_BranchPush] Toast assertions for the load/save failure paths.
@@ -295,6 +296,26 @@ describe("useSettings hook", () => {
     const { result } = renderHook(() => useSettings());
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.settings.default_mode).toBe("auto");
+  });
+
+  it("falls back to the default hotkey when the stored value is not a usable string", async () => {
+    // [20260905_Fix_249_ReviewCoverage] The two fallback arms of the hotkey
+    // loader: non-string stored values and empty strings both yield
+    // DEFAULT_HOTKEY.
+    const api = (globalThis.window as TestWindow).electronAPI!;
+    (api.getAllSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      hotkey: 42,
+    });
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.settings.hotkey).toBe(DEFAULT_HOTKEY);
+
+    (api.getAllSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      hotkey: "",
+    });
+    const { result: result2 } = renderHook(() => useSettings());
+    await waitFor(() => expect(result2.current.loading).toBe(false));
+    expect(result2.current.settings.hotkey).toBe(DEFAULT_HOTKEY);
   });
 
   it("keeps a persisted default_mode value as-is", async () => {
