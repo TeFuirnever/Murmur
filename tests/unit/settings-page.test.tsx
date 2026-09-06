@@ -36,6 +36,9 @@ function flatten(
 const LOCALE = flatten(zhCN as Record<string, unknown>);
 
 vi.mock("react-i18next", () => ({
+  // [20260905_Fix_247_I18nMainHistory] settings.tsx now imports ./i18n which
+  // calls i18n.use(initReactI18next) — the mock must provide the symbol.
+  initReactI18next: { type: "3rdParty", init: () => undefined },
   useTranslation: () => ({
     t: (key: string, fallback?: string) => LOCALE[key] ?? fallback ?? key,
     i18n: { language: "zh-CN", changeLanguage: vi.fn() },
@@ -64,6 +67,8 @@ vi.mock("../../src/settings/useSettings", async (importOriginal) => {
         auto_paste: "paste",
         close_behavior: "hide",
         theme: "system",
+        // [20260905_Fix_246_HotkeySettingsUi] new settings key
+        hotkey: "CommandOrControl+Shift+Space",
       },
       loading: false,
       saving: false,

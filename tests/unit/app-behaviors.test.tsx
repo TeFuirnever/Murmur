@@ -19,6 +19,59 @@ const { toast } = vi.hoisted(() => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
 }));
 
+// [20260905_Fix_247_I18nMainHistory] App.tsx now translates through
+// react-i18next (with interpolation variables like {{error}} / {{progress}}).
+// The real i18next instance is uninitialized in unit tests and would return
+// the raw fallback templates uninterpolated — resolve t() against the shipped
+// zh-CN locale with variable substitution instead (settings-page pattern).
+import zhCN from "../../src/i18n/locales/zh-CN.json";
+
+function flattenLocale(
+  obj: Record<string, unknown>,
+  prefix = "",
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    const key = prefix ? `${prefix}.${k}` : k;
+    if (v !== null && typeof v === "object") {
+      Object.assign(out, flattenLocale(v as Record<string, unknown>, key));
+    } else {
+      out[key] = String(v);
+    }
+  }
+  return out;
+}
+const APP_LOCALE = flattenLocale(zhCN as Record<string, unknown>);
+
+// Stable identity across renders — the real useTranslation returns a
+// referentially stable t, and App's applyHotkeySetting depends on it.
+const translate = (
+  key: string,
+  fallbackOrOpts?: string | Record<string, unknown>,
+  opts?: Record<string, unknown>,
+): string => {
+  const template =
+    APP_LOCALE[key] ??
+    (typeof fallbackOrOpts === "string" ? fallbackOrOpts : key);
+  const vars =
+    opts ??
+    (typeof fallbackOrOpts === "object" && fallbackOrOpts !== null
+      ? fallbackOrOpts
+      : undefined);
+  if (!vars) return template;
+  return template.replace(/{{(\w+)}}/g, (_m, name: string) =>
+    vars[name] === undefined ? `{{${name}}}` : String(vars[name]),
+  );
+};
+
+vi.mock("react-i18next", () => ({
+  initReactI18next: { type: "3rdParty", init: () => undefined },
+  useTranslation: () => ({
+    t: translate,
+    i18n: { language: "zh-CN" },
+  }),
+}));
+
 vi.mock("sonner", () => ({
   toast,
   Toaster: () =>
@@ -450,7 +503,9 @@ describe("[20260816_Test_AppBehaviors] App behavior matrix", () => {
     await mountApp();
     const before = apiMocks.getSetting.mock.calls.length;
     act(() => {
-      listeners.settings?.();
+      // Realistic SETTINGS_UPDATE payload ({key, value}) per the preload
+      // contract — App reads data.key to decide re-application targets.
+      listeners.settings?.({ key: "theme", value: "dark" });
     });
     expect(apiMocks.getSetting.mock.calls.length).toBeGreaterThan(before);
   });
@@ -1135,11 +1190,18 @@ describe("[20260816_Test_BranchPush] App branch matrix", () => {
 
   // --- hook wiring edge cases ---
 
-  it("stays quiet when hotkey registration resolves false (value is not branched on)", async () => {
+  it("warns when hotkey registration resolves false (settings entry exists now)", async () => {
+    // [20260905_Fix_246_HotkeySettingsUi] The old contract kept quiet on
+    // success=false because the failure toast pointed at a nonexistent
+    // settings entry. With the entry shipped (#246), a failed registration
+    // warns the user and points at the (now real) setting.
     hotkeyCtl.registerHotkey.mockResolvedValueOnce(false);
     await mountApp();
     await act(async () => {});
-    expect(toast.warning).not.toHaveBeenCalled();
+    expect(toast.warning).toHaveBeenCalledTimes(1);
+    expect(toast.warning).toHaveBeenCalledWith(
+      expect.stringContaining("快捷键注册失败"),
+    );
   });
 
   it("tolerates a missing syncRecordingState hook member", async () => {

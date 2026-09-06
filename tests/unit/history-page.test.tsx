@@ -27,6 +27,61 @@ vi.mock("../../src/bootstrap/assertElectronAPI.js", () => ({
   assertElectronAPI: vi.fn(() => true),
 }));
 
+// [20260905_Fix_247_I18nMainHistory] src/history.tsx now imports ./i18n and
+// translates through react-i18next. Under jsdom the real i18n instance would
+// boot at navigator.language ("en-US"), breaking the zh assertions below —
+// resolve t() against the shipped zh-CN locale (flattened) instead, the same
+// pattern as settings-page.test.tsx.
+import zhCN from "../../src/i18n/locales/zh-CN.json";
+
+function flatten(
+  obj: Record<string, unknown>,
+  prefix = "",
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    const key = prefix ? `${prefix}.${k}` : k;
+    if (v !== null && typeof v === "object") {
+      Object.assign(out, flatten(v as Record<string, unknown>, key));
+    } else {
+      out[key] = String(v);
+    }
+  }
+  return out;
+}
+const LOCALE = flatten(zhCN as Record<string, unknown>);
+
+// Stable identity across renders — the real useTranslation returns a
+// referentially stable t; a per-render t would rebuild hooks that depend
+// on it (loadTranscriptions) and re-trigger their mount effects forever.
+const translate = (
+  key: string,
+  fallbackOrOpts?: string | Record<string, unknown>,
+  opts?: Record<string, unknown>,
+): string => {
+  const template =
+    LOCALE[key] ?? (typeof fallbackOrOpts === "string" ? fallbackOrOpts : key);
+  const vars =
+    opts ??
+    (typeof fallbackOrOpts === "object" && fallbackOrOpts !== null
+      ? fallbackOrOpts
+      : undefined);
+  if (!vars) return template;
+  return template.replace(/{{(\w+)}}/g, (_m, name: string) =>
+    vars[name] === undefined ? `{{${name}}}` : String(vars[name]),
+  );
+};
+
+vi.mock("react-i18next", () => ({
+  // src/history.tsx imports ./i18n, which calls i18n.use(initReactI18next) —
+  // the mock must provide the plugin symbol too.
+  initReactI18next: { type: "3rdParty", init: () => undefined },
+  useTranslation: () => ({
+    t: translate,
+    i18n: { language: "zh-CN" },
+  }),
+}));
+
 type TestWindow = Omit<Window, "electronAPI"> & {
   electronAPI?: {
     getTranscriptions: (

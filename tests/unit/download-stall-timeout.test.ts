@@ -147,9 +147,14 @@ describe("[20260905_Fix_254_DownloadStallTimeout] modelManager stall watchdog", 
 
   it("still times out when progress plateaus — repeated equal values do not re-arm the watchdog", async () => {
     const { stdout, done } = await spawnDownload();
-    // Attach the rejection assertion BEFORE advancing timers so the
-    // rejection never lands in an unhandled window.
-    const rejection = expect(done).rejects.toThrow(/保留|续传/);
+    // Attach the catch handler BEFORE advancing timers so the rejection
+    // never lands in an unhandled window; the assertion happens after.
+    // (Inline `expect(done).rejects.*` attachment is reserved for direct
+    // awaits by the rejection-assertions-awaited suite rule.)
+    let stallError: Error | undefined;
+    const settled = done.catch((error: Error) => {
+      stallError = error;
+    });
 
     emitProgress(stdout, 50);
     // Heartbeat-style events at the SAME value every minute: no growth, so
@@ -160,7 +165,8 @@ describe("[20260905_Fix_254_DownloadStallTimeout] modelManager stall watchdog", 
     }
 
     await vi.advanceTimersByTimeAsync(STALL_WINDOW_MS);
-    await rejection;
+    await settled;
+    expect(stallError?.message).toMatch(/保留|续传/);
 
     const spawned = spawnMock.mock.results[0]?.value as EventEmitter & {
       killed: boolean;
@@ -170,11 +176,15 @@ describe("[20260905_Fix_254_DownloadStallTimeout] modelManager stall watchdog", 
 
   it("rejects with a resume hint when the download stalls past the window", async () => {
     const { done } = await spawnDownload();
-    const rejection = expect(done).rejects.toThrow(/已保留.*续传|保留.*续传/);
+    let stallError: Error | undefined;
+    const settled = done.catch((error: Error) => {
+      stallError = error;
+    });
 
     // No progress event ever arrives (hang at start) — pure idle timeout.
     await vi.advanceTimersByTimeAsync(STALL_WINDOW_MS + 1000);
-    await rejection;
+    await settled;
+    expect(stallError?.message).toMatch(/已保留.*续传|保留.*续传/);
 
     // The stale process must have been killed, not left running.
     const spawned = spawnMock.mock.results[0]?.value as EventEmitter & {
