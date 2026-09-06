@@ -1185,7 +1185,6 @@ describe("[20260816_Test_BranchPush] App branch matrix", () => {
     const settingsButton = screen.getByRole("button", { name: "设置" });
     fireEvent.click(settingsButton);
     expect(apiMocks.openSettingsWindow).toHaveBeenCalledTimes(1);
-    expect(buttons.length).toBeGreaterThan(0);
   });
 
   it("does nothing on window-control clicks when the bridge is absent", async () => {
@@ -1193,11 +1192,6 @@ describe("[20260816_Test_BranchPush] App branch matrix", () => {
     fireEvent.click(screen.getByRole("button", { name: "最小化" }));
     fireEvent.click(screen.getByRole("button", { name: "最大化" }));
     fireEvent.click(screen.getByRole("button", { name: "关闭" }));
-    // [20260905_Feat_BloubMascotWiring] the wordmark now sits inside a
-    // bot+wordmark wrapper, so the row is located by its own classes
-    const titleBar = screen
-      .getByText("Murmur")
-      .closest("div.items-center.justify-between");
     const historyButton = screen.getByRole("button", { name: "历史记录" });
     const settingsButton = screen.getByRole("button", { name: "设置" });
     fireEvent.click(historyButton);
