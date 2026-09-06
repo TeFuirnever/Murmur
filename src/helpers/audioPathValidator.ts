@@ -101,11 +101,21 @@ function validateAudioPath(filePath: string): AudioPathResult {
 // targets — the Windows system trees — are rejected explicitly. Zero
 // compatibility cost (audio never legitimately lives there), and UNC paths
 // stay rejected. User directories on any drive remain accepted.
+// [20260905_Fix_195_ReviewBlacklistHardening] Also catch Win32 8.3 short
+// names (PROGRA~1) and per-segment trailing dots/spaces — these slip past
+// the regex on the non-existent-path branch, where realpath cannot
+// canonicalize the raw string first (security review finding 1, MEDIUM).
 const WIN_SYSTEM_DIR_RE =
-  /^[a-z]:[\\/](?:windows|program files(?: \(x86\))?|programdata)(?:[\\/]|$)/i;
+  /^[a-z]:[\\/](?:windows|program files(?: \(x86\))?|programdata|progra~\d)(?:[\\/]|$)/i;
 
 function isWindowsSystemPath(candidate: string): boolean {
-  return WIN_SYSTEM_DIR_RE.test(candidate);
+  // Win32 treats a trailing dot/space in each path segment as a separator
+  // artifact ("C:\Windows.\x.wav" == "C:\Windows\x.wav"), so normalize the
+  // raw candidate before matching — mirroring the text the OS would resolve.
+  const normalized = candidate
+    .replace(/[. ]+([\\/])/g, "$1")
+    .replace(/[. ]+$/g, "");
+  return WIN_SYSTEM_DIR_RE.test(normalized);
 }
 
 /**

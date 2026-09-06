@@ -68,6 +68,9 @@ describe("[20260816_Test_BranchPush] audioPathValidator branch coverage", () => 
     ["C:\\Program Files (x86)\\SomeApp\\capture.wav"],
     ["C:\\ProgramData\\SomeApp\\clip.wav"],
     ["D:\\Windows\\Media\\x.wav"],
+    ["C:\\PROGRA~1\\SomeApp\\capture.wav"], // 8.3 short name (review MFIX 1)
+    ["C:\\Windows.\\Media\\x.wav"], // trailing-dot segment (review MFIX 1)
+    ["C:\\windows\\Media\\alarm.wav "], // trailing space (review MFIX 1)
   ])("rejects a windows system-directory path %s", (candidate) => {
     setPlatform("win32");
     const target = path.join(tmpDir, "audio.wav");
