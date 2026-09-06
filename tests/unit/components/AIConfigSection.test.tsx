@@ -24,10 +24,14 @@ const BASE_SETTINGS: SettingsState = {
   ai_temperature: 0.3,
   ai_max_tokens: 8192,
   enable_ai_optimization: true,
+  // [20260905_Fix_249_DefaultModeUi] new settings key
+  default_mode: "auto",
   window_always_on_top: true,
   auto_paste: "paste",
   close_behavior: "hide",
   theme: "system",
+  // [20260905_Fix_246_HotkeySettingsUi] new settings key
+  hotkey: "CommandOrControl+Shift+Space",
   hotwords: "",
   bot_shape: "circle",
   bot_color: "auto",

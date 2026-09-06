@@ -23,7 +23,8 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
   const [recording, setRecording] = useState(false);
 
   const handleCaptureKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (!recording) return;
+    // The capture zone only renders while recording, so no !recording guard
+    // is needed here (an unreachable branch would just rot).
     event.preventDefault();
     event.stopPropagation();
     // Escape is the recorder's cancel key (buildAccelerator rejects it).

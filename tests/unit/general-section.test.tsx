@@ -138,4 +138,35 @@ describe("[20260816_Test_GeneralSection] GeneralSection", () => {
   it("defaults the contract default_mode to auto", () => {
     expect(DEFAULT_SETTINGS.default_mode).toBe("auto");
   });
+
+  // [20260905_Fix_249_CoveragePush] Branch arms added with the default-mode
+  // and hotkey-recorder UI: the always-on-top OFF render arm, the recorder's
+  // blur-cancels-capture behavior, and the hotwords input path.
+  it("renders the always-on-top switch unchecked when the setting is off", () => {
+    render(
+      <GeneralSection
+        settings={{ ...BASE, window_always_on_top: false }}
+        onInputChange={onInputChange}
+      />,
+    );
+    expect(screen.getByRole("switch")).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("cancels the hotkey capture when the zone loses focus", () => {
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+    fireEvent.click(screen.getByTestId("hotkey-record"));
+    const capture = screen.getByTestId("hotkey-capture");
+    fireEvent.blur(capture);
+    // Recording ended — the capture zone is gone and the button resets.
+    expect(screen.queryByTestId("hotkey-capture")).not.toBeInTheDocument();
+    expect(screen.getByTestId("hotkey-record")).toHaveTextContent("更改");
+  });
+
+  it("reports hotword list edits", () => {
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+    fireEvent.change(screen.getByLabelText("热词"), {
+      target: { value: "张晗玥" },
+    });
+    expect(onInputChange).toHaveBeenCalledWith("hotwords", "张晗玥");
+  });
 });

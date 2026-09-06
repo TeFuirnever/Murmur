@@ -26,7 +26,10 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-import { buildAccelerator } from "../../src/settings/hotkeyRecorder";
+import {
+  buildAccelerator,
+  formatAccelerator,
+} from "../../src/settings/hotkeyRecorder";
 import { useHotkey } from "../../src/hooks/useHotkey";
 import { DEFAULT_SETTINGS } from "../../src/settings/useSettings";
 import { GeneralSection } from "../../src/settings/sections/GeneralSection";
@@ -75,6 +78,21 @@ describe("[20260905_Fix_246_HotkeySettingsUi] buildAccelerator", () => {
 
   it("rejects combos without a modifier (except F-keys)", () => {
     expect(buildAccelerator(keyEvent({ key: "k", code: "KeyK" }))).toBeNull();
+  });
+
+  // [20260905_Fix_249_CoveragePush] arrow-map and space main-key arms.
+  it("maps arrows with a modifier via the arrow code map", () => {
+    expect(
+      buildAccelerator(
+        keyEvent({ key: "ArrowDown", code: "ArrowDown", ctrlKey: true }),
+      ),
+    ).toBe("CommandOrControl+Down");
+  });
+
+  it("maps the space key to the Space token", () => {
+    expect(
+      buildAccelerator(keyEvent({ key: " ", code: "Space", shiftKey: true })),
+    ).toBe("Shift+Space");
   });
 
   it("rejects modifier-only presses", () => {
@@ -146,6 +164,66 @@ describe("[20260905_Fix_246_HotkeySettingsUi] useHotkey hotkey change", () => {
       "CommandOrControl+Shift+K",
     );
     expect(result.current.rawHotkey).toBe("CommandOrControl+Shift+K");
+  });
+
+  it("dedups a repeated registration of the same combo", async () => {
+    // [20260905_Fix_249_CoveragePush] The ref-based dedup: the second
+    // registerHotkey with the identical combo must not hit the IPC bridge.
+    const registerHotkeyIpc = vi.fn().mockResolvedValue({ success: true });
+    (globalThis.window as TestWindow).electronAPI = makeElectronAPIStub({
+      registerHotkey: registerHotkeyIpc,
+    });
+
+    const { result } = renderHook(() => useHotkey());
+
+    await act(async () => {
+      await result.current.registerHotkey("CommandOrControl+Shift+Space");
+    });
+    await act(async () => {
+      await result.current.registerHotkey("CommandOrControl+Shift+Space");
+    });
+
+    expect(registerHotkeyIpc).toHaveBeenCalledTimes(1);
+  });
+
+  it("survives a rejected unregister IPC", async () => {
+    // [20260905_Fix_249_CoveragePush] The catch arm: unregister failures are
+    // logged, never thrown to the caller.
+    const unregisterHotkeyIpc = vi.fn().mockRejectedValue(new Error("bridge"));
+    const logIpc = vi.fn().mockResolvedValue(undefined);
+    (globalThis.window as TestWindow).electronAPI = makeElectronAPIStub({
+      unregisterHotkey: unregisterHotkeyIpc,
+      log: logIpc,
+    });
+
+    const { result } = renderHook(() => useHotkey());
+
+    await expect(
+      act(async () => {
+        await result.current.unregisterHotkey("CommandOrControl+Shift+Space");
+      }),
+    ).resolves.toBeUndefined();
+    expect(logIpc).toHaveBeenCalledWith(
+      "error",
+      "注销热键失败:",
+      expect.any(Error),
+    );
+  });
+});
+
+// [20260905_Fix_249_CoveragePush] Pure display formatter arms: the default
+// Space label and separator rendering for non-space accelerators.
+describe("[20260905_Fix_249_CoveragePush] formatAccelerator", () => {
+  it("defaults the Space label to the word Space", () => {
+    expect(formatAccelerator("CommandOrControl+Shift+Space")).toContain(
+      "Space",
+    );
+  });
+
+  it("renders a non-space accelerator with separators", () => {
+    expect(formatAccelerator("CommandOrControl+Shift+K")).toMatch(
+      /(⌘|Ctrl) \+ ⇧ \+ K/,
+    );
   });
 });
 

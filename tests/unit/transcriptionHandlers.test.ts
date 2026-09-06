@@ -293,13 +293,13 @@ describe("transcriptionHandlers", () => {
       const C = await setup();
       const handler = registeredHandlers.get(C.TRANSCRIPTION.CLEAR)!;
 
-      mockDb.clearAllTranscriptions.mockReturnValue({
+      mockDb.clearAllTranscriptions!.mockReturnValue({
         changes: 5,
         lastInsertRowid: 1,
       });
       const result = (await handler({})) as Record<string, unknown>;
 
-      expect(mockDb.clearAllTranscriptions).toHaveBeenCalledTimes(1);
+      expect(mockDb.clearAllTranscriptions!).toHaveBeenCalledTimes(1);
       expect(result).toEqual({ success: true, changes: 5 });
     });
 
@@ -307,7 +307,7 @@ describe("transcriptionHandlers", () => {
       const C = await setup();
       const handler = registeredHandlers.get(C.TRANSCRIPTION.CLEAR)!;
 
-      mockDb.clearAllTranscriptions.mockImplementation(() => {
+      mockDb.clearAllTranscriptions!.mockImplementation(() => {
         throw new Error("db locked");
       });
       const result = (await handler({})) as Record<string, unknown>;

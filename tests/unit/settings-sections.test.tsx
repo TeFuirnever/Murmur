@@ -104,10 +104,13 @@ function buildSettings(overrides: Partial<SettingsState> = {}): SettingsState {
     ai_temperature: 0.3,
     ai_max_tokens: 2000,
     enable_ai_optimization: true,
+    default_mode: "auto",
     window_always_on_top: false,
     auto_paste: "paste",
     close_behavior: "hide",
     theme: "system",
+    // [20260905_Fix_246_HotkeySettingsUi] new settings key
+    hotkey: "CommandOrControl+Shift+Space",
     hotwords: "",
     bot_shape: "circle",
     bot_color: "auto",

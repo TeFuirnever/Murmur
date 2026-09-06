@@ -173,7 +173,7 @@ describe("App component", () => {
 // vi.fn() per call, which would be unassertable across the render boundary).
 describe("App hotkey setting wiring (#246)", () => {
   it("applies the persisted hotkey setting on mount", async () => {
-    mockElectronAPI.getSetting.mockImplementation(async (key: string) =>
+    mockElectronAPI.getSetting!.mockImplementation(async (key: string) =>
       key === "hotkey" ? "CommandOrControl+Shift+K" : "paste",
     );
     render(React.createElement(App));
@@ -194,8 +194,8 @@ describe("App hotkey setting wiring (#246)", () => {
     );
     hotkeyMocks.registerHotkey.mockClear();
 
-    const updateCb = mockElectronAPI.onSettingsUpdate.mock
-      .calls[0][0] as (data: { key: string }) => void;
+    const updateCb = mockElectronAPI.onSettingsUpdate!.mock
+      .calls[0]![0] as (data: { key: string }) => void;
     await act(async () => {
       updateCb({ key: "hotkey" });
     });
@@ -216,8 +216,8 @@ describe("App hotkey setting wiring (#246)", () => {
     );
     hotkeyMocks.registerHotkey.mockClear();
 
-    const updateCb = mockElectronAPI.onSettingsUpdate.mock
-      .calls[0][0] as (data: { key: string }) => void;
+    const updateCb = mockElectronAPI.onSettingsUpdate!.mock
+      .calls[0]![0] as (data: { key: string }) => void;
     await act(async () => {
       updateCb({ key: "theme" });
     });

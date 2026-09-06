@@ -320,6 +320,31 @@ describe("[20260816_Test_HistoryPage] history window entry", () => {
     }
   });
 
+  it("returns silently when the bridge is absent for export and clear", async () => {
+    // [20260905_Fix_249_CoveragePush] The no-bridge early returns: without
+    // electronAPI both actions are no-ops (no crash, no toast possible).
+    apiMocks.getTranscriptions.mockResolvedValue([makeRecord(1, "x")]);
+    await mountHistory();
+    (globalThis.window as unknown as TestWindow).electronAPI = undefined;
+    fireEvent.click(await screen.findByTestId("export-all"));
+    fireEvent.click(screen.getByTestId("clear-all"));
+    // No IPC, no throw — the records are still rendered.
+    expect(screen.getByText("x")).toBeInTheDocument();
+  });
+
+  it("toasts failure when the export IPC rejects", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    apiMocks.getTranscriptions.mockResolvedValue([makeRecord(1, "x")]);
+    apiMocks.exportTranscriptions.mockRejectedValue(new Error("disk full"));
+    await mountHistory();
+    fireEvent.click(await screen.findByTestId("export-all"));
+    const { toast } = await import("sonner");
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith("导出失败");
+    });
+    errSpy.mockRestore();
+  });
+
   it("stays silent when the export save dialog is cancelled", async () => {
     apiMocks.getTranscriptions.mockResolvedValue([makeRecord(1, "x")]);
     apiMocks.exportTranscriptions.mockResolvedValue({
