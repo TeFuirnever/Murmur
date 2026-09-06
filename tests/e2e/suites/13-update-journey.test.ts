@@ -1,3 +1,4 @@
+// [20260906_Test_UpdateJourney] Spec #266 T13 (#290)
 /**
  * Suite 13: Semi-auto update journey (Spec #266 T13).
  *
@@ -75,7 +76,8 @@ test.describe("Suite 13: Update journey", () => {
           downloaded: 66026410,
           total: 157286400,
         });
-        await new Promise((r) => setTimeout(r, 300));
+        // >=1s keeps the 42% progress DOM state observable on a slow CI runner
+        await new Promise((r) => setTimeout(r, 1000));
         sender.send("update-download-error", {
           error: "SHA256 校验失败：下载文件已损坏",
         });

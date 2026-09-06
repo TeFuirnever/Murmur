@@ -58,19 +58,25 @@ const KNOWN_RENDERER_NOISE = [
 // test evaluates them by name inside the browser (the old call(window) form
 // ran on the Node side, where the Playwright Page has no electronAPI — the
 // test could only ever fail).
+// [20260906_Refactor_DeadChannelCleanup] Ticket #250: the get-system-info and
+// is-window-maximized probes were removed with their zero-renderer-caller
+// channels (SYSTEM.INFO / WINDOW.IS_MAX); 6 side-effect-free probes remain.
 const BOOT_PROBES = {
   "check-funasr-status": "checkFunASRStatus",
   "check-model-files": "checkModelFiles",
   "get-ai-modes": "getAIModes",
   "get-all-settings": "getAllSettings",
-  "get-system-info": "getSystemInfo",
   "get-app-version": "getAppVersion",
-  "is-window-maximized": "isWindowMaximized",
   "get-current-hotkey": "getCurrentHotkey",
 };
 // [20260725_E2E_BootHealthGate] END
 
 test.describe.serial("Suite 0: Boot Health (Phase A-E)", () => {
+  // [20260906_Test_PackagedBootHealth] Spec #266 T11: in packaged-app runs
+  // (release workflow) first boot pays cold asar/entitlements cost; the
+  // config default 45s would mask the real launch timeout of 60s.
+  test.setTimeout(90_000);
+
   let electronApp;
   let window;
   // [20260725_E2E_BootHealthGate_CodeReviewS2] Renderer console listener
@@ -111,6 +117,8 @@ test.describe.serial("Suite 0: Boot Health (Phase A-E)", () => {
   //
   // [20260816_Refactor_DeadChannels] get-current-model probe removed with the
   // placeholder MODELS.CURRENT channel; 8 side-effect-free probes remain.
+  // [20260906_Refactor_DeadChannelCleanup] …and ticket #250 removed the
+  // get-system-info / is-window-maximized probes; 6 probes remain.
   // [20260816_Fix_BootProbeContext] The probes used to run as call(window) on
   // the Node side, where the Playwright Page object has no electronAPI — the
   // test could only ever fail. Evaluate each probe inside the browser so the
@@ -120,7 +128,7 @@ test.describe.serial("Suite 0: Boot Health (Phase A-E)", () => {
       await expect(
         window.evaluate(
           // [20260816_Refactor_DeadChannels] get-current-model probe removed with the
-          // placeholder MODELS.CURRENT channel; 8 side-effect-free probes remain.
+          // placeholder MODELS.CURRENT channel.
           // [20260816_Fix_BootProbeContext] Runs in the browser: look the
           // method up on the real preload bridge by name so a rejection
           // ("No handler registered") surfaces as a test failure.
