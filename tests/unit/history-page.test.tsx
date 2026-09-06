@@ -90,7 +90,8 @@ type TestWindow = Omit<Window, "electronAPI"> & {
     ) => Promise<Array<Record<string, unknown>>>;
     deleteTranscription: (id: number) => Promise<unknown>;
     copyText: (text: string) => Promise<unknown>;
-    exportTranscriptions: (format: string) => void;
+    exportTranscriptions: (format: string) => Promise<unknown>;
+    clearAllTranscriptions: () => Promise<unknown>;
     getAllSettings: () => Promise<Record<string, unknown>>;
     closeHistoryWindow: () => void;
   };
@@ -115,6 +116,7 @@ const apiMocks = {
   deleteTranscription: vi.fn(),
   copyText: vi.fn(),
   exportTranscriptions: vi.fn(),
+  clearAllTranscriptions: vi.fn(),
   closeHistoryWindow: vi.fn(),
 };
 
@@ -127,6 +129,7 @@ async function mountHistory() {
     deleteTranscription: apiMocks.deleteTranscription,
     copyText: apiMocks.copyText,
     exportTranscriptions: apiMocks.exportTranscriptions,
+    clearAllTranscriptions: apiMocks.clearAllTranscriptions,
     closeHistoryWindow: apiMocks.closeHistoryWindow,
     getAllSettings: vi.fn().mockResolvedValue({}),
   } as TestWindow["electronAPI"];
@@ -252,6 +255,58 @@ describe("[20260816_Test_HistoryPage] history window entry", () => {
     await mountHistory();
     fireEvent.click(await screen.findByText("导出全部"));
     expect(apiMocks.exportTranscriptions).toHaveBeenCalledWith("txt");
+  });
+
+  // [20260905_Fix_248_HistoryClearExport] Issue #248: the export button was
+  // hardcoded to txt (the handler already supports txt/srt/vtt/md/docx) and
+  // there was no clear-all entry (the CLEAR IPC chain was fully in place).
+  it("exports with the format chosen in the format selector", async () => {
+    apiMocks.getTranscriptions.mockResolvedValue([makeRecord(1, "x")]);
+    apiMocks.exportTranscriptions.mockResolvedValue({
+      success: true,
+      path: "/tmp/out.md",
+    });
+    await mountHistory();
+    fireEvent.change(await screen.findByTestId("export-format"), {
+      target: { value: "md" },
+    });
+    fireEvent.click(screen.getByTestId("export-all"));
+    await waitFor(() => {
+      expect(apiMocks.exportTranscriptions).toHaveBeenCalledWith("md");
+    });
+  });
+
+  it("clears all records after confirmation and reloads the list", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    apiMocks.getTranscriptions.mockResolvedValue([makeRecord(1, "x")]);
+    apiMocks.clearAllTranscriptions.mockResolvedValue({ success: true });
+    await mountHistory();
+    await screen.findByText("x");
+
+    fireEvent.click(screen.getByTestId("clear-all"));
+
+    await waitFor(() => {
+      expect(apiMocks.clearAllTranscriptions).toHaveBeenCalledTimes(1);
+    });
+    // The list reloads after the wipe — the empty state shows.
+    await waitFor(() => {
+      expect(screen.getByText("暂无转录历史")).toBeInTheDocument();
+    });
+    expect(screen.getByText("共 0 条记录")).toBeInTheDocument();
+    confirmSpy.mockRestore();
+  });
+
+  it("keeps the records when the clear confirmation is dismissed", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    apiMocks.getTranscriptions.mockResolvedValue([makeRecord(1, "x")]);
+    await mountHistory();
+    await screen.findByText("x");
+
+    fireEvent.click(screen.getByTestId("clear-all"));
+
+    expect(apiMocks.clearAllTranscriptions).not.toHaveBeenCalled();
+    expect(screen.getByText("x")).toBeInTheDocument();
+    confirmSpy.mockRestore();
   });
 
   it("closes the window via the header button", async () => {

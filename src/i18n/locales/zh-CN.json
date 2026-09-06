@@ -303,7 +303,10 @@
     "deleteFailed": "删除记录失败",
     "today": "今天 {{time}}",
     "yesterday": "昨天 {{time}}",
-    "daysAgo": "{{count}}天前"
+    "daysAgo": "{{count}}天前",
+    "formatLabel": "导出格式",
+    "clearSuccess": "已清空所有转录记录",
+    "clearFailed": "清空失败"
   },
   "recording": {
     "recording": "录音中",

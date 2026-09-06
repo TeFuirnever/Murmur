@@ -303,7 +303,10 @@
     "deleteFailed": "Failed to delete record",
     "today": "Today {{time}}",
     "yesterday": "Yesterday {{time}}",
-    "daysAgo": "{{count}} days ago"
+    "daysAgo": "{{count}} days ago",
+    "formatLabel": "Export format",
+    "clearSuccess": "All transcriptions cleared",
+    "clearFailed": "Failed to clear transcriptions"
   },
   "recording": {
     "recording": "Recording",

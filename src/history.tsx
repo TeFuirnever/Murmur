@@ -91,6 +91,10 @@ const HistoryContent = ({
   >([]);
   const [loading, setLoading] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState("");
+  // [20260905_Fix_248_HistoryClearExport] Export format for the bulk export
+  // (issue #248: the button was hardcoded to txt while the IPC handler
+  // already supports txt/srt/vtt/md/docx via exportFormatters).
+  const [exportFormat, setExportFormat] = React.useState("txt");
 
   // [20260815_Refactor_HistoryDerivedState] filteredTranscriptions was a
   // second useState synced by a useEffect — derivable state, now a useMemo.
@@ -126,6 +130,54 @@ const HistoryContent = ({
   React.useEffect(() => {
     loadTranscriptions();
   }, [loadTranscriptions]);
+
+  // [20260905_Fix_248_HistoryClearExport] Bulk export with a user-chosen
+  // format; the main-process handler resolves the formatter and the save
+  // dialog. Cancelled dialogs stay silent.
+  const handleExportAll = async () => {
+    if (!window.electronAPI) return;
+    try {
+      const result = (await window.electronAPI.exportTranscriptions(
+        exportFormat,
+      )) as { success: boolean; canceled?: boolean; error?: string };
+      if (result.success) {
+        toast.success(t("history.exportSuccess", "导出成功"));
+      } else if (!result.canceled) {
+        toast.error(t("history.exportFailed", "导出失败"));
+      }
+    } catch (error) {
+      console.error("导出失败:", error);
+      toast.error(t("history.exportFailed", "导出失败"));
+    }
+  };
+
+  // [20260905_Fix_248_HistoryClearExport] Clear-all entry (issue #248): the
+  // CLEAR IPC chain was fully wired (preload → handler → databaseManager)
+  // with no UI. Destructive — gated behind a native confirm dialog, then the
+  // list resets to the empty state.
+  const handleClearAll = async () => {
+    if (!window.electronAPI) return;
+    if (
+      !window.confirm(t("history.clearConfirm", "确定清空所有转录记录吗？"))
+    ) {
+      return;
+    }
+    try {
+      const result = (await window.electronAPI.clearAllTranscriptions()) as {
+        success: boolean;
+        error?: string;
+      };
+      if (result.success) {
+        toast.success(t("history.clearSuccess", "已清空所有转录记录"));
+        setTranscriptions([]);
+      } else {
+        toast.error(t("history.clearFailed", "清空失败"));
+      }
+    } catch (error) {
+      console.error("清空失败:", error);
+      toast.error(t("history.clearFailed", "清空失败"));
+    }
+  };
 
   // 删除转录记录
   const handleDelete = async (id: number) => {
@@ -190,16 +242,38 @@ const HistoryContent = ({
                 count: filteredTranscriptions.length,
               })}
             </span>
-            <button
-              onClick={() => {
-                if (window.electronAPI) {
-                  window.electronAPI.exportTranscriptions("txt");
-                }
-              }}
-              className="px-4 py-2 bg-[#0071e3] hover:bg-[#0077ed] dark:bg-[#0071e3] dark:hover:bg-[#0077ed] text-white rounded-lg transition-colors text-sm"
-            >
-              {t("history.exportAll", "导出全部")}
-            </button>
+            {/* [20260905_Fix_248_HistoryClearExport] Format selector + export
+                (handler-supported formats), and the clear-all entry gated by
+                a confirm dialog. */}
+            <div className="flex items-center gap-2">
+              <select
+                data-testid="export-format"
+                aria-label={t("history.formatLabel", "导出格式")}
+                value={exportFormat}
+                onChange={(e) => setExportFormat(e.target.value)}
+                className="px-3 py-2 text-sm border border-[#d2d2d7] dark:border-gray-600 bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-white rounded-lg focus:ring-2 focus:ring-[#0071e3] focus:border-transparent"
+              >
+                <option value="txt">TXT</option>
+                <option value="srt">SRT</option>
+                <option value="vtt">VTT</option>
+                <option value="md">Markdown</option>
+                <option value="docx">DOCX</option>
+              </select>
+              <button
+                data-testid="export-all"
+                onClick={handleExportAll}
+                className="px-4 py-2 bg-[#0071e3] hover:bg-[#0077ed] dark:bg-[#0071e3] dark:hover:bg-[#0077ed] text-white rounded-lg transition-colors text-sm"
+              >
+                {t("history.exportAll", "导出全部")}
+              </button>
+              <button
+                data-testid="clear-all"
+                onClick={handleClearAll}
+                className="px-4 py-2 text-sm border border-[#d2d2d7] dark:border-gray-600 text-[#86868b] hover:text-red-500 hover:border-red-300 dark:hover:border-red-500/50 rounded-lg transition-colors"
+              >
+                {t("history.clear", "清空所有")}
+              </button>
+            </div>
           </div>
         </div>
       </div>
