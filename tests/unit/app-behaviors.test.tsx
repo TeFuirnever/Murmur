@@ -1185,13 +1185,15 @@ describe("[20260816_Test_BranchPush] App branch matrix", () => {
     const buttons = Array.from(
       titleBar?.querySelectorAll("button") ?? [],
     ) as HTMLButtonElement[];
-    // The history/settings buttons are icon-only (no aria-label).
-    const unlabeled = buttons.filter((b) => !b.getAttribute("aria-label"));
-    expect(unlabeled).toHaveLength(2);
-    fireEvent.click(unlabeled[0] as HTMLButtonElement);
+    // [20260906_Test_AxeA11y] the history/settings buttons now carry
+    // aria-labels (axe button-name gate) — select them by name.
+    const historyButton = screen.getByRole("button", { name: "历史记录" });
+    fireEvent.click(historyButton);
     expect(apiMocks.openHistoryWindow).toHaveBeenCalledTimes(1);
-    fireEvent.click(unlabeled[1] as HTMLButtonElement);
+    const settingsButton = screen.getByRole("button", { name: "设置" });
+    fireEvent.click(settingsButton);
     expect(apiMocks.openSettingsWindow).toHaveBeenCalledTimes(1);
+    expect(buttons.length).toBeGreaterThan(0);
   });
 
   it("does nothing on window-control clicks when the bridge is absent", async () => {
@@ -1204,12 +1206,10 @@ describe("[20260816_Test_BranchPush] App branch matrix", () => {
     const titleBar = screen
       .getByText("Murmur")
       .closest("div.items-center.justify-between");
-    const buttons = Array.from(
-      titleBar?.querySelectorAll("button") ?? [],
-    ) as HTMLButtonElement[];
-    const unlabeled = buttons.filter((b) => !b.getAttribute("aria-label"));
-    fireEvent.click(unlabeled[0] as HTMLButtonElement);
-    fireEvent.click(unlabeled[1] as HTMLButtonElement);
+    const historyButton = screen.getByRole("button", { name: "历史记录" });
+    const settingsButton = screen.getByRole("button", { name: "设置" });
+    fireEvent.click(historyButton);
+    fireEvent.click(settingsButton);
     // No crash and no bridge calls — every guard short-circuited.
     expect(screen.getByText("Murmur")).toBeInTheDocument();
   });
@@ -1306,7 +1306,7 @@ describe("[20260816_Test_BranchPush] App branch matrix", () => {
     fireEvent.click(screen.getByRole("button", { name: "文件导入" }));
     const tab = screen.getByRole("button", { name: "实时录音模式" });
     expect((tab as HTMLButtonElement).disabled).toBe(false);
-    expect(tab.className).toContain("hover:text-gray-700");
+    expect(tab.className).toContain("hover:text-gray-800");
   });
 
   // --- result panel visibility rules ---

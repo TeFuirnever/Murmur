@@ -270,7 +270,11 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
           />
           <button
             type="button"
-            aria-label={showApiKey ? "隐藏 API Key" : "显示 API Key"}
+            aria-label={
+              showApiKey
+                ? t("settings.ai.hideApiKey", "隐藏 API Key")
+                : t("settings.ai.showApiKey", "显示 API Key")
+            }
             onClick={() => setShowApiKey(!showApiKey)}
             className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#86868b] hover:text-[#1d1d1f] dark:hover:text-[#f5f5f7]"
           >
