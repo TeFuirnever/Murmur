@@ -217,45 +217,66 @@ async function launchElectronApp({ env = {} } = {}) {
   );
   const launchStart = Date.now();
 
-  const app = await electron.launch({
-    // [20260725_E2E_CiStartupProbe] Pass --require ci-probe.js as the
-    // FIRST arg so it executes before dist-main/main.js. If [probe]
-    // lines appear in CI logs but [main:canary] don't, the problem
-    // is in main.ts module-load (e.g. an import side-effect that
-    // hangs on CI macOS).
-    // [20260726_Tier43_E2EHelpers] ci-probe stays .js: Electron's
-    // --require flag cannot transpile TypeScript, only .js/.json/.node.
-    args: [
-      "--require",
-      path.join(PROJECT_ROOT, "tests/e2e/helpers/ci-probe.js"),
-      // [20260906_Test_E2eDeterministicLocale] The main/settings/history
-      // windows are i18n-wired now (spec #247): without a pinned locale the
-      // UI language follows navigator.language, so Chinese-text selectors
-      // broke on English-locale machines (invisible while e2e was
-      // non-blocking). All suites assert zh-CN labels; make it explicit.
-      "--lang=zh-CN",
-      appRoot,
-    ],
-    // [20260725_E2E_CiStartupProbe] END
-    env: {
-      ...process.env,
-      NODE_ENV: "test",
-      MURMUR_DB_PATH: ":memory:",
-      // [20260725_E2E_LaunchDiagnosis] Force Electron to emit verbose
-      // logs to stderr. Without this the main process stays silent and
-      // the 'console' event listener only catches explicit console.log
-      // calls, not GPU/code-signing/init errors.
-      ELECTRON_ENABLE_LOGGING: "1",
+  // [20260906_Test_PackagedBootHealth] Spec #266 T11 (#288): target an
+  // INSTALLED packaged executable (release-workflow smoke target) instead
+  // of the dev bundle. The packaged app embeds its own main.js, so neither
+  // the ci-probe require nor the appRoot argument applies there.
+  const packagedExecutable = process.env.MURMUR_PACKAGED_EXECUTABLE;
+  const packagedOptions = packagedExecutable
+    ? {
+        executablePath: packagedExecutable,
+        args: ["--lang=zh-CN"],
+        env: {
+          ...process.env,
+          NODE_ENV: "test",
+          MURMUR_DB_PATH: ":memory:",
+          ELECTRON_ENABLE_LOGGING: "1",
+          ...env,
+        },
+        timeout: 60_000,
+      }
+    : undefined;
+  const app = await electron.launch(
+    packagedOptions ?? {
+      // [20260725_E2E_CiStartupProbe] Pass --require ci-probe.js as the
+      // FIRST arg so it executes before dist-main/main.js. If [probe]
+      // lines appear in CI logs but [main:canary] don't, the problem
+      // is in main.ts module-load (e.g. an import side-effect that
+      // hangs on CI macOS).
+      // [20260726_Tier43_E2EHelpers] ci-probe stays .js: Electron's
+      // --require flag cannot transpile TypeScript, only .js/.json/.node.
+      args: [
+        "--require",
+        path.join(PROJECT_ROOT, "tests/e2e/helpers/ci-probe.js"),
+        // [20260906_Test_E2eDeterministicLocale] The main/settings/history
+        // windows are i18n-wired now (spec #247): without a pinned locale the
+        // UI language follows navigator.language, so Chinese-text selectors
+        // broke on English-locale machines (invisible while e2e was
+        // non-blocking). All suites assert zh-CN labels; make it explicit.
+        "--lang=zh-CN",
+        appRoot,
+      ],
+      // [20260725_E2E_CiStartupProbe] END
+      env: {
+        ...process.env,
+        NODE_ENV: "test",
+        MURMUR_DB_PATH: ":memory:",
+        // [20260725_E2E_LaunchDiagnosis] Force Electron to emit verbose
+        // logs to stderr. Without this the main process stays silent and
+        // the 'console' event listener only catches explicit console.log
+        // calls, not GPU/code-signing/init errors.
+        ELECTRON_ENABLE_LOGGING: "1",
+        // [20260725_E2E_LaunchDiagnosis] END
+        ...env,
+      },
+      // [20260725_E2E_LaunchDiagnosis] Default Playwright launch timeout
+      // is 30s; CI macOS firstWindow flakiness is documented in spec
+      // §7 Stage 0. Bump to 60s for the diagnostic run so we get more
+      // process output before the timeout fires.
+      timeout: 60_000,
       // [20260725_E2E_LaunchDiagnosis] END
-      ...env,
     },
-    // [20260725_E2E_LaunchDiagnosis] Default Playwright launch timeout
-    // is 30s; CI macOS firstWindow flakiness is documented in spec
-    // §7 Stage 0. Bump to 60s for the diagnostic run so we get more
-    // process output before the timeout fires.
-    timeout: 60_000,
-    // [20260725_E2E_LaunchDiagnosis] END
-  });
+  );
 
   console.log(
     `${DIAG_PREFIX} electron.launch() returned after ${Date.now() - launchStart}ms (pid=${app.process()?.pid})`,
