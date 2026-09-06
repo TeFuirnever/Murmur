@@ -15,7 +15,10 @@ vi.mock("react-i18next", () => ({
 }));
 
 import { GeneralSection } from "../../src/settings/sections/GeneralSection";
-import type { SettingsState } from "../../src/settings/useSettings";
+import {
+  DEFAULT_SETTINGS,
+  type SettingsState,
+} from "../../src/settings/useSettings";
 
 const BASE: SettingsState = {
   ai_api_key: "",
@@ -28,6 +31,10 @@ const BASE: SettingsState = {
   auto_paste: "paste",
   close_behavior: "hide",
   theme: "system",
+  // [20260905_Fix_246_HotkeySettingsUi] new settings key
+  hotkey: "CommandOrControl+Shift+Space",
+  // [20260905_Fix_249_DefaultModeUi] new settings key
+  default_mode: "auto",
   hotwords: "",
   bot_shape: "circle",
   bot_color: "auto",
@@ -104,5 +111,31 @@ describe("[20260816_Test_GeneralSection] GeneralSection", () => {
       target: { value: "quit" },
     });
     expect(onInputChange).toHaveBeenCalledWith("close_behavior", "quit");
+  });
+
+  // [20260905_Fix_249_DefaultModeUi] Issue #249: "default_mode" was read by
+  // useRecording/useFileTranscription but had no write path (not even in
+  // ALLOWED_SETTING_KEYS), so the user's choice never persisted. The General
+  // tab gets a select over the read-side vocabulary (auto / off / mode names).
+  it("renders the default AI mode select reflecting the setting", () => {
+    render(
+      <GeneralSection
+        settings={{ ...BASE, default_mode: "correct" }}
+        onInputChange={onInputChange}
+      />,
+    );
+    expect(screen.getByDisplayValue("校对纠错")).toBeInTheDocument();
+  });
+
+  it("changing the default AI mode reports the selected mode", () => {
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+    fireEvent.change(screen.getByTestId("default-mode"), {
+      target: { value: "off" },
+    });
+    expect(onInputChange).toHaveBeenCalledWith("default_mode", "off");
+  });
+
+  it("defaults the contract default_mode to auto", () => {
+    expect(DEFAULT_SETTINGS.default_mode).toBe("auto");
   });
 });

@@ -113,6 +113,51 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
         </p>
       </div>
 
+      {/* [20260905_Fix_249_DefaultModeUi] Default AI processing mode for the
+          recording / file-transcription pipelines (issue #249: the read side
+          honored "default_mode" but nothing could write it). "auto" picks by
+          text length, "off" disables, the rest map to built-in modes. */}
+      <div>
+        <label
+          htmlFor="default-mode"
+          className="block text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7] mb-1"
+        >
+          {t("settings.general.defaultModeLabel", "默认 AI 处理模式")}
+        </label>
+        <select
+          id="default-mode"
+          data-testid="default-mode"
+          value={settings.default_mode}
+          onChange={(e) => onInputChange("default_mode", e.target.value)}
+          className="w-full px-3 py-2 text-sm border border-[#d2d2d7] dark:border-[#3a3a3c] rounded-lg focus:ring-2 focus:ring-[#0071e3] focus:border-transparent bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7]"
+        >
+          <option value="auto">
+            {t("settings.general.defaultModeAuto", "智能判断（按文本长度）")}
+          </option>
+          <option value="optimize">
+            {t("settings.general.defaultModeOptimize", "智能润色")}
+          </option>
+          <option value="optimize_long">
+            {t("settings.general.defaultModeOptimizeLong", "长文本整理")}
+          </option>
+          <option value="correct">
+            {t("settings.general.defaultModeCorrect", "校对纠错")}
+          </option>
+          <option value="summarize">
+            {t("settings.general.defaultModeSummarize", "摘要总结")}
+          </option>
+          <option value="off">
+            {t("settings.general.defaultModeOff", "关闭 AI 处理")}
+          </option>
+        </select>
+        <p className="mt-1 text-xs text-[#86868b]">
+          {t(
+            "settings.general.defaultModeDesc",
+            "录音与文件导入完成后自动应用的 AI 处理方式；单次结果面板仍可临时切换。",
+          )}
+        </p>
+      </div>
+
       {/* 关闭行为 */}
       <div>
         <label className="block text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7] mb-1">

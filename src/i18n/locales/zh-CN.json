@@ -103,7 +103,15 @@
       "hotkeyStart": "更改",
       "hotkeyCancel": "取消",
       "hotkeyRecording": "请按下新的快捷键组合(Esc 取消)…",
-      "hotkeySpace": "空格"
+      "hotkeySpace": "空格",
+      "defaultModeLabel": "默认 AI 处理模式",
+      "defaultModeAuto": "智能判断（按文本长度）",
+      "defaultModeOptimize": "智能润色",
+      "defaultModeOptimizeLong": "长文本整理",
+      "defaultModeCorrect": "校对纠错",
+      "defaultModeSummarize": "摘要总结",
+      "defaultModeOff": "关闭 AI 处理",
+      "defaultModeDesc": "录音与文件导入完成后自动应用的 AI 处理方式；单次结果面板仍可临时切换。"
     },
     "quickStart": {
       "title": "快速开始",
@@ -289,7 +297,7 @@
     "windowTitle": "转录历史",
     "close": "关闭窗口",
     "searchPlaceholder": "搜索转录内容...",
-    "recordCount": "共 {{count}} 条记录",
+    "recordCount": "共 {{total}} 条记录",
     "exportAll": "导出全部",
     "noMatch": "没有找到匹配的记录",
     "emptyHistory": "暂无转录历史",
@@ -303,7 +311,7 @@
     "deleteFailed": "删除记录失败",
     "today": "今天 {{time}}",
     "yesterday": "昨天 {{time}}",
-    "daysAgo": "{{count}}天前",
+    "daysAgo": "{{days}}天前",
     "formatLabel": "导出格式",
     "clearSuccess": "已清空所有转录记录",
     "clearFailed": "清空失败"

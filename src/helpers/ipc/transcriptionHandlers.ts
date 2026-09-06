@@ -523,8 +523,20 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
     return databaseManager.deleteTranscription(id);
   });
 
+  // [20260905_Fix_248_ReviewClearContract] Wrap the raw node:sqlite RunResult
+  // ({changes, lastInsertRowid}) into the declared OperationResult contract —
+  // the renderer checks `success`, and the unwrapped shape made every
+  // successful clear report failure (review BLOCKER, issue #248).
   ipcMain.handle(C.TRANSCRIPTION.CLEAR, () => {
-    return databaseManager.clearAllTranscriptions();
+    try {
+      const result = databaseManager.clearAllTranscriptions() as {
+        changes?: number;
+      };
+      return { success: true, changes: result.changes ?? 0 };
+    } catch (error) {
+      logger.error?.("清空转录记录失败:", error);
+      return { success: false, error: (error as Error).message };
+    }
   });
 
   ipcMain.handle(C.TRANSCRIPTION.EXPORT_ALL, async (_event, format: string) => {

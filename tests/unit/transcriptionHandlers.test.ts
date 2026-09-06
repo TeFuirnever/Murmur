@@ -282,6 +282,41 @@ describe("transcriptionHandlers", () => {
     });
   });
 
+  describe("TRANSCRIPTION.CLEAR handler", () => {
+    it("wraps the SQLite RunResult into the declared OperationResult shape", async () => {
+      // [20260905_Fix_248_ReviewClearContract] databaseManager returns the
+      // raw node:sqlite RunResult ({changes, lastInsertRowid}) — the renderer
+      // and the declared contract (OperationResult in types/ipc.ts, preload
+      // electronAPI.d.ts) expect { success }. Without the wrapper the UI
+      // read success===undefined and showed "clear failed" after a
+      // successful wipe (review BLOCKER, issue #248).
+      const C = await setup();
+      const handler = registeredHandlers.get(C.TRANSCRIPTION.CLEAR)!;
+
+      mockDb.clearAllTranscriptions.mockReturnValue({
+        changes: 5,
+        lastInsertRowid: 1,
+      });
+      const result = (await handler({})) as Record<string, unknown>;
+
+      expect(mockDb.clearAllTranscriptions).toHaveBeenCalledTimes(1);
+      expect(result).toEqual({ success: true, changes: 5 });
+    });
+
+    it("returns success:false when the underlying clear throws", async () => {
+      const C = await setup();
+      const handler = registeredHandlers.get(C.TRANSCRIPTION.CLEAR)!;
+
+      mockDb.clearAllTranscriptions.mockImplementation(() => {
+        throw new Error("db locked");
+      });
+      const result = (await handler({})) as Record<string, unknown>;
+
+      expect(result).toMatchObject({ success: false });
+      expect(String(result.error)).toContain("db locked");
+    });
+  });
+
   describe("TRANSCRIPTION.GET_ALL handler", () => {
     it("returns transcriptions array", async () => {
       const C = await setup();

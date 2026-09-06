@@ -103,7 +103,15 @@
       "hotkeyStart": "Change",
       "hotkeyCancel": "Cancel",
       "hotkeyRecording": "Press the new key combination (Esc to cancel)…",
-      "hotkeySpace": "Space"
+      "hotkeySpace": "Space",
+      "defaultModeLabel": "Default AI mode",
+      "defaultModeAuto": "Auto (by text length)",
+      "defaultModeOptimize": "Smart polish",
+      "defaultModeOptimizeLong": "Long-text cleanup",
+      "defaultModeCorrect": "Proofread",
+      "defaultModeSummarize": "Summarize",
+      "defaultModeOff": "Turn AI off",
+      "defaultModeDesc": "AI processing applied automatically after recording or file import; the per-result panel still allows a one-off switch."
     },
     "quickStart": {
       "title": "Quick Start",
@@ -289,7 +297,7 @@
     "windowTitle": "Transcription History",
     "close": "Close window",
     "searchPlaceholder": "Search transcriptions...",
-    "recordCount": "{{count}} records",
+    "recordCount": "{{total}} records",
     "exportAll": "Export all",
     "noMatch": "No matching records",
     "emptyHistory": "No transcriptions yet",
@@ -303,7 +311,7 @@
     "deleteFailed": "Failed to delete record",
     "today": "Today {{time}}",
     "yesterday": "Yesterday {{time}}",
-    "daysAgo": "{{count}} days ago",
+    "daysAgo": "{{days}} days ago",
     "formatLabel": "Export format",
     "clearSuccess": "All transcriptions cleared",
     "clearFailed": "Failed to clear transcriptions"

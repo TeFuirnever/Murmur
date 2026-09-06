@@ -137,9 +137,8 @@ const HistoryContent = ({
   const handleExportAll = async () => {
     if (!window.electronAPI) return;
     try {
-      const result = (await window.electronAPI.exportTranscriptions(
-        exportFormat,
-      )) as { success: boolean; canceled?: boolean; error?: string };
+      const result =
+        await window.electronAPI.exportTranscriptions(exportFormat);
       if (result.success) {
         toast.success(t("history.exportSuccess", "导出成功"));
       } else if (!result.canceled) {
@@ -163,10 +162,7 @@ const HistoryContent = ({
       return;
     }
     try {
-      const result = (await window.electronAPI.clearAllTranscriptions()) as {
-        success: boolean;
-        error?: string;
-      };
+      const result = await window.electronAPI.clearAllTranscriptions();
       if (result.success) {
         toast.success(t("history.clearSuccess", "已清空所有转录记录"));
         setTranscriptions([]);
@@ -210,7 +206,7 @@ const HistoryContent = ({
     } else if (diffDays === 2) {
       return t("history.yesterday", "昨天 {{time}}", { time });
     } else if (diffDays <= 7) {
-      return t("history.daysAgo", "{{count}}天前", { count: diffDays - 1 });
+      return t("history.daysAgo", "{{days}}天前", { days: diffDays - 1 });
     } else {
       return date.toLocaleDateString(i18n.language, {
         month: "short",
@@ -238,8 +234,8 @@ const HistoryContent = ({
           </div>
           <div className="mt-3 flex items-center justify-between">
             <span className="text-sm text-[#86868b] dark:text-[#86868b]">
-              {t("history.recordCount", "共 {{count}} 条记录", {
-                count: filteredTranscriptions.length,
+              {t("history.recordCount", "共 {{total}} 条记录", {
+                total: filteredTranscriptions.length,
               })}
             </span>
             {/* [20260905_Fix_248_HistoryClearExport] Format selector + export

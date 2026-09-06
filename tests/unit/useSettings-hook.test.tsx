@@ -194,6 +194,40 @@ describe("useSettings hook", () => {
     });
     expect(result.current.settings.ai_max_tokens).toBe(8192);
   });
+
+  // [20260905_Fix_249_DefaultModeUi] default_mode gets a write path (issue
+  // #249). loadSettings must MIGRATE, not blindly default: a user with the
+  // legacy enable_ai_optimization=false must load "off" — otherwise opening
+  // settings would auto-persist "auto" and silently re-enable AI processing.
+  it("migrates default_mode off the legacy boolean when unset", async () => {
+    const api = (globalThis.window as TestWindow).electronAPI!;
+    (api.getAllSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      enable_ai_optimization: false,
+    });
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.settings.default_mode).toBe("off");
+  });
+
+  it("migrates default_mode to auto when the legacy boolean is on", async () => {
+    const api = (globalThis.window as TestWindow).electronAPI!;
+    (api.getAllSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      enable_ai_optimization: true,
+    });
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.settings.default_mode).toBe("auto");
+  });
+
+  it("keeps a persisted default_mode value as-is", async () => {
+    const api = (globalThis.window as TestWindow).electronAPI!;
+    (api.getAllSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      default_mode: "correct",
+    });
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.settings.default_mode).toBe("correct");
+  });
 });
 
 // [20260816_Test_UseSettingsExpanded] Second describe: save reconciliation
@@ -247,10 +281,10 @@ describe("useSettings hook — save / test / presets / updates", () => {
     expect(keys).toContain("theme");
     expect(keys).toContain("ai_max_tokens");
     expect(keys).not.toContain(undefined);
-    // [20260905_Fix_246_HotkeySettingsUi] count updated for the hotkey key:
-    // 1 special-cased (unmasked api_key) + 14 in the loop.
-    // [20260820_T14_Hotwords] count updated for the new key.
-    expect(calls).toHaveLength(15);
+    // [20260905_Fix_249_DefaultModeUi] count updated for default_mode:
+    // 1 special-cased (unmasked api_key) + 15 in the loop.
+    // [20260905_Fix_246_HotkeySettingsUi] count updated for the hotkey key.
+    expect(calls).toHaveLength(16);
   });
 
   it("saveSettings skips re-sending a masked api_key but still saves the rest", async () => {
@@ -267,7 +301,7 @@ describe("useSettings hook — save / test / presets / updates", () => {
     });
     const calls = (api().setSetting as ReturnType<typeof vi.fn>).mock.calls;
     expect(calls.find((c) => c[0] === "ai_api_key")).toBeUndefined();
-    expect(calls).toHaveLength(14); // [20260905_Fix_246_HotkeySettingsUi] 14 loop keys after hotkey (10 + 3 bot keys + hotkey). [20260820_T14_Hotwords] 10 loop keys after hotwords
+    expect(calls).toHaveLength(15); // [20260905_Fix_249_DefaultModeUi] 15 loop keys after default_mode. [20260905_Fix_246_HotkeySettingsUi] +hotkey. [20260820_T14_Hotwords] 10 loop keys after hotwords
   });
 
   it("saveSettings returns false and toasts on IPC failure", async () => {

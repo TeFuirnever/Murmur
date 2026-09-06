@@ -278,35 +278,86 @@ describe("[20260816_Test_HistoryPage] history window entry", () => {
 
   it("clears all records after confirmation and reloads the list", async () => {
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
-    apiMocks.getTranscriptions.mockResolvedValue([makeRecord(1, "x")]);
-    apiMocks.clearAllTranscriptions.mockResolvedValue({ success: true });
-    await mountHistory();
-    await screen.findByText("x");
+    try {
+      apiMocks.getTranscriptions.mockResolvedValue([makeRecord(1, "x")]);
+      // Real handler contract after the #248 review fix: the CLEAR handler
+      // wraps the SQLite RunResult into { success: true, changes }.
+      apiMocks.clearAllTranscriptions.mockResolvedValue({
+        success: true,
+        changes: 1,
+      });
+      await mountHistory();
+      await screen.findByText("x");
 
-    fireEvent.click(screen.getByTestId("clear-all"));
+      fireEvent.click(screen.getByTestId("clear-all"));
 
-    await waitFor(() => {
-      expect(apiMocks.clearAllTranscriptions).toHaveBeenCalledTimes(1);
-    });
-    // The list reloads after the wipe — the empty state shows.
-    await waitFor(() => {
-      expect(screen.getByText("暂无转录历史")).toBeInTheDocument();
-    });
-    expect(screen.getByText("共 0 条记录")).toBeInTheDocument();
-    confirmSpy.mockRestore();
+      await waitFor(() => {
+        expect(apiMocks.clearAllTranscriptions).toHaveBeenCalledTimes(1);
+      });
+      // The list reloads after the wipe — the empty state shows.
+      await waitFor(() => {
+        expect(screen.getByText("暂无转录历史")).toBeInTheDocument();
+      });
+      expect(screen.getByText("共 0 条记录")).toBeInTheDocument();
+    } finally {
+      confirmSpy.mockRestore();
+    }
   });
 
   it("keeps the records when the clear confirmation is dismissed", async () => {
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    try {
+      apiMocks.getTranscriptions.mockResolvedValue([makeRecord(1, "x")]);
+      await mountHistory();
+      await screen.findByText("x");
+
+      fireEvent.click(screen.getByTestId("clear-all"));
+
+      expect(apiMocks.clearAllTranscriptions).not.toHaveBeenCalled();
+      expect(screen.getByText("x")).toBeInTheDocument();
+    } finally {
+      confirmSpy.mockRestore();
+    }
+  });
+
+  it("stays silent when the export save dialog is cancelled", async () => {
     apiMocks.getTranscriptions.mockResolvedValue([makeRecord(1, "x")]);
+    apiMocks.exportTranscriptions.mockResolvedValue({
+      success: false,
+      canceled: true,
+    });
     await mountHistory();
-    await screen.findByText("x");
+    fireEvent.click(await screen.findByTestId("export-all"));
+    await waitFor(() => {
+      expect(apiMocks.exportTranscriptions).toHaveBeenCalledWith("txt");
+    });
+    const { toast } = await import("sonner");
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
 
-    fireEvent.click(screen.getByTestId("clear-all"));
+  it("toasts failure when the clear IPC reports unsuccessful", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    try {
+      apiMocks.getTranscriptions.mockResolvedValue([makeRecord(1, "x")]);
+      apiMocks.clearAllTranscriptions.mockResolvedValue({
+        success: false,
+        error: "db locked",
+      });
+      await mountHistory();
+      await screen.findByText("x");
 
-    expect(apiMocks.clearAllTranscriptions).not.toHaveBeenCalled();
-    expect(screen.getByText("x")).toBeInTheDocument();
-    confirmSpy.mockRestore();
+      fireEvent.click(screen.getByTestId("clear-all"));
+
+      const { toast } = await import("sonner");
+      await waitFor(() => {
+        expect(toast.error).toHaveBeenCalledWith("清空失败");
+      });
+      // The list is NOT reset when the wipe failed.
+      expect(screen.getByText("x")).toBeInTheDocument();
+    } finally {
+      confirmSpy.mockRestore();
+    }
   });
 
   it("closes the window via the header button", async () => {

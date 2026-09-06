@@ -25,6 +25,10 @@ const ALLOWED_SETTING_KEYS = new Set<string>([
   "ai_temperature",
   "ai_max_tokens",
   "enable_ai_optimization",
+  // [20260905_Fix_249_DefaultModeUi] Default AI processing mode — the read
+  // side (useRecording/useFileTranscription) already honored it; now writable
+  // (issue #249).
+  "default_mode",
   "window_always_on_top",
   "auto_paste",
   "close_behavior",
