@@ -66,6 +66,12 @@ function run(cmd, label) {
 // Ports mirror src/vite.config.js server.port; VITE_DEV_PORT overrides.
 const DEV_VITE_PORT = process.env.VITE_DEV_PORT || "5173";
 const DEV_READY_TIMEOUT_MS = 120_000;
+// [20260906_Test_DevSmokeHeartbeat] Spec #266 T(#251): port reachability
+// only proves the RENDERER (vite) is up — a main-process crash after boot
+// left the smoke green (the pre-node:sqlite sqlite crash episode). The
+// smoke now additionally requires the main process to print its
+// "window-created" startup milestone (main.ts) before the gate passes.
+const DEV_MAIN_READY_PATTERN = /\[main:startup\] phase=window-created/;
 
 async function runDevSmoke() {
   const start = performance.now();
@@ -78,6 +84,8 @@ async function runDevSmoke() {
   });
   let output = "";
   let fatal = null;
+  let portReady = false;
+  let mainReady = false;
   const onData = (buf) => {
     const text = buf.toString();
     output += text;
@@ -85,6 +93,9 @@ async function runDevSmoke() {
     // early so the gate fails fast instead of waiting out the timeout.
     if (/SQLite 原生模块版本不匹配|NODE_MODULE_VERSION/.test(text)) {
       fatal = text.slice(0, 300);
+    }
+    if (DEV_MAIN_READY_PATTERN.test(text)) {
+      mainReady = true;
     }
   };
   child.stdout.on("data", onData);
@@ -97,18 +108,21 @@ async function runDevSmoke() {
     try {
       const res = await fetch(`http://localhost:${DEV_VITE_PORT}/`);
       if (res.ok) {
-        const dur = ((performance.now() - start) / 1000).toFixed(1);
-        result = {
-          step: "dev smoke (pnpm run dev)",
-          ok: true,
-          duration: dur,
-          output:
-            "dev server reached on :" +
-            DEV_VITE_PORT +
-            "\n" +
-            output.slice(-800),
-        };
-        break;
+        portReady = true;
+        if (mainReady) {
+          const dur = ((performance.now() - start) / 1000).toFixed(1);
+          result = {
+            step: "dev smoke (pnpm run dev)",
+            ok: true,
+            duration: dur,
+            output:
+              "dev server reached on :" +
+              DEV_VITE_PORT +
+              " + main process window-created milestone\n" +
+              output.slice(-800),
+          };
+          break;
+        }
       }
     } catch {
       // Port not up yet — keep polling.
@@ -120,14 +134,20 @@ async function runDevSmoke() {
   await new Promise((r) => setTimeout(r, 1500));
   if (!result) {
     const dur = ((performance.now() - start) / 1000).toFixed(1);
+    // [20260906_Test_DevSmokeHeartbeat] Distinguish the two failure shapes:
+    // renderer up but main never reporting its milestone is the exact blind
+    // spot this heartbeat was added for.
+    const reason = fatal
+      ? fatal
+      : portReady
+        ? "dev server reached, but the main process never reported " +
+          "[main:startup] phase=window-created within the timeout"
+        : "dev server did not become ready within the timeout";
     result = {
       step: "dev smoke (pnpm run dev)",
       ok: false,
       duration: dur,
-      output:
-        (fatal || "dev server did not become ready within the timeout") +
-        "\n" +
-        output.slice(-1200),
+      output: reason + "\n" + output.slice(-1200),
     };
   }
   // [20260905_Feat_NodeSqlite] The ABI restore note is obsolete with the
