@@ -91,6 +91,23 @@ function validateAudioPath(filePath: string): AudioPathResult {
   return { valid: true, ext, resolved };
 }
 
+// [20260905_Fix_195_DriveLetterPolicy] Issue #195 design decision (options
+// 1 + 3 combined). The drive-letter fast-accept below is INTENTIONAL, not an
+// oversight: allowed-roots (homedir/tmpdir/Volumes) is a macOS-centric
+// concept, Windows users keep audio on arbitrary drives, and tightening to
+// user-profile subdirectories would reject legitimate files (the issue
+// itself flags the compatibility risk). To keep the "no arbitrary path
+// read" defense meaningful on win32, the highest-value exfiltration
+// targets — the Windows system trees — are rejected explicitly. Zero
+// compatibility cost (audio never legitimately lives there), and UNC paths
+// stay rejected. User directories on any drive remain accepted.
+const WIN_SYSTEM_DIR_RE =
+  /^[a-z]:[\\/](?:windows|program files(?: \(x86\))?|programdata)(?:[\\/]|$)/i;
+
+function isWindowsSystemPath(candidate: string): boolean {
+  return WIN_SYSTEM_DIR_RE.test(candidate);
+}
+
 /**
  * Decide whether `candidate` is inside one of the allowed root prefixes.
  *
@@ -112,8 +129,10 @@ function isPathAllowed(
   homedir: string,
   tmpdir: string,
 ): boolean {
-  if (/^[A-Za-z]:\\/.test(candidate)) {
-    return true;
+  // Fast-accept every drive-letter path EXCEPT the Windows system trees —
+  // see [20260905_Fix_195_DriveLetterPolicy] above for the design decision.
+  if (/^[A-Za-z]:[\\/]/.test(candidate)) {
+    return !isWindowsSystemPath(candidate);
   }
   const canonicalCandidate = canonicalizeCandidate(candidate);
   const roots = canonicalizeRoots([homedir, tmpdir, "/Volumes/"]);
