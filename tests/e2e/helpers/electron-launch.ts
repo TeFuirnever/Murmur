@@ -228,6 +228,12 @@ async function launchElectronApp({ env = {} } = {}) {
     args: [
       "--require",
       path.join(PROJECT_ROOT, "tests/e2e/helpers/ci-probe.js"),
+      // [20260906_Test_E2eDeterministicLocale] The main/settings/history
+      // windows are i18n-wired now (spec #247): without a pinned locale the
+      // UI language follows navigator.language, so Chinese-text selectors
+      // broke on English-locale machines (invisible while e2e was
+      // non-blocking). All suites assert zh-CN labels; make it explicit.
+      "--lang=zh-CN",
       appRoot,
     ],
     // [20260725_E2E_CiStartupProbe] END
