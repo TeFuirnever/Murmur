@@ -5,7 +5,6 @@ interface DatabaseManager {
   getSetting(key: string, defaultValue?: unknown): unknown;
   setSetting(key: string, value: unknown): unknown;
   getAllSettings(): Record<string, unknown>;
-  resetSettings(): unknown;
   syncToFileConfig(): void;
 }
 
@@ -117,19 +116,8 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
   // EXPORT handlers (dialog-backed but with no UI entry point anywhere) were
   // removed with their contract constants.
 
-  ipcMain.handle(C.SETTINGS.SAVE, (_event, key: string, value: unknown) => {
-    if (!validateSetting(key, value)) {
-      return { success: false, error: "Invalid setting key or value" };
-    }
-    const result = databaseManager.setSetting(key, value);
-    broadcastSettingsUpdate(key);
-    return result;
-  });
-
-  ipcMain.handle(C.SETTINGS.RESET, () => {
-    const result = databaseManager.resetSettings();
-    broadcastSettingsUpdate(null);
-    return result;
-  });
+  // [20260906_Refactor_DeadChannelCleanup] Ticket #250: the SETTINGS.SAVE and
+  // SETTINGS.RESET handlers were removed — zero renderer callers (orphans
+  // yellow list). Persistence goes through SETTINGS.SET.
 }
 // [20260724_TS_BigBang_SettingsHandlers] END

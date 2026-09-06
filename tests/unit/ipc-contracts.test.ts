@@ -50,7 +50,6 @@ describe("ipc-contracts", () => {
 
   it("WINDOW domain has all expected channels", () => {
     expect(C.WINDOW.HIDE).toBe("hide-window");
-    expect(C.WINDOW.SHOW).toBe("show-window");
     expect(C.WINDOW.CLOSE).toBe("close-window");
     expect(C.WINDOW.SET_TOP).toBe("set-always-on-top");
   });
@@ -75,7 +74,6 @@ describe("ipc-contracts", () => {
     expect(C.SETTINGS.GET).toBe("get-setting");
     expect(C.SETTINGS.SET).toBe("set-setting");
     expect(C.SETTINGS.GET_ALL).toBe("get-all-settings");
-    expect(C.SETTINGS.RESET).toBe("reset-settings");
   });
 
   it("AI domain has process and check-status channels", () => {

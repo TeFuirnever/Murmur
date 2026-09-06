@@ -121,8 +121,9 @@ describe("preload listener lifecycle", () => {
   const SINGLE_PAYLOAD_LISTENERS = [
     { method: "onWindowMaximizeChange", channel: "window-maximize-change" },
     { method: "onHotkeyTriggered", channel: "hotkey-triggered" },
-    { method: "onTranscriptionUpdate", channel: "transcription-update" },
-    { method: "onError", channel: "error" },
+    // [20260906_Refactor_DeadChannelCleanup] Ticket #250 removed the
+    // onTranscriptionUpdate (transcription-update) and onError (error)
+    // listeners with their dead channels.
     { method: "onSettingsUpdate", channel: "settings-update" },
     { method: "onUpdateDownloadProgress", channel: "update-download-progress" },
     { method: "onUpdateDownloadComplete", channel: "update-download-complete" },
@@ -146,6 +147,8 @@ describe("preload listener lifecycle", () => {
     api().onSettingsUpdate!(() => {});
     expect(listeners.get("hotkey-triggered")?.length ?? 0).toBe(1);
     expect(listeners.get("settings-update")?.length ?? 0).toBe(1);
+    // [20260906_Refactor_DeadChannelCleanup] "error" channel deleted by
+    // ticket #250 — nothing may register on it anymore.
     expect(listeners.get("error")?.length ?? 0).toBe(0);
   });
   // [20260725_CodeReview_ListenerHelper] END

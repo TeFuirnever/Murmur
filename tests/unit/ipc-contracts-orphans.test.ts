@@ -108,7 +108,7 @@ describe("ipc-contracts orphans", () => {
 // `electronAPI.<method>` callers. A channel that preloads but nobody calls
 // lands on an explicit YELLOW LIST (bidirectional assert: unknown channels
 // fail until added consciously; yellow entries that regain a caller fail
-// until removed — the list can only shrink via the #250 cleanup ticket).
+// until removed — the list can only shrink via a cleanup ticket).
 describe("ipc-contracts renderer-caller dimension", () => {
   // Renderer side = src/** minus the main-process helpers and the ambient
   // declaration (electronAPI.d.ts declares every method, so counting it
@@ -176,48 +176,19 @@ describe("ipc-contracts renderer-caller dimension", () => {
       if (!isCalled) yellow.push(dotted);
     }
 
-    // [20260906_Test_OrphansRendererDim] Pinned from the first honest scan
-    // (2026-09-06): each entry verified by grep to have ZERO renderer
-    // callers (the preload method name never appears after
-    // `electronAPI.` / `electronAPI?.` in any renderer source). Note:
-    // usePermissions shadows the name `testAccessibilityPermission` with a
-    // hook-local callback that uses pasteText — it never calls the preload
-    // method. Cleanup is tracked in #250; entries may only be REMOVED
-    // (channel deleted or a real caller wired).
-    const KNOWN_RENDERER_ORPHANS = new Set<string>([
-      // restart is triggered main-internally after model downloads
-      "FUNASR.RESTART",
-      // exposed for parity with the installer flow; renderer never calls it
-      "FUNASR.INSTALL",
-      // settings persistence goes through the per-key setSetting channel
-      "SETTINGS.SAVE",
-      // no settings-reset UI exists
-      "SETTINGS.RESET",
-      // window show/maximize are driven by tray/main, not the renderer
-      "WINDOW.SHOW",
-      "WINDOW.IS_MAX",
-      // dev-only handlers (registered under NODE_ENV=development)
-      "WINDOW.RELOAD",
-      "WINDOW.OPEN_DEV_TOOLS",
-      // settings/history windows close via CLOSE_APP/CLOSE instead
-      "WINDOW.HIDE_HISTORY",
-      "WINDOW.CLOSE_SETTINGS",
-      // hotkey state is consumed main-internally; never polled from UI
-      "HOTKEY.GET_STATE",
-      // diagnostics surface without a renderer consumer
-      "SYSTEM.INFO",
-      "SYSTEM.DEBUG_INFO",
-      // permissions are handled by OS prompts + usePermissions' own probe
-      "SYSTEM.PERMISSIONS",
-      "SYSTEM.REQUEST_PERMS",
-      "SYSTEM.OPEN_PERMS",
-      // a11y is tested via pasteText in usePermissions, not this probe
-      "SYSTEM.TEST_A11Y",
-      // dead push events: listeners exist in preload, nobody subscribes
-      "EVENTS.TRANSCRIPTION_UPDATE",
-      "EVENTS.ERROR",
-      "EVENTS.FUNASR_INSTALL_PROGRESS",
-    ]);
+    // [20260906_Refactor_DeadChannelCleanup] Ticket #250 deleted all 20
+    // channels the first honest scan (2026-09-06) pinned here — each was
+    // grep-verified to have ZERO renderer callers (the preload method name
+    // never appeared after `electronAPI.` / `electronAPI?.` in any renderer
+    // source; note usePermissions shadows the name `testAccessibilityPermission`
+    // with a hook-local callback that uses pasteText, and useRecording
+    // shadows `checkPermissions` with a navigator.permissions probe — neither
+    // ever called the preload method). EVENTS.PROCESSING_UPDATE went too,
+    // with its one live subscriber (useModelStatus) removed by the same
+    // ticket. The set is kept EMPTY and non-deleted so the bidirectional
+    // asserts below now enforce the net-zero invariant directly: any
+    // channel that preloads without a renderer caller fails immediately.
+    const KNOWN_RENDERER_ORPHANS = new Set<string>([]);
 
     const unexpected = yellow.filter((c) => !KNOWN_RENDERER_ORPHANS.has(c));
     const stale = [...KNOWN_RENDERER_ORPHANS].filter(

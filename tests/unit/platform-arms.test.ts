@@ -13,7 +13,10 @@
 //   pythonInstaller mac dispatch          pythonInstaller (setPlatform)
 //   updateManager dmg/exe asset arms      updateManager-behavioral + HERE
 //   audioFileHelpers which/where ffmpeg   HERE (previously uncovered)
-//   systemHandlers darwin-gated perms     HERE (previously uncovered)
+//
+// [20260906_Refactor_DeadChannelCleanup] The systemHandlers darwin-gated
+// perms arm rows were removed with the handlers themselves (ticket #250
+// deleted the zero-renderer-caller SYSTEM.REQUEST_PERMS/OPEN_PERMS chain).
 //
 // process.platform BRANCHES are dual-asserted here; the fs/path MODULES
 // stay host-bound (a win CI leg resolves paths with win32 semantics), so
@@ -42,8 +45,6 @@ vi.mock("electron", () => ({
 
 import { execSync } from "child_process";
 import * as audioFileHelpers from "../../src/helpers/audioFileHelpers";
-import * as sysHandlers from "../../src/helpers/ipc/systemHandlers";
-import * as C from "../../src/helpers/ipc-contracts";
 import { getPlatformAsset } from "../../src/helpers/updateManager";
 import { validateAudioPath } from "../../src/helpers/audioPathValidator";
 
@@ -82,68 +83,6 @@ describe("[20260906_Test_PlatformArms] audioFileHelpers ffmpeg detection", () =>
     vi.mocked(execSync).mockImplementation(() => "/opt/homebrew/bin/ffmpeg\n");
     expect(audioFileHelpers.getFFmpegPath()).toBe("/opt/homebrew/bin/ffmpeg");
     expect(execSync).toHaveBeenCalledWith("which ffmpeg", expect.any(Object));
-  });
-});
-
-describe("[20260906_Test_PlatformArms] systemHandlers darwin-gated permission handlers", () => {
-  function makeHarness() {
-    const handlers: Record<string, (...args: unknown[]) => unknown> = {};
-    const ipcMain = {
-      handle: vi.fn((channel: string, fn: (...args: unknown[]) => unknown) => {
-        handlers[channel] = fn;
-      }),
-    };
-    const clipboardManager = {
-      checkAccessibilityPermissions: vi.fn(async () => true),
-      openSystemSettings: vi.fn(),
-      pasteText: vi.fn(async () => undefined),
-    };
-    const managers = {
-      logger: {},
-      funasrManager: {
-        isInitialized: true,
-        modelsInitialized: true,
-        serverReady: true,
-        pythonCmd: "python",
-      },
-      clipboardManager,
-    };
-    sysHandlers.register(
-      ipcMain as never,
-      managers as unknown as Parameters<typeof sysHandlers.register>[1],
-    );
-    return { handlers, clipboardManager };
-  }
-
-  it("REQUEST_PERMS opens system settings on darwin only", async () => {
-    setPlatform("darwin");
-    const darwin = makeHarness();
-    await expect(darwin.handlers[C.SYSTEM.REQUEST_PERMS]!()).resolves.toEqual({
-      success: true,
-    });
-    expect(darwin.clipboardManager.openSystemSettings).toHaveBeenCalledTimes(1);
-
-    setPlatform("win32");
-    const win = makeHarness();
-    await expect(win.handlers[C.SYSTEM.REQUEST_PERMS]!()).resolves.toEqual({
-      success: true,
-    });
-    expect(win.clipboardManager.openSystemSettings).not.toHaveBeenCalled();
-  });
-
-  it("OPEN_PERMS succeeds on darwin and degrades with a clear error on win32", async () => {
-    setPlatform("darwin");
-    const darwin = makeHarness();
-    expect(darwin.handlers[C.SYSTEM.OPEN_PERMS]!()).toEqual({ success: true });
-    expect(darwin.clipboardManager.openSystemSettings).toHaveBeenCalledTimes(1);
-
-    setPlatform("win32");
-    const win = makeHarness();
-    expect(win.handlers[C.SYSTEM.OPEN_PERMS]!()).toEqual({
-      success: false,
-      error: "当前平台不支持自动打开权限设置",
-    });
-    expect(win.clipboardManager.openSystemSettings).not.toHaveBeenCalled();
   });
 });
 

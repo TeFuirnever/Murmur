@@ -385,23 +385,6 @@ describe("SETTINGS_UPDATE broadcast regression", () => {
     };
   }
 
-  it("sends SETTINGS_UPDATE event on save-setting", async () => {
-    const { register } = settingsHandlers;
-    const ipcMain = createIpcMain();
-    const { managers, sendSpy } = createManagers();
-
-    register(
-      ipcMain as unknown as Parameters<typeof register>[0],
-      managers as unknown as Parameters<typeof register>[1],
-    );
-    await ipcMain._handlers[C.SETTINGS.SAVE]!({}, "theme", "dark");
-
-    expect(sendSpy).toHaveBeenCalledWith(
-      C.EVENTS.SETTINGS_UPDATE,
-      expect.objectContaining({ key: "theme" }),
-    );
-  });
-
   it("sends SETTINGS_UPDATE event on set-setting", async () => {
     const { register } = settingsHandlers;
     const ipcMain = createIpcMain();
@@ -418,24 +401,11 @@ describe("SETTINGS_UPDATE broadcast regression", () => {
       expect.objectContaining({ key: "theme" }),
     );
   });
-
-  it("sends SETTINGS_UPDATE event on reset-settings", async () => {
-    const { register } = settingsHandlers;
-    const ipcMain = createIpcMain();
-    const { managers, sendSpy } = createManagers();
-
-    register(
-      ipcMain as unknown as Parameters<typeof register>[0],
-      managers as unknown as Parameters<typeof register>[1],
-    );
-    await ipcMain._handlers[C.SETTINGS.RESET]!();
-
-    expect(sendSpy).toHaveBeenCalledWith(
-      C.EVENTS.SETTINGS_UPDATE,
-      expect.objectContaining({ key: null }),
-    );
-  });
 });
+
+// [20260906_Refactor_DeadChannelCleanup] Ticket #250: the save-setting /
+// reset-settings SETTINGS_UPDATE regression tests were removed with the
+// SETTINGS.SAVE / SETTINGS.RESET handlers (zero renderer callers).
 
 // 4. aiPrompts returns {system, user} structure
 describe("aiPrompts system/user structure regression", () => {

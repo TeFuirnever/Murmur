@@ -28,7 +28,15 @@ test.describe("Suite 11: cross-window journeys", () => {
 
   test.afterAll(async () => {
     // Leave the persisted settings clean for other suites.
-    await window.evaluate(() => window.electronAPI.resetSettings());
+    // [20260906_Refactor_DeadChannelCleanup] Ticket #250 removed the
+    // zero-renderer-caller resetSettings binding; isolation now restores the
+    // keys this suite wrote ("hotkey", "language") to their defaults.
+    await window.evaluate(() =>
+      window.electronAPI.setSetting("hotkey", "CommandOrControl+Shift+Space"),
+    );
+    await window.evaluate(() =>
+      window.electronAPI.setSetting("language", "zh-CN"),
+    );
     await closeElectronApp(electronApp);
   });
 

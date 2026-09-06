@@ -17,10 +17,6 @@ interface FunasrManager {
       funasr_installed?: boolean;
     }
   >;
-  installFunASR(
-    cb: (progress: Record<string, unknown>) => void,
-  ): Promise<unknown>;
-  restartServer(): Promise<unknown>;
   // [20260822_T12_IdleUnload] Hotkey-down reload pre-trigger (#190).
   reloadModels(): Promise<unknown>;
   modelsInitialized: boolean;
@@ -67,11 +63,9 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
     };
   });
 
-  ipcMain.handle(C.FUNASR.INSTALL, async (event) => {
-    return await funasrManager.installFunASR((progress) => {
-      event.sender.send(C.EVENTS.FUNASR_INSTALL_PROGRESS, progress);
-    });
-  });
+  // [20260906_Refactor_DeadChannelCleanup] Ticket #250: the FUNASR.INSTALL
+  // handler (and its install-progress event sender) and the FUNASR.RESTART
+  // handler were removed — zero renderer callers (orphans yellow list).
 
   // [20260822_T12_IdleUnload] Hotkey-down pre-trigger: fire-and-forget —
   // the renderer never blocks on the reload; the transcription request
@@ -87,17 +81,6 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
       return { success: true, message: "模型重载已触发" };
     } catch (error) {
       logger.error?.("触发模型重载失败", error);
-      return { success: false, error: (error as Error).message };
-    }
-  });
-
-  ipcMain.handle(C.FUNASR.RESTART, async () => {
-    try {
-      logger.info?.("手动重启FunASR服务器");
-      const result = await funasrManager.restartServer();
-      return result;
-    } catch (error) {
-      logger.error?.("重启FunASR服务器失败", error);
       return { success: false, error: (error as Error).message };
     }
   });

@@ -12,7 +12,6 @@ interface HotkeyManager {
   unregisterHotkey(hotkey: string): boolean;
   getRegisteredHotkeys(): string[];
   setRecordingState(isRecording: boolean): void;
-  getRecordingState(): boolean;
 }
 
 interface WindowManager {
@@ -142,17 +141,8 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
     }
   });
 
-  ipcMain.handle(C.HOTKEY.GET_STATE, () => {
-    try {
-      if (hotkeyManager) {
-        const isRecording = hotkeyManager.getRecordingState();
-        return { success: true, isRecording };
-      }
-      return { success: false, error: "热键管理器未初始化" };
-    } catch (error) {
-      logger.error?.("获取录音状态失败:", error);
-      return { success: false, error: (error as Error).message };
-    }
-  });
+  // [20260906_Refactor_DeadChannelCleanup] Ticket #250: the HOTKEY.GET_STATE
+  // handler was removed — zero renderer callers (orphans yellow list); the
+  // recording state is consumed main-internally.
 }
 // [20260724_TS_BigBang_HotkeyHandlers] END
