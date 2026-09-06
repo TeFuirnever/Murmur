@@ -15,9 +15,16 @@ interface WindowManager {
   historyWindow?: Electron.BrowserWindow | null;
 }
 
+interface TrayManager {
+  setLanguage(lang: string): void;
+}
+
 interface Managers {
   databaseManager: DatabaseManager;
   windowManager: WindowManager;
+  // [20260906_Fix_TrayI18n] Optional so existing call sites (and tests)
+  // without a tray keep working; the language write rebuilds the tray.
+  trayManager?: TrayManager;
 }
 
 const ALLOWED_SETTING_KEYS = new Set<string>([
@@ -105,6 +112,11 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
     const result = databaseManager.setSetting(key, value);
     databaseManager.syncToFileConfig();
     broadcastSettingsUpdate(key);
+    // [20260906_Fix_TrayI18n] The tray lives in the main process and has no
+    // renderer i18n context — push the language switch to it directly.
+    if (key === "language") {
+      managers.trayManager?.setLanguage(String(value));
+    }
     return result;
   });
 

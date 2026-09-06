@@ -157,6 +157,7 @@ registerIPCHandlers(ipcMain, {
   funasrManager,
   windowManager,
   hotkeyManager,
+  trayManager,
   logger,
 });
 

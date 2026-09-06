@@ -284,6 +284,43 @@ describe("[20260906_Test_TrayBehavior] TrayManager", () => {
       expect(() => manager.setStatus("recording")).not.toThrow();
     });
 
+    it("setLanguage rebuilds labels for the live tray and is safe without one", async () => {
+      const manager = new TrayManager();
+      await manager.createTray();
+      manager.setStatus("recording");
+
+      manager.setLanguage("en");
+      // rebuild applies to both menu and tooltip
+      const template = (
+        trayInstances[0]?.contextMenu as {
+          template: { label?: string }[];
+        }
+      )?.template;
+      expect(template?.map((item) => item.label)).toContain("Show Main Window");
+      expect(trayInstances[0]?.tooltip).toBe("Murmur - Recording...");
+
+      // currentStatus (recording) is preserved across the switch
+      manager.setLanguage("zh-CN");
+      expect(trayInstances[0]?.tooltip).toBe("Murmur - 正在录音...");
+    });
+
+    it("an unknown language falls back to the zh-CN labels", async () => {
+      const manager = new TrayManager();
+      await manager.createTray();
+      manager.setLanguage("klingon");
+      const template = (
+        trayInstances[0]?.contextMenu as {
+          template: { label?: string }[];
+        }
+      )?.template;
+      expect(template?.map((item) => item.label)).toContain("显示主窗口");
+    });
+
+    it("setLanguage without a tray is a safe no-op", () => {
+      const manager = new TrayManager();
+      expect(() => manager.setLanguage("en")).not.toThrow();
+    });
+
     it("destroy tears down the tray and is idempotent", async () => {
       const manager = new TrayManager();
       await manager.createTray();

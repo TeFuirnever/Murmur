@@ -344,5 +344,15 @@
   },
   "bot": {
     "ariaLabel": "Murmur mascot"
+  },
+  "tray": {
+    "showWindow": "Show Main Window",
+    "about": "About",
+    "quit": "Quit",
+    "tooltipReady": "Murmur - Chinese Voice to Text",
+    "tooltipRecording": "Murmur - Recording...",
+    "tooltipProcessing": "Murmur - Processing...",
+    "aboutTitle": "About Murmur",
+    "aboutDescription": "Free and open-source AI voice input tool"
   }
 }
