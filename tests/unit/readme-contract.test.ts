@@ -83,4 +83,43 @@ describe("README contract", () => {
       ).toBe(true);
     });
   });
+
+  describe("link integrity (T2, Spec #299)", () => {
+    // T3 extends this list with README.zh-CN.md after the bilingual split.
+    const readmeFiles = ["README.md"];
+
+    function internalLinkTargets(markdown: string): string[] {
+      const rendered = stripHtmlComments(markdown);
+      const linkPattern = /\[[^\]]*\]\(([^)\s]+)\)/g;
+      return [...rendered.matchAll(linkPattern)].map((match) => match[1] ?? "");
+    }
+
+    for (const file of readmeFiles) {
+      it(`${file}: every internal link/asset path resolves on disk`, () => {
+        const targets = internalLinkTargets(readRootFile(file));
+        expect(
+          targets.length,
+          "link extractor must find the README's links",
+        ).toBeGreaterThan(0);
+
+        const broken: string[] = [];
+        for (const target of targets) {
+          // External URLs are out of contract scope (CI network flakiness;
+          // industry link checkers exclude them the same way).
+          if (/^(https?:)?\/\//.test(target) || target.startsWith("mailto:")) {
+            continue;
+          }
+          const withoutAnchor = target.split("#")[0] ?? "";
+          if (withoutAnchor === "") continue; // pure in-page anchor
+          const decoded = decodeURIComponent(withoutAnchor);
+          if (!fs.existsSync(path.join(ROOT, decoded))) {
+            broken.push(target);
+          }
+        }
+        expect(broken, `broken internal links: ${broken.join(", ")}`).toEqual(
+          [],
+        );
+      });
+    }
+  });
 });
