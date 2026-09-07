@@ -575,6 +575,24 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
         return { success: false, canceled: true };
       }
 
+      // [20260906_Fix_ExportAllSegments] Found by the T16 content-readback
+      // e2e: rows carry the raw segments JSON string, but formatters read
+      // parsedSegments — export-all therefore silently dropped segment
+      // timelines. Parse per record (parity with the single-record export).
+      const withParsedSegments = (
+        transcriptions as unknown as Array<Record<string, unknown>>
+      ).map((row) => {
+        let parsedSegments: unknown[] = [];
+        if (typeof row.segments === "string" && row.segments) {
+          try {
+            parsedSegments = JSON.parse(row.segments) as unknown[];
+          } catch {
+            parsedSegments = [];
+          }
+        }
+        return { ...row, parsedSegments };
+      });
+
       let content: Buffer | string;
       if (format === "docx") {
         // [20260724_TS_BigBang_TranscriptionHandlers] Pre-existing behavior:
@@ -582,14 +600,14 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
         // (which expects a single record). Preserve runtime behavior via
         // a cast; the doc comes out with empty text/segments as before.
         content = await exportFormatters.formatDOCX(
-          transcriptions as unknown as TranscriptionForExport,
+          withParsedSegments as unknown as TranscriptionForExport,
         );
         fs.writeFileSync(result.filePath, content as Buffer);
       } else {
         // [20260815_Refactor_FormatterLookup] getFormatInfo above already
         // resolved the right formatter; the nested ternary re-derived it.
         const formatter = formatInfo.formatter;
-        content = (transcriptions as unknown[])
+        content = (withParsedSegments as unknown[])
           .map((t) => formatter(t as unknown as TranscriptionForExport))
           .join("\n\n");
         fs.writeFileSync(result.filePath, content as string, "utf-8");

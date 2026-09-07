@@ -157,7 +157,9 @@
       "precise": "Precise",
       "creative": "Creative",
       "ai_temperature": "Creativity (Temperature)",
-      "ai_max_tokens": "Max Output Length"
+      "ai_max_tokens": "Max Output Length",
+      "hideApiKey": "Hide API Key",
+      "showApiKey": "Show API Key"
     },
     "recognition": {
       "autoPaste": "Action after speech recognition",
@@ -344,5 +346,15 @@
   },
   "bot": {
     "ariaLabel": "Murmur mascot"
+  },
+  "tray": {
+    "showWindow": "Show Main Window",
+    "about": "About",
+    "quit": "Quit",
+    "tooltipReady": "Murmur - Chinese Voice to Text",
+    "tooltipRecording": "Murmur - Recording...",
+    "tooltipProcessing": "Murmur - Processing...",
+    "aboutTitle": "About Murmur",
+    "aboutDescription": "Free and open-source AI voice input tool"
   }
 }

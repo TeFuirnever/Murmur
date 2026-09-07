@@ -37,12 +37,13 @@ function createMockIpcMain(): MockIpcMain {
 
 // [20260726_Tier3_SettingsHandlersMigrate] Stubbed managers surface: only the
 // databaseManager methods + logger the registered handlers exercise.
+// [20260906_Refactor_DeadChannelCleanup] resetSettings dropped — the
+// SETTINGS.RESET handler was removed by ticket #250.
 interface MockManagers {
   databaseManager: {
     getSetting: (key: string, defaultValue?: unknown) => unknown;
     setSetting: (key: string, value: unknown) => boolean;
     getAllSettings: () => Record<string, unknown>;
-    resetSettings: () => boolean;
     syncToFileConfig: () => void;
   };
   logger: { error: (...args: unknown[]) => void };
@@ -67,7 +68,6 @@ describe("settingsHandlers", () => {
           ai_base_url: "https://api.openai.com/v1",
           ai_model: "gpt-3.5-turbo",
         })),
-        resetSettings: vi.fn(() => true),
         syncToFileConfig: vi.fn(),
       },
       logger: { error: vi.fn() },
@@ -82,12 +82,13 @@ describe("settingsHandlers", () => {
     );
   });
 
+  // [20260906_Refactor_DeadChannelCleanup] Ticket #250: the save-setting /
+  // reset-settings registration and delegation tests were removed with the
+  // SETTINGS.SAVE / SETTINGS.RESET handlers (zero renderer callers).
   it("registers all settings handlers", () => {
     expect(ipcMain._handlers["get-setting"]).toBeDefined();
     expect(ipcMain._handlers["set-setting"]).toBeDefined();
     expect(ipcMain._handlers["get-all-settings"]).toBeDefined();
-    expect(ipcMain._handlers["save-setting"]).toBeDefined();
-    expect(ipcMain._handlers["reset-settings"]).toBeDefined();
   });
 
   it("get-setting delegates to databaseManager", () => {
@@ -115,17 +116,4 @@ describe("settingsHandlers", () => {
   });
 
   // [20260816_Refactor_DeadChannels] legacy get-settings masking test removed.
-
-  it("save-setting delegates to databaseManager.setSetting", () => {
-    ipcMain._handlers["save-setting"]!({}, "auto_paste", "clipboard_only");
-    expect(managers.databaseManager.setSetting).toHaveBeenCalledWith(
-      "auto_paste",
-      "clipboard_only",
-    );
-  });
-
-  it("reset-settings delegates to databaseManager", () => {
-    ipcMain._handlers["reset-settings"]!();
-    expect(managers.databaseManager.resetSettings).toHaveBeenCalled();
-  });
 });

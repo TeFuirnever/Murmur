@@ -9,6 +9,10 @@
  *  - the history window's clear-all + export toolbar work end-to-end (#248)
  */
 import { test, expect } from "@playwright/test";
+import fs from "fs";
+import os from "os";
+import path from "path";
+import { mockIpcHandler } from "../helpers/ipc-mock";
 import {
   launchElectronApp,
   closeElectronApp,
@@ -28,7 +32,15 @@ test.describe("Suite 11: cross-window journeys", () => {
 
   test.afterAll(async () => {
     // Leave the persisted settings clean for other suites.
-    await window.evaluate(() => window.electronAPI.resetSettings());
+    // [20260906_Refactor_DeadChannelCleanup] Ticket #250 removed the
+    // zero-renderer-caller resetSettings binding; isolation now restores the
+    // keys this suite wrote ("hotkey", "language") to their defaults.
+    await window.evaluate(() =>
+      window.electronAPI.setSetting("hotkey", "CommandOrControl+Shift+Space"),
+    );
+    await window.evaluate(() =>
+      window.electronAPI.setSetting("language", "zh-CN"),
+    );
     await closeElectronApp(electronApp);
   });
 
@@ -166,5 +178,154 @@ test.describe("Suite 11: cross-window journeys", () => {
     expect(body).not.toContain("Export successful");
 
     await historyPage.close();
+  });
+});
+
+// [20260906_Test_ExportContentReadback] Spec #266 T16 (#293): export is not
+// just a clickable button — read the exported files back and assert their
+// CONTENT. Drives the REAL single-record export path (result-card panel →
+// formatter → dialog → file): srt is plain text; docx is a zip whose
+// word/document.xml is DEFLATE-compressed, inflated here with node zlib.
+test.describe("Suite 11b: Export content readback", () => {
+  let electronApp;
+  let window;
+  let wavPath;
+
+  function makeSilentWav() {
+    const sampleRate = 16000;
+    const dataSize = sampleRate * 2;
+    const header = Buffer.alloc(44);
+    header.write("RIFF", 0);
+    header.writeUInt32LE(36 + dataSize, 4);
+    header.write("WAVE", 8);
+    header.write("fmt ", 12);
+    header.writeUInt32LE(16, 16);
+    header.writeUInt16LE(1, 20);
+    header.writeUInt16LE(1, 22);
+    header.writeUInt32LE(sampleRate, 24);
+    header.writeUInt32LE(sampleRate * 2, 28);
+    header.writeUInt16LE(2, 32);
+    header.writeUInt16LE(16, 34);
+    header.write("data", 36);
+    header.writeUInt32LE(dataSize, 40);
+    return Buffer.concat([header, Buffer.alloc(dataSize)]);
+  }
+
+  function inflateStoredEntry(zip, entryName) {
+    const nameBuf = Buffer.from(entryName, "utf8");
+    let offset = 0;
+    while (offset < zip.length - 4) {
+      if (zip.readUInt32LE(offset) !== 0x04034b50) {
+        offset += 1;
+        continue;
+      }
+      const method = zip.readUInt16LE(offset + 8);
+      const compressedSize = zip.readUInt32LE(offset + 18);
+      const nameLen = zip.readUInt16LE(offset + 26);
+      const extraLen = zip.readUInt16LE(offset + 28);
+      const name = zip.slice(offset + 30, offset + 30 + nameLen);
+      if (name.equals(nameBuf)) {
+        const payload = zip.slice(
+          offset + 30 + nameLen + extraLen,
+          offset + 30 + nameLen + extraLen + compressedSize,
+        );
+        const zlib = require("zlib");
+        return String(method === 8 ? zlib.inflateRawSync(payload) : payload);
+      }
+      offset += 30 + nameLen + extraLen + compressedSize;
+    }
+    return "";
+  }
+
+  test.beforeAll(async () => {
+    ({ app: electronApp, window } = await launchElectronApp());
+    wavPath = path.join(os.tmpdir(), `murmur-e2e-export-${Date.now()}.wav`);
+    fs.writeFileSync(wavPath, makeSilentWav());
+  });
+
+  test.afterAll(async () => {
+    await closeElectronApp(electronApp);
+    fs.rmSync(wavPath, { force: true });
+  });
+
+  test("11.5 — exported srt/docx carry the record content and timeline", async () => {
+    test.setTimeout(60_000);
+    // Seed a REAL record (with server-shape segments) so the export path
+    // formats genuine data; the file journey then lands on a result card
+    // whose id points at this record.
+    const seedResult: unknown = await window.evaluate(() =>
+      window.electronAPI.saveTranscription({
+        text: "Suite11b 导出内容校验",
+        raw_text: "Suite11b 导出内容校验",
+        confidence: 0.9,
+        duration: 3.0,
+        source_type: "recording",
+        segments: JSON.stringify([
+          { text: "第一段", start_ms: 0, end_ms: 1500, speaker: 0 },
+          { text: "第二段", start_ms: 1500, end_ms: 3000, speaker: 1 },
+        ]),
+      }),
+    );
+    const recordId = Number(
+      (seedResult as { lastInsertRowid?: number })?.lastInsertRowid,
+    );
+
+    await mockIpcHandler(electronApp, "transcribe-file", {
+      success: true,
+      text: "Suite11b 导出内容校验",
+      segments: [
+        { text: "第一段", start_ms: 0, end_ms: 1500, speaker: 0 },
+        { text: "第二段", start_ms: 1500, end_ms: 3000, speaker: 1 },
+      ],
+      duration: 3.0,
+      id: recordId,
+    });
+
+    await window.locator('button:has-text("文件导入")').click();
+    await mockIpcHandler(electronApp, "import-audio-file", {
+      success: true,
+      filePath: wavPath,
+      fileName: "silence-1s.wav",
+      fileSize: 32044,
+      extension: ".wav",
+    });
+    await window.locator('[data-testid="file-drop-zone"]').click();
+    await window.locator('button:has-text("开始转录")').click();
+    const result = window.locator('[data-testid="transcription-result"]');
+    await expect(result).toBeVisible();
+
+    const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "murmur-export-"));
+    const srtPath = path.join(outDir, "record.srt");
+    const docxPath = path.join(outDir, "record.docx");
+    try {
+      // SRT: patch the save dialog to our tmp path, click the SRT button
+      await electronApp.evaluate(({ dialog }, filePath) => {
+        (dialog as unknown as { showSaveDialog: unknown }).showSaveDialog =
+          async () => ({ canceled: false, filePath });
+      }, srtPath);
+      await result.locator('button:has-text("SRT")').click();
+      await window.waitForTimeout(1200);
+      expect(fs.existsSync(srtPath)).toBe(true);
+      const srt = fs.readFileSync(srtPath, "utf8");
+      // adjacent segments come out smart-merged into one cue (formatter
+      // behavior) — assert the merged timeline and combined text
+      expect(srt).toContain("00:00:00,000 --> 00:00:03,000");
+      expect(srt).toContain("第一段第二段");
+
+      // DOCX: inflate word/document.xml out of the zip and assert the text
+      await electronApp.evaluate(({ dialog }, filePath) => {
+        (dialog as unknown as { showSaveDialog: unknown }).showSaveDialog =
+          async () => ({ canceled: false, filePath });
+      }, docxPath);
+      await result.locator('button:has-text("DOCX")').click();
+      await window.waitForTimeout(1200);
+      expect(fs.existsSync(docxPath)).toBe(true);
+      const documentXml = String(
+        inflateStoredEntry(fs.readFileSync(docxPath), "word/document.xml"),
+      );
+      expect(documentXml).toContain("Suite11b 导出内容校验");
+    } finally {
+      fs.rmSync(outDir, { recursive: true, force: true });
+    }
   });
 });

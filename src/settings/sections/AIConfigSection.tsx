@@ -113,6 +113,7 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
         </label>
         <button
           type="button"
+          id="ai-optimization-toggle"
           role="switch"
           aria-checked={settings.enable_ai_optimization}
           onClick={() =>
@@ -269,6 +270,11 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
           />
           <button
             type="button"
+            aria-label={
+              showApiKey
+                ? t("settings.ai.hideApiKey", "隐藏 API Key")
+                : t("settings.ai.showApiKey", "显示 API Key")
+            }
             onClick={() => setShowApiKey(!showApiKey)}
             className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#86868b] hover:text-[#1d1d1f] dark:hover:text-[#f5f5f7]"
           >
@@ -325,6 +331,7 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
           </div>
           {!customModel && (
             <select
+              aria-label={t("settings.ai.predefinedModel", "预定义模型")}
               value={settings.ai_model}
               onChange={(e) => onInputChange("ai_model", e.target.value)}
               className="w-full px-3 py-2 text-sm border border-[#d2d2d7] dark:border-[#3a3a3c] rounded-lg focus:ring-2 focus:ring-[#0071e3] focus:border-transparent bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7]"

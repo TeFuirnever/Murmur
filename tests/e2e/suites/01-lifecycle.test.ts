@@ -48,9 +48,9 @@ test.describe("Suite 1: Application Lifecycle", () => {
     // Must-have methods for the app to function
     // [20260815_Refactor_DeadIpc] readClipboard/writeClipboard removed with
     // their zero-renderer-caller IPC channels.
+    // [20260906_Refactor_DeadChannelCleanup] Ticket #250 removed the
+    // zero-renderer-caller getSystemInfo/checkPermissions bindings.
     const requiredMethods = [
-      "getSystemInfo",
-      "checkPermissions",
       "getSetting",
       "setSetting",
       "getAllSettings",

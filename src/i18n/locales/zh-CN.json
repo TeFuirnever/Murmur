@@ -157,7 +157,9 @@
       "precise": "精确",
       "creative": "创造",
       "ai_temperature": "创造性 (Temperature)",
-      "ai_max_tokens": "最大输出长度"
+      "ai_max_tokens": "最大输出长度",
+      "hideApiKey": "隐藏 API Key",
+      "showApiKey": "显示 API Key"
     },
     "recognition": {
       "autoPaste": "语音识别完成后的操作方式",
@@ -344,5 +346,15 @@
   },
   "bot": {
     "ariaLabel": "Murmur 吉祥物"
+  },
+  "tray": {
+    "showWindow": "显示主窗口",
+    "about": "关于",
+    "quit": "退出",
+    "tooltipReady": "Murmur - 中文语音转文字",
+    "tooltipRecording": "Murmur - 正在录音...",
+    "tooltipProcessing": "Murmur - 正在处理...",
+    "aboutTitle": "关于 Murmur",
+    "aboutDescription": "开源免费的 AI 语音输入工具"
   }
 }

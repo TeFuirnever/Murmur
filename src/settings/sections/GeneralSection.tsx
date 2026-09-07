@@ -50,13 +50,16 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
           <label className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
             {t("settings.recognition.alwaysOnTop", "窗口始终置顶")}
           </label>
-          <p className="text-xs text-[#86868b]">
+          // [20260906_Test_AxeA11y] #6e6e73 passes 4.5:1 (small text); the //
+          former #86868b measured ~3.5:1 and failed the axe gate.
+          <p className="text-xs text-[#6e6e73]">
             {t("settings.general.alwaysOnTopDesc", "将应用窗口保持在最前面")}
           </p>
         </div>
         <button
           type="button"
           role="switch"
+          aria-label={t("settings.recognition.alwaysOnTop", "窗口始终置顶")}
           aria-checked={settings.window_always_on_top}
           onClick={() => {
             const newVal = !settings.window_always_on_top;
@@ -92,6 +95,7 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
           {t("settings.recognition.autoPaste", "自动粘贴行为")}
         </label>
         <select
+          aria-label={t("settings.recognition.autoPaste", "自动粘贴行为")}
           value={settings.auto_paste}
           onChange={(e) => onInputChange("auto_paste", e.target.value)}
           className="w-full px-3 py-2 text-sm border border-[#d2d2d7] dark:border-[#3a3a3c] rounded-lg focus:ring-2 focus:ring-[#0071e3] focus:border-transparent bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7]"
@@ -106,7 +110,7 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
             {t("settings.recognition.noneOption", "不自动操作")}
           </option>
         </select>
-        <p className="mt-1 text-xs text-[#86868b]">
+        <p className="mt-1 text-xs text-[#6e6e73]">
           {t(
             "settings.recognition.autoPasteDesc",
             "语音识别完成后的文本处理方式",
@@ -151,7 +155,7 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
             {t("settings.general.defaultModeOff", "关闭 AI 处理")}
           </option>
         </select>
-        <p className="mt-1 text-xs text-[#86868b]">
+        <p className="mt-1 text-xs text-[#6e6e73]">
           {t(
             "settings.general.defaultModeDesc",
             "录音与文件导入完成后自动应用的 AI 处理方式；单次结果面板仍可临时切换。",
@@ -165,6 +169,7 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
           {t("settings.recognition.closeBehavior", "关闭行为")}
         </label>
         <select
+          aria-label={t("settings.recognition.closeBehavior", "关闭行为")}
           value={settings.close_behavior}
           onChange={(e) => onInputChange("close_behavior", e.target.value)}
           className="w-full px-3 py-2 text-sm border border-[#d2d2d7] dark:border-[#3a3a3c] rounded-lg focus:ring-2 focus:ring-[#0071e3] focus:border-transparent bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7]"
@@ -176,7 +181,7 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
             {t("settings.recognition.quitBehavior", "退出应用")}
           </option>
         </select>
-        <p className="mt-1 text-xs text-[#86868b]">
+        <p className="mt-1 text-xs text-[#6e6e73]">
           {t(
             "settings.recognition.closeBehaviorDesc",
             "点击窗口关闭按钮时的行为",
@@ -190,6 +195,7 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
           {t("settings.appearance.theme", "外观主题")}
         </label>
         <select
+          aria-label={t("settings.appearance.theme", "外观主题")}
           value={settings.theme}
           onChange={(e) => onInputChange("theme", e.target.value)}
           className="w-full px-3 py-2 text-sm border border-[#d2d2d7] dark:border-[#3a3a3c] rounded-lg focus:ring-2 focus:ring-[#0071e3] focus:border-transparent bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7]"
@@ -212,6 +218,7 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
           {t("settings.language.label", "语言")}
         </label>
         <select
+          aria-label={t("settings.language.label", "语言")}
           value={i18n.language}
           onChange={(e) => {
             i18n.changeLanguage(e.target.value);
@@ -240,7 +247,7 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
         >
           {t("settings.general.hotwordsLabel", "热词")}
         </label>
-        <p className="text-xs text-[#86868b] mb-2">
+        <p className="text-xs text-[#6e6e73] mb-2">
           {t(
             "settings.general.hotwordsDesc",
             "每行一个。识别时优先匹配这些词,提升生僻专名命中率。",
@@ -256,7 +263,7 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
           aria-describedby="hotwords-hint"
           className="w-full text-sm px-3 py-2 border border-[#d2d2d7] dark:border-[#3a3a3c] rounded-lg bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7] focus:ring-2 focus:ring-[#0071e3] focus:border-transparent resize-y"
         />
-        <p id="hotwords-hint" className="text-xs text-[#86868b] mt-1">
+        <p id="hotwords-hint" className="text-xs text-[#6e6e73] mt-1">
           {t("settings.general.hotwordsLimit", "最多 200 行,每行 32 字")}
         </p>
       </div>
@@ -268,7 +275,7 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
         <label className="block text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7] mb-1">
           {t("settings.general.hotkeyLabel", "录音快捷键")}
         </label>
-        <p className="text-xs text-[#86868b] mb-2">
+        <p className="text-xs text-[#6e6e73] mb-2">
           {t(
             "settings.general.hotkeyDesc",
             "全局快捷键,任意界面按下即可开始/停止录音。",

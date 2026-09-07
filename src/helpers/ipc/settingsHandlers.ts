@@ -5,7 +5,6 @@ interface DatabaseManager {
   getSetting(key: string, defaultValue?: unknown): unknown;
   setSetting(key: string, value: unknown): unknown;
   getAllSettings(): Record<string, unknown>;
-  resetSettings(): unknown;
   syncToFileConfig(): void;
 }
 
@@ -16,9 +15,16 @@ interface WindowManager {
   historyWindow?: Electron.BrowserWindow | null;
 }
 
+interface TrayManager {
+  setLanguage(lang: string): void;
+}
+
 interface Managers {
   databaseManager: DatabaseManager;
   windowManager: WindowManager;
+  // [20260906_Fix_TrayI18n] Optional so existing call sites (and tests)
+  // without a tray keep working; the language write rebuilds the tray.
+  trayManager?: TrayManager;
 }
 
 const ALLOWED_SETTING_KEYS = new Set<string>([
@@ -106,6 +112,11 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
     const result = databaseManager.setSetting(key, value);
     databaseManager.syncToFileConfig();
     broadcastSettingsUpdate(key);
+    // [20260906_Fix_TrayI18n] The tray lives in the main process and has no
+    // renderer i18n context — push the language switch to it directly.
+    if (key === "language") {
+      managers.trayManager?.setLanguage(String(value));
+    }
     return result;
   });
 
@@ -117,19 +128,8 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
   // EXPORT handlers (dialog-backed but with no UI entry point anywhere) were
   // removed with their contract constants.
 
-  ipcMain.handle(C.SETTINGS.SAVE, (_event, key: string, value: unknown) => {
-    if (!validateSetting(key, value)) {
-      return { success: false, error: "Invalid setting key or value" };
-    }
-    const result = databaseManager.setSetting(key, value);
-    broadcastSettingsUpdate(key);
-    return result;
-  });
-
-  ipcMain.handle(C.SETTINGS.RESET, () => {
-    const result = databaseManager.resetSettings();
-    broadcastSettingsUpdate(null);
-    return result;
-  });
+  // [20260906_Refactor_DeadChannelCleanup] Ticket #250: the SETTINGS.SAVE and
+  // SETTINGS.RESET handlers were removed — zero renderer callers (orphans
+  // yellow list). Persistence goes through SETTINGS.SET.
 }
 // [20260724_TS_BigBang_SettingsHandlers] END

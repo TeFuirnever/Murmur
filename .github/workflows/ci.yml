@@ -102,9 +102,23 @@ jobs:
         if: runner.os == 'macOS'
         run: pnpm run test:coverage
 
-      - name: Test (full suite; coverage floor is macOS-scoped)
+      # [20260906_Test_CoverageSignal] Spec #266 T05: the Windows leg has no
+      # threshold (see vitest.config.ts platform-scope note — platform-
+      # conditional branches make the percentages non-comparable), which made
+      # cross-leg divergence invisible (first honest win measurement:
+      # 91.53 branch vs 92.19 mac). Run coverage with a text reporter so
+      # both legs' numbers land in the CI log for comparison. The four
+      # threshold=0 flags neutralize the global thresholds from
+      # vitest.config.ts for THIS step only (the macOS leg keeps enforcing
+      # them) — report-only, non-blocking by construction.
+      - name: Test (full suite) with coverage report (no threshold on win)
         if: runner.os == 'Windows'
-        run: pnpm run test
+        run: >-
+          pnpm exec vitest run --coverage --coverage.reporter=text
+          --coverage.thresholds.statements=0
+          --coverage.thresholds.branches=0
+          --coverage.thresholds.functions=0
+          --coverage.thresholds.lines=0
 
       # [20260817_T4_CiMatrix] Mirror of the local ci-check stage1 entry:
       # stdlib-unittest suite (protocol contract + numpy smoke) via the
@@ -138,27 +152,29 @@ jobs:
         run: pnpm test:e2e:diag
         continue-on-error: true
 
-      # [20260725_E2E_BootHealthGate] Gate 3 (boot health) — runs the new
-      # 7-test boot smoke suite per e2e-functional-verification-strategy.md
-      # §4.1 / §7 Stage 1.
+      # [20260906_Test_E2eGatePromotion] Gate 3 (boot health) — PROMOTED to
+      # blocking per Spec #266 T01: the node:sqlite migration (spec #226)
+      # removed the native-ABI failure class and the suite is green locally
+      # at this HEAD (8/8). One CI-only retry (playwright.config.ts)
+      # absorbs the documented macOS firstWindow flakiness. A red boot
+      # health now blocks merge on both matrix legs.
       #
-      # STATUS: NON-BLOCKING until validated on real macOS (architect
-      # review condition). The suite was authored against spec but could
-      # not be run in the dev sandbox (firstWindow 30s timeout — env-wide,
-      # 01-lifecycle fails identically). KNOWN_RENDERER_NOISE allowlist
-      # at tests/e2e/suites/00-boot-health.test.js:43-45 is unvalidated.
+      # NOTE: the Windows leg has never been observed green in CI (this
+      # step ran behind continue-on-error since 20260725). First red win
+      # run: diagnose via the [e2e-launch] output above before any gate
+      # change.
       #
-      # PROMOTION PLAN:
-      #   1. Watch this step on the next 2-3 PRs (capture real output).
-      #   2. If green 3x consecutive, flip to blocking by removing
-      #      continue-on-error below AND add `retries: 1` per architect
-      #      recommendation (CI macOS firstWindow flakiness — see spec §7
-      #      Stage 0 acceptance at line 518-519).
-      #   3. Expand KNOWN_RENDERER_NOISE based on observed console output.
-      - name: E2E boot health (non-blocking — pending validation)
+      # Escape hatch (use sparingly): if a leg flakes despite the retry,
+      # capture the [e2e-launch] diagnostic output above before any
+      # allowlist change — do not silently re-add continue-on-error.
+      - name: E2E boot health
         run: pnpm test:e2e:boot
-        continue-on-error: true
 
+      # [20260906_Test_E2eGatePromotion] Full e2e remains NON-BLOCKING for
+      # now: promote it (remove continue-on-error) only after boot health
+      # above has been green on 2-3 consecutive PRs on BOTH matrix legs.
+      # Original promotion context: e2e-functional-verification-strategy.md
+      # §7 Stage 1.
       - name: E2E tests
         run: pnpm test:e2e
         continue-on-error: true

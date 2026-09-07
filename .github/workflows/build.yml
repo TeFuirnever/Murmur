@@ -209,6 +209,15 @@ jobs:
           pkill -f "murmur-smoke/Murmur.app" 2>/dev/null || true
           echo "packaged app smoke passed: boot milestones + preload bridge verified"
       # [20260816_Gate_PackagedBootSmoke] END
+      # [20260906_Test_PackagedBootHealth] Spec #266 T11 (#288): run the full
+      # boot-health probes (preload bridge surface, mic button, mascot,
+      # CSP, 6s quit) against the INSTALLED app copied by the smoke step
+      # above — packaged asar layout is invisible to the dev-mode e2e job.
+      # DB isolation rides on MURMUR_DB_PATH=:memory: (electron-launch).
+      - name: Boot-health e2e probes against packaged app (mac)
+        run: pnpm exec playwright test tests/e2e/suites/00-boot-health.test.ts
+        env:
+          MURMUR_PACKAGED_EXECUTABLE: /tmp/murmur-smoke/Murmur.app/Contents/MacOS/Murmur
       - name: Generate SHA256 checksums
         run: |
           cd dist
@@ -395,6 +404,16 @@ jobs:
           Stop-Process -Name 'Murmur' -Force -ErrorAction SilentlyContinue
           Write-Host 'packaged installer smoke passed: boot milestones + preload bridge verified'
       # [20260816_Gate_PackagedBootSmoke] END
+      # [20260906_Test_PackagedBootHealth] Spec #266 T11 (#288): Windows
+      # counterpart — boot-health probes against the NSIS-installed exe.
+      # Stop the smoke's leftover process first so the probes boot a fresh
+      # instance with isolated DB.
+      - name: Boot-health e2e probes against packaged app (win)
+        shell: pwsh
+        run: |
+          Stop-Process -Name 'Murmur' -Force -ErrorAction SilentlyContinue
+          $env:MURMUR_PACKAGED_EXECUTABLE = Join-Path $env:LOCALAPPDATA 'Programs\murmur\Murmur.exe'
+          pnpm exec playwright test tests/e2e/suites/00-boot-health.test.ts
       - name: Generate SHA256 checksums
         shell: pwsh
         run: |

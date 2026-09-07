@@ -56,7 +56,6 @@ describe("hotkeyHandlers", () => {
       unregisterHotkey: vi.fn(() => true),
       getRegisteredHotkeys: vi.fn(() => ["CommandOrControl+Shift+Space"]),
       setRecordingState: vi.fn(),
-      getRecordingState: vi.fn(() => false),
     };
 
     mockMainWindow = {
@@ -86,7 +85,9 @@ describe("hotkeyHandlers", () => {
   }
 
   describe("register() — channel registration completeness", () => {
-    it("registers all 5 hotkey channels", async () => {
+    // [20260906_Refactor_DeadChannelCleanup] Ticket #250 removed the
+    // HOTKEY.GET_STATE channel — 4 hotkey channels remain.
+    it("registers all 4 hotkey channels", async () => {
       const C = await setup();
 
       const expectedChannels = [
@@ -94,13 +95,12 @@ describe("hotkeyHandlers", () => {
         C.HOTKEY.UNREGISTER,
         C.HOTKEY.GET_CURRENT,
         C.HOTKEY.SET_STATE,
-        C.HOTKEY.GET_STATE,
       ];
 
       for (const channel of expectedChannels) {
         expect(registeredHandlers.has(channel)).toBe(true);
       }
-      expect(registeredHandlers.size).toBeGreaterThanOrEqual(5);
+      expect(registeredHandlers.size).toBeGreaterThanOrEqual(4);
     });
 
     it("does not register duplicate channels", async () => {
@@ -116,10 +116,8 @@ describe("hotkeyHandlers", () => {
       expect(registeredHandlers.has("unregister-hotkey")).toBe(true);
       expect(registeredHandlers.has("get-current-hotkey")).toBe(true);
       expect(registeredHandlers.has("set-recording-state")).toBe(true);
-      expect(registeredHandlers.has("get-recording-state")).toBe(true);
       // Sanity: contract symbols match literal strings
       expect(C.HOTKEY.REGISTER).toBe("register-hotkey");
-      expect(C.HOTKEY.GET_STATE).toBe("get-recording-state");
     });
   });
 
@@ -350,37 +348,7 @@ describe("hotkeyHandlers", () => {
     });
   });
 
-  describe("HOTKEY.GET_STATE handler", () => {
-    it("returns the recording state from hotkeyManager.getRecordingState", async () => {
-      const C = await setup();
-      const handler = registeredHandlers.get(C.HOTKEY.GET_STATE)!;
-      // [20260726_TypeGate_HotkeyHandlers] mockHotkeyManager indexed access is
-      // possibly-undefined; the method is populated in beforeEach so assert.
-      mockHotkeyManager.getRecordingState!.mockReturnValueOnce(true);
-
-      const result = (await handler(mockEvent)) as HandlerResult;
-      expect(result.success).toBe(true);
-      expect(result.isRecording).toBe(true);
-      expect(mockHotkeyManager.getRecordingState).toHaveBeenCalled();
-    });
-
-    it("returns failure when hotkeyManager is null", async () => {
-      const { register } = await import("../../src/helpers/ipc/hotkeyHandlers");
-      registeredHandlers.clear();
-      register(
-        mockIpcMain as never,
-        {
-          hotkeyManager: null,
-          windowManager: { mainWindow: mockMainWindow },
-          logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-        } as never,
-      );
-      const C = await import("../../src/helpers/ipc-contracts");
-      const handler = registeredHandlers.get(C.HOTKEY.GET_STATE)!;
-
-      const result = (await handler(mockEvent)) as HandlerResult;
-      expect(result.success).toBe(false);
-      expect(result.error).toContain("未初始化");
-    });
-  });
+  // [20260906_Refactor_DeadChannelCleanup] Ticket #250: the HOTKEY.GET_STATE
+  // handler describe block was removed with the handler (zero renderer
+  // callers); its success/failure arms pinned a deleted channel.
 });

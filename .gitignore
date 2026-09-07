@@ -139,3 +139,6 @@ src/dist/
 
 # Icon design exploration masters (5MB+ WIP; exported-png/ is the reproducible source kept tracked)
 design/icon-rebrand/candidates/
+
+# machine-local ASR regression run report (scripts/asr-regression.js)
+scripts/asr_regression_results.json

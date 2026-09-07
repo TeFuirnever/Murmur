@@ -11,7 +11,6 @@ import type {
   ExportAllResult,
   AIReviewResult,
   FunASRStatusResult,
-  FunASRInstallResult,
   ModelCheckResult,
   DownloadProgress,
   UpdateCheckResult,
@@ -19,9 +18,7 @@ import type {
   UpdateProgressData,
   UpdateCompleteData,
   UpdateErrorData,
-  PermissionResult,
   HotkeyRegistrationResult,
-  ProcessingUpdateData,
   FileTranscriptionProgressData,
   OperationResult,
 } from "./types/ipc";
@@ -29,10 +26,8 @@ import type {
 export interface ElectronAPI {
   // Window control
   hideWindow: () => Promise<void>;
-  showWindow: () => Promise<void>;
   minimizeWindow: () => Promise<void>;
   maximizeWindow: () => Promise<void>;
-  isWindowMaximized: () => Promise<boolean>;
   onWindowMaximizeChange: (
     callback: (isMaximized: boolean) => void,
   ) => () => void;
@@ -46,12 +41,6 @@ export interface ElectronAPI {
     options?: Record<string, unknown>,
   ) => Promise<FileTranscriptionResult>;
   checkFunASRStatus: () => Promise<FunASRStatusResult>;
-  installFunASR: () => Promise<FunASRInstallResult>;
-  restartFunasrServer: () => Promise<{
-    success: boolean;
-    message?: string;
-    error?: string;
-  }>;
   // [20260822_T12_IdleUnload] Fire-and-forget reload warm-up (#190).
   reloadFunasrModels: () => Promise<{
     success: boolean;
@@ -119,15 +108,12 @@ export interface ElectronAPI {
   getSetting: (key: string, defaultValue?: unknown) => Promise<unknown>;
   setSetting: (key: string, value: unknown) => Promise<void>;
   getAllSettings: () => Promise<Record<string, unknown>>;
-  saveSetting: (key: string, value: unknown) => Promise<void>;
-  resetSettings: () => Promise<void>;
 
   // Hotkey
   registerHotkey: (hotkey: string) => Promise<HotkeyRegistrationResult>;
   unregisterHotkey: (hotkey: string) => Promise<HotkeyRegistrationResult>;
   getCurrentHotkey: () => Promise<string>;
   setRecordingState: (isRecording: boolean) => Promise<void>;
-  getRecordingState: () => Promise<boolean>;
   onHotkeyTriggered: (callback: (hotkey: string) => void) => () => void;
 
   // File operations
@@ -164,11 +150,6 @@ export interface ElectronAPI {
   ) => Promise<AIReviewResult>;
 
   // System
-  getSystemInfo: () => Promise<Record<string, unknown>>;
-  checkPermissions: () => Promise<PermissionResult>;
-  requestPermissions: () => Promise<PermissionResult>;
-  testAccessibilityPermission: () => Promise<boolean>;
-  openSystemPermissions: () => Promise<void>;
   getAppVersion: () => Promise<string>;
 
   // Update management
@@ -193,17 +174,8 @@ export interface ElectronAPI {
   // Misc
   openExternal: (url: string) => Promise<void>;
   log: (level: string, message: string, data?: unknown) => Promise<void>;
-  reloadWindow: () => Promise<void>;
-  openDevTools: () => Promise<void>;
 
   // Event listeners
-  onTranscriptionUpdate: (
-    callback: (data: TranscriptionRecord) => void,
-  ) => () => void;
-  onProcessingUpdate: (
-    callback: (eventOrData: unknown, data?: ProcessingUpdateData) => void,
-  ) => () => void;
-  onError: (callback: (data: { error: string }) => void) => () => void;
   onSettingsUpdate: (
     callback: (data: Record<string, unknown>) => void,
   ) => () => void;
@@ -211,11 +183,9 @@ export interface ElectronAPI {
   // History window
   openHistoryWindow: () => Promise<void>;
   closeHistoryWindow: () => Promise<void>;
-  hideHistoryWindow: () => Promise<void>;
 
   // Settings window
   openSettingsWindow: () => Promise<void>;
-  closeSettingsWindow: () => Promise<void>;
   hideSettingsWindow: () => Promise<void>;
 }
 
@@ -244,6 +214,15 @@ declare global {
   // getTranscription/getTranscriptionStats, getSettings(legacy),
   // importSettings/exportSettings, and the TranscriptionStats/ModelInfo/
   // SettingsImportResult/SettingsExportResult interfaces in types/ipc.ts.
+  // [20260906_Refactor_DeadChannelCleanup] Ticket #250: removed the 20
+  // renderer-orphan channels measured by ipc-contracts-orphans.test.ts
+  // (yellow list) — showWindow, isWindowMaximized, installFunASR,
+  // restartFunasrServer, saveSetting, resetSettings, getRecordingState,
+  // getSystemInfo, checkPermissions, requestPermissions,
+  // testAccessibilityPermission, openSystemPermissions, reloadWindow,
+  // openDevTools, hideHistoryWindow, closeSettingsWindow,
+  // onTranscriptionUpdate, onProcessingUpdate, onError — plus the orphaned
+  // FunASRInstallResult/PermissionResult/ProcessingUpdateData imports.
   interface Window {
     electronAPI: ElectronAPI;
     constants: AppConstants;

@@ -10,9 +10,7 @@
  */
 
 export const FUNASR = {
-  INSTALL: "install-funasr",
   STATUS: "check-funasr-status",
-  RESTART: "restart-funasr-server",
   // [20260822_T12_IdleUnload] Hotkey-down reload pre-trigger (fire-and-
   // forget warm-up; ticket #190).
   RELOAD_MODELS: "reload-funasr-models",
@@ -27,6 +25,13 @@ export const FUNASR = {
 // handlers: MODELS.AVAILABLE/CURRENT/SWITCH/DOWNLOAD_MODEL (hardcoded
 // placeholder responses — fake feature), TRANSCRIPTION.GET/STATS, and
 // SETTINGS.GET_LEGACY/IMPORT/EXPORT (no UI entry points).
+
+// [20260906_Refactor_DeadChannelCleanup] Ticket #250: removed the 20
+// renderer-orphan channels measured by ipc-contracts-orphans.test.ts
+// (yellow list), plus the processing-update push event with its live
+// subscriber (useModelStatus) per the ticket manifest. See that test for
+// the evidence baseline; the deleted keys span the FUNASR, SETTINGS,
+// WINDOW, HOTKEY, SYSTEM and EVENTS domains.
 
 export const MODELS = {
   CHECK: "check-model-files",
@@ -61,26 +66,18 @@ export const SETTINGS = {
   GET: "get-setting",
   SET: "set-setting",
   GET_ALL: "get-all-settings",
-  SAVE: "save-setting",
-  RESET: "reset-settings",
 } as const;
 
 export const WINDOW = {
   HIDE: "hide-window",
-  SHOW: "show-window",
   MINIMIZE: "minimize-window",
   MAXIMIZE: "maximize-window",
-  IS_MAX: "is-window-maximized",
   CLOSE: "close-window",
   SET_TOP: "set-always-on-top",
   CLOSE_APP: "close-app",
-  RELOAD: "reload-window",
-  OPEN_DEV_TOOLS: "open-dev-tools",
   OPEN_HISTORY: "open-history-window",
   CLOSE_HISTORY: "close-history-window",
-  HIDE_HISTORY: "hide-history-window",
   OPEN_SETTINGS: "open-settings-window",
-  CLOSE_SETTINGS: "close-settings-window",
   HIDE_SETTINGS: "hide-settings-window",
 } as const;
 
@@ -89,7 +86,6 @@ export const HOTKEY = {
   UNREGISTER: "unregister-hotkey",
   GET_CURRENT: "get-current-hotkey",
   SET_STATE: "set-recording-state",
-  GET_STATE: "get-recording-state",
 } as const;
 
 export const CLIPBOARD = {
@@ -105,12 +101,6 @@ export const UPDATE = {
 } as const;
 
 export const SYSTEM = {
-  INFO: "get-system-info",
-  DEBUG_INFO: "get-system-debug-info",
-  PERMISSIONS: "check-permissions",
-  REQUEST_PERMS: "request-permissions",
-  TEST_A11Y: "test-accessibility-permission",
-  OPEN_PERMS: "open-system-permissions",
   VERSION: "get-app-version",
   LOG: "log",
   OPEN_EXTERNAL: "open-external",
@@ -119,13 +109,9 @@ export const SYSTEM = {
 export const EVENTS = {
   HOTKEY_TRIGGERED: "hotkey-triggered",
   WINDOW_MAXIMIZE_CHANGE: "window-maximize-change",
-  TRANSCRIPTION_UPDATE: "transcription-update",
-  PROCESSING_UPDATE: "processing-update",
-  ERROR: "error",
   SETTINGS_UPDATE: "settings-update",
   MODEL_DOWNLOAD_PROGRESS: "model-download-progress",
   FILE_TRANSCRIPTION_PROGRESS: "file-transcription-progress",
-  FUNASR_INSTALL_PROGRESS: "funasr-install-progress",
   UPDATE_DOWNLOAD_PROGRESS: "update-download-progress",
   UPDATE_DOWNLOAD_COMPLETE: "update-download-complete",
   UPDATE_DOWNLOAD_ERROR: "update-download-error",

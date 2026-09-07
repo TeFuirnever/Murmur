@@ -51,38 +51,28 @@ test.describe("Suite 9: Window Management", () => {
   });
 
   test("9.2 — Maximize and restore toggle", async () => {
+    // [20260906_Refactor_DeadChannelCleanup] Ticket #250 removed the
+    // zero-renderer-caller WINDOW.IS_MAX channel (isWindowMaximized), so the
+    // toggle is observed through the main-process window state — the same
+    // electronApp.evaluate pattern suites 9.1/9.3 use.
+    const maximized = () =>
+      electronApp.evaluate(({ BrowserWindow }) => {
+        const win = BrowserWindow.getAllWindows()[0];
+        return win ? win.isMaximized() : false;
+      });
+
     // Check initial state
-    const initiallyMaximized = await window.evaluate(() =>
-      window.electronAPI.isWindowMaximized(),
-    );
+    const initiallyMaximized = await maximized();
 
     // Toggle maximize
     await window.evaluate(() => window.electronAPI.maximizeWindow());
 
-    await expect
-      .poll(
-        async () => {
-          return await window.evaluate(() =>
-            window.electronAPI.isWindowMaximized(),
-          );
-        },
-        { timeout: 3000 },
-      )
-      .toBe(!initiallyMaximized);
+    await expect.poll(maximized, { timeout: 3000 }).toBe(!initiallyMaximized);
 
     // Toggle back
     await window.evaluate(() => window.electronAPI.maximizeWindow());
 
-    await expect
-      .poll(
-        async () => {
-          return await window.evaluate(() =>
-            window.electronAPI.isWindowMaximized(),
-          );
-        },
-        { timeout: 3000 },
-      )
-      .toBe(initiallyMaximized);
+    await expect.poll(maximized, { timeout: 3000 }).toBe(initiallyMaximized);
   });
 
   test("9.3 — Always-on-top toggle", async () => {

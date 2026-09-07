@@ -44,7 +44,8 @@ function wrapWithRateLimits(ipcMain: Electron.IpcMain): Electron.IpcMain {
     [C.AI.CHECK_STATUS]: { maxCalls: 30, windowMs: 60_000 },
     [C.TRANSCRIPTION.SAVE]: { maxCalls: 30, windowMs: 60_000 },
     [C.MODELS.DOWNLOAD]: { maxCalls: 3, windowMs: 300_000 },
-    [C.FUNASR.INSTALL]: { maxCalls: 3, windowMs: 300_000 },
+    // [20260906_Refactor_DeadChannelCleanup] Ticket #250: the FUNASR.INSTALL
+    // rate-limit entry was removed with the channel (zero renderer callers).
   };
 
   // Reassign handle with a rate-limiting wrapper. Cast through unknown to

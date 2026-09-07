@@ -10,8 +10,6 @@
 // tsconfig.json sets `skipLibCheck: true`. The d.ts-internal errors are
 // caught separately by tests/unit/backend-type-safety.test.js (which scans
 // .d.ts for `any`). See ADR-013 for the wider preload ↔ handler ↔ db seam.
-// reloadWindow/openDevTools handlers are registered dev-only in
-// systemHandlers.ts (NOT main.ts) under NODE_ENV === "development".
 import { contextBridge, ipcRenderer } from "electron";
 import * as C from "./src/helpers/ipc-contracts";
 import type { ElectronAPI } from "./src/electronAPI";
@@ -19,18 +17,16 @@ import type {
   UpdateProgressData,
   UpdateCompleteData,
   UpdateErrorData,
-  TranscriptionRecord,
   DownloadProgress,
-  ProcessingUpdateData,
   FileTranscriptionProgressData,
 } from "./src/types/ipc";
 
 // [20260725_CodeReview_ListenerHelper] Common shape for 7 `on*` event
 // listeners that follow the pattern: register a handler that strips the
 // IPC `_event` arg and forwards only the payload to the user callback;
-// return an unsubscribe that removes exactly that handler. Heterogeneous
-// listeners (onProcessingUpdate forwards both args, onModelDownloadProgress
-// passes the callback through directly) stay inline.
+// return an unsubscribe that removes exactly that handler. The one
+// heterogeneous listener left (onModelDownloadProgress passes the callback
+// through directly) stays inline.
 function makeListener<T>(
   channel: string,
   callback: (data: T) => void,
@@ -42,14 +38,15 @@ function makeListener<T>(
   return () => ipcRenderer.removeListener(channel, handler);
 }
 
+// [20260906_Refactor_DeadChannelCleanup] Ticket #250: removed the 20
+// renderer-orphan channels measured by ipc-contracts-orphans.test.ts
+// (yellow list). See that test for the evidence baseline.
 // Expose a safe API to the renderer process
 export const preloadApi: ElectronAPI = {
   // Window controls
   hideWindow: () => ipcRenderer.invoke(C.WINDOW.HIDE),
-  showWindow: () => ipcRenderer.invoke(C.WINDOW.SHOW),
   minimizeWindow: () => ipcRenderer.invoke(C.WINDOW.MINIMIZE),
   maximizeWindow: () => ipcRenderer.invoke(C.WINDOW.MAXIMIZE),
-  isWindowMaximized: () => ipcRenderer.invoke(C.WINDOW.IS_MAX),
   onWindowMaximizeChange: (callback: (isMaximized: boolean) => void) =>
     makeListener<boolean>(C.EVENTS.WINDOW_MAXIMIZE_CHANGE, callback),
   closeWindow: () => ipcRenderer.invoke(C.WINDOW.CLOSE),
@@ -61,8 +58,6 @@ export const preloadApi: ElectronAPI = {
   transcribeAudio: (audioData: unknown) =>
     ipcRenderer.invoke(C.TRANSCRIPTION.AUDIO, audioData),
   checkFunASRStatus: () => ipcRenderer.invoke(C.FUNASR.STATUS),
-  installFunASR: () => ipcRenderer.invoke(C.FUNASR.INSTALL),
-  restartFunasrServer: () => ipcRenderer.invoke(C.FUNASR.RESTART),
   // [20260822_T12_IdleUnload] Hotkey-down reload pre-trigger (#190).
   reloadFunasrModels: () => ipcRenderer.invoke(C.FUNASR.RELOAD_MODELS),
 
@@ -102,9 +97,6 @@ export const preloadApi: ElectronAPI = {
     ipcRenderer.invoke(C.SETTINGS.GET, key, defaultValue),
   setSetting: (key: string, value: unknown) =>
     ipcRenderer.invoke(C.SETTINGS.SET, key, value),
-  saveSetting: (key: string, value: unknown) =>
-    ipcRenderer.invoke(C.SETTINGS.SAVE, key, value),
-  resetSettings: () => ipcRenderer.invoke(C.SETTINGS.RESET),
 
   // Hotkey management
   registerHotkey: (hotkey: string) =>
@@ -116,7 +108,6 @@ export const preloadApi: ElectronAPI = {
   // (zero renderer callers).
   setRecordingState: (isRecording: boolean) =>
     ipcRenderer.invoke(C.HOTKEY.SET_STATE, isRecording),
-  getRecordingState: () => ipcRenderer.invoke(C.HOTKEY.GET_STATE),
 
   // Hotkey triggered event listener
   onHotkeyTriggered: (callback: (hotkey: string) => void) =>
@@ -125,13 +116,6 @@ export const preloadApi: ElectronAPI = {
   // File operations
   exportTranscriptions: (format: string) =>
     ipcRenderer.invoke(C.TRANSCRIPTION.EXPORT_ALL, format),
-
-  // System info
-  getSystemInfo: () => ipcRenderer.invoke(C.SYSTEM.INFO),
-  checkPermissions: () => ipcRenderer.invoke(C.SYSTEM.PERMISSIONS),
-  requestPermissions: () => ipcRenderer.invoke(C.SYSTEM.REQUEST_PERMS),
-  testAccessibilityPermission: () => ipcRenderer.invoke(C.SYSTEM.TEST_A11Y),
-  openSystemPermissions: () => ipcRenderer.invoke(C.SYSTEM.OPEN_PERMS),
 
   // App info
   getAppVersion: () => ipcRenderer.invoke(C.SYSTEM.VERSION),
@@ -161,36 +145,15 @@ export const preloadApi: ElectronAPI = {
     ipcRenderer.invoke(C.SYSTEM.LOG, level, message),
 
   // Event listeners
-  onTranscriptionUpdate: (callback: (data: TranscriptionRecord) => void) =>
-    makeListener<TranscriptionRecord>(C.EVENTS.TRANSCRIPTION_UPDATE, callback),
-  onProcessingUpdate: (
-    callback: (eventOrData: unknown, data?: ProcessingUpdateData) => void,
-  ) => {
-    const handler = (eventOrData: unknown, data?: ProcessingUpdateData) =>
-      callback(eventOrData, data);
-    ipcRenderer.on(C.EVENTS.PROCESSING_UPDATE, handler);
-    return () =>
-      ipcRenderer.removeListener(C.EVENTS.PROCESSING_UPDATE, handler);
-  },
-  onError: (callback: (data: { error: string }) => void) =>
-    makeListener<{ error: string }>(C.EVENTS.ERROR, callback),
   onSettingsUpdate: (callback: (data: Record<string, unknown>) => void) =>
     makeListener<Record<string, unknown>>(C.EVENTS.SETTINGS_UPDATE, callback),
-
-  // Dev tools (dev-only handlers registered in systemHandlers.ts under
-  // NODE_ENV === "development"; these reject in prod with "No handler
-  // registered")
-  reloadWindow: () => ipcRenderer.invoke(C.WINDOW.RELOAD),
-  openDevTools: () => ipcRenderer.invoke(C.WINDOW.OPEN_DEV_TOOLS),
 
   // History window
   openHistoryWindow: () => ipcRenderer.invoke(C.WINDOW.OPEN_HISTORY),
   closeHistoryWindow: () => ipcRenderer.invoke(C.WINDOW.CLOSE_HISTORY),
-  hideHistoryWindow: () => ipcRenderer.invoke(C.WINDOW.HIDE_HISTORY),
 
   // Settings window
   openSettingsWindow: () => ipcRenderer.invoke(C.WINDOW.OPEN_SETTINGS),
-  closeSettingsWindow: () => ipcRenderer.invoke(C.WINDOW.CLOSE_SETTINGS),
   hideSettingsWindow: () => ipcRenderer.invoke(C.WINDOW.HIDE_SETTINGS),
 
   // Model management
