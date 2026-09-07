@@ -922,9 +922,21 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
       // route the PROCESS entry straight through the shared orchestrator
       // (entry resolves its own default mode; the orchestrator owns prompt
       // building, the provider call and response/error mapping).
+      //
+      // [20260907_Fix_312_WireClampEntry] Activate the minimal-edit output
+      // budget clamp for this entry (issue #312, first T7 wiring step): the
+      // orchestrator only clamps when the caller opts in, and without this
+      // the 2026-08-15 empty-content fix never bound on a live path. Rewrite
+      // modes and custom templates stay unclamped by design.
       return await runPolishOrchestrator(
         { databaseManager, logger },
-        { text, mode, templatesDir, timeout },
+        {
+          text,
+          mode,
+          templatesDir,
+          timeout,
+          clampOutputTokens: MINIMAL_EDIT_MODES.has(mode),
+        },
       );
     },
   );

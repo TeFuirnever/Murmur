@@ -997,9 +997,48 @@ describe("aiHandlers", () => {
           { role: "user", content: "<transcript>\n原始文本\n</transcript>" },
         ],
         temperature: 0.3,
-        max_tokens: 2000,
+        // [20260907_Fix_312_WireClampEntry] optimize is a minimal-edit mode:
+        // the entry now wires clampOutputTokens, so the short input lands on
+        // the 4096 floor instead of the raw 2000 user cap.
+        max_tokens: aiHandlersNS.POLISH_CLAMP_MIN_TOKENS,
         stream: false,
       });
+    });
+
+    // ---- [20260907_Fix_312_WireClampEntry] PROCESS entry clamp activation ----
+
+    it("wires clampOutputTokens for minimal-edit modes at the IPC entry", async () => {
+      // Issue #312: the orchestrator's budget clamp only binds when the
+      // caller passes clampOutputTokens — the PROCESS entry never did, so
+      // the minimal-edit clamp (2026-08-15 empty-content fix) never bound on
+      // a live path. Through the IPC handler, optimize at 2000×2=4000 must
+      // hit the 4096 floor.
+      const handlers = captureHandlers(register, {
+        databaseManager: createPolishDb(null),
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        templatesDir: "/tmp/test-templates",
+      });
+      mockFetch({ choices: [{ message: { content: "润色完成" } }] });
+
+      await handlers[C.AI.PROCESS]!({}, "字".repeat(2000), "optimize");
+
+      expect(readRequestBody().max_tokens).toBe(
+        aiHandlersNS.POLISH_CLAMP_MIN_TOKENS,
+      );
+    });
+
+    it("keeps rewrite-class modes unclamped at the IPC entry", async () => {
+      const handlers = captureHandlers(register, {
+        databaseManager: createPolishDb(null),
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        templatesDir: "/tmp/test-templates",
+      });
+      mockFetch({ choices: [{ message: { content: "摘要完成" } }] });
+
+      await handlers[C.AI.PROCESS]!({}, "字".repeat(2000), "summarize");
+
+      // summarize is rewrite-class: the user cap binds, no clamp floor.
+      expect(readRequestBody().max_tokens).toBe(2000);
     });
 
     it("PROCESS prefers a custom template from templatesDir over built-in modes", async () => {
