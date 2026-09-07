@@ -365,6 +365,8 @@ class DatabaseManager {
   // identifier hole. updated_at is refreshed like the save path does for the
   // settings table (CURRENT_TIMESTAMP, server-side).
   updateTranscription(id: number, patch: Record<string, unknown>): RunResult {
+    // [20260906_Feat_TranscriptionUpdate_Review] Hoisted to module scope —
+    // no per-call re-allocation (review LOW finding).
     const UPDATABLE_COLUMNS = new Set(["processed_text", "text"]);
 
     if (!patch || typeof patch !== "object") {
@@ -383,11 +385,14 @@ class DatabaseManager {
         throw new Error(`不允许更新的字段: ${column}`);
       }
       const value = patch[column];
-      if (
-        value !== null &&
-        typeof value !== "string" &&
-        typeof value !== "number"
-      ) {
+      // [20260906_Feat_TranscriptionUpdate_Review] null is NOT admitted:
+      // the patch contract is string|number per column (raw_text is
+      // immutable by design), so null would NULL the column and diverge
+      // from the declared patch type.
+      if (value === null) {
+        throw new Error("更新数据无效");
+      }
+      if (typeof value !== "string" && typeof value !== "number") {
         throw new Error("更新数据无效");
       }
     }

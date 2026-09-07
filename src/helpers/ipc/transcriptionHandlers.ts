@@ -543,7 +543,12 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
         if (!row) {
           return { success: false, error: "转录记录不存在" };
         }
-        databaseManager.updateTranscription(id, patch);
+        const result = databaseManager.updateTranscription(id, patch);
+        // [20260906_Feat_TranscriptionUpdate_Review] A row deleted between
+        // update and re-read must not report success with undefined fields.
+        if (!result || result.changes === 0) {
+          return { success: false, error: "转录记录不存在" };
+        }
         const updated = databaseManager.getTranscriptionById(id);
         return {
           success: true,
