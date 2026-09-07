@@ -7,32 +7,32 @@
     {
       "id": "inventory",
       "status": "passed",
-      "evidence": "snapshot 342 files -> 全分类(9 update / 322 verified / 5 hold / 6 out_of_scope); inventory_knowledge.py validate -> valid:true, errors:[]"
+      "evidence": "snapshot 343 files -> all classified (334 verified / 9 hold); runnable_stage=true; history_sources 4 entries; inventory_knowledge.py validate -> valid:true, errors:[] (fixed this run: 9 oversized got size_resolution holds, history_sources was empty)"
     },
     {
       "id": "readback",
       "status": "passed",
-      "evidence": "grep 读回: README '2200+ tests'; CONTRIBUTING '88% / 83% / 88% / 89%' + '2200+ 用例'; CHANGELOG Unreleased 含 Spec #259/#193 T1/T2/T3/T7 条目; notepad 计数 157f/2201 + T7 状态"
+      "evidence": "grep readback: CHANGELOG 2x 'Spec #299' (Added+Changed); troubleshooting.md:27/117 Python 3.11+ both halves; promotion-article.md:44 + jike-v2ex-post.md:66 Electron 39; follow-ups.md:73 维护者手动项 section; stale rescan over live docs: only ADR-014 (dated investigation record) + README P0Facts change-tag comments remain, both intentional historical context"
     },
     {
       "id": "tests",
       "status": "passed",
-      "evidence": "pnpm ci:check 11/11 (含 test+coverage 与 dev smoke); pnpm test 157 files / 2201 tests; pnpm run test:python:unit exit 0 (--fail-under=43)"
+      "evidence": "pnpm ci:check 11/11 passed on reconcile worktree (incl. test+coverage, dev smoke; security audit non-blocking warning); docs contract test tests/unit/readme-contract.test.ts 5/5; prettier --check on all 6 patched md files clean"
     },
     {
       "id": "links",
       "status": "passed",
-      "evidence": "locale-parity 2/2; rg 已删通道在活文档零残留(仅 dated research 历史语境); CHANGELOG 新条目引用的 ticket 号 #273–#276/#228/#229/#230/#234 均为真实已关 issue"
+      "evidence": "CHANGELOG new entries reference real closed issues #300-#304 and merged PRs #308/#309/#310; follow-ups points at real path docs/promotion/screenshots/; docs contract link-integrity green for README.md + README.zh-CN.md"
     },
     {
       "id": "diff",
       "status": "passed",
-      "evidence": "reconcile 提交仅触 README/CONTRIBUTING/CHANGELOG/.omc/notepad/.azhou inventory——无源码/测试改动"
+      "evidence": "reconcile commit touches docs only: CHANGELOG.md, docs/troubleshooting.md, docs/promotion-article.md, docs/promotion/jike-v2ex-post.md, docs/follow-ups.md, .azhou/repo-pedant/{inventory,execution}.json — zero src/runtime change"
     },
     {
       "id": "coverage",
       "status": "passed",
-      "evidence": "pnpm test:coverage exit 0(全局 88/83/88/89 重定基线 + 六组 per-glob 92 地板强制); 负向验证: updateManager 地板 99 -> 红"
+      "evidence": "ci:check 'test + coverage' gate passed (global 88/83/88/89 baseline + per-glob floors, unchanged by this docs-only reconcile)"
     }
   ],
   "events": [
@@ -42,19 +42,19 @@
     },
     {
       "stage": "scope",
-      "message": "🧭 范围锁定｜authority=维护者直接调用($repo-pedant,Spec #259+#193 前置链交付收尾)｜projects=1"
+      "message": "🧭 范围锁定｜authority=维护者直接调用($repo-pedant,Spec #299 五票交付收尾)｜projects=1"
     },
     {
       "stage": "inventory",
-      "message": "🗂️ 清单完成｜files=342｜holds=6｜out_of_scope=10"
+      "message": "🗂️ 清单完成｜files=343｜holds=9｜out_of_scope=0"
     },
     {
       "stage": "impact",
-      "message": "🕸️ 影响确认｜surfaces=8｜consumers=7"
+      "message": "🕸️ 影响确认｜surfaces=9｜consumers=6"
     },
     {
       "stage": "sync",
-      "message": "🧹 同步完成｜changed=8"
+      "message": "🧹 同步完成｜changed=6"
     },
     {
       "stage": "verify_success",
