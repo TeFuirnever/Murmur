@@ -29,6 +29,16 @@ type AiHandlersModule = typeof import("../../src/helpers/ipc/aiHandlers");
 // The require shim (_tsresolve.setup) was only needed to load .ts source.
 import * as aiHandlersNS from "../../src/helpers/ipc/aiHandlers";
 
+// [20260906_Refactor_PolishOrchestrator] Spec #193 T3 (ticket #230): the
+// SECOND polish entry is the file-import review handler registered by
+// transcriptionHandlers on C.TRANSCRIPTION.AI_REVIEW. It is characterized
+// end-to-end below with the REAL processTextWithAI wired in (only fetch is
+// mocked), so its prompt chain and provider payload are pinned exactly as
+// production sends them — independent of the injected-mock harness used in
+// transcriptionHandlers.test.ts.
+import * as transcriptionHandlersNS from "../../src/helpers/ipc/transcriptionHandlers";
+import * as C from "../../src/helpers/ipc-contracts";
+
 // [20260726_Tier3_AiHandlersMigrate] Fetch mock return: the source only reads
 // ok/status/statusText/json()/text(), so this is the narrowest shape that
 // satisfies the call sites. Cast through unknown to Response at the assignment
@@ -871,6 +881,324 @@ describe("aiHandlers", () => {
       };
       expect(result.available).toBe(true);
       expect(result.model).toBe("gpt-3.5-turbo");
+    });
+  });
+
+  // ======================================================================
+  // [20260906_Refactor_PolishOrchestrator] Characterization tests (Spec #193
+  // T3, ticket #230): lock the CURRENT behavior of BOTH polish entries before
+  // extracting runPolishOrchestrator. These are characterization, not TDD-red:
+  // they must pass against the pre-refactor code and stay untouched after.
+  // ======================================================================
+  describe("polish entries — characterization (Spec #193 T3)", () => {
+    // Handle-capturing ipcMain mock (same pattern as the Spec #259 T3 block).
+    type AsyncMockHandler = (...args: unknown[]) => unknown;
+
+    // [20260906_Refactor_PolishOrchestrator] The never-parameter signature is
+    // the assignability trick that lets BOTH handler modules' register
+    // functions (aiHandlers and transcriptionHandlers) be passed without
+    // restating their manager shapes; the invocation itself casts through
+    // unknown, mirroring the register call sites elsewhere in this file.
+    function captureHandlers(
+      registerFn: (ipcMain: never, managers: never) => void,
+      managers: unknown,
+    ): Record<string, AsyncMockHandler | undefined> {
+      const handlers: Record<string, AsyncMockHandler | undefined> = {};
+      const ipcMain = {
+        handle: vi.fn((channel: string, fn: AsyncMockHandler) => {
+          handlers[channel] = fn;
+        }),
+      };
+      (registerFn as unknown as (ipc: unknown, managers: unknown) => void)(
+        ipcMain,
+        managers,
+      );
+      return handlers;
+    }
+
+    // DB with the standard AI settings plus the transcription-row readers
+    // the AI_REVIEW handler needs (getTranscriptionById is synchronous in
+    // the transcriptionHandlers DatabaseManager contract).
+    function createPolishDb(row: unknown): {
+      getSetting: (key: string) => Promise<unknown>;
+      getTranscriptionById: (id: number) => unknown;
+      saveTranscription: (...args: unknown[]) => unknown;
+    } {
+      const settings: Record<string, string | number> = {
+        ai_api_key: "test-key",
+        ai_base_url: "https://api.openai.com/v1",
+        ai_model: "gpt-3.5-turbo",
+        ai_temperature: 0.3,
+        ai_max_tokens: 2000,
+      };
+      return {
+        getSetting: vi.fn(async (key: string) => settings[key] ?? null),
+        getTranscriptionById: vi.fn(() => row),
+        saveTranscription: vi.fn(),
+      };
+    }
+
+    function readRequestBody(): Record<string, unknown> {
+      const fetchMock = global.fetch as unknown as FetchMock;
+      return JSON.parse(
+        (fetchMock.mock.calls[0]![1] as { body: string }).body,
+      ) as Record<string, unknown>;
+    }
+
+    it("PROCESS happy path: builds the mode prompt, calls the provider, maps success", async () => {
+      const handlers = captureHandlers(register, {
+        databaseManager: createPolishDb(null),
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        templatesDir: "/tmp/test-templates",
+      });
+      mockFetch({
+        choices: [{ message: { content: "  润色结果  " } }],
+        usage: { total_tokens: 7 },
+      });
+
+      const result = (await handlers[C.AI.PROCESS]!(
+        {},
+        "原始文本",
+        "optimize",
+      )) as {
+        success: boolean;
+        text?: string;
+        usage?: unknown;
+        model?: string;
+      };
+
+      // Success mapping: trimmed text + usage + resolved model, no error key.
+      expect(result).toEqual({
+        success: true,
+        text: "润色结果",
+        usage: { total_tokens: 7 },
+        model: "gpt-3.5-turbo",
+      });
+
+      // Provider payload: URL, auth, method and the full chat-completion body.
+      const fetchMock = global.fetch as unknown as FetchMock;
+      expect(fetchMock.mock.calls[0]![0]).toBe(
+        "https://api.openai.com/v1/chat/completions",
+      );
+      const init = fetchMock.mock.calls[0]![1] as {
+        method: string;
+        headers: Record<string, string>;
+      };
+      expect(init.method).toBe("POST");
+      expect(init.headers.Authorization).toBe("Bearer test-key");
+      expect(readRequestBody()).toEqual({
+        model: "gpt-3.5-turbo",
+        messages: [
+          {
+            role: "system",
+            content: expect.stringContaining("语音转录文本润色助手"),
+          },
+          { role: "user", content: "<transcript>\n原始文本\n</transcript>" },
+        ],
+        temperature: 0.3,
+        max_tokens: 2000,
+        stream: false,
+      });
+    });
+
+    it("PROCESS prefers a custom template from templatesDir over built-in modes", async () => {
+      const dir = path.join(process.cwd(), "test-polish-templates-temp");
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(
+        path.join(dir, "meeting.md"),
+        '---\nname: meeting\nlabel: 会议纪要\nuser_template: "整理：{text}"\n---\n你是会议纪要助手。',
+      );
+      try {
+        const handlers = captureHandlers(register, {
+          databaseManager: createPolishDb(null),
+          logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+          templatesDir: dir,
+        });
+        mockFetch({ choices: [{ message: { content: "纪要" } }] });
+
+        const result = (await handlers[C.AI.PROCESS]!(
+          {},
+          "正文",
+          "meeting",
+        )) as { success: boolean };
+
+        expect(result.success).toBe(true);
+        const body = readRequestBody();
+        expect(body.messages).toEqual([
+          { role: "system", content: "你是会议纪要助手。" },
+          { role: "user", content: "整理：正文" },
+        ]);
+      } finally {
+        fs.rmSync(dir, { recursive: true });
+      }
+    });
+
+    it("PROCESS maps a provider HTTP error body to the normalized failure", async () => {
+      const handlers = captureHandlers(register, {
+        databaseManager: createPolishDb(null),
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        templatesDir: "/tmp/test-templates",
+      });
+      mockFetchError(401, { error: { message: "Invalid API key" } });
+
+      const result = (await handlers[C.AI.PROCESS]!({}, "t", "optimize")) as {
+        success: boolean;
+        error?: string;
+      };
+      expect(result).toEqual({ success: false, error: "Invalid API key" });
+    });
+
+    it("PROCESS blocks an unconfigured non-local call before reaching the provider", async () => {
+      const db = {
+        getSetting: vi.fn(async () => null),
+      };
+      const handlers = captureHandlers(register, {
+        databaseManager: db,
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        templatesDir: "/tmp/test-templates",
+      });
+      mockFetch({ choices: [{ message: { content: "x" } }] });
+
+      const result = (await handlers[C.AI.PROCESS]!({}, "t", "optimize")) as {
+        success: boolean;
+        error?: string;
+      };
+      expect(result).toEqual({
+        success: false,
+        error: "请先在设置页面配置AI API密钥",
+      });
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it("AI_REVIEW professional fallback: built-in professional prompt, reviewText mapping, never persisted", async () => {
+      const db = createPolishDb({ id: 42, text: "评审原文" });
+      const logger = {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+        debug: vi.fn(),
+      };
+      mockFetch({
+        choices: [{ message: { content: "评审结果" } }],
+        usage: { total_tokens: 3 },
+      });
+
+      // Wire the transcription AI_REVIEW handler to the REAL processTextWithAI
+      // — the exact production wiring from src/helpers/ipc/index.ts.
+      const handlers = captureHandlers(transcriptionHandlersNS.register, {
+        funasrManager: {},
+        databaseManager: db,
+        logger,
+        processTextWithAI: aiHandlers.processTextWithAI,
+      });
+
+      // Empty template → the handler must fall back to "professional".
+      const result = (await handlers[C.TRANSCRIPTION.AI_REVIEW]!(
+        {},
+        42,
+        "",
+      )) as Record<string, unknown>;
+
+      // Return-only: mapped to reviewText, exactly these keys.
+      expect(result).toEqual({ success: true, reviewText: "评审结果" });
+      // Never persisted to the DB.
+      expect(db.saveTranscription).not.toHaveBeenCalled();
+
+      // The prompt chain must produce the BUILT-IN professional template for
+      // the row text (built outside the entry, sent as system+user messages).
+      const body = readRequestBody();
+      expect(body.model).toBe("gpt-3.5-turbo");
+      expect(body.stream).toBe(false);
+      expect(body.messages).toEqual([
+        {
+          role: "system",
+          content: expect.stringContaining("专业评价文稿撰写专家"),
+        },
+        { role: "user", content: "<transcript>\n评审原文\n</transcript>" },
+      ]);
+    });
+
+    it("AI_REVIEW passes an explicit template through to prompt resolution", async () => {
+      const db = createPolishDb({ id: 42, text: "评审原文" });
+      const logger = {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+        debug: vi.fn(),
+      };
+      mockFetch({ choices: [{ message: { content: "摘要结果" } }] });
+
+      const handlers = captureHandlers(transcriptionHandlersNS.register, {
+        funasrManager: {},
+        databaseManager: db,
+        logger,
+        processTextWithAI: aiHandlers.processTextWithAI,
+      });
+
+      const result = (await handlers[C.TRANSCRIPTION.AI_REVIEW]!(
+        {},
+        42,
+        "summarize",
+      )) as Record<string, unknown>;
+
+      expect(result).toEqual({ success: true, reviewText: "摘要结果" });
+      const body = readRequestBody();
+      expect(body.messages).toEqual([
+        { role: "system", content: expect.stringContaining("文本摘要助手") },
+        { role: "user", content: "<transcript>\n评审原文\n</transcript>" },
+      ]);
+    });
+
+    it("AI_REVIEW passes provider failures through unchanged", async () => {
+      const db = createPolishDb({ id: 42, text: "评审原文" });
+      const logger = {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+        debug: vi.fn(),
+      };
+      mockFetchError(401, { error: { message: "Invalid API key" } });
+
+      const handlers = captureHandlers(transcriptionHandlersNS.register, {
+        funasrManager: {},
+        databaseManager: db,
+        logger,
+        processTextWithAI: aiHandlers.processTextWithAI,
+      });
+
+      const result = (await handlers[C.TRANSCRIPTION.AI_REVIEW]!(
+        {},
+        42,
+        "professional",
+      )) as Record<string, unknown>;
+      expect(result).toEqual({ success: false, error: "Invalid API key" });
+      expect(db.saveTranscription).not.toHaveBeenCalled();
+    });
+
+    it("AI_REVIEW returns the not-found failure before touching the provider", async () => {
+      const db = createPolishDb(null);
+      const logger = {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+        debug: vi.fn(),
+      };
+      mockFetch({ choices: [{ message: { content: "x" } }] });
+
+      const handlers = captureHandlers(transcriptionHandlersNS.register, {
+        funasrManager: {},
+        databaseManager: db,
+        logger,
+        processTextWithAI: aiHandlers.processTextWithAI,
+      });
+
+      const result = (await handlers[C.TRANSCRIPTION.AI_REVIEW]!(
+        {},
+        999,
+        "",
+      )) as Record<string, unknown>;
+      expect(result).toEqual({ success: false, error: "转录记录不存在" });
+      expect(global.fetch).not.toHaveBeenCalled();
     });
   });
 });

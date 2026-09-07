@@ -5,7 +5,9 @@ import { dialog } from "electron";
 import * as C from "../ipc-contracts";
 import * as exportFormatters from "../exportFormatters";
 import type { TranscriptionForExport } from "../exportFormatters";
-import { buildPrompt } from "../aiPrompts";
+// [20260906_Refactor_PolishOrchestrator] The buildPrompt import was removed:
+// the AI_REVIEW entry now passes its mode/template explicitly into the shared
+// polish orchestrator (aiHandlers), which owns prompt building.
 import { validateAudioPath } from "../audioPathValidator";
 import { cleanTranscriptionText } from "../transcriptCleaner";
 import { sanitizeHotwordInput } from "../hotwords";
@@ -461,22 +463,28 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
           return { success: false, error: "转录记录不存在" };
         }
 
-        const { system, user } = buildPrompt(
-          template || "professional",
-          row.text || "",
-        );
         // [20260725_Fix_NonNullAssertion] Guard against missing processTextWithAI
         // instead of using non-null assertion (!). Returns a clear error message
         // rather than letting TypeError propagate as a generic caught error.
         if (!processTextWithAI) {
           return { success: false, error: "AI 处理功能不可用" };
         }
+        // [20260906_Refactor_PolishOrchestrator] Spec #193 T3 (ticket #230):
+        // pass the review mode/template explicitly into the shared polish
+        // orchestrator (runPolishOrchestrator, via the processTextWithAI
+        // adapter) instead of pre-building the prompt here — the old code
+        // built system/user prompts locally and injected them as
+        // systemPrompt/userPrompt options, bypassing the orchestrator's
+        // normal prompt branch. Semantics preserved: an empty template falls
+        // back to "professional" and the orchestrator resolves the built-in
+        // prompt (identical bytes to the previously hand-built one), and the
+        // result stays RETURN-ONLY (mapped to reviewText, never persisted).
         const result = await processTextWithAI(
           row.text || "",
           template || "professional",
           databaseManager,
           logger,
-          { systemPrompt: system, userPrompt: user },
+          {},
         );
 
         if (!result.success) {
