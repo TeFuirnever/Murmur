@@ -33,8 +33,6 @@ const EXEMPT_GROUPS = [
   "src/helpers/hotkeyManager.ts",
 ] as const;
 
-const EXEMPTION_TAG = "[20260906_Spec259_T1]";
-
 const FIRST_MEASURED_FLOORS = {
   "src/helpers/modelManager.ts": 55,
   "src/helpers/windowManager.ts": 48,
