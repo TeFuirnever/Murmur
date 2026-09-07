@@ -46,14 +46,14 @@
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![Stars](https://img.shields.io/github/stars/TeFuirnever/Murmur?style=social)](https://github.com/TeFuirnever/Murmur)
 
-<!-- [20260907_Spec299_EmbedMedia] T4（Spec #299）：将归档的 macOS 真机截图
+<!-- [20260907_Spec299_EmbedMedia] T4（Spec #299）：将归档的小红书模式真机截图（真实应用界面：转写 → AI 润色 → 小红书文案）
      嵌入 Hero 区——审计发现零嵌入媒体低于同类底线（5/5 基准项目首屏有图）。
      替换原 [20260731_README_RewriteHero] 的 demo GIF TODO 占位；录制 GIF
      仍为维护者后续事项。截图摄于 2026-07-20，早于 Fox rebrand（7/29），
      后续推广使用前建议重截。 -->
 <!-- [20260907_Spec299_EmbedMedia] END -->
 
-<img src="docs/promotion/screenshots/screenshot-macos.jpg" width="800" alt="Murmur macOS 界面——语音转写与 AI 润色实际运行效果" />
+<img src="docs/promotion/screenshots/screenshot-xhs-mode.jpg" width="640" alt="Murmur 界面——口述原文经 AI 润色一键转为小红书风格文案" />
 
 📦 [产品截图存档](docs/promotion/screenshots/) · macOS 界面 / AI 小红书模式 / Windows bug 故事
 
@@ -81,7 +81,7 @@
 | **完全本地**                |   ✅   |       ✅       |    ❌    |       ✅        |
 | **自定义 Prompt**           |   ✅   |       ❌       |    ❌    |       ❌        |
 | **11+ AI 模型可选**         |   ✅   |       ❌       |    ❌    |       ❌        |
-| **桌面端（macOS/Windows）** |   ✅   |    仅 macOS    |    ❌    |       ✅        |
+| **桌面端（macOS/Windows）** |   ✅   |   仅 Windows   |    ❌    |       ✅        |
 | 开源免费                    |   ✅   |       ❌       |    ❌    |       ✅        |
 
 > 系统听写在"实时性"上更强（流式低延迟），Murmur 在"转写后能做什么"上更强（AI 润色 + 文件批处理 + 隐私）。两者可以共存。
@@ -231,6 +231,8 @@ pnpm ci:check     # 本地运行所有 CI 门禁
      要求回答"哪里获取更多帮助"，opensource.guide 上线清单要求从 README
      链接社区文件。FAQ、Troubleshooting 与 SECURITY.md 此前存在但成为
      孤儿文档。 -->
+
+<!-- [20260907_Spec299_HelpLinks] END -->
 
 PRs welcome! 见 [CONTRIBUTING.md](CONTRIBUTING.md) 了解开发环境搭建、代码规范和提交流程。
 

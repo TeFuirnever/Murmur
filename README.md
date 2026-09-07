@@ -48,8 +48,7 @@ English · [简体中文](./README.zh-CN.md)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![Stars](https://img.shields.io/github/stars/TeFuirnever/Murmur?style=social)](https://github.com/TeFuirnever/Murmur)
 
-<!-- [20260907_Spec299_EmbedMedia] T4 (Spec #299): embedded the archived
-     macOS screenshot as the hero visual — the audit found zero embedded
+<!-- [20260907_Spec299_EmbedMedia] T4 (Spec #299): embedded the archived XHS-mode screenshot (real app UI: transcript → AI polish → Xiaohongshu post) as the hero visual — the audit found zero embedded
      media was below the peer floor (5/5 benchmark projects render an image
      in the first screenful). Replaces the [20260731_README_RewriteHero]
      demo-GIF TODO placeholder; recording the GIF remains a maintainer
@@ -57,7 +56,7 @@ English · [简体中文](./README.zh-CN.md)
      — re-capture before promoting them further. -->
 <!-- [20260907_Spec299_EmbedMedia] END -->
 
-<img src="docs/promotion/screenshots/screenshot-macos.jpg" width="800" alt="Murmur on macOS — dictation in action with transcript and AI polish" />
+<img src="docs/promotion/screenshots/screenshot-xhs-mode.jpg" width="640" alt="Murmur app: a raw transcript is polished into a Xiaohongshu-style post through the AI polish pipeline" />
 
 📦 [Screenshot archive](docs/promotion/screenshots/) · macOS UI / AI Xiaohongshu mode / Windows bug story
 
@@ -87,7 +86,7 @@ English · [简体中文](./README.zh-CN.md)
 | **Fully Local**             |   ✅   |       ✅        |   ❌    |       ✅        |
 | **Custom Prompts**          |   ✅   |       ❌        |   ❌    |       ❌        |
 | **11+ AI Models**           |   ✅   |       ❌        |   ❌    |       ❌        |
-| **Desktop (macOS/Windows)** |   ✅   |   macOS only    |   ❌    |       ✅        |
+| **Desktop (macOS/Windows)** |   ✅   |  Windows only   |   ❌    |       ✅        |
 | Open Source                 |   ✅   |       ❌        |   ❌    |       ✅        |
 
 > System dictation wins on real-time latency (streaming); Murmur wins on "what you can do after transcription" (AI polish + batch files + privacy). They can coexist.
@@ -237,6 +236,8 @@ See [docs/follow-ups.md](docs/follow-ups.md) (open items) and [CHANGELOG.md](CHA
      expects "where to get more help" and opensource.guide's pre-launch
      checklist requires linking CONTRIBUTING/SECURITY from the README.
      FAQ, Troubleshooting and SECURITY.md existed but were orphaned. -->
+
+<!-- [20260907_Spec299_HelpLinks] END -->
 
 PRs welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, code standards, and the PR process.
 
