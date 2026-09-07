@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **ASR 回归 harness**（`pnpm test:asr`，开发机专用）：以仓库自带 golden_set 语料驱动真实 FunASR server，按字错率阈值红绿；当前基线 6/6 通过、CER 0.0%。
 - **打包态 boot-health 探针**（发布流水线 mac/win）：以已安装产物为启动目标运行完整探针套件。
 - **QA 文档**：发版人工验收清单、LLM 供应商兼容走查单、探索性测试 charter（多显示器/读屏/浸泡）。
+- **文档契约测试**（Spec #299 T1–T3，#300–#302）：钉住 README 事实声明——Electron/Node 版本与 package.json 一致、站内链接与资源路径落盘可解析（外链/纯锚点除外）、中英标题序列 1:1（fence 感知 + 配平钉，只读渲染内容）；漂移即 CI 红。
 
 ### Fixed
 
@@ -31,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **清理 20 个渲染层孤儿 IPC 通道**（#250，依据 #252 实测黄名单）：契约/preload/类型声明/handler/限流表全链路删除，契约面净减约 500 行；orphans 测试升级为净零网（新增无调用者通道直接 CI 红）。
 - **CI e2e 获得门禁权**（#277）：boot-health 探针失败即阻塞合并（此前 52 条 E2E 全部 continue-on-error 从未拦截过回归）；dev smoke 升级为主进程启动里程碑心跳（#251），主进程崩溃不再被端口探活漏过。
 - **退役 phase3/phase5 文本断言套件**：分别被真实更新旅程 E2E 与 axe 扫描替代。
+- **README 修缮**（Spec #299 五票，#300–#304，PR #308–#310）：修正审计确认的 6 处事实错误（Electron 39、FTS5 已删→客户端过滤、Python 3.11+、GPU 实为 CUDA > CPU（MPS 因 float64 有意跳过）、macOS 听写非开源、测试数行改不漂移口径）；单文件双语拆分为 README.md（英）+ README.zh-CN.md（中）+ 顶部互切；首屏嵌入真机截图、链接 FAQ/Troubleshooting/SECURITY；对比表 ⭐ 自评改可验证属性（Whisper Desktop 标注 Windows only）并补 release 徽章；CONTRIBUTING 与 promo 文档同步（Node 22.5+/Python 3.11+/Electron 39）。
 
 ## [1.5.0] - 2026-09-05
 

@@ -24,7 +24,7 @@
 
 **解决方案**:
 
-1. 确保安装了 Python 3.8+（推荐 3.11）
+1. 确保安装了 Python 3.11+（与 `pyproject.toml` 的 requires-python 一致）
 2. 推荐使用 `uv` 管理环境：
    ```bash
    curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -114,7 +114,7 @@
 
 **Solutions**:
 
-1. Install Python 3.8+ (3.11 recommended)
+1. Install Python 3.11+ (matches the `pyproject.toml` requires-python)
 2. Use `uv` for environment management:
    ```bash
    curl -LsSf https://astral.sh/uv/install.sh | sh

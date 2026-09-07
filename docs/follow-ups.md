@@ -69,3 +69,8 @@ dev:main 改用 `build:main && electron .`，dev/e2e/prod 加载同一 artifact�
 ## ~~README 平台徽章承诺了未发布的 Linux（2026-08-19 视景评审 H-5）~~ ✅ 已处理（2026-08-19）
 
 维护者裁决：暂不支持 Linux，标注"暂无官方安装包，待社区投入"。已执行：平台徽章改为 macOS | Windows；中英文安装段各加 Linux 说明（欢迎社区贡献打包与维护方案）。完整记录见 `docs/vision-answers.md` H-5。
+
+## 维护者手动项（Spec #299 交付后，2026-09-07）
+
+- **录制 10 秒 demo GIF**（说话 → 文字出现 → AI 润色 → 自动粘贴），用于 README hero 区；原 [20260731_README_RewriteHero] 注释 TODO 已随 T4 移除，本条为唯一跟踪位置。当前 hero 使用静态截图 docs/promotion/screenshots/screenshot-xhs-mode.jpg。
+- **按 Fox rebrand（2026-07-29）后版式重截产品截图**：docs/promotion/screenshots/ 现有三张摄于 2026-07-20，icon 为旧版；重截前 hero 沿用现有素材（已在 README 内注记）。
