@@ -86,7 +86,7 @@ English · [简体中文](./README.zh-CN.md)
 | **Fully Local**             |   ✅   |       ✅        |   ❌    |       ✅        |
 | **Custom Prompts**          |   ✅   |       ❌        |   ❌    |       ❌        |
 | **11+ AI Models**           |   ✅   |       ❌        |   ❌    |       ❌        |
-| **Desktop (macOS/Windows)** |   ✅   |  Windows only   |   ❌    |       ✅        |
+| **Desktop (macOS/Windows)** |   ✅   |   macOS only    |   ❌    |  Windows only   |
 | Open Source                 |   ✅   |       ❌        |   ❌    |       ✅        |
 
 > System dictation wins on real-time latency (streaming); Murmur wins on "what you can do after transcription" (AI polish + batch files + privacy). They can coexist.
