@@ -94,8 +94,8 @@ describe("README contract", () => {
   });
 
   describe("link integrity (T2, Spec #299)", () => {
-    // T3 extends this list with README.zh-CN.md after the bilingual split.
-    const readmeFiles = ["README.md"];
+    // T3 extended this list with README.zh-CN.md after the bilingual split.
+    const readmeFiles = ["README.md", "README.zh-CN.md"];
 
     function internalLinkTargets(markdown: string): string[] {
       const rendered = stripHtmlComments(markdown);
@@ -150,4 +150,40 @@ describe("README contract", () => {
       });
     }
   });
+
+  // [20260907_Spec299_HeadingsParity] T3: the single bilingual file drifted
+  // (the en half lagged zh by 9 items) because nothing detected divergence.
+  // After the split, both files must keep a 1:1 section sequence: same
+  // heading count, same heading-level order. Wording may differ per
+  // language; structure may not.
+  describe("bilingual parity (T3, Spec #299)", () => {
+    function headingLevels(markdownPath: string): number[] {
+      const rendered = stripHtmlComments(readRootFile(markdownPath));
+      const levels: number[] = [];
+      let insideFence = false;
+      for (const line of rendered.split("\n")) {
+        if (line.trimStart().startsWith("```")) {
+          insideFence = !insideFence; // bash `# comments` are not headings
+          continue;
+        }
+        if (insideFence) continue;
+        const match = /^(#{1,6}) /.exec(line);
+        if (match) levels.push((match[1] ?? "").length);
+      }
+      return levels;
+    }
+
+    it("zh and en READMEs have 1:1 section sequences", () => {
+      const en = headingLevels("README.md");
+      const zh = headingLevels("README.zh-CN.md");
+      expect(en.length, "en/zh heading count diverged").toBe(zh.length);
+      for (const [index, level] of en.entries()) {
+        expect(
+          level,
+          `heading #${index + 1} level diverged between en and zh`,
+        ).toBe(zh[index]);
+      }
+    });
+  });
+  // [20260907_Spec299_HeadingsParity] END
 });

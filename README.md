@@ -1,15 +1,26 @@
+<!-- [20260907_Spec299_BilingualSplit] T3 (Spec #299) split the single
+     bilingual README: this file is now the English front door (standard-readme:
+     "README.md is reserved for English"); Chinese lives in README.zh-CN.md.
+     The 9 en-half gaps found by the audit (§3) are filled here: mascot
+     blurb, screenshot archive link, environment requirements, dev commands,
+     first-install tips, roadmap reference links, hotkey details, 10-minute
+     timeout note, provider table, Project Status section. -->
+<!-- [20260907_Spec299_BilingualSplit] END -->
+
 <div align="center">
 
 <img src="assets/icon.png" width="120" height="120" alt="Murmur Logo" />
 
 # Murmur
 
-**开源 · 本地 · AI 语音转文字**
+**Open Source · Local · AI Speech-to-Text**
 
-说话就能打字，音频秒转文字，AI 自动润色。基于 FunASR，数据不出你的电脑。
+Speak to type, convert audio to text, AI auto-polish. Powered by FunASR, all on your device.
+
+English · [简体中文](./README.zh-CN.md)
 
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey)](#安装)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey)](#-install)
 
 <!-- [20260731_README_DynamicBadge] Replaced hardcoded "tests-672 passing" /
      "coverage-95%" badges (which were stale — the 95% figure used the old
@@ -23,34 +34,22 @@
 
 <!-- [20260731_README_DynamicBadge] END -->
 
-<!-- [20260907_Spec299_P0Facts] Batch factual sync after the end-to-end README
-     audit (docs/research/readme-end-to-end-audit-2026-09-07.md §2): Electron
-     36→39, FTS5 claim → client-side filtering (FTS5 table removed 2026-08-15),
-     Python 3.8+ → 3.11+ (pyproject.toml requires-python), GPU order
-     CUDA > CPU (MPS intentionally skipped: FunASR float64 unsupported),
-     comparison table macOS Dictation open-source ❌, test-count line switched
-     to non-drift wording. Version claims are pinned by
-     tests/unit/readme-contract.test.ts. -->
-<!-- [20260907_Spec299_P0Facts] END -->
-
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![Stars](https://img.shields.io/github/stars/TeFuirnever/Murmur?style=social)](https://github.com/TeFuirnever/Murmur)
 
-[English](#english) · [中文](#中文)
-
-<!-- [20260731_README_RewriteHero] Hero 区强化价值主张。
-     TODO（需项目维护者录制）：录制 10 秒产品演示 GIF，
-     展示「说话 → 文字出现 → AI 润色 → 自动粘贴」完整流程，
-     替换下方占位注释。这是 README 最高 ROI 的转化元素。 -->
+<!-- [20260731_README_RewriteHero] Strengthen the hero value proposition.
+     TODO (needs the maintainer to record): capture a 10-second product demo
+     GIF showing "speak → text appears → AI polish → auto paste" and replace
+     the placeholder below. Highest-ROI conversion element of the README. -->
 <!-- <img src="assets/demo.gif" width="800" alt="Murmur Demo — speak → text → AI polish → paste" /> -->
 <!-- [20260731_README_RewriteHero] END -->
 
-<!-- [20260731_README_Screenshots] 产品截图归档。
-     3 张真机截图（macOS 界面 / 小红书模式 / Windows bug）归档在
-     docs/promotion/screenshots/。注意：制作于 2026-07-20，icon 可能
-     过时（Fox rebrand 7/29）。如需用于 README Hero 区，建议重新截取。 -->
+<!-- [20260731_README_Screenshots] Screenshot archive. 3 real-device shots
+     (macOS UI / Xiaohongshu mode / Windows bug) live in
+     docs/promotion/screenshots/. Note: taken 2026-07-20, so the icon may
+     predate the Fox rebrand (7/29). Re-capture before using in the hero. -->
 
-📦 [产品截图存档](docs/promotion/screenshots/) · macOS 界面 / AI 小红书模式 / Windows bug 故事
+📦 [Screenshot archive](docs/promotion/screenshots/) · macOS UI / AI Xiaohongshu mode / Windows bug story
 
 <!-- [20260731_README_Screenshots] END -->
 
@@ -58,206 +57,11 @@
 
 ---
 
-<a id="中文"></a>
-
-## 为什么选择 Murmur？
-
-**Murmur 是为中文优化的本地语音转文字工具。** 它不只是"语音输入"——按一下快捷键说话，文字出现在光标处；导入音频文件，批量转写并导出；再用 AI 去除口头禅、整理成会议纪要或小红书文案。全部在你的电脑上完成，无需联网，无需上传。
-
-> **定位说明**：Murmur 不与 macOS/Windows 系统听写正面竞争实时性，而是聚焦三个系统听写做不到的事——**文件转录**、**AI 后处理**、**完全本地 + 可自定义模型**。实时流式转录在规划中（见[路线图](#-路线图)）。
-
-### 🆚 与同类工具对比
-
-| 能力                |   Murmur   | macOS 原生听写 |  讯飞语记  | Whisper Desktop |
-| ------------------- | :--------: | :------------: | :--------: | :-------------: |
-| **音频文件转录**    |     ✅     |       ❌       |     ✅     |       ✅        |
-| **AI 后处理**       |     ✅     |       ❌       |     ❌     |       ❌        |
-| **完全本地**        |     ✅     |       ✅       |     ❌     |       ✅        |
-| **自定义 Prompt**   |     ✅     |       ❌       |     ❌     |       ❌        |
-| **11+ AI 模型可选** |     ✅     |       ❌       |     ❌     |       ❌        |
-| 中文识别精度        | ⭐⭐⭐⭐⭐ |     ⭐⭐⭐     | ⭐⭐⭐⭐⭐ |     ⭐⭐⭐      |
-| 开源免费            |     ✅     |       ❌       |     ❌     |       ✅        |
-
-> 系统听写在"实时性"上更强（流式低延迟），Murmur 在"转写后能做什么"上更强（AI 润色 + 文件批处理 + 隐私）。两者可以共存。
-
-## ✨ 特性
-
-| 🎤 高精度中文识别       | 🤖 AI 智能润色           | 📁 音频文件转录       | 🔒 完全本地 |
-| ----------------------- | ------------------------ | --------------------- | ----------- |
-| FunASR Paraformer-large | 去口头禅、修错字、整纪要 | wav/mp3/m4a/flac 批量 | 零数据上传  |
-
-| ⌨️ 全局热键            | 🌐 11+ AI 模型                        | 💾 转录历史          | 🌍 双语支持  |
-| ---------------------- | ------------------------------------- | -------------------- | ------------ |
-| `Cmd+Shift+Space` 即录 | OpenAI/DeepSeek/通义/智谱/本地 Ollama | SQLite + 搜索 + 导出 | 中文/English |
-
-> 🤖 **会动的 Bot 吉祥物**:标题栏的小家伙会随应用状态变形——录音时睁大眼、识别时冒思考点、转写完成放彗星。引擎移植自 [bloub](https://github.com/jeremy-prt/bloub)(MIT),动画常数逐帧测量、零漂移复刻;在 设置 → Bot 可自选形状/颜色/表情。
-
-## 🚀 安装
-
-<!-- [20260803_InstallHonesty] Homebrew/Winget 发布计划进行中（见 docs/homebrew、docs/winget），
-     但尚未提交到上游仓库，目前仅 GitHub Releases 可用。避免展示会报错的安装命令。 -->
-
-从 [Releases](https://github.com/TeFuirnever/Murmur/releases/latest) 下载最新安装包：
-
-- **macOS**：`Murmur-<version>-arm64.dmg`
-- **Windows**：`Murmur.Setup.<version>.exe`
-
-> **包管理器（规划中）**：Homebrew（`brew install --cask murmur`）和 Winget（`winget install TeFuirnever.Murmur`）即将支持，cask/manifest 定义见 `docs/homebrew/`、`docs/winget/`，尚未提交到上游。
->
-> **Linux**：暂无官方安装包（维护人力有限，优先保障 macOS/Windows 双平台质量）。欢迎社区贡献 Linux 打包与维护方案（issue / PR）。
-
-<!-- [20260803_InstallHonesty] END -->
-
-> **首次安装提示**
->
-> - **macOS**：如遇"无法验证开发者"，右键点击应用 → 选择"打开"
-> - **Windows**：如遇 SmartScreen 拦截，点击"更多信息" → "仍要运行"
-
-## ⚡ 30 秒上手
-
-1. 启动 Murmur，等待模型下载完成（首次约 1GB，后续秒开）
-2. 按下 `Cmd+Shift+Space`（macOS）或 `Ctrl+Shift+Space`（Windows）开始说话
-3. 文字自动出现在光标处
-
-**使用 AI 润色**（可选）：打开设置 → 选择 AI 模型提供商 → 填入 API Key 或使用本地模型。设置页内置「快速开始」引导，DeepSeek / 硅基流动注册即送免费额度。
-
-## 🤖 支持的 AI 模型
-
-| 提供商               | Base URL               | 需要 API Key | 免费额度 |
-| -------------------- | ---------------------- | :----------: | :------: |
-| OpenAI               | api.openai.com/v1      |      ✅      |    —     |
-| **DeepSeek** ⭐      | api.deepseek.com/v1    |      ✅      |  注册送  |
-| 通义千问             | dashscope.aliyuncs.com |      ✅      |  新用户  |
-| 智谱 GLM             | open.bigmodel.cn       |      ✅      |  注册送  |
-| **硅基流动** ⭐      | api.siliconflow.cn     |      ✅      |  注册送  |
-| Groq                 | api.groq.com           |      ✅      |  免费层  |
-| Moonshot             | api.moonshot.cn        |      ✅      |    —     |
-| MiniMax              | api.minimaxi.com       |      ✅      |    —     |
-| OpenRouter           | openrouter.ai/api/v1   |      ✅      | 部分免费 |
-| **Ollama (本地)**    | localhost:11434        |      ❌      |   免费   |
-| **LM Studio (本地)** | localhost:1234         |      ❌      |   免费   |
-
-> ⭐ 标记的提供商推荐新手使用——注册即送免费额度，国内访问稳定。
-
-只需选择提供商，Murmur 自动填入地址和模型。
-
----
-
-## 从源码构建
-
-### 环境要求
-
-- **Node.js** 22.5+ 和 [pnpm](https://pnpm.io)
-- **Python** 3.11+（用于 FunASR，与 `pyproject.toml` 的 requires-python 一致）
-
-### 快速开始
-
-```bash
-git clone https://github.com/TeFuirnever/Murmur.git
-cd Murmur
-pnpm install
-
-# Python 环境（二选一）
-# 方案 A: uv（推荐，自动管理虚拟环境）
-curl -LsSf https://astral.sh/uv/install.sh | sh
-uv sync && uv run python download_models.py
-
-# 方案 B: 系统 Python
-pip install funasr modelscope torch torchaudio librosa numpy
-python download_models.py
-
-pnpm dev
-```
-
-### 开发命令
-
-```bash
-pnpm dev          # 启动开发模式
-pnpm test         # 运行单元测试与覆盖率门禁（E2E 在 CI 单独运行）
-pnpm lint         # 代码检查（0 warnings）
-pnpm typecheck    # TypeScript 类型检查
-pnpm ci:check     # 本地运行所有 CI 门禁
-```
-
----
-
-## 🛠 技术栈
-
-| 层级     | 技术                                                  |
-| -------- | ----------------------------------------------------- |
-| 桌面框架 | Electron 39                                           |
-| 前端     | React 19, Tailwind CSS 4, Vite                        |
-| 语音识别 | FunASR (Paraformer-large + FSMN-VAD + CT-Transformer) |
-| AI 优化  | 11+ OpenAI 兼容模型 + 自定义 Prompt 模板              |
-| 数据存储 | SQLite (node:sqlite, safeStorage 加密)                |
-
-## 📋 路线图
-
-**已完成：**
-
-- [x] 本地 FunASR 语音识别（Paraformer-large）
-- [x] AI 文本智能优化（11+ 模型，含本地 Ollama/LM Studio）
-- [x] 自定义 AI Prompt 模板
-- [x] 音频文件导入转录（wav/mp3/m4a/flac）
-- [x] 转录历史搜索（实时客户端过滤）和导出（TXT/SRT/Markdown/DOCX）
-- [x] 全局热键 `Cmd+Shift+Space`
-- [x] 多语言支持（中文/English）
-- [x] 半自动更新（SHA256 校验）
-- [x] 无障碍（ARIA + 键盘导航）
-- [x] GPU 自动检测（CUDA > CPU；MPS 因 FunASR float64 不兼容被有意跳过）
-- [x] TypeScript 严格模式（全 src 覆盖率门禁，测试与覆盖率详见 CI）
-- [x] 文件配置支持（`~/.murmur.json`）
-- [x] AI Provider 快速开始引导（免费 API Key 获取）
-
-**进行中 / 规划：**
-
-- [ ] 实时流式转录（目标 200ms 延迟）
-- [ ] CLI 模式（`murmur transcribe --file`）
-- [ ] ASR 多引擎支持（whisper.cpp / SenseVoice）
-- [ ] 长音频分片转录（解决 10 分钟超时）
-- [ ] AI 流式响应
-
-详见 [docs/follow-ups.md](docs/follow-ups.md)（遗留事项跟踪）与 [CHANGELOG.md](CHANGELOG.md)（已交付）。`docs/strategic-plan-gap-analysis.md` 为历史战略快照，仅供参考。
-
-## 🤝 参与贡献
-
-PRs welcome! 见 [CONTRIBUTING.md](CONTRIBUTING.md) 了解开发环境搭建、代码规范和提交流程。
-
-## 📊 项目状态
-
-<div align="center">
-
-[![Star History Chart](https://api.star-history.com/svg?repos=TeFuirnever/Murmur&type=Date)](https://star-history.com/#TeFuirnever/Murmur&Date)
-
-</div>
-
-## 致谢
-
-- [蛐蛐(QuQu)](https://github.com/yan5xu/ququ) — 本项目的上游项目
-- [FunASR](https://github.com/modelscope/FunASR) — 阿里巴巴开源语音识别工具包
-- [shadcn/ui](https://ui.shadcn.com/) — UI 组件
-
-## 许可证
-
-[Apache License 2.0](LICENSE)
-
----
-
-<a id="english"></a>
-
-<div align="center">
-
-**Open Source · Local · AI Speech-to-Text**
-
-Speak to type, convert audio to text, AI auto-polish. Powered by FunASR, all on your device.
-
-</div>
-
 ## Why Murmur?
 
-**Murmur is a local-first speech-to-text tool optimized for Chinese.** It's more than "voice input" — press a hotkey to dictate, import audio files for batch transcription, then use AI to remove filler words, or turn the transcript into meeting notes or a Xiaohongshu post. All processed locally, no internet required.
+**Murmur is a local-first speech-to-text tool optimized for Chinese.** It's more than "voice input" — press a hotkey to dictate and text appears at your cursor; import audio files for batch transcription and export; then let AI remove filler words or turn the transcript into meeting notes or a Xiaohongshu post. Everything happens on your computer, no internet, no uploads.
 
-> **Positioning**: Murmur doesn't compete head-on with macOS/Windows system dictation on real-time latency. It focuses on three things system dictation can't do — **file transcription**, **AI post-processing**, and **fully local + customizable models**. Real-time streaming is on the roadmap (see [Roadmap](#roadmap)).
+> **Positioning**: Murmur doesn't compete head-on with macOS/Windows system dictation on real-time latency. It focuses on three things system dictation can't do — **file transcription**, **AI post-processing**, and **fully local + customizable models**. Real-time streaming is on the roadmap (see [Roadmap](#-roadmap)).
 
 ### 🆚 Comparison
 
@@ -273,7 +77,7 @@ Speak to type, convert audio to text, AI auto-polish. Powered by FunASR, all on 
 
 > System dictation wins on real-time latency (streaming); Murmur wins on "what you can do after transcription" (AI polish + batch files + privacy). They can coexist.
 
-## Features
+## ✨ Features
 
 | 🎤 Accurate Chinese     | 🤖 AI Polish                   | 📁 File Transcription  | 🔒 Fully Local   |
 | ----------------------- | ------------------------------ | ---------------------- | ---------------- |
@@ -283,7 +87,9 @@ Speak to type, convert audio to text, AI auto-polish. Powered by FunASR, all on 
 | ----------------- | ------------------------------- | ------------------------ | --------------- |
 | `Cmd+Shift+Space` | OpenAI/DeepSeek/Qwen/GLM/Ollama | SQLite + search + export | zh-CN / English |
 
-## Install
+> 🤖 **Meet the animated Bot mascot** — the little fellow in the title bar morphs with app state: eyes wide open while recording, thinking dots while recognizing, a comet when a transcription finishes. The engine is ported from [bloub](https://github.com/jeremy-prt/bloub) (MIT) with frame-by-frame measured animation constants, replicated with zero drift. Pick its shape / color / expression under Settings → Bot.
+
+## 🚀 Install
 
 <!-- [20260803_InstallHonesty] Homebrew/Winget are planned (see docs/homebrew, docs/winget)
      but not yet submitted upstream — only GitHub Releases works today. -->
@@ -299,31 +105,80 @@ Download the latest build from [Releases](https://github.com/TeFuirnever/Murmur/
 
 <!-- [20260803_InstallHonesty] END -->
 
-## Quick Start
+> **First install notes**
+>
+> - **macOS**: if macOS reports "cannot verify the developer", right-click the app → **Open**
+> - **Windows**: if SmartScreen blocks the installer, click **More info** → **Run anyway**
 
-1. Launch Murmur, wait for model download (~1GB first time)
-2. Press `Cmd+Shift+Space` and start speaking
+## ⚡ Quick Start
+
+1. Launch Murmur and wait for the model download (~1GB the first time, instant afterwards)
+2. Press `Cmd+Shift+Space` (macOS) or `Ctrl+Shift+Space` (Windows) and start speaking
 3. Text appears at your cursor
 
-**AI Polish** (optional): Settings → choose provider (DeepSeek, Qwen, Ollama, etc.) → enter API key or use local model. Built-in Quick Start guide helps you get a free API key.
+**AI Polish** (optional): Settings → choose provider (DeepSeek, Qwen, Ollama, etc.) → enter API key or use a local model. A built-in Quick Start guide helps you get a free API key (DeepSeek / SiliconFlow grant free credits on sign-up).
+
+## 🤖 Supported AI Models
+
+| Provider              | Base URL               | Needs API Key |   Free tier    |
+| --------------------- | ---------------------- | :-----------: | :------------: |
+| OpenAI                | api.openai.com/v1      |      ✅       |       —        |
+| **DeepSeek** ⭐       | api.deepseek.com/v1    |      ✅       | Sign-up bonus  |
+| Qwen (通义千问)       | dashscope.aliyuncs.com |      ✅       |   New users    |
+| Zhipu GLM (智谱)      | open.bigmodel.cn       |      ✅       | Sign-up bonus  |
+| **SiliconFlow** ⭐    | api.siliconflow.cn     |      ✅       | Sign-up bonus  |
+| Groq                  | api.groq.com           |      ✅       |   Free tier    |
+| Moonshot              | api.moonshot.cn        |      ✅       |       —        |
+| MiniMax               | api.minimaxi.com       |      ✅       |       —        |
+| OpenRouter            | openrouter.ai/api/v1   |      ✅       | Partially free |
+| **Ollama (local)**    | localhost:11434        |      ❌       |      Free      |
+| **LM Studio (local)** | localhost:1234         |      ❌       |      Free      |
+
+> ⭐ Providers marked with a star are beginner-friendly — free credits on sign-up, stable access within mainland China.
+
+Just pick a provider — Murmur fills in the base URL and models automatically.
+
+---
 
 ## Build from Source
 
+### Requirements
+
+- **Node.js** 22.5+ and [pnpm](https://pnpm.io)
+- **Python** 3.11+ (for FunASR, matching the `pyproject.toml` requires-python)
+
+### Quick start
+
 ```bash
 git clone https://github.com/TeFuirnever/Murmur.git
-cd Murmur && pnpm install
+cd Murmur
+pnpm install
 
 # Python setup (choose one)
-curl -LsSf https://astral.sh/uv/install.sh | sh  # Option A: uv (recommended)
+# Option A: uv (recommended, manages the virtualenv for you)
+curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync && uv run python download_models.py
 
-pip install funasr modelscope torch torchaudio librosa numpy  # Option B: system Python
+# Option B: system Python
+pip install funasr modelscope torch torchaudio librosa numpy
 python download_models.py
 
 pnpm dev
 ```
 
-## Tech Stack
+### Development commands
+
+```bash
+pnpm dev          # start dev mode
+pnpm test         # unit tests + coverage gate (e2e runs separately in CI)
+pnpm lint         # linting (0 warnings)
+pnpm typecheck    # TypeScript type check
+pnpm ci:check     # run all CI gates locally
+```
+
+---
+
+## 🛠 Tech Stack
 
 | Layer    | Technology                                             |
 | -------- | ------------------------------------------------------ |
@@ -333,7 +188,7 @@ pnpm dev
 | AI       | 11+ OpenAI-compatible models + custom prompt templates |
 | Storage  | SQLite (node:sqlite, safeStorage encryption)           |
 
-## Roadmap
+## 📋 Roadmap
 
 **Done:**
 
@@ -347,7 +202,7 @@ pnpm dev
 - [x] Semi-auto update (SHA256 verified)
 - [x] Accessibility (ARIA + keyboard nav)
 - [x] GPU auto-detection (CUDA > CPU; MPS intentionally skipped — FunASR float64 unsupported)
-- [x] TypeScript strict mode (full-src coverage gated, see CI for test count)
+- [x] TypeScript strict mode (full-src coverage gated, see CI)
 - [x] File config support (`~/.murmur.json`)
 - [x] AI Provider quick-start guide (free API key)
 
@@ -356,12 +211,22 @@ pnpm dev
 - [ ] Real-time streaming transcription (target 200ms latency)
 - [ ] CLI mode (`murmur transcribe --file`)
 - [ ] Multi-engine ASR (whisper.cpp / SenseVoice)
-- [ ] Long audio chunked transcription
+- [ ] Long audio chunked transcription (solves the 10-minute timeout)
 - [ ] AI streaming response
 
-## Contributing
+See [docs/follow-ups.md](docs/follow-ups.md) (open items) and [CHANGELOG.md](CHANGELOG.md) (shipped). `docs/strategic-plan-gap-analysis.md` is a historical strategy snapshot, kept for reference only.
 
-PRs welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, code standards, and PR process.
+## 🤝 Contributing
+
+PRs welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, code standards, and the PR process.
+
+## 📊 Project Status
+
+<div align="center">
+
+[![Star History Chart](https://api.star-history.com/svg?repos=TeFuirnever/Murmur&type=Date)](https://star-history.com/#TeFuirnever/Murmur&Date)
+
+</div>
 
 ## Acknowledgments
 
