@@ -1,4 +1,8 @@
 import * as React from "react";
+// [20260907_Fix_314_PolishSaveToast] Toast surfaces a polish write-back
+// failure; useTranslation routes the warning through i18n.
+import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { LoadingDots } from "./ui/loading-dots";
 import ExportPanel from "./ExportPanel";
 import ProcessingPanel from "./ProcessingPanel";
@@ -48,6 +52,8 @@ export default function TranscriptionResult({
   onCopy,
   onAIOptimize,
 }: TranscriptionResultProps) {
+  // [20260907_Fix_314_PolishSaveToast] i18n for the write-back failure toast.
+  const { t } = useTranslation();
   const [expandedSegment, setExpandedSegment] = React.useState<
     string | number | null
   >(null);
@@ -126,7 +132,16 @@ export default function TranscriptionResult({
         text: polishedText,
       });
     } catch (err) {
+      // [20260907_Fix_314_PolishSaveToast] The polished text stays on screen
+      // (do not erase what the user is reading), but a persistence failure
+      // must be visible: after a restart the record reverts to the original.
       console.warn("Failed to persist polished transcription:", err);
+      toast.warning(
+        t(
+          "transcription.polishSaveFailed",
+          "润色结果保存失败，重启后将显示原文本",
+        ),
+      );
     }
   };
 
