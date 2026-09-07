@@ -23,6 +23,16 @@
 
 <!-- [20260731_README_DynamicBadge] END -->
 
+<!-- [20260907_Spec299_P0Facts] Batch factual sync after the end-to-end README
+     audit (docs/research/readme-end-to-end-audit-2026-09-07.md §2): Electron
+     36→39, FTS5 claim → client-side filtering (FTS5 table removed 2026-08-15),
+     Python 3.8+ → 3.11+ (pyproject.toml requires-python), GPU order
+     CUDA > CPU (MPS intentionally skipped: FunASR float64 unsupported),
+     comparison table macOS Dictation open-source ❌, test-count line switched
+     to non-drift wording. Version claims are pinned by
+     tests/unit/readme-contract.test.ts. -->
+<!-- [20260907_Spec299_P0Facts] END -->
+
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![Stars](https://img.shields.io/github/stars/TeFuirnever/Murmur?style=social)](https://github.com/TeFuirnever/Murmur)
 
@@ -66,7 +76,7 @@
 | **自定义 Prompt**   |     ✅     |       ❌       |     ❌     |       ❌        |
 | **11+ AI 模型可选** |     ✅     |       ❌       |     ❌     |       ❌        |
 | 中文识别精度        | ⭐⭐⭐⭐⭐ |     ⭐⭐⭐     | ⭐⭐⭐⭐⭐ |     ⭐⭐⭐      |
-| 开源免费            |     ✅     |       ✅       |     ❌     |       ✅        |
+| 开源免费            |     ✅     |       ❌       |     ❌     |       ✅        |
 
 > 系统听写在"实时性"上更强（流式低延迟），Murmur 在"转写后能做什么"上更强（AI 润色 + 文件批处理 + 隐私）。两者可以共存。
 
@@ -138,7 +148,7 @@
 ### 环境要求
 
 - **Node.js** 22.5+ 和 [pnpm](https://pnpm.io)
-- **Python** 3.8+（用于 FunASR）
+- **Python** 3.11+（用于 FunASR，与 `pyproject.toml` 的 requires-python 一致）
 
 ### 快速开始
 
@@ -163,7 +173,7 @@ pnpm dev
 
 ```bash
 pnpm dev          # 启动开发模式
-pnpm test         # 运行测试（2200+ tests，覆盖率 ~97%）
+pnpm test         # 运行测试（单测 + E2E）与覆盖率门禁
 pnpm lint         # 代码检查（0 warnings）
 pnpm typecheck    # TypeScript 类型检查
 pnpm ci:check     # 本地运行所有 CI 门禁
@@ -175,7 +185,7 @@ pnpm ci:check     # 本地运行所有 CI 门禁
 
 | 层级     | 技术                                                  |
 | -------- | ----------------------------------------------------- |
-| 桌面框架 | Electron 36                                           |
+| 桌面框架 | Electron 39                                           |
 | 前端     | React 19, Tailwind CSS 4, Vite                        |
 | 语音识别 | FunASR (Paraformer-large + FSMN-VAD + CT-Transformer) |
 | AI 优化  | 11+ OpenAI 兼容模型 + 自定义 Prompt 模板              |
@@ -189,12 +199,12 @@ pnpm ci:check     # 本地运行所有 CI 门禁
 - [x] AI 文本智能优化（11+ 模型，含本地 Ollama/LM Studio）
 - [x] 自定义 AI Prompt 模板
 - [x] 音频文件导入转录（wav/mp3/m4a/flac）
-- [x] 转录历史搜索（FTS5 全文搜索）和导出（TXT/SRT/Markdown/DOCX）
+- [x] 转录历史搜索（实时客户端过滤）和导出（TXT/SRT/Markdown/DOCX）
 - [x] 全局热键 `Cmd+Shift+Space`
 - [x] 多语言支持（中文/English）
 - [x] 半自动更新（SHA256 校验）
 - [x] 无障碍（ARIA + 键盘导航）
-- [x] GPU 自动检测（CUDA > MPS > CPU）
+- [x] GPU 自动检测（CUDA > CPU；MPS 因 FunASR float64 不兼容被有意跳过）
 - [x] TypeScript 严格模式（全 src 覆盖率门禁，测试与覆盖率详见 CI）
 - [x] 文件配置支持（`~/.murmur.json`）
 - [x] AI Provider 快速开始引导（免费 API Key 获取）
@@ -259,7 +269,7 @@ Speak to type, convert audio to text, AI auto-polish. Powered by FunASR, all on 
 | **Custom Prompts**     |     ✅     |       ❌        |     ❌     |       ❌        |
 | **11+ AI Models**      |     ✅     |       ❌        |     ❌     |       ❌        |
 | Chinese Accuracy       | ⭐⭐⭐⭐⭐ |     ⭐⭐⭐      | ⭐⭐⭐⭐⭐ |     ⭐⭐⭐      |
-| Open Source            |     ✅     |       ✅        |     ❌     |       ✅        |
+| Open Source            |     ✅     |       ❌        |     ❌     |       ✅        |
 
 > System dictation wins on real-time latency (streaming); Murmur wins on "what you can do after transcription" (AI polish + batch files + privacy). They can coexist.
 
@@ -317,7 +327,7 @@ pnpm dev
 
 | Layer    | Technology                                             |
 | -------- | ------------------------------------------------------ |
-| Desktop  | Electron 36                                            |
+| Desktop  | Electron 39                                            |
 | Frontend | React 19, Tailwind CSS 4, Vite                         |
 | Speech   | FunASR (Paraformer-large + FSMN-VAD + CT-Transformer)  |
 | AI       | 11+ OpenAI-compatible models + custom prompt templates |
@@ -331,12 +341,12 @@ pnpm dev
 - [x] AI text optimization (11+ models, incl. local Ollama/LM Studio)
 - [x] Custom AI prompt templates
 - [x] Audio file transcription (wav/mp3/m4a/flac)
-- [x] History search (FTS5 full-text) and export (TXT/SRT/Markdown/DOCX)
+- [x] History search (instant client-side filtering) and export (TXT/SRT/Markdown/DOCX)
 - [x] Global hotkey
 - [x] Multi-language (Chinese/English)
 - [x] Semi-auto update (SHA256 verified)
 - [x] Accessibility (ARIA + keyboard nav)
-- [x] GPU auto-detection (CUDA > MPS > CPU)
+- [x] GPU auto-detection (CUDA > CPU; MPS intentionally skipped — FunASR float64 unsupported)
 - [x] TypeScript strict mode (full-src coverage gated, see CI for test count)
 - [x] File config support (`~/.murmur.json`)
 - [x] AI Provider quick-start guide (free API key)

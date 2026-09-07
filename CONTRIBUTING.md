@@ -6,9 +6,15 @@
 
 ### 必要条件
 
-- **Node.js** 18+（推荐 22 LTS）
+<!-- [20260907_Spec299_P0Facts] Env requirements synced with package.json
+     engines (node >=22.5) and pyproject.toml requires-python (>=3.11) after
+     the README audit: 18+/3.8+ contradicted README and failed contributor
+     setup at `uv sync`. -->
+<!-- [20260907_Spec299_P0Facts] END -->
+
+- **Node.js** 22.5+（与 `package.json` engines 一致）
 - **pnpm** 9+（`npm install -g pnpm`）
-- **Python** 3.8+（推荐 3.11）
+- **Python** 3.11+（与 `pyproject.toml` 的 requires-python 一致）
 - **ffmpeg**（音频格式转换，macOS: `brew install ffmpeg`）
 - **Git**
 - macOS / Windows / Linux
