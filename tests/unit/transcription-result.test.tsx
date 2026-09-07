@@ -516,10 +516,55 @@ describe("TranscriptionResult — polish write-back failure (#314)", () => {
       });
     });
     await waitFor(() => {
-      expect(toastMocks.toast.warning).toHaveBeenCalledTimes(1);
+      expect(toastMocks.toast.warning).toHaveBeenCalledWith(
+        expect.stringContaining("保存失败"),
+      );
     });
     // The polished result stays on screen (documented intent).
     expect(screen.getByText("润色后文本")).toBeInTheDocument();
     consoleSpy.mockRestore();
+  });
+
+  // [20260907_Fix_314_ReviewFix] The DOMINANT production failure shape: the
+  // main-process handler wraps every failure (DB locked, missing record,
+  // zero changes, whitelist rejection) in a RESOLVED {success:false, error}
+  // envelope — the catch never runs for it.
+  it("warns when the write-back resolves unsuccessful (envelope shape)", async () => {
+    const consoleSpy2 = vi.spyOn(console, "warn").mockImplementation(() => {});
+    (globalThis.window as unknown as TestWindow).electronAPI = {
+      processText: vi
+        .fn()
+        .mockResolvedValue({ success: true, text: "润色后文本" }),
+      updateTranscription: vi.fn().mockResolvedValue({
+        success: false,
+        error: "db locked",
+      }),
+      getAIModes: vi
+        .fn()
+        .mockResolvedValue([
+          { name: "optimize", label: "智能润色", description: "" },
+        ]),
+    };
+
+    render(
+      React.createElement(TranscriptionResult, {
+        text: "原始文本",
+        id: 42,
+        onCopy: vi.fn(),
+      }),
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "应用 AI 处理" }),
+    );
+
+    await waitFor(() => {
+      expect(toastMocks.toast.warning).toHaveBeenCalledWith(
+        expect.stringContaining("保存失败"),
+      );
+    });
+    // Not wiped: the polished text stays on screen.
+    expect(screen.getByText("润色后文本")).toBeInTheDocument();
+    consoleSpy2.mockRestore();
   });
 });

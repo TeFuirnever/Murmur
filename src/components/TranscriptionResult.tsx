@@ -127,10 +127,27 @@ export default function TranscriptionResult({
   ): Promise<void> => {
     if (!window.electronAPI?.updateTranscription) return;
     try {
-      await window.electronAPI.updateTranscription(recordId, {
+      // [20260907_Fix_314_ReviewFix] The handler wraps every failure (DB
+      // locked, missing record, zero changes, whitelist rejection) in a
+      // RESOLVED {success:false, error} envelope — only invoke-level faults
+      // reject. Both shapes must warn.
+      const result = await window.electronAPI.updateTranscription(recordId, {
         processed_text: polishedText,
         text: polishedText,
       });
+      if (!result?.success) {
+        console.warn(
+          "Failed to persist polished transcription:",
+          result?.error,
+        );
+        toast.warning(
+          t(
+            "transcription.polishSaveFailed",
+            "润色结果保存失败，重启后将显示原文本",
+          ),
+        );
+        return;
+      }
     } catch (err) {
       // [20260907_Fix_314_PolishSaveToast] The polished text stays on screen
       // (do not erase what the user is reading), but a persistence failure
