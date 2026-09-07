@@ -57,6 +57,9 @@ describe("ipc-contracts", () => {
   it("TRANSCRIPTION domain has all expected channels", () => {
     expect(C.TRANSCRIPTION.AUDIO).toBe("transcribe-audio");
     expect(C.TRANSCRIPTION.SAVE).toBe("save-transcription");
+    // [20260906_Feat_TranscriptionUpdate] Manual polish write-back channel
+    // (spec #193 T1, ticket #228).
+    expect(C.TRANSCRIPTION.UPDATE).toBe("update-transcription");
     expect(C.TRANSCRIPTION.GET_ALL).toBe("get-transcriptions");
     expect(C.TRANSCRIPTION.DELETE).toBe("delete-transcription");
     expect(C.TRANSCRIPTION.CLEAR).toBe("clear-all-transcriptions");

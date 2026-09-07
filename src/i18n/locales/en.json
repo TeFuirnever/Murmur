@@ -316,7 +316,12 @@
     "daysAgo": "{{days}} days ago",
     "formatLabel": "Export format",
     "clearSuccess": "All transcriptions cleared",
-    "clearFailed": "Failed to clear transcriptions"
+    "clearFailed": "Failed to clear transcriptions",
+    "editTooltip": "Edit record",
+    "editSave": "Save",
+    "editCancel": "Cancel",
+    "editSaved": "Record updated",
+    "editFailed": "Failed to update record"
   },
   "recording": {
     "recording": "Recording",

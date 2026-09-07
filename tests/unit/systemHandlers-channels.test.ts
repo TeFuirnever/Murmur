@@ -5,11 +5,19 @@
 // mock ipcMain/managers are cast to the source register() argument types via
 // `as unknown as Parameters<...>`. Template reference: phase4-i18n.test.ts
 // (commit d52f2e0).
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 // [20260726_Tier32_SystemHandlersChannels] Convert two CJS require() → ESM
 // namespace imports.
 import * as C from "../../src/helpers/ipc-contracts";
 import * as sysHandlers from "../../src/helpers/ipc/systemHandlers";
+
+// [20260906_Spec259_T3] Electron module mock so the behavioral section below
+// can assert shell.openExternal calls and a stubbed app.getVersion without
+// booting Electron.
+vi.mock("electron", () => ({
+  app: { getVersion: vi.fn(() => "9.9.9-test") },
+  shell: { openExternal: vi.fn() },
+}));
 
 // [20260726_Tier3_SystemHandlersChannelsMigrate] Handler shape: ipcMain.handle
 // registers `(event, ...args) => result` callbacks. The suite only asserts
@@ -72,5 +80,116 @@ describe("systemHandlers channel registration", () => {
     expect(channels).not.toContain("log-message");
     expect(channels).not.toContain("get-debug-info");
     expect(channels).not.toContain("report-error");
+  });
+});
+
+// ======================================================================
+// [20260906_Spec259_T3] Behavioral section: the three surviving handlers
+// (OPEN_EXTERNAL / VERSION / LOG) invoked through the captured handlers —
+// Spec #259 T3 (#275). External behavior only: return shapes plus
+// shell/app/logger boundary calls.
+// ======================================================================
+describe("systemHandlers behavior", () => {
+  type MockHandler = (...args: unknown[]) => unknown;
+
+  // The electron mock module (and its shell.openExternal call record) is
+  // shared file-wide — clear call history before each behavioral test.
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function setupBehavior() {
+    const handlers: Record<string, MockHandler | undefined> = {};
+    const ipcMain = {
+      handle: vi.fn((channel: string, fn: MockHandler) => {
+        handlers[channel] = fn;
+      }),
+    };
+    const logger = {
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+    sysHandlers.register(
+      ipcMain as unknown as Parameters<typeof sysHandlers.register>[0],
+      { logger } as unknown as Parameters<typeof sysHandlers.register>[1],
+    );
+    return { handlers, logger };
+  }
+
+  describe("SYSTEM.OPEN_EXTERNAL", () => {
+    it("opens an https URL via shell.openExternal", async () => {
+      const { shell } = await import("electron");
+      const { handlers } = setupBehavior();
+      const result = (await handlers[C.SYSTEM.OPEN_EXTERNAL]!(
+        {},
+        "https://example.com/page",
+      )) as Record<string, unknown>;
+      expect(result).toEqual({ success: true });
+      expect(vi.mocked(shell.openExternal)).toHaveBeenCalledWith(
+        "https://example.com/page",
+      );
+    });
+
+    it.each([[""], [123], ["http://example.com"], ["ftp://example.com"]])(
+      "blocks %s with a warning and no shell call",
+      async (url) => {
+        const { shell } = await import("electron");
+        const { handlers, logger } = setupBehavior();
+        const result = (await handlers[C.SYSTEM.OPEN_EXTERNAL]!(
+          {},
+          url,
+        )) as Record<string, unknown>;
+        expect(result).toEqual({
+          success: false,
+          error: "只允许打开HTTPS链接",
+        });
+        expect(logger.warn).toHaveBeenCalledWith("阻止打开非HTTPS链接:", url);
+        expect(vi.mocked(shell.openExternal)).not.toHaveBeenCalled();
+      },
+    );
+  });
+
+  describe("SYSTEM.VERSION", () => {
+    it("returns app.getVersion()", async () => {
+      const { handlers } = setupBehavior();
+      const result = await handlers[C.SYSTEM.VERSION]!();
+      expect(result).toBe("9.9.9-test");
+    });
+  });
+
+  describe("SYSTEM.LOG", () => {
+    it("dispatches to the requested logger level with a renderer prefix", async () => {
+      const { handlers, logger } = setupBehavior();
+      const payload = { stack: "…" };
+      const result = await handlers[C.SYSTEM.LOG]!(
+        {},
+        "warn",
+        "渲染进程崩溃",
+        payload,
+      );
+      expect(logger.warn).toHaveBeenCalledWith(
+        "[渲染进程] 渲染进程崩溃",
+        payload,
+      );
+      expect(result).toBe(true);
+    });
+
+    it("passes empty data as an empty string", async () => {
+      const { handlers, logger } = setupBehavior();
+      await handlers[C.SYSTEM.LOG]!({}, "info", "无附言", null);
+      expect(logger.info).toHaveBeenCalledWith("[渲染进程] 无附言", "");
+    });
+
+    it("is a no-op for an unknown log level and still returns true", async () => {
+      const { handlers } = setupBehavior();
+      const result = await handlers[C.SYSTEM.LOG]!(
+        {},
+        "verbose",
+        "没有这个级别",
+        { a: 1 },
+      );
+      expect(result).toBe(true);
+    });
   });
 });

@@ -253,13 +253,49 @@ function extractAIErrorMessage(
   );
 }
 
-export async function processTextWithAI(
-  text: string,
-  mode: string,
-  databaseManager: DatabaseManager,
-  logger: Logger,
-  options: Record<string, unknown> = {},
+// [20260906_Refactor_PolishOrchestrator] Spec #193 T3 (ticket #230): single
+// polish orchestrator. BOTH polish IPC entries route through
+// runPolishOrchestrator — C.AI.PROCESS (this module's register) and
+// C.TRANSCRIPTION.AI_REVIEW (transcriptionHandlers, wired via the injected
+// processTextWithAI adapter in src/helpers/ipc/index.ts). It owns the full
+// pipeline for both: mode/template resolution → prompt building → provider
+// call → response normalization/error mapping.
+//
+// Extension points for the upcoming spec tickets — add them HERE, never by
+// bypassing this function, so both entries keep one shared seam:
+//   - T7 generation invalidation: add a generation/cancellation handle to
+//     PolishRequest and short-circuit before the provider call.
+//   - T8 streaming/clamping: add stream/clamp fields to PolishRequest; the
+//     provider call and response normalization live only here.
+//   - T14 chunking: add chunk-strategy fields to PolishRequest; long-input
+//     splitting/merging stays transparent to both entries.
+export interface PolishRequest {
+  text: string;
+  // Explicit mode/template id. Callers resolve their own entry-level defaults
+  // (PROCESS defaults to "optimize"; the AI_REVIEW entry falls back to
+  // "professional" for an empty template) — the orchestrator never guesses.
+  mode: string;
+  // Directory of custom prompt templates; when set, a custom template whose
+  // name matches `mode` wins over the built-in mode prompts.
+  templatesDir?: string;
+  timeout?: number;
+  // Escape hatch that skips prompt building entirely. Kept for the existing
+  // processTextWithAI option contract; after T3 no production caller uses it.
+  systemPrompt?: string;
+  userPrompt?: string;
+}
+
+export interface PolishDeps {
+  databaseManager: DatabaseManager;
+  logger: Logger;
+}
+
+export async function runPolishOrchestrator(
+  deps: PolishDeps,
+  request: PolishRequest,
 ): Promise<AIResult> {
+  const { databaseManager, logger } = deps;
+  const { text, mode } = request;
   try {
     const apiKey = (await databaseManager.getSetting("ai_api_key")) as
       | string
@@ -300,12 +336,12 @@ export async function processTextWithAI(
     }
 
     let system: string, user: string;
-    if (options.systemPrompt && options.userPrompt) {
-      system = options.systemPrompt as string;
-      user = options.userPrompt as string;
+    if (request.systemPrompt && request.userPrompt) {
+      system = request.systemPrompt;
+      user = request.userPrompt;
     } else {
-      const customTemplates = options.templatesDir
-        ? getCachedTemplates(options.templatesDir as string)
+      const customTemplates = request.templatesDir
+        ? getCachedTemplates(request.templatesDir)
         : [];
       ({ system, user } = buildPrompt(mode, text, { customTemplates }));
     }
@@ -328,8 +364,7 @@ export async function processTextWithAI(
       inputLength: text.length,
     });
 
-    const timeoutMs =
-      (options.timeout as number) || (isLocal ? 180_000 : 150_000);
+    const timeoutMs = request.timeout || (isLocal ? 180_000 : 150_000);
     const response = await postChatCompletion(
       baseUrl,
       apiKey,
@@ -420,6 +455,31 @@ export async function processTextWithAI(
     return { success: false, error: errorMessage };
   }
 }
+
+// [20260906_Refactor_PolishOrchestrator] Positional-args adapter kept for the
+// injected provider seam (src/helpers/ipc/index.ts wires this into
+// transcriptionHandlers' AI_REVIEW entry) and the existing unit-test
+// contract. Pure delegation — all logic lives in runPolishOrchestrator.
+export async function processTextWithAI(
+  text: string,
+  mode: string,
+  databaseManager: DatabaseManager,
+  logger: Logger,
+  options: Record<string, unknown> = {},
+): Promise<AIResult> {
+  return runPolishOrchestrator(
+    { databaseManager, logger },
+    {
+      text,
+      mode,
+      templatesDir: options.templatesDir as string | undefined,
+      timeout: options.timeout as number | undefined,
+      systemPrompt: options.systemPrompt as string | undefined,
+      userPrompt: options.userPrompt as string | undefined,
+    },
+  );
+}
+// [20260906_Refactor_PolishOrchestrator] END
 
 export async function checkAIStatus(
   testConfig: {
@@ -588,10 +648,14 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
   ipcMain.handle(
     C.AI.PROCESS,
     async (_event, text: string, mode = "optimize", timeout?: number) => {
-      return await processTextWithAI(text, mode, databaseManager, logger, {
-        templatesDir,
-        timeout,
-      });
+      // [20260906_Refactor_PolishOrchestrator] Spec #193 T3 (ticket #230):
+      // route the PROCESS entry straight through the shared orchestrator
+      // (entry resolves its own default mode; the orchestrator owns prompt
+      // building, the provider call and response/error mapping).
+      return await runPolishOrchestrator(
+        { databaseManager, logger },
+        { text, mode, templatesDir, timeout },
+      );
     },
   );
 

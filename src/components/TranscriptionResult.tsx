@@ -108,11 +108,37 @@ export default function TranscriptionResult({
   const displayRawText = rawText && rawText !== displayText ? rawText : null;
   const hasAIResult = displayRawText !== null;
 
+  // [20260906_Feat_TranscriptionUpdate] Spec #193 T1 (ticket #228): after a
+  // successful manual polish of a SAVED record (id present), persist the
+  // polished text into that record (processed_text + text). raw_text always
+  // keeps the original ASR output — enforced by the DB column whitelist, so
+  // the patch cannot touch it. A write-back failure must not erase the
+  // polish result the user is already looking at, so it is logged and
+  // intentionally swallowed here.
+  const persistPolishedText = async (
+    recordId: number,
+    polishedText: string,
+  ): Promise<void> => {
+    if (!window.electronAPI?.updateTranscription) return;
+    try {
+      await window.electronAPI.updateTranscription(recordId, {
+        processed_text: polishedText,
+        text: polishedText,
+      });
+    } catch (err) {
+      console.warn("Failed to persist polished transcription:", err);
+    }
+  };
+
   const handleAIOptimize = async () => {
     if (!text) return;
     setIsOptimizingInternal(true);
     setOptimizeError(null);
     try {
+      // [20260906_Feat_TranscriptionUpdate] Both polish paths (direct
+      // processText and the injected onAIOptimize flow) converge here so
+      // the write-back fires exactly once per successful polish.
+      let polishedText: string | null = null;
       if (window.electronAPI?.processText) {
         const result = (await Promise.race([
           window.electronAPI.processText(text, currentMode),
@@ -124,6 +150,7 @@ export default function TranscriptionResult({
           ),
         ])) as { success?: boolean; text?: string; error?: string };
         if (result?.success && result?.text) {
+          polishedText = result.text;
           setOptimizedText(result.text);
         } else {
           // [20260815_Fix_AiEmptyContent] Surface the main-process error
@@ -133,9 +160,14 @@ export default function TranscriptionResult({
         }
       } else if (onAIOptimize) {
         const result = await onAIOptimize(text);
+        polishedText = result;
         setOptimizedText(result);
       } else {
         setOptimizeError("AI功能不可用");
+      }
+      // [20260906_Feat_TranscriptionUpdate] Write-back for saved records.
+      if (polishedText !== null && id != null) {
+        await persistPolishedText(id, polishedText);
       }
     } catch (err) {
       setOptimizeError((err as Error).message || "优化失败");

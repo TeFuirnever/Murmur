@@ -610,6 +610,55 @@ describe("[20260729_Test_UseRecording] useRecording — transcription flow", () 
     await waitFor(() => expect(result.current.isOptimizing).toBe(false));
   });
 
+  // [20260906_Feat_ManualEditProtection] Spec #193 T2 (ticket #229) regres-
+  // sion lock on the end-of-recording auto-polish persist site: a FRESH
+  // (never-edited) recording is polished and saved exactly as today — the
+  // polished text lands in the saved payload and the auto path never sets
+  // the manually_edited flag (that flag belongs to the user's edit-save).
+  it("auto-polishes a fresh record: polished payload saved once, flag never set", async () => {
+    const processText = vi.fn().mockResolvedValue({
+      success: true,
+      text: "润色后的文本",
+    });
+    const saveTranscription = vi
+      .fn()
+      .mockResolvedValue({ success: true, lastInsertRowid: 7 });
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "原始识别文本",
+        confidence: 0.9,
+        duration: 1.2,
+      }),
+      getSetting: vi.fn().mockResolvedValue("auto"),
+      processText,
+      saveTranscription,
+      log: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { result } = renderHook(() => useRecording());
+
+    await act(async () => {
+      await result.current.startRecording();
+    });
+    await act(async () => {
+      result.current.stopRecording();
+    });
+
+    await waitFor(() => expect(processText).toHaveBeenCalledTimes(1));
+    // Saved exactly once, after the polish, with both columns populated.
+    await waitFor(() => expect(saveTranscription).toHaveBeenCalledTimes(1));
+    const payload = saveTranscription.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
+    expect(payload.text).toBe("润色后的文本");
+    expect(payload.processed_text).toBe("润色后的文本");
+    expect(payload).not.toHaveProperty("manually_edited");
+
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+  });
+
   it("migrates legacy enable_ai_optimization setting when default_mode is null", async () => {
     const getSetting = vi.fn().mockImplementation((key: string) => {
       if (key === "default_mode") return Promise.resolve(null);

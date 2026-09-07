@@ -10,7 +10,7 @@ import { useTranslation } from "react-i18next";
 import { Toaster } from "./components/ui/sonner";
 // [20260816_Refactor_MinimalHistory] Inline hand-written SVGs replaced with
 // lucide-react icons (the project icon library).
-import { Search, FileText, Calendar, Copy, Trash2 } from "lucide-react";
+import { Search, FileText, Calendar, Copy, Trash2, Pencil } from "lucide-react";
 import "./index.css";
 import { assertElectronAPI } from "./bootstrap/assertElectronAPI.js";
 import type { TranscriptionRecord } from "./types/ipc";
@@ -95,6 +95,16 @@ const HistoryContent = ({
   // (issue #248: the button was hardcoded to txt while the IPC handler
   // already supports txt/srt/vtt/md/docx via exportFormatters).
   const [exportFormat, setExportFormat] = React.useState("txt");
+
+  // [20260906_Feat_ManualEditProtection] Spec #193 T2 (ticket #229): the
+  // minimal manual edit-save entry (survey confirmed no edit UI existed).
+  // One record at a time: editingId selects the card, editText holds the
+  // draft, savingEdit debounces double submits. Saving routes through the
+  // TRANSCRIPTION.UPDATE write-back channel with manually_edited=true so the
+  // end-of-recording auto-polish can never overwrite this record.
+  const [editingId, setEditingId] = React.useState<number | null>(null);
+  const [editText, setEditText] = React.useState("");
+  const [savingEdit, setSavingEdit] = React.useState(false);
 
   // [20260815_Refactor_HistoryDerivedState] filteredTranscriptions was a
   // second useState synced by a useEffect — derivable state, now a useMemo.
@@ -230,6 +240,65 @@ const HistoryContent = ({
     }
   };
 
+  // [20260906_Feat_ManualEditProtection] Open the inline editor pre-filled
+  // with the record's current final text.
+  const handleEditStart = (id: number, text: string) => {
+    setEditingId(id);
+    setEditText(text);
+  };
+
+  const handleEditCancel = () => {
+    setEditingId(null);
+    setEditText("");
+  };
+
+  // [20260906_Feat_ManualEditProtection] Persist the edit: text AND
+  // processed_text carry the new final content (same two-column rule as the
+  // T1 polish write-back, so the copy button and the result cards stay
+  // consistent); manually_edited=true marks the record so the auto-polish
+  // write-back path skips it forever. raw_text is NOT in the UPDATE
+  // whitelist and always keeps the original ASR output. A blank edit is
+  // refused client-side — the DB would otherwise accept an empty overwrite.
+  const handleEditSave = async (id: number) => {
+    if (!window.electronAPI?.updateTranscription) return;
+    const trimmed = editText.trim();
+    if (!trimmed) return;
+
+    setSavingEdit(true);
+    try {
+      const result = await window.electronAPI.updateTranscription(id, {
+        text: trimmed,
+        processed_text: trimmed,
+        manually_edited: true,
+      });
+      if (result?.success) {
+        setTranscriptions((prev) =>
+          prev.map((item) =>
+            item.id === id
+              ? {
+                  ...item,
+                  text: result.text ?? trimmed,
+                  processed_text: result.processed_text ?? trimmed,
+                  // [20260906_Feat_ManualEditProtection_Review] keep the
+                  // local flag in sync so a future badge doesn't go stale
+                  manually_edited: true,
+                }
+              : item,
+          ),
+        );
+        handleEditCancel();
+        toast.success(t("history.editSaved", "记录已更新"));
+      } else {
+        toast.error(t("history.editFailed", "更新记录失败"));
+      }
+    } catch (error) {
+      console.error("更新记录失败:", error);
+      toast.error(t("history.editFailed", "更新记录失败"));
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   // 格式化日期
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -355,6 +424,18 @@ const HistoryContent = ({
                       )}
                     </div>
                     <div className="flex space-x-2">
+                      {/* [20260906_Feat_ManualEditProtection] Inline edit
+                          entry — hidden while this card's editor is open. */}
+                      {editingId !== item.id && (
+                        <button
+                          onClick={() => handleEditStart(item.id, item.text)}
+                          className="p-2 hover:bg-[#f5f5f7] dark:hover:bg-[#3a3a3c] rounded-lg transition-colors"
+                          title={t("history.editTooltip", "编辑记录")}
+                          aria-label={t("history.editTooltip", "编辑记录")}
+                        >
+                          <Pencil className="w-4 h-4 text-[#86868b] dark:text-[#86868b]" />
+                        </button>
+                      )}
                       <button
                         onClick={() => onCopy(item.processed_text || item.text)}
                         className="p-2 hover:bg-[#f5f5f7] dark:hover:bg-[#3a3a3c] rounded-lg transition-colors"
@@ -377,9 +458,44 @@ const HistoryContent = ({
                     <h4 className="text-sm font-medium text-[#1d1d1f]/80 dark:text-[#f5f5f7]/80 mb-2">
                       {t("history.finalResult", "最终结果:")}
                     </h4>
-                    <p className="text-content leading-relaxed bg-[#f5f5f7] dark:bg-[#3a3a3c] p-4 rounded-lg border dark:border-gray-600/30">
-                      {item.text}
-                    </p>
+                    {/* [20260906_Feat_ManualEditProtection] While editing,
+                        the final-text block becomes the inline editor: a
+                        textarea plus save/cancel. Save is disabled for a
+                        blank draft so the record can never be overwritten
+                        with empty text. */}
+                    {editingId === item.id ? (
+                      <div className="space-y-2">
+                        <textarea
+                          data-testid="edit-textarea"
+                          aria-label={t("history.editTooltip", "编辑记录")}
+                          value={editText}
+                          onChange={(e) => setEditText(e.target.value)}
+                          rows={4}
+                          className="w-full text-content leading-relaxed bg-[#f5f5f7] dark:bg-[#3a3a3c] p-4 rounded-lg border border-[#0071e3] dark:border-[#2997ff] focus:ring-2 focus:ring-[#0071e3] focus:border-transparent resize-y"
+                        />
+                        <div className="flex justify-end gap-2">
+                          <button
+                            data-testid="edit-cancel"
+                            onClick={handleEditCancel}
+                            className="px-4 py-2 text-sm text-[#86868b] dark:text-[#86868b] hover:bg-[#f5f5f7] dark:hover:bg-[#3a3a3c] rounded-lg transition-colors"
+                          >
+                            {t("history.editCancel", "取消")}
+                          </button>
+                          <button
+                            data-testid="edit-save"
+                            disabled={savingEdit || !editText.trim()}
+                            onClick={() => handleEditSave(item.id)}
+                            className="px-4 py-2 text-sm bg-[#0071e3] hover:bg-[#0077ed] text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {t("history.editSave", "保存")}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-content leading-relaxed bg-[#f5f5f7] dark:bg-[#3a3a3c] p-4 rounded-lg border dark:border-gray-600/30">
+                        {item.text}
+                      </p>
+                    )}
                   </div>
 
                   {/* AI优化文本 */}

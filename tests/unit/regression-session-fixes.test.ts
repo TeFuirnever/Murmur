@@ -889,3 +889,163 @@ describe("SETTINGS_UPDATE history-window broadcast", () => {
     expect(hwSend).not.toHaveBeenCalled();
   });
 });
+
+// ======================================================================
+// [20260906_Spec259_T3] FUNASR.STATUS status_message matrix arms + the
+// FUNASR.RELOAD_MODELS fire-and-forget contract (Spec #259 T3, #275).
+// ======================================================================
+describe("FUNASR.STATUS status_message matrix (Spec #259 T3)", () => {
+  function createEnvManagers(
+    checkStatusResult: Record<string, unknown>,
+    overrides: Record<string, unknown> = {},
+  ) {
+    return {
+      environmentManager: {
+        exportConfig: vi.fn(),
+        validateEnvironment: vi.fn(),
+      },
+      funasrManager: {
+        checkStatus: vi.fn(async () => checkStatusResult),
+        modelsInitialized: false,
+        serverReady: false,
+        initializationPromise: null,
+        ...overrides,
+      },
+      logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
+    };
+  }
+
+  async function statusMessage(managers: Record<string, unknown>) {
+    const ipcMain = createIpcMain();
+    envHandlers.register(
+      ipcMain as unknown as Parameters<typeof envHandlers.register>[0],
+      managers as unknown as Parameters<typeof envHandlers.register>[1],
+    );
+    const result = await ipcMain._handlers[C.FUNASR.STATUS]!();
+    return result.status_message;
+  }
+
+  it("reports models_not_downloaded when checkStatus says so", async () => {
+    const managers = createEnvManagers({ models_downloaded: false });
+    expect(await statusMessage(managers)).toBe("models_not_downloaded");
+  });
+
+  it("reports python_not_installed when python is missing", async () => {
+    const managers = createEnvManagers({
+      models_downloaded: true,
+      python_installed: false,
+    });
+    expect(await statusMessage(managers)).toBe("python_not_installed");
+  });
+
+  it("reports funasr_not_installed when funasr is missing", async () => {
+    const managers = createEnvManagers({
+      models_downloaded: true,
+      python_installed: true,
+      funasr_installed: false,
+    });
+    expect(await statusMessage(managers)).toBe("funasr_not_installed");
+  });
+
+  it("reports not_ready when everything is installed but not serving", async () => {
+    const managers = createEnvManagers({
+      models_downloaded: true,
+      python_installed: true,
+      funasr_installed: true,
+    });
+    expect(await statusMessage(managers)).toBe("not_ready");
+  });
+});
+
+describe("FUNASR.RELOAD_MODELS (Spec #259 T3)", () => {
+  it("triggers the reload and reports success without awaiting it", async () => {
+    const ipcMain = createIpcMain();
+    const reloadModels = vi.fn(() => Promise.resolve({ reloaded: true }));
+    const managers = {
+      environmentManager: {
+        exportConfig: vi.fn(),
+        validateEnvironment: vi.fn(),
+      },
+      funasrManager: {
+        checkStatus: vi.fn(async () => ({})),
+        modelsInitialized: false,
+        serverReady: false,
+        initializationPromise: null,
+        reloadModels,
+      },
+      logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
+    };
+    envHandlers.register(
+      ipcMain as unknown as Parameters<typeof envHandlers.register>[0],
+      managers as unknown as Parameters<typeof envHandlers.register>[1],
+    );
+    const result = await ipcMain._handlers[C.FUNASR.RELOAD_MODELS]!();
+    expect(result).toEqual({ success: true, message: "模型重载已触发" });
+    expect(reloadModels).toHaveBeenCalledTimes(1);
+  });
+
+  it("routes a reload rejection to the logger instead of crashing", async () => {
+    const ipcMain = createIpcMain();
+    const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+    const managers = {
+      environmentManager: {
+        exportConfig: vi.fn(),
+        validateEnvironment: vi.fn(),
+      },
+      funasrManager: {
+        checkStatus: vi.fn(async () => ({})),
+        modelsInitialized: false,
+        serverReady: false,
+        initializationPromise: null,
+        // Fire-and-forget contract: the handler must NOT await this promise —
+        // a rejection is caught and logged via the attached .catch.
+        reloadModels: vi.fn(() => Promise.reject(new Error("reload timeout"))),
+      },
+      logger,
+    };
+    envHandlers.register(
+      ipcMain as unknown as Parameters<typeof envHandlers.register>[0],
+      managers as unknown as Parameters<typeof envHandlers.register>[1],
+    );
+    const result = await ipcMain._handlers[C.FUNASR.RELOAD_MODELS]!();
+    expect(result).toEqual({ success: true, message: "模型重载已触发" });
+    // Flush the microtask queue so the attached .catch runs.
+    await vi.waitFor(() => {
+      expect(logger.warn).toHaveBeenCalledWith(
+        "模型重载失败",
+        expect.any(Error),
+      );
+    });
+  });
+
+  it("returns a failure shape when reloadModels throws synchronously", async () => {
+    const ipcMain = createIpcMain();
+    const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+    const managers = {
+      environmentManager: {
+        exportConfig: vi.fn(),
+        validateEnvironment: vi.fn(),
+      },
+      funasrManager: {
+        checkStatus: vi.fn(async () => ({})),
+        modelsInitialized: false,
+        serverReady: false,
+        initializationPromise: null,
+        reloadModels: vi.fn(() => {
+          throw new Error("manager is dead");
+        }),
+      },
+      logger,
+    };
+    envHandlers.register(
+      ipcMain as unknown as Parameters<typeof envHandlers.register>[0],
+      managers as unknown as Parameters<typeof envHandlers.register>[1],
+    );
+    const result = await ipcMain._handlers[C.FUNASR.RELOAD_MODELS]!();
+    expect(result).toEqual({ success: false, error: "manager is dead" });
+    expect(logger.error).toHaveBeenCalledWith(
+      "触发模型重载失败",
+      expect.any(Error),
+    );
+  });
+});

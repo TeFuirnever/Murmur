@@ -91,6 +91,22 @@ export interface TranscriptionSaveResult {
   error?: string;
 }
 
+// [20260906_Feat_TranscriptionUpdate] Manual polish write-back result
+// (spec #193 T1, ticket #228): echoes the refreshed row fields on success.
+// raw_text is returned for readback only — the DB whitelist makes it
+// unwritable, so it always still holds the original ASR output.
+export interface TranscriptionUpdateResult {
+  success: boolean;
+  text?: string;
+  processed_text?: string;
+  raw_text?: string;
+  // [20260906_Feat_ManualEditProtection] Spec #193 T2 (ticket #229): the
+  // refreshed record's manual-edit flag (SQLite INTEGER 0/1) echoed back so
+  // the edit-save caller can observe the persisted mark.
+  manually_edited?: number;
+  error?: string;
+}
+
 export interface FileTranscriptionResult {
   success: boolean;
   text?: string;

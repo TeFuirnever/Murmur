@@ -5,7 +5,9 @@ import { dialog } from "electron";
 import * as C from "../ipc-contracts";
 import * as exportFormatters from "../exportFormatters";
 import type { TranscriptionForExport } from "../exportFormatters";
-import { buildPrompt } from "../aiPrompts";
+// [20260906_Refactor_PolishOrchestrator] The buildPrompt import was removed:
+// the AI_REVIEW entry now passes its mode/template explicitly into the shared
+// polish orchestrator (aiHandlers), which owns prompt building.
 import { validateAudioPath } from "../audioPathValidator";
 import { cleanTranscriptionText } from "../transcriptCleaner";
 import { sanitizeHotwordInput } from "../hotwords";
@@ -83,6 +85,10 @@ interface TranscriptionRow {
   segments?: string;
   source_file_path?: string;
   audio_path?: string;
+  // [20260906_Feat_TranscriptionUpdate] Polished-text fields echoed back by
+  // the UPDATE handler (spec #193 T1).
+  processed_text?: string;
+  raw_text?: string;
   [key: string]: unknown;
 }
 
@@ -97,6 +103,14 @@ interface DatabaseManager {
   getTranscriptions(limit: number, offset: number): TranscriptionRow[];
   deleteTranscription(id: number): unknown;
   clearAllTranscriptions(): unknown;
+  // [20260906_Feat_TranscriptionUpdate] Manual polish write-back
+  // (spec #193 T1, ticket #228). Column whitelisting lives in the DB layer.
+  updateTranscription(
+    id: number,
+    patch: Record<string, unknown>,
+  ): {
+    changes?: number;
+  };
 }
 
 interface FunasrManager {
@@ -461,22 +475,28 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
           return { success: false, error: "转录记录不存在" };
         }
 
-        const { system, user } = buildPrompt(
-          template || "professional",
-          row.text || "",
-        );
         // [20260725_Fix_NonNullAssertion] Guard against missing processTextWithAI
         // instead of using non-null assertion (!). Returns a clear error message
         // rather than letting TypeError propagate as a generic caught error.
         if (!processTextWithAI) {
           return { success: false, error: "AI 处理功能不可用" };
         }
+        // [20260906_Refactor_PolishOrchestrator] Spec #193 T3 (ticket #230):
+        // pass the review mode/template explicitly into the shared polish
+        // orchestrator (runPolishOrchestrator, via the processTextWithAI
+        // adapter) instead of pre-building the prompt here — the old code
+        // built system/user prompts locally and injected them as
+        // systemPrompt/userPrompt options, bypassing the orchestrator's
+        // normal prompt branch. Semantics preserved: an empty template falls
+        // back to "professional" and the orchestrator resolves the built-in
+        // prompt (identical bytes to the previously hand-built one), and the
+        // result stays RETURN-ONLY (mapped to reviewText, never persisted).
         const result = await processTextWithAI(
           row.text || "",
           template || "professional",
           databaseManager,
           logger,
-          { systemPrompt: system, userPrompt: user },
+          {},
         );
 
         if (!result.success) {
@@ -503,6 +523,45 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
         };
       } catch (error) {
         logger.error?.("保存转录失败:", error);
+        return { success: false, error: (error as Error).message };
+      }
+    },
+  );
+
+  // [20260906_Feat_TranscriptionUpdate] Spec #193 T1 (ticket #228): manual
+  // polish write-back. The renderer only polishes SAVED records, so the
+  // polished text lands in the SAME row (processed_text + text); raw_text is
+  // not in the DB layer's whitelist and always keeps the original ASR
+  // output. Whitelist rejections from database.updateTranscription surface
+  // through the normal {success:false, error} envelope; a missing record is
+  // rejected before any write, matching the sibling DIARIZE/AI_REVIEW guards.
+  // [20260906_Feat_ManualEditProtection] Spec #193 T2 (ticket #229): the
+  // success echo carries the refreshed manually_edited flag so the edit-save
+  // caller can observe the persisted mark.
+  ipcMain.handle(
+    C.TRANSCRIPTION.UPDATE,
+    (_event, id: number, patch: Record<string, unknown>) => {
+      try {
+        const row = databaseManager.getTranscriptionById(id);
+        if (!row) {
+          return { success: false, error: "转录记录不存在" };
+        }
+        const result = databaseManager.updateTranscription(id, patch);
+        // [20260906_Feat_TranscriptionUpdate_Review] A row deleted between
+        // update and re-read must not report success with undefined fields.
+        if (!result || result.changes === 0) {
+          return { success: false, error: "转录记录不存在" };
+        }
+        const updated = databaseManager.getTranscriptionById(id);
+        return {
+          success: true,
+          text: updated?.text,
+          processed_text: updated?.processed_text,
+          raw_text: updated?.raw_text,
+          manually_edited: updated?.manually_edited,
+        };
+      } catch (error) {
+        logger.error?.("更新转录记录失败:", error);
         return { success: false, error: (error as Error).message };
       }
     },

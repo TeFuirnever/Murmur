@@ -84,6 +84,11 @@ describe("IPC rate limit integration", () => {
         getAllSettings: vi.fn(() => ({})),
         resetSettings: vi.fn(() => true),
         saveTranscription: vi.fn(() => ({ lastInsertRowid: 1 })),
+        // [20260906_Feat_TranscriptionUpdate] UPDATE-channel surface
+        // (spec #193 T1, ticket #228): the rate-limit test below drives
+        // the update-transcription handler end to end.
+        getTranscriptionById: vi.fn(() => ({ id: 1, text: "t" })),
+        updateTranscription: vi.fn(() => ({ changes: 1 })),
         syncToFileConfig: vi.fn(),
       },
       logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
@@ -140,6 +145,31 @@ describe("IPC rate limit integration", () => {
     await handler!({}, vi.fn());
     await handler!({}, vi.fn());
     const result = (await handler!({}, vi.fn())) as {
+      success: boolean;
+      error: string;
+    };
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/rate/i);
+  });
+
+  it("rate-limits update-transcription like the save channel", async () => {
+    // [20260906_Feat_TranscriptionUpdate] Spec #193 T1 (ticket #228): the
+    // UPDATE channel must carry the same budget as the SAVE row
+    // (30 calls / 60s) — the 31st call within the window is rejected.
+    const ipcMain = createIpcMain();
+    registerAll(
+      ipcMain as unknown as Parameters<typeof registerAll>[0],
+      createManagers() as unknown as Parameters<typeof registerAll>[1],
+    );
+
+    const handler = ipcMain._handlers["update-transcription"];
+    expect(handler).toBeDefined();
+
+    const patch = { processed_text: "润色后", text: "润色后" };
+    for (let i = 0; i < 30; i++) {
+      await handler!({}, 1, patch);
+    }
+    const result = (await handler!({}, 1, patch)) as {
       success: boolean;
       error: string;
     };

@@ -29,6 +29,16 @@ type AiHandlersModule = typeof import("../../src/helpers/ipc/aiHandlers");
 // The require shim (_tsresolve.setup) was only needed to load .ts source.
 import * as aiHandlersNS from "../../src/helpers/ipc/aiHandlers";
 
+// [20260906_Refactor_PolishOrchestrator] Spec #193 T3 (ticket #230): the
+// SECOND polish entry is the file-import review handler registered by
+// transcriptionHandlers on C.TRANSCRIPTION.AI_REVIEW. It is characterized
+// end-to-end below with the REAL processTextWithAI wired in (only fetch is
+// mocked), so its prompt chain and provider payload are pinned exactly as
+// production sends them — independent of the injected-mock harness used in
+// transcriptionHandlers.test.ts.
+import * as transcriptionHandlersNS from "../../src/helpers/ipc/transcriptionHandlers";
+import * as C from "../../src/helpers/ipc-contracts";
+
 // [20260726_Tier3_AiHandlersMigrate] Fetch mock return: the source only reads
 // ok/status/statusText/json()/text(), so this is the narrowest shape that
 // satisfies the call sites. Cast through unknown to Response at the assignment
@@ -105,6 +115,8 @@ describe("aiHandlers", () => {
   const processTextWithAI = aiHandlers.processTextWithAI;
   const checkAIStatus = aiHandlers.checkAIStatus;
   const getAIModes = aiHandlers.getAIModes;
+  // [20260906_Spec259_T3] Exported URL validator exercised directly below.
+  const validateAIBaseUrl = aiHandlers.validateAIBaseUrl;
 
   describe("register", () => {
     it("registers process-text and check-ai-status handlers", () => {
@@ -441,6 +453,752 @@ describe("aiHandlers", () => {
         expect(mode.name).toBeTruthy();
         expect(mode.label).toBeTruthy();
       }
+    });
+  });
+
+  // ======================================================================
+  // [20260906_Spec259_T3] URL-validation, fetch edge and error-mapping
+  // arms (Spec #259 T3, #275).
+  // ======================================================================
+  describe("validateAIBaseUrl", () => {
+    it("accepts a public https endpoint", () => {
+      expect(validateAIBaseUrl("https://api.openai.com/v1")).toBe(true);
+    });
+
+    it("rejects http when localhost is not allowed", () => {
+      expect(validateAIBaseUrl("http://api.openai.com/v1")).toBe(false);
+    });
+
+    it("accepts http for an allowed localhost endpoint", () => {
+      expect(
+        validateAIBaseUrl("http://localhost:1234/v1", {
+          allowLocalhost: true,
+        }),
+      ).toBe(true);
+    });
+
+    it("accepts https for an allowed localhost endpoint", () => {
+      expect(
+        validateAIBaseUrl("https://localhost:1234/v1", {
+          allowLocalhost: true,
+        }),
+      ).toBe(true);
+    });
+
+    it.each([
+      "https://localhost/v1",
+      "https://sub.localhost/v1",
+      "https://0.0.0.0/v1",
+      "https://[::1]/v1",
+      "https://127.0.0.1/v1",
+    ])("rejects loopback host %s", (baseUrl) => {
+      expect(validateAIBaseUrl(baseUrl)).toBe(false);
+    });
+
+    it.each([
+      "https://10.1.2.3/v1",
+      "https://192.168.0.5/v1",
+      "https://172.16.0.1/v1",
+      "https://172.31.255.255/v1",
+      "https://169.254.9.9/v1",
+    ])("rejects private-network host %s", (baseUrl) => {
+      expect(validateAIBaseUrl(baseUrl)).toBe(false);
+    });
+
+    it("accepts a host that only looks like the 172 range", () => {
+      expect(validateAIBaseUrl("https://172.15.0.1/v1")).toBe(true);
+      expect(validateAIBaseUrl("https://172.32.0.1/v1")).toBe(true);
+    });
+
+    it("rejects a URL with an empty hostname", () => {
+      expect(validateAIBaseUrl("https://#")).toBe(false);
+    });
+
+    it("rejects unparseable input", () => {
+      expect(validateAIBaseUrl("not a url")).toBe(false);
+    });
+  });
+
+  describe("processTextWithAI — request and error-mapping arms", () => {
+    it("falls back to the default base URL when the setting is empty", async () => {
+      const db = setupDb({ ai_base_url: "" });
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      mockFetch({ choices: [{ message: { content: "ok" } }] });
+
+      const result = await processTextWithAI("t", "optimize", db, logger);
+      expect(result.success).toBe(true);
+      const fetchMock = global.fetch as unknown as FetchMock;
+      expect(fetchMock.mock.calls[0]![0]).toBe(
+        "https://api.openai.com/v1/chat/completions",
+      );
+    });
+
+    it("uses caller-supplied system/user prompts verbatim", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      mockFetch({ choices: [{ message: { content: "ok" } }] });
+
+      await processTextWithAI("t", "optimize", db, logger, {
+        systemPrompt: "SYS",
+        userPrompt: "USR",
+      });
+      const fetchMock = global.fetch as unknown as FetchMock;
+      const body = JSON.parse(
+        (fetchMock.mock.calls[0]![1] as { body: string }).body,
+      );
+      expect(body.messages[0].content).toBe("SYS");
+      expect(body.messages[1].content).toBe("USR");
+    });
+
+    it("maps a timed-out request to the TIMEOUT message", async () => {
+      vi.useFakeTimers();
+      try {
+        const db = setupDb();
+        const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+        // A fetch that never resolves but rejects when its abort signal
+        // fires — lets the real AbortController timer run out.
+        global.fetch = vi.fn(
+          (_input: unknown, init?: { signal?: AbortSignal }) =>
+            new Promise<FetchResponseStub>((_resolve, reject) => {
+              init?.signal?.addEventListener("abort", () => {
+                const err = new Error("The operation was aborted");
+                err.name = "AbortError";
+                reject(err);
+              });
+            }),
+        ) as unknown as typeof global.fetch;
+
+        const pending = processTextWithAI("t", "optimize", db, logger);
+        await vi.advanceTimersByTimeAsync(150_000);
+        const result = await pending;
+        expect(result.success).toBe(false);
+        expect(result.error).toContain("超时");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("surfaces a generic fetch failure message", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      global.fetch = vi.fn(async () => {
+        throw new Error("socket boom");
+      }) as unknown as typeof global.fetch;
+
+      const result = await processTextWithAI("t", "optimize", db, logger);
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("socket boom");
+    });
+
+    it("maps an ENOTFOUND failure to the network hint", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      global.fetch = vi.fn(async () => {
+        throw Object.assign(new Error("getaddrinfo failed"), {
+          code: "ENOTFOUND",
+        });
+      }) as unknown as typeof global.fetch;
+
+      const result = await processTextWithAI("t", "optimize", db, logger);
+      expect(result.error).toBe("无法连接到AI服务器，请检查网络");
+    });
+
+    it("logs and forwards a non-JSON error body", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      global.fetch = vi.fn(async () => ({
+        ok: false,
+        status: 500,
+        statusText: "Internal Server Error",
+        text: async () => "<html>oops</html>",
+      })) as unknown as typeof global.fetch;
+
+      const result = await processTextWithAI("t", "optimize", db, logger);
+      expect(result.success).toBe(false);
+      expect(logger.warn).toHaveBeenCalledWith(
+        "AI错误响应非JSON格式:",
+        expect.any(String),
+      );
+      expect(String(result.error)).toContain("<html>oops</html>");
+    });
+
+    it("falls back to the status code when the error body has no message", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      mockFetchError(500, { error: null });
+
+      const result = await processTextWithAI("t", "optimize", db, logger);
+      expect(result.success).toBe(false);
+      expect(String(result.error)).toContain("AI服务请求失败 (500)");
+    });
+
+    it("tolerates an empty non-JSON error body (falls back to statusText)", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      global.fetch = vi.fn(async () => ({
+        ok: false,
+        status: 503,
+        statusText: "Service Unavailable",
+        text: async () => "",
+      })) as unknown as typeof global.fetch;
+
+      const result = await processTextWithAI("t", "optimize", db, logger);
+      expect(result.success).toBe(false);
+      expect(String(result.error)).toContain("Service Unavailable");
+    });
+
+    it("reports empty content without a token cap as retryable", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      mockFetch({ choices: [{ message: {} }] });
+
+      const result = await processTextWithAI("t", "optimize", db, logger);
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("AI返回了空内容，请重试或更换模型");
+    });
+
+    it("reports the token cap when usage alone proves it", async () => {
+      const db = setupDb({ ai_max_tokens: 2000 });
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      mockFetch({
+        choices: [{ message: { content: "  " }, finish_reason: "stop" }],
+        usage: { completion_tokens: 2000 },
+      });
+
+      const result = await processTextWithAI("t", "optimize", db, logger);
+      expect(result.success).toBe(false);
+      expect(String(result.error)).toContain("max_tokens");
+    });
+  });
+
+  describe("checkAIStatus — config and error-mapping arms", () => {
+    it("uses a temporary test config when provided", async () => {
+      const db = { getSetting: vi.fn(async () => null) };
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      mockFetch({
+        choices: [{ message: { content: "测试成功" } }],
+        usage: { total_tokens: 5 },
+      });
+
+      const result = await checkAIStatus(
+        {
+          ai_api_key: "temp-key",
+          ai_base_url: "https://temp.example.com/v1",
+          ai_model: "temp-model",
+        },
+        db,
+        logger,
+      );
+      expect(result.available).toBe(true);
+      expect(result.model).toBe("temp-model");
+      expect(result.status).toBe("connected");
+      // The saved config must not have been read.
+      expect(db.getSetting).not.toHaveBeenCalled();
+    });
+
+    it("defaults missing temp-config fields to the OpenAI presets", async () => {
+      const db = { getSetting: vi.fn(async () => null) };
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      mockFetch({ choices: [{ message: { content: "测试成功" } }] });
+
+      const result = await checkAIStatus(
+        { ai_api_key: "temp-key" },
+        db,
+        logger,
+      );
+      expect(result.available).toBe(true);
+      expect(result.model).toBe("gpt-3.5-turbo");
+      const fetchMock = global.fetch as unknown as FetchMock;
+      expect(fetchMock.mock.calls[0]![0]).toBe(
+        "https://api.openai.com/v1/chat/completions",
+      );
+    });
+
+    it("maps an HTTP 403 to the permission message", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      mockFetchError(403, { error: { message: "Forbidden" } });
+
+      const result = await checkAIStatus(null, db, logger);
+      expect(result.available).toBe(false);
+      expect(result.error).toBe("API密钥权限不足");
+    });
+
+    it("falls back to the HTTP status when the body has no message", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      mockFetchError(502, { error: null });
+
+      const result = await checkAIStatus(null, db, logger);
+      expect(result.available).toBe(false);
+      expect(String(result.error)).toContain("HTTP 502");
+      expect(result.details).toContain("HTTP 502");
+    });
+
+    it("maps an AbortError to the timeout message", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      global.fetch = vi.fn(async () => {
+        const err = new Error("The operation was aborted");
+        err.name = "AbortError";
+        throw err;
+      }) as unknown as typeof global.fetch;
+
+      const result = await checkAIStatus(null, db, logger);
+      expect(result.available).toBe(false);
+      expect(result.error).toBe("请求超时，请检查网络连接");
+    });
+
+    it.each([
+      [
+        "getaddrinfo ENOTFOUND api.example.com",
+        "无法连接到AI服务器，请检查网络和Base URL",
+      ],
+      [
+        "connect ECONNREFUSED 1.2.3.4:443",
+        "连接被拒绝，请检查Base URL是否正确",
+      ],
+      ["socket timeout waiting for response", "请求超时，请检查网络连接"],
+      ["upstream replied 401 to probe", "API密钥无效"],
+      ["upstream replied 403 to probe", "API密钥权限不足"],
+      ["upstream replied 429 to probe", "API调用频率超限"],
+    ])("maps %s to %s", async (message, expected) => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      global.fetch = vi.fn(async () => {
+        throw new Error(message);
+      }) as unknown as typeof global.fetch;
+
+      const result = await checkAIStatus(null, db, logger);
+      expect(result.available).toBe(false);
+      expect(result.error).toBe(expected);
+    });
+
+    it("reports connected with an empty reply when content is absent", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      mockFetch({ choices: [{ message: {} }], usage: { total_tokens: 1 } });
+
+      const result = await checkAIStatus(null, db, logger);
+      expect(result.available).toBe(true);
+      expect(result.response).toBe("");
+    });
+  });
+
+  describe("register — handler invocation (Spec #259 T3)", () => {
+    // Handler shape for invocation asserts: unknown args, unknown result.
+    type AsyncMockHandler = (...args: unknown[]) => unknown;
+
+    // UNREACHABLE ARM (documented per Spec #259 T3): the
+    // managers.templatesDir fallback at aiHandlers.ts L578-585 (lazy
+    // require("electron") → app.getPath) cannot resolve in the test
+    // environment — vi.mock does not intercept CJS require, the real
+    // electron package exports a binary path string outside Electron, so
+    // register() without templatesDir always throws there. The handlers
+    // below therefore pass templatesDir explicitly.
+    function createCapturingIpcMain() {
+      const handlers: Record<string, AsyncMockHandler | undefined> = {};
+      const ipcMain = {
+        handle: vi.fn((channel: string, fn: AsyncMockHandler) => {
+          handlers[channel] = fn;
+        }),
+      };
+      return { handlers, ipcMain };
+    }
+
+    function createManagers() {
+      return {
+        databaseManager: setupDb(),
+        logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
+        templatesDir: "/tmp/test-templates",
+      } as unknown as Parameters<typeof register>[1];
+    }
+
+    it("serves the info handlers through the registered channels", async () => {
+      const { handlers, ipcMain } = createCapturingIpcMain();
+      register(
+        ipcMain as unknown as Parameters<typeof register>[0],
+        createManagers(),
+      );
+
+      // GET_MODES through the explicit templatesDir.
+      const modes = (await handlers["get-ai-modes"]!()) as Array<{
+        name: string;
+      }>;
+      expect(modes.length).toBeGreaterThanOrEqual(6);
+
+      // GET_PROVIDER_PRESETS passthrough.
+      const presets = (await handlers[
+        "get-ai-provider-presets"
+      ]!()) as unknown[];
+      expect(Array.isArray(presets)).toBe(true);
+
+      // DETECT_LOCAL_MODELS — probes localhost; offline yields an array.
+      const detected = (await handlers["detect-local-models"]!()) as unknown[];
+      expect(Array.isArray(detected)).toBe(true);
+    });
+
+    it("PROCESS applies the default mode and the template cache", async () => {
+      const { handlers, ipcMain } = createCapturingIpcMain();
+      register(
+        ipcMain as unknown as Parameters<typeof register>[0],
+        createManagers(),
+      );
+      mockFetch({ choices: [{ message: { content: "ok" } }] });
+
+      const first = (await handlers["process-text"]!({}, "raw")) as {
+        success: boolean;
+      };
+      // Second call inside the template-cache TTL exercises the hit path.
+      const second = (await handlers["process-text"]!({}, "raw")) as {
+        success: boolean;
+      };
+      expect(first.success).toBe(true);
+      expect(second.success).toBe(true);
+
+      const fetchMock = global.fetch as unknown as FetchMock;
+      expect(fetchMock.mock.calls.length).toBe(2);
+      const body = JSON.parse(
+        (fetchMock.mock.calls[0]![1] as { body: string }).body,
+      );
+      expect(body.model).toBe("gpt-3.5-turbo");
+    });
+
+    it("CHECK_STATUS handler defaults to the saved config", async () => {
+      const { handlers, ipcMain } = createCapturingIpcMain();
+      register(
+        ipcMain as unknown as Parameters<typeof register>[0],
+        createManagers(),
+      );
+      mockFetch({
+        choices: [{ message: { content: "测试成功" } }],
+        usage: { total_tokens: 5 },
+      });
+
+      const result = (await handlers["check-ai-status"]!()) as {
+        available: boolean;
+        model?: string;
+      };
+      expect(result.available).toBe(true);
+      expect(result.model).toBe("gpt-3.5-turbo");
+    });
+  });
+
+  // ======================================================================
+  // [20260906_Refactor_PolishOrchestrator] Characterization tests (Spec #193
+  // T3, ticket #230): lock the CURRENT behavior of BOTH polish entries before
+  // extracting runPolishOrchestrator. These are characterization, not TDD-red:
+  // they must pass against the pre-refactor code and stay untouched after.
+  // ======================================================================
+  describe("polish entries — characterization (Spec #193 T3)", () => {
+    // Handle-capturing ipcMain mock (same pattern as the Spec #259 T3 block).
+    type AsyncMockHandler = (...args: unknown[]) => unknown;
+
+    // [20260906_Refactor_PolishOrchestrator] The never-parameter signature is
+    // the assignability trick that lets BOTH handler modules' register
+    // functions (aiHandlers and transcriptionHandlers) be passed without
+    // restating their manager shapes; the invocation itself casts through
+    // unknown, mirroring the register call sites elsewhere in this file.
+    function captureHandlers(
+      registerFn: (ipcMain: never, managers: never) => void,
+      managers: unknown,
+    ): Record<string, AsyncMockHandler | undefined> {
+      const handlers: Record<string, AsyncMockHandler | undefined> = {};
+      const ipcMain = {
+        handle: vi.fn((channel: string, fn: AsyncMockHandler) => {
+          handlers[channel] = fn;
+        }),
+      };
+      (registerFn as unknown as (ipc: unknown, managers: unknown) => void)(
+        ipcMain,
+        managers,
+      );
+      return handlers;
+    }
+
+    // DB with the standard AI settings plus the transcription-row readers
+    // the AI_REVIEW handler needs (getTranscriptionById is synchronous in
+    // the transcriptionHandlers DatabaseManager contract).
+    function createPolishDb(row: unknown): {
+      getSetting: (key: string) => Promise<unknown>;
+      getTranscriptionById: (id: number) => unknown;
+      saveTranscription: (...args: unknown[]) => unknown;
+    } {
+      const settings: Record<string, string | number> = {
+        ai_api_key: "test-key",
+        ai_base_url: "https://api.openai.com/v1",
+        ai_model: "gpt-3.5-turbo",
+        ai_temperature: 0.3,
+        ai_max_tokens: 2000,
+      };
+      return {
+        getSetting: vi.fn(async (key: string) => settings[key] ?? null),
+        getTranscriptionById: vi.fn(() => row),
+        saveTranscription: vi.fn(),
+      };
+    }
+
+    function readRequestBody(): Record<string, unknown> {
+      const fetchMock = global.fetch as unknown as FetchMock;
+      return JSON.parse(
+        (fetchMock.mock.calls[0]![1] as { body: string }).body,
+      ) as Record<string, unknown>;
+    }
+
+    it("PROCESS happy path: builds the mode prompt, calls the provider, maps success", async () => {
+      const handlers = captureHandlers(register, {
+        databaseManager: createPolishDb(null),
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        templatesDir: "/tmp/test-templates",
+      });
+      mockFetch({
+        choices: [{ message: { content: "  润色结果  " } }],
+        usage: { total_tokens: 7 },
+      });
+
+      const result = (await handlers[C.AI.PROCESS]!(
+        {},
+        "原始文本",
+        "optimize",
+      )) as {
+        success: boolean;
+        text?: string;
+        usage?: unknown;
+        model?: string;
+      };
+
+      // Success mapping: trimmed text + usage + resolved model, no error key.
+      expect(result).toEqual({
+        success: true,
+        text: "润色结果",
+        usage: { total_tokens: 7 },
+        model: "gpt-3.5-turbo",
+      });
+
+      // Provider payload: URL, auth, method and the full chat-completion body.
+      const fetchMock = global.fetch as unknown as FetchMock;
+      expect(fetchMock.mock.calls[0]![0]).toBe(
+        "https://api.openai.com/v1/chat/completions",
+      );
+      const init = fetchMock.mock.calls[0]![1] as {
+        method: string;
+        headers: Record<string, string>;
+      };
+      expect(init.method).toBe("POST");
+      expect(init.headers.Authorization).toBe("Bearer test-key");
+      expect(readRequestBody()).toEqual({
+        model: "gpt-3.5-turbo",
+        messages: [
+          {
+            role: "system",
+            content: expect.stringContaining("语音转录文本润色助手"),
+          },
+          { role: "user", content: "<transcript>\n原始文本\n</transcript>" },
+        ],
+        temperature: 0.3,
+        max_tokens: 2000,
+        stream: false,
+      });
+    });
+
+    it("PROCESS prefers a custom template from templatesDir over built-in modes", async () => {
+      const dir = path.join(process.cwd(), "test-polish-templates-temp");
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(
+        path.join(dir, "meeting.md"),
+        '---\nname: meeting\nlabel: 会议纪要\nuser_template: "整理：{text}"\n---\n你是会议纪要助手。',
+      );
+      try {
+        const handlers = captureHandlers(register, {
+          databaseManager: createPolishDb(null),
+          logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+          templatesDir: dir,
+        });
+        mockFetch({ choices: [{ message: { content: "纪要" } }] });
+
+        const result = (await handlers[C.AI.PROCESS]!(
+          {},
+          "正文",
+          "meeting",
+        )) as { success: boolean };
+
+        expect(result.success).toBe(true);
+        const body = readRequestBody();
+        expect(body.messages).toEqual([
+          { role: "system", content: "你是会议纪要助手。" },
+          { role: "user", content: "整理：正文" },
+        ]);
+      } finally {
+        fs.rmSync(dir, { recursive: true });
+      }
+    });
+
+    it("PROCESS maps a provider HTTP error body to the normalized failure", async () => {
+      const handlers = captureHandlers(register, {
+        databaseManager: createPolishDb(null),
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        templatesDir: "/tmp/test-templates",
+      });
+      mockFetchError(401, { error: { message: "Invalid API key" } });
+
+      const result = (await handlers[C.AI.PROCESS]!({}, "t", "optimize")) as {
+        success: boolean;
+        error?: string;
+      };
+      expect(result).toEqual({ success: false, error: "Invalid API key" });
+    });
+
+    it("PROCESS blocks an unconfigured non-local call before reaching the provider", async () => {
+      const db = {
+        getSetting: vi.fn(async () => null),
+      };
+      const handlers = captureHandlers(register, {
+        databaseManager: db,
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        templatesDir: "/tmp/test-templates",
+      });
+      mockFetch({ choices: [{ message: { content: "x" } }] });
+
+      const result = (await handlers[C.AI.PROCESS]!({}, "t", "optimize")) as {
+        success: boolean;
+        error?: string;
+      };
+      expect(result).toEqual({
+        success: false,
+        error: "请先在设置页面配置AI API密钥",
+      });
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it("AI_REVIEW professional fallback: built-in professional prompt, reviewText mapping, never persisted", async () => {
+      const db = createPolishDb({ id: 42, text: "评审原文" });
+      const logger = {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+        debug: vi.fn(),
+      };
+      mockFetch({
+        choices: [{ message: { content: "评审结果" } }],
+        usage: { total_tokens: 3 },
+      });
+
+      // Wire the transcription AI_REVIEW handler to the REAL processTextWithAI
+      // — the exact production wiring from src/helpers/ipc/index.ts.
+      const handlers = captureHandlers(transcriptionHandlersNS.register, {
+        funasrManager: {},
+        databaseManager: db,
+        logger,
+        processTextWithAI: aiHandlers.processTextWithAI,
+      });
+
+      // Empty template → the handler must fall back to "professional".
+      const result = (await handlers[C.TRANSCRIPTION.AI_REVIEW]!(
+        {},
+        42,
+        "",
+      )) as Record<string, unknown>;
+
+      // Return-only: mapped to reviewText, exactly these keys.
+      expect(result).toEqual({ success: true, reviewText: "评审结果" });
+      // Never persisted to the DB.
+      expect(db.saveTranscription).not.toHaveBeenCalled();
+
+      // The prompt chain must produce the BUILT-IN professional template for
+      // the row text (built outside the entry, sent as system+user messages).
+      const body = readRequestBody();
+      expect(body.model).toBe("gpt-3.5-turbo");
+      expect(body.stream).toBe(false);
+      expect(body.messages).toEqual([
+        {
+          role: "system",
+          content: expect.stringContaining("专业评价文稿撰写专家"),
+        },
+        { role: "user", content: "<transcript>\n评审原文\n</transcript>" },
+      ]);
+    });
+
+    it("AI_REVIEW passes an explicit template through to prompt resolution", async () => {
+      const db = createPolishDb({ id: 42, text: "评审原文" });
+      const logger = {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+        debug: vi.fn(),
+      };
+      mockFetch({ choices: [{ message: { content: "摘要结果" } }] });
+
+      const handlers = captureHandlers(transcriptionHandlersNS.register, {
+        funasrManager: {},
+        databaseManager: db,
+        logger,
+        processTextWithAI: aiHandlers.processTextWithAI,
+      });
+
+      const result = (await handlers[C.TRANSCRIPTION.AI_REVIEW]!(
+        {},
+        42,
+        "summarize",
+      )) as Record<string, unknown>;
+
+      expect(result).toEqual({ success: true, reviewText: "摘要结果" });
+      const body = readRequestBody();
+      expect(body.messages).toEqual([
+        { role: "system", content: expect.stringContaining("文本摘要助手") },
+        { role: "user", content: "<transcript>\n评审原文\n</transcript>" },
+      ]);
+    });
+
+    it("AI_REVIEW passes provider failures through unchanged", async () => {
+      const db = createPolishDb({ id: 42, text: "评审原文" });
+      const logger = {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+        debug: vi.fn(),
+      };
+      mockFetchError(401, { error: { message: "Invalid API key" } });
+
+      const handlers = captureHandlers(transcriptionHandlersNS.register, {
+        funasrManager: {},
+        databaseManager: db,
+        logger,
+        processTextWithAI: aiHandlers.processTextWithAI,
+      });
+
+      const result = (await handlers[C.TRANSCRIPTION.AI_REVIEW]!(
+        {},
+        42,
+        "professional",
+      )) as Record<string, unknown>;
+      expect(result).toEqual({ success: false, error: "Invalid API key" });
+      expect(db.saveTranscription).not.toHaveBeenCalled();
+    });
+
+    it("AI_REVIEW returns the not-found failure before touching the provider", async () => {
+      const db = createPolishDb(null);
+      const logger = {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+        debug: vi.fn(),
+      };
+      mockFetch({ choices: [{ message: { content: "x" } }] });
+
+      const handlers = captureHandlers(transcriptionHandlersNS.register, {
+        funasrManager: {},
+        databaseManager: db,
+        logger,
+        processTextWithAI: aiHandlers.processTextWithAI,
+      });
+
+      const result = (await handlers[C.TRANSCRIPTION.AI_REVIEW]!(
+        {},
+        999,
+        "",
+      )) as Record<string, unknown>;
+      expect(result).toEqual({ success: false, error: "转录记录不存在" });
+      expect(global.fetch).not.toHaveBeenCalled();
     });
   });
 });

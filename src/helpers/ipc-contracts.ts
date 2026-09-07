@@ -45,6 +45,10 @@ export const TRANSCRIPTION = {
   TRANSCRIBE_FILE: "transcribe-file",
   CANCEL: "cancel-file-transcription",
   SAVE: "save-transcription",
+  // [20260906_Feat_TranscriptionUpdate] Spec #193 T1 (ticket #228): manual
+  // polish write-back — persists polished text into the saved record
+  // (UPDATE processed_text AND text; raw_text keeps the original).
+  UPDATE: "update-transcription",
   GET_ALL: "get-transcriptions",
   DELETE: "delete-transcription",
   CLEAR: "clear-all-transcriptions",
