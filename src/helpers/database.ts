@@ -65,6 +65,23 @@ export interface RunResult {
   lastInsertRowid: number;
 }
 
+// [20260906_Feat_TranscriptionUpdate_Review] UPDATE patch whitelist — hoisted
+// to module scope so the Sets are allocated once, not per updateTranscription
+// call (review LOW finding; the previous in-function placement contradicted
+// this comment, fixed by [20260907_Fix_313_HoistUpdateSets]).
+const UPDATABLE_COLUMNS = new Set([
+  "processed_text",
+  "text",
+  // [20260906_Feat_ManualEditProtection] The manual-edit flag itself is
+  // patchable (see updateTranscription block comment); it is stored as
+  // INTEGER 0/1.
+  "manually_edited",
+]);
+// [20260906_Feat_ManualEditProtection] Columns that carry SQLite booleans
+// (INTEGER 0/1). Their patch values may be JS booleans or the numbers
+// 0/1; anything else is rejected, and booleans are bound as 1/0.
+const BOOLEAN_COLUMNS = new Set(["manually_edited"]);
+
 // [20260726_TechDebt_TypedRows] Typed helper wrapping the engine's
 // untyped .get()/.all() returns. Eliminates the 10 `as { field: type }`
 // casts that were scattered across this file. The engine returns
@@ -396,19 +413,8 @@ class DatabaseManager {
     patch: Record<string, unknown>,
     options?: { skipWhenManuallyEdited?: boolean },
   ): RunResult & { skipped?: boolean } {
-    // [20260906_Feat_TranscriptionUpdate_Review] Hoisted to module scope —
-    // no per-call re-allocation (review LOW finding).
-    const UPDATABLE_COLUMNS = new Set([
-      "processed_text",
-      "text",
-      // [20260906_Feat_ManualEditProtection] The manual-edit flag itself is
-      // patchable (see block comment above); it is stored as INTEGER 0/1.
-      "manually_edited",
-    ]);
-    // [20260906_Feat_ManualEditProtection] Columns that carry SQLite booleans
-    // (INTEGER 0/1). Their patch values may be JS booleans or the numbers
-    // 0/1; anything else is rejected, and booleans are bound as 1/0.
-    const BOOLEAN_COLUMNS = new Set(["manually_edited"]);
+    // [20260907_Fix_313_HoistUpdateSets] UPDATABLE_COLUMNS / BOOLEAN_COLUMNS
+    // live at module scope (see above) — this function only consumes them.
 
     if (!patch || typeof patch !== "object") {
       throw new Error("更新数据无效");
