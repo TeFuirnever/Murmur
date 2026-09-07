@@ -279,6 +279,9 @@ const HistoryContent = ({
                   ...item,
                   text: result.text ?? trimmed,
                   processed_text: result.processed_text ?? trimmed,
+                  // [20260906_Feat_ManualEditProtection_Review] keep the
+                  // local flag in sync so a future badge doesn't go stale
+                  manually_edited: true,
                 }
               : item,
           ),
