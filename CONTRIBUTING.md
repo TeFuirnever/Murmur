@@ -126,7 +126,7 @@ chore: 升级 Electron 到 v36
 4. **Security audit** — `pnpm audit --audit-level moderate`（非阻塞）
 5. **License compliance** — `pnpm license:check`（拦截 GPL/AGPL）
 6. **Dependency review** — PR 中自动审查新增依赖（high 级别阻断）
-7. **Test + coverage** — `pnpm test -- --coverage`（覆盖率阈值：全 src/ 统计，statements 96% / branches 92% / functions 94% / lines 96%，2026-09-06 起以 1800+ 用例维持；Windows 腿全量跑测并输出覆盖率报告但不设阈值——平台分支两侧百分比不可比，见 `tests/unit/platform-arms.test.ts` 头注）
+7. **Test + coverage** — `pnpm test -- --coverage`（覆盖率阈值：全 src/ 统计，2026-09-07 随六组模块插桩重定基线为 statements 88% / branches 83% / functions 88% / lines 89%（原 96/92/94/96 不可达，棘轮路线见 vitest.config.ts thresholds 注释与 coverage-meta.test.ts），2026-09-06 起以 2200+ 用例维持；Windows 腿全量跑测并输出覆盖率报告但不设阈值——平台分支两侧百分比不可比，见 `tests/unit/platform-arms.test.ts` 头注）
 8. **Build main** — `pnpm run build:main`
 9. **Build preload** — `pnpm run build:preload`
 10. **Build renderer** — `pnpm run build:renderer`
