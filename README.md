@@ -7,6 +7,11 @@
      timeout note, provider table, Project Status section. -->
 <!-- [20260907_Spec299_BilingualSplit] END -->
 
+<!-- [20260907_Spec299_P0Facts] Factual-sync provenance for the lines in this
+     file: Electron 36→39, FTS5 → client-side filtering, Python 3.11+,
+     GPU CUDA > CPU (MPS intentionally skipped), macOS Dictation marked
+     not open source. Full rationale lives in git history (T1, #300). -->
+
 <div align="center">
 
 <img src="assets/icon.png" width="120" height="120" alt="Murmur Logo" />
@@ -170,7 +175,7 @@ pnpm dev
 
 ```bash
 pnpm dev          # start dev mode
-pnpm test         # unit tests + coverage gate (e2e runs separately in CI)
+pnpm test         # unit tests (coverage gate enforced by ci:check)
 pnpm lint         # linting (0 warnings)
 pnpm typecheck    # TypeScript type check
 pnpm ci:check     # run all CI gates locally
@@ -197,7 +202,7 @@ pnpm ci:check     # run all CI gates locally
 - [x] Custom AI prompt templates
 - [x] Audio file transcription (wav/mp3/m4a/flac)
 - [x] History search (instant client-side filtering) and export (TXT/SRT/Markdown/DOCX)
-- [x] Global hotkey
+- [x] Global hotkey (`Cmd+Shift+Space`)
 - [x] Multi-language (Chinese/English)
 - [x] Semi-auto update (SHA256 verified)
 - [x] Accessibility (ARIA + keyboard nav)

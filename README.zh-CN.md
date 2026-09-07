@@ -5,6 +5,11 @@
      anchor fix (#安装 → #-安装, GitHub slugifies "## 🚀 安装" to #-安装). -->
 <!-- [20260907_Spec299_BilingualSplit] END -->
 
+<!-- [20260907_Spec299_P0Facts] Factual-sync provenance for the lines in this
+     file: Electron 36→39, FTS5 → client-side filtering, Python 3.11+,
+     GPU CUDA > CPU (MPS intentionally skipped), macOS Dictation marked
+     not open source. Full rationale lives in git history (T1, #300). -->
+
 <div align="center">
 
 <img src="assets/icon.png" width="120" height="120" alt="Murmur Logo" />
@@ -168,7 +173,7 @@ pnpm dev
 
 ```bash
 pnpm dev          # 启动开发模式
-pnpm test         # 运行单元测试与覆盖率门禁（E2E 在 CI 单独运行）
+pnpm test         # 运行单元测试（覆盖率门禁随 ci:check 执行）
 pnpm lint         # 代码检查（0 warnings）
 pnpm typecheck    # TypeScript 类型检查
 pnpm ci:check     # 本地运行所有 CI 门禁

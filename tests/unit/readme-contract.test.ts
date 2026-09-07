@@ -152,24 +152,33 @@ describe("README contract", () => {
   });
 
   // [20260907_Spec299_HeadingsParity] T3: the single bilingual file drifted
-  // (the en half lagged zh by 9 items) because nothing detected divergence.
-  // After the split, both files must keep a 1:1 section sequence: same
-  // heading count, same heading-level order. Wording may differ per
-  // language; structure may not.
+  // (the en half lagged zh by 9 items) because nothing detected structural
+  // divergence. After the split, both files must keep a 1:1 section
+  // sequence: same heading count, same heading-level order. Wording may
+  // differ per language; structure may not. Scope note: this pin covers the
+  // structure class (sections added/removed); wording-level drift inside a
+  // section remains the PR review's job.
   describe("bilingual parity (T3, Spec #299)", () => {
     function headingLevels(markdownPath: string): number[] {
       const rendered = stripHtmlComments(readRootFile(markdownPath));
       const levels: number[] = [];
       let insideFence = false;
+      let fenceCount = 0;
       for (const line of rendered.split("\n")) {
         if (line.trimStart().startsWith("```")) {
           insideFence = !insideFence; // bash `# comments` are not headings
+          fenceCount += 1;
           continue;
         }
         if (insideFence) continue;
         const match = /^(#{1,6}) /.exec(line);
         if (match) levels.push((match[1] ?? "").length);
       }
+      // An unbalanced fence would silently swallow every heading after it
+      // and fake a parity mismatch (or hide one) — pin balance itself.
+      expect(fenceCount % 2, `unbalanced code fences in ${markdownPath}`).toBe(
+        0,
+      );
       return levels;
     }
 
