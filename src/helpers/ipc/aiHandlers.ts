@@ -366,6 +366,9 @@ interface PolishRunHandle {
   scope: string | null;
   epoch: number | null;
   controller: AbortController;
+  // [20260906_Feat_OrchestratorGenCancel_Review] Removed in endPolishRun so
+  // a long-lived external signal does not accumulate one listener per run.
+  removeExternalAbortListener: (() => void) | null;
 }
 
 const activePolishRuns = new Map<
@@ -379,6 +382,7 @@ const activePolishRuns = new Map<
  * previous behavior (no registry writes, no AbortController).
  */
 function beginPolishRun(request: PolishRequest): PolishRunHandle | null {
+  let removeExternalAbortListener: (() => void) | null = null;
   const { generationScope, signal } = request;
   if (generationScope === undefined && signal === undefined) {
     return null;
@@ -388,9 +392,10 @@ function beginPolishRun(request: PolishRequest): PolishRunHandle | null {
     if (signal.aborted) {
       controller.abort();
     } else {
-      signal.addEventListener("abort", () => controller.abort(), {
-        once: true,
-      });
+      const forwardAbort = () => controller.abort();
+      signal.addEventListener("abort", forwardAbort, { once: true });
+      removeExternalAbortListener = () =>
+        signal.removeEventListener("abort", forwardAbort);
     }
   }
   let epoch: number | null = null;
@@ -402,7 +407,12 @@ function beginPolishRun(request: PolishRequest): PolishRunHandle | null {
     // aborted and it will settle with the SUPERSEDED outcome.
     previous?.controller.abort();
   }
-  return { scope: generationScope ?? null, epoch, controller };
+  return {
+    scope: generationScope ?? null,
+    epoch,
+    controller,
+    removeExternalAbortListener,
+  };
 }
 
 /**
@@ -410,6 +420,10 @@ function beginPolishRun(request: PolishRequest): PolishRunHandle | null {
  * current run of its scope (a superseded run must never evict its successor).
  */
 function endPolishRun(handle: PolishRunHandle | null): void {
+  // [20260906_Feat_OrchestratorGenCancel_Review] Always drop the forwarded
+  // abort listener first — a long-lived external signal must not accumulate
+  // one listener per run.
+  handle?.removeExternalAbortListener?.();
   if (handle === null || handle.scope === null) {
     return;
   }
