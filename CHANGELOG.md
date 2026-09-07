@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **测试度量收口**（Spec #259，#273–#276）：六组模块（modelManager、ipc/\*\*、windowManager、updateManager、logManager、pythonEnvironment）纳入覆盖率插桩，per-glob 分支地板按首测值设防并随补齐抬升至 92；全局阈值重定基线 88/83/88/89；Python 套件接入 coverage.py（`test:python:unit` 携带 --fail-under=43 门禁）。
+- **润色编排器**（Spec #193 T3，#230）：`runPolishOrchestrator` 统一 AI PROCESS 与 AI_REVIEW 两入口（AI_REVIEW 移除自带 prompt 绕过），作为代际失效/流式/分块的唯一收敛点。
+
 - **五级测试体系补全**（Spec #266，issues #277–#297）：按单元/集成/契约/E2E/验收五级补齐测试网。新增真实浏览器旅程 E2E（文件导入→转录→取消、热词持久化→说话人分离、检查更新→下载进度→SHA256 失败分支）、axe 无障碍门禁（真实窗口扫描，发现并修复 7 处真实缺陷）、托盘/热键/剪贴板管理器行为单测、平台臂同机对测（win/darwin 双语义同机断言）、覆盖率门禁 meta 钉、settings 四处同步规则 meta-test、磁盘满/DB busy 传播回归、导出内容读回断言（srt 时间轴 + docx 正文）。
 - **ASR 回归 harness**（`pnpm test:asr`，开发机专用）：以仓库自带 golden_set 语料驱动真实 FunASR server，按字错率阈值红绿；当前基线 6/6 通过、CER 0.0%。
 - **打包态 boot-health 探针**（发布流水线 mac/win）：以已安装产物为启动目标运行完整探针套件。
@@ -16,12 +19,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **手动润色不再丢失**（Spec #193 T1/T2，#228 #229）：新增全库首个 UPDATE 写回通道（列白名单防注入）与 `manually_edited` 编辑保护列（无损迁移），历史窗新增内联编辑入口；被编辑记录自动跳过后续自动润色。
+
 - **导出全部丢失分段时间轴**：export-all 向格式化器传原始行（segments 为 JSON 字符串）而格式化器读解析后的字段——历史记录"导出全部"的 srt/vtt 从未包含时间轴，已按单条导出口径逐行解析。
 - **7 处无障碍缺陷**（axe 扫描发现并修复）：主窗标题栏历史/设置图标按钮无 accessible name、设置窗模型下拉/语言下拉/两个开关无名称、侧栏 tab 缺 tablist 结构，及 7 处小字号描述文本对比度不足（#86868b → #6e6e73）。
 - **托盘菜单硬编码中文**：接入 i18n 并随语言设置实时重建菜单。
 
 ### Changed
 
+- **AI 润色代际失效 + 取消 + 钳制**（Spec #193 T7，#234）：编排器支持 per-scope 代际失效（过期响应丢弃）、AbortController 取消（CANCELLED 静默结算）与输出钳制（请求侧 4096 下限 + 2M 字符响应守卫）。
 - **清理 20 个渲染层孤儿 IPC 通道**（#250，依据 #252 实测黄名单）：契约/preload/类型声明/handler/限流表全链路删除，契约面净减约 500 行；orphans 测试升级为净零网（新增无调用者通道直接 CI 红）。
 - **CI e2e 获得门禁权**（#277）：boot-health 探针失败即阻塞合并（此前 52 条 E2E 全部 continue-on-error 从未拦截过回归）；dev smoke 升级为主进程启动里程碑心跳（#251），主进程崩溃不再被端口探活漏过。
 - **退役 phase3/phase5 文本断言套件**：分别被真实更新旅程 E2E 与 axe 扫描替代。

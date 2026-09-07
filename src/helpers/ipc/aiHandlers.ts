@@ -25,12 +25,20 @@ interface AIMode {
   description: string;
 }
 
+// [20260906_Feat_OrchestratorGenCancel] Machine-readable outcome codes for
+// runs that end without a provider result. They let the renderer stay silent
+// for user cancels and superseded races instead of surfacing an error UI.
+export type PolishOutcomeCode = "CANCELLED" | "SUPERSEDED";
+
 interface AIResult {
   success: boolean;
   text?: string;
   error?: string;
   usage?: unknown;
   model?: string;
+  // Present only when the run was cancelled by the caller ("CANCELLED") or
+  // invalidated by a newer run in the same generation scope ("SUPERSEDED").
+  code?: PolishOutcomeCode;
 }
 
 const BUILT_IN_MODES: AIMode[] = [
@@ -194,6 +202,12 @@ async function postChatCompletion(
   body: ChatCompletionRequest,
   timeoutMs: number,
   timeoutMessage: string,
+  // [20260906_Feat_OrchestratorGenCancel] T7 cancel semantics: run-level
+  // signal (caller cancel / generation supersession) combined with the
+  // timeout signal. When THIS signal fires, the raw AbortError is rethrown
+  // so the orchestrator can classify it as a silent cancel/supersede — only
+  // the timeout abort maps to the TIMEOUT error message.
+  externalSignal?: AbortSignal,
 ): Promise<Response> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -204,6 +218,9 @@ async function postChatCompletion(
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const signal = externalSignal
+    ? AbortSignal.any([controller.signal, externalSignal])
+    : controller.signal;
 
   let response: Response;
   try {
@@ -211,10 +228,13 @@ async function postChatCompletion(
       method: "POST",
       headers,
       body: JSON.stringify(body),
-      signal: controller.signal,
+      signal,
     });
   } catch (fetchError) {
     clearTimeout(timeoutId);
+    if (externalSignal?.aborted) {
+      throw fetchError;
+    }
     if ((fetchError as Error).name === "AbortError") {
       throw Object.assign(new Error(timeoutMessage), { code: "TIMEOUT" });
     }
@@ -263,10 +283,11 @@ function extractAIErrorMessage(
 //
 // Extension points for the upcoming spec tickets — add them HERE, never by
 // bypassing this function, so both entries keep one shared seam:
-//   - T7 generation invalidation: add a generation/cancellation handle to
-//     PolishRequest and short-circuit before the provider call.
-//   - T8 streaming/clamping: add stream/clamp fields to PolishRequest; the
-//     provider call and response normalization live only here.
+//   - T7 generation invalidation: LANDED (20260906_Feat_OrchestratorGenCancel,
+//     ticket #234) — PolishRequest.generationScope / .signal / .clampOutputTokens
+//     activate it; omitted options keep the legacy behavior byte-for-byte.
+//   - T8 streaming: add stream fields to PolishRequest; the provider call and
+//     response normalization live only here.
 //   - T14 chunking: add chunk-strategy fields to PolishRequest; long-input
 //     splitting/merging stays transparent to both entries.
 export interface PolishRequest {
@@ -283,12 +304,197 @@ export interface PolishRequest {
   // processTextWithAI option contract; after T3 no production caller uses it.
   systemPrompt?: string;
   userPrompt?: string;
+  // [20260906_Feat_OrchestratorGenCancel] Spec #193 T7 (ticket #234):
+  // generation-scope key for last-write-wins race protection. When two runs
+  // share a scope, starting a newer run invalidates the older one: the stale
+  // run's provider fetch is aborted and it settles with the SUPERSEDED
+  // outcome instead of overwriting the newer result. Omitted = no tracking.
+  generationScope?: string;
+  // Caller-side cancellation. Aborting it terminates the in-flight provider
+  // fetch and settles the run with the silent CANCELLED outcome (no error
+  // log — a user cancel is a normal operation, not a failure). Omitted = the
+  // run can only end via timeout/completion, as before.
+  signal?: AbortSignal;
+  // Opt-in output budget clamp for minimal-edit modes (optimize /
+  // optimize_long / format / correct): request max_tokens becomes
+  // max(4096 floor, min(inputLength × factor, user max_tokens)). Rewrite-class
+  // modes and custom templates are never clamped. Omitted/false = the user
+  // max_tokens is sent verbatim (legacy behavior).
+  clampOutputTokens?: boolean;
 }
+// [20260906_Refactor_PolishOrchestrator] END
 
 export interface PolishDeps {
   databaseManager: DatabaseManager;
   logger: Logger;
 }
+
+// [20260906_Feat_OrchestratorGenCancel] Spec #193 T7 (ticket #234) constants
+// and per-scope run registry. Rationale: the polish pipeline must be
+// race-safe (double-fire: only the newest request lands), cancellable (the
+// upstream fetch must actually terminate, and a cancel is silent — no error
+// log, no error UI) and cost-bounded (minimal-edit modes clamp the request
+// budget, and an absurd provider response must never reach the renderer).
+const POLISH_RESULT_CANCELLED: PolishOutcomeCode = "CANCELLED";
+const POLISH_RESULT_SUPERSEDED: PolishOutcomeCode = "SUPERSEDED";
+const POLISH_CANCELLED_MESSAGE = "已取消本次AI处理";
+const POLISH_SUPERSEDED_MESSAGE = "已发起新的AI处理，本次结果已丢弃";
+// Output budget clamp for minimal-edit modes: max(4096, min(input×2, userMax)).
+// The 4096 floor exists so a short input × small coefficient can never starve
+// a reasoning model's thinking budget (the 2026-08-15 empty-content
+// regression); the user-configured cap still binds above the floor.
+const POLISH_CLAMP_MIN_TOKENS = 4096;
+const POLISH_CLAMP_INPUT_LENGTH_FACTOR = 2;
+export { POLISH_CLAMP_MIN_TOKENS, POLISH_CLAMP_INPUT_LENGTH_FACTOR };
+// Minimal-edit modes (最小修改类) whose output is expected to track the input
+// length; everything else (rewrite-class + custom templates) is never clamped.
+const MINIMAL_EDIT_MODES: ReadonlySet<string> = new Set([
+  "optimize",
+  "optimize_long",
+  "format",
+  "correct",
+]);
+// Absolute response guard (Spec #193 超时与总量上限矩阵: 绝对上限 200 万字符):
+// a provider (or malicious gateway) response longer than this is truncated
+// before mapping, so oversized/absurd output never flows to the renderer.
+export const POLISH_OUTPUT_MAX_CHARS = 2_000_000;
+
+// One in-flight run per generation scope: the epoch orders runs within the
+// scope, the controller aborts the run's provider fetch when it is
+// superseded (or the caller cancels).
+interface PolishRunHandle {
+  scope: string | null;
+  epoch: number | null;
+  controller: AbortController;
+  // [20260906_Feat_OrchestratorGenCancel_Review] Removed in endPolishRun so
+  // a long-lived external signal does not accumulate one listener per run.
+  removeExternalAbortListener: (() => void) | null;
+}
+
+const activePolishRuns = new Map<
+  string,
+  { epoch: number; controller: AbortController }
+>();
+
+/**
+ * Register a run for generation/cancel tracking. Returns null when the
+ * request opts out of both features, so legacy callers keep the exact
+ * previous behavior (no registry writes, no AbortController).
+ */
+function beginPolishRun(request: PolishRequest): PolishRunHandle | null {
+  let removeExternalAbortListener: (() => void) | null = null;
+  const { generationScope, signal } = request;
+  if (generationScope === undefined && signal === undefined) {
+    return null;
+  }
+  const controller = new AbortController();
+  if (signal !== undefined) {
+    if (signal.aborted) {
+      controller.abort();
+    } else {
+      const forwardAbort = () => controller.abort();
+      signal.addEventListener("abort", forwardAbort, { once: true });
+      removeExternalAbortListener = () =>
+        signal.removeEventListener("abort", forwardAbort);
+    }
+  }
+  let epoch: number | null = null;
+  if (generationScope !== undefined) {
+    const previous = activePolishRuns.get(generationScope);
+    epoch = (previous?.epoch ?? 0) + 1;
+    activePolishRuns.set(generationScope, { epoch, controller });
+    // Invalidate the previously in-flight run of this scope: its fetch is
+    // aborted and it will settle with the SUPERSEDED outcome.
+    previous?.controller.abort();
+  }
+  return {
+    scope: generationScope ?? null,
+    epoch,
+    controller,
+    removeExternalAbortListener,
+  };
+}
+
+/**
+ * Drop a finished run from the registry — but only if it is still the
+ * current run of its scope (a superseded run must never evict its successor).
+ */
+function endPolishRun(handle: PolishRunHandle | null): void {
+  // [20260906_Feat_OrchestratorGenCancel_Review] Always drop the forwarded
+  // abort listener first — a long-lived external signal must not accumulate
+  // one listener per run.
+  handle?.removeExternalAbortListener?.();
+  if (handle === null || handle.scope === null) {
+    return;
+  }
+  const current = activePolishRuns.get(handle.scope);
+  if (current?.controller === handle.controller) {
+    activePolishRuns.delete(handle.scope);
+  }
+}
+
+function isRunSuperseded(handle: PolishRunHandle): boolean {
+  return (
+    handle.scope !== null &&
+    activePolishRuns.get(handle.scope)?.epoch !== handle.epoch
+  );
+}
+
+/**
+ * Outcome for a run whose abort signal fired. Supersession wins over plain
+ * cancellation so the caller can distinguish the two races.
+ */
+function polishAbortOutcome(handle: PolishRunHandle): AIResult {
+  if (isRunSuperseded(handle)) {
+    return {
+      success: false,
+      code: POLISH_RESULT_SUPERSEDED,
+      error: POLISH_SUPERSEDED_MESSAGE,
+    };
+  }
+  return {
+    success: false,
+    code: POLISH_RESULT_CANCELLED,
+    error: POLISH_CANCELLED_MESSAGE,
+  };
+}
+
+/**
+ * The settle-aside outcome for a cancelled/superseded run, or null while the
+ * run is still current and its signal has not fired.
+ */
+function polishRunOutcomeIfSettledAside(
+  handle: PolishRunHandle | null,
+): AIResult | null {
+  if (handle === null) {
+    return null;
+  }
+  if (!handle.controller.signal.aborted && !isRunSuperseded(handle)) {
+    return null;
+  }
+  return polishAbortOutcome(handle);
+}
+
+/**
+ * Effective request budget for this run. Only minimal-edit modes with the
+ * opt-in flag are clamped; rewrite-class modes and legacy calls get the user
+ * max_tokens verbatim.
+ */
+function resolvePolishMaxTokens(
+  mode: string,
+  inputLength: number,
+  userMaxTokens: number,
+  clampEnabled: boolean,
+): number {
+  if (!clampEnabled || !MINIMAL_EDIT_MODES.has(mode)) {
+    return userMaxTokens;
+  }
+  return Math.max(
+    POLISH_CLAMP_MIN_TOKENS,
+    Math.min(inputLength * POLISH_CLAMP_INPUT_LENGTH_FACTOR, userMaxTokens),
+  );
+}
+// [20260906_Feat_OrchestratorGenCancel] END
 
 export async function runPolishOrchestrator(
   deps: PolishDeps,
@@ -296,6 +502,11 @@ export async function runPolishOrchestrator(
 ): Promise<AIResult> {
   const { databaseManager, logger } = deps;
   const { text, mode } = request;
+  // [20260906_Feat_OrchestratorGenCancel] Register the run for generation/
+  // cancel tracking first (synchronously, so a newer run fired right after
+  // invalidates this one before it even reaches the provider). Null when the
+  // request opts out — the legacy path below is untouched.
+  const runHandle = beginPolishRun(request);
   try {
     const apiKey = (await databaseManager.getSetting("ai_api_key")) as
       | string
@@ -327,6 +538,17 @@ export async function runPolishOrchestrator(
         (await databaseManager.getSetting("ai_max_tokens")) as string,
         10,
       ) || 8192;
+    // [20260906_Feat_OrchestratorGenCancel] T7 output clamp: minimal-edit
+    // modes with the opt-in flag get the floored budget; every other
+    // combination sends the user max_tokens verbatim. The effective budget
+    // (not the raw setting) also drives the empty-content token-cap check so
+    // its message names the budget the provider actually received.
+    const effectiveMaxTokens = resolvePolishMaxTokens(
+      mode,
+      text.length,
+      maxTokens,
+      request.clampOutputTokens === true,
+    );
 
     if (!validateAIBaseUrl(baseUrl, { allowLocalhost: isLocal })) {
       return {
@@ -353,7 +575,7 @@ export async function runPolishOrchestrator(
         { role: "user", content: user },
       ],
       temperature: temperature,
-      max_tokens: maxTokens,
+      max_tokens: effectiveMaxTokens,
       stream: false,
     };
 
@@ -364,6 +586,14 @@ export async function runPolishOrchestrator(
       inputLength: text.length,
     });
 
+    // [20260906_Feat_OrchestratorGenCancel] T7 generation gate: short-circuit
+    // BEFORE the provider call when the run was cancelled or superseded
+    // while settings/prompt were being resolved.
+    const pendingOutcome = polishRunOutcomeIfSettledAside(runHandle);
+    if (pendingOutcome) {
+      return pendingOutcome;
+    }
+
     const timeoutMs = request.timeout || (isLocal ? 180_000 : 150_000);
     const response = await postChatCompletion(
       baseUrl,
@@ -371,7 +601,16 @@ export async function runPolishOrchestrator(
       requestData,
       timeoutMs,
       `AI请求超时（${Math.round(timeoutMs / 1000)}秒），请尝试缩短文本或检查网络`,
+      runHandle?.controller.signal,
     );
+
+    // [20260906_Feat_OrchestratorGenCancel] T7 generation gate: the provider
+    // response of a cancelled/superseded run is discarded unread — it must
+    // never overwrite the newer run's result.
+    const staleOutcome = polishRunOutcomeIfSettledAside(runHandle);
+    if (staleOutcome) {
+      return staleOutcome;
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -408,20 +647,33 @@ export async function runPolishOrchestrator(
         const tokenCapHit =
           data.choices[0]?.finish_reason === "length" ||
           (usage?.completion_tokens !== undefined &&
-            usage.completion_tokens >= maxTokens);
+            usage.completion_tokens >= effectiveMaxTokens);
         const error = tokenCapHit
-          ? `AI输出为空：模型推理占满了 max_tokens（${maxTokens}）预算，请在设置中调大「AI 配置 → 最大输出长度」或换用非推理模型`
+          ? `AI输出为空：模型推理占满了 max_tokens（${effectiveMaxTokens}）预算，请在设置中调大「AI 配置 → 最大输出长度」或换用非推理模型`
           : "AI返回了空内容，请重试或更换模型";
         logger.error?.("AI返回空内容:", {
           finish_reason: data.choices[0]?.finish_reason,
           usage: data.usage,
-          maxTokens,
+          maxTokens: effectiveMaxTokens,
         });
         return { success: false, error };
       }
+      // [20260906_Feat_OrchestratorGenCancel] T7 output guard: clamp an
+      // oversized provider response to the absolute char cap before it can
+      // flow to the renderer (logged as info — a robustness action, not an
+      // error).
+      let resultText = content;
+      if (resultText.length > POLISH_OUTPUT_MAX_CHARS) {
+        const originalLength = resultText.length;
+        resultText = resultText.slice(0, POLISH_OUTPUT_MAX_CHARS);
+        logger.info?.("AI输出超出字符上限，已截断:", {
+          originalLength,
+          cap: POLISH_OUTPUT_MAX_CHARS,
+        });
+      }
       const result: AIResult = {
         success: true,
-        text: content,
+        text: resultText,
         usage: data.usage,
         model: model,
       };
@@ -438,6 +690,15 @@ export async function runPolishOrchestrator(
       return { success: false, error: "AI API返回数据格式错误" };
     }
   } catch (error) {
+    // [20260906_Feat_OrchestratorGenCancel] T7 cancel semantics: classify
+    // abort-driven failures BEFORE the generic error mapping. A user cancel
+    // or generation supersession settles silently — no error log, cancel-
+    // shaped outcome — so it never drives an error UI.
+    const abortOutcome = polishRunOutcomeIfSettledAside(runHandle);
+    if (abortOutcome) {
+      return abortOutcome;
+    }
+
     logger.error?.("AI文本处理失败:", error);
 
     const err = error as Error & { code?: string };
@@ -453,6 +714,10 @@ export async function runPolishOrchestrator(
     // error code this fetch-based code path can never produce.
 
     return { success: false, error: errorMessage };
+  } finally {
+    // [20260906_Feat_OrchestratorGenCancel] T7: release the registry slot —
+    // a superseded run must never evict its successor's registration.
+    endPolishRun(runHandle);
   }
 }
 
@@ -476,6 +741,11 @@ export async function processTextWithAI(
       timeout: options.timeout as number | undefined,
       systemPrompt: options.systemPrompt as string | undefined,
       userPrompt: options.userPrompt as string | undefined,
+      // [20260906_Feat_OrchestratorGenCancel] T7 options flow through the
+      // positional-args contract; omitted options keep legacy behavior.
+      generationScope: options.generationScope as string | undefined,
+      signal: options.signal as AbortSignal | undefined,
+      clampOutputTokens: options.clampOutputTokens as boolean | undefined,
     },
   );
 }
