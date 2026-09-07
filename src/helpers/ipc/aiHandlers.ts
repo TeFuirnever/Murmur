@@ -460,7 +460,6 @@ export async function runPolishOrchestrator(
 // injected provider seam (src/helpers/ipc/index.ts wires this into
 // transcriptionHandlers' AI_REVIEW entry) and the existing unit-test
 // contract. Pure delegation — all logic lives in runPolishOrchestrator.
-// [20260906_Refactor_PolishOrchestrator] END
 export async function processTextWithAI(
   text: string,
   mode: string,
@@ -480,6 +479,7 @@ export async function processTextWithAI(
     },
   );
 }
+// [20260906_Refactor_PolishOrchestrator] END
 
 export async function checkAIStatus(
   testConfig: {
