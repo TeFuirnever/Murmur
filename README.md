@@ -39,6 +39,12 @@ English · [简体中文](./README.zh-CN.md)
 
 <!-- [20260731_README_DynamicBadge] END -->
 
+<!-- [20260907_Spec299_ReleaseBadge] T5 (Spec #299): complete the industry
+     badge trio (license + CI + release) — release was the missing one. -->
+<!-- [20260907_Spec299_ReleaseBadge] END -->
+
+[![Release](https://img.shields.io/github/v/release/TeFuirnever/Murmur)](https://github.com/TeFuirnever/Murmur/releases/latest)
+
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![Stars](https://img.shields.io/github/stars/TeFuirnever/Murmur?style=social)](https://github.com/TeFuirnever/Murmur)
 
@@ -67,15 +73,22 @@ English · [简体中文](./README.zh-CN.md)
 
 ### 🆚 Comparison
 
-| Capability             |   Murmur   | macOS Dictation |  iFlytek   | Whisper Desktop |
-| ---------------------- | :--------: | :-------------: | :--------: | :-------------: |
-| **File Transcription** |     ✅     |       ❌        |     ✅     |       ✅        |
-| **AI Post-processing** |     ✅     |       ❌        |     ❌     |       ❌        |
-| **Fully Local**        |     ✅     |       ✅        |     ❌     |       ✅        |
-| **Custom Prompts**     |     ✅     |       ❌        |     ❌     |       ❌        |
-| **11+ AI Models**      |     ✅     |       ❌        |     ❌     |       ❌        |
-| Chinese Accuracy       | ⭐⭐⭐⭐⭐ |     ⭐⭐⭐      | ⭐⭐⭐⭐⭐ |     ⭐⭐⭐      |
-| Open Source            |     ✅     |       ❌        |     ❌     |       ✅        |
+<!-- [20260907_Spec299_VerifiableTable] T5 (Spec #299, benchmark §B6): the
+     star-self-rating row is gone — 0/5 benchmark projects publish a
+     competitor table with graded self-ratings. Replaced with the
+     verifiable "Desktop (macOS/Windows)" attribute. The fairness caveat
+     below is retained. -->
+<!-- [20260907_Spec299_VerifiableTable] END -->
+
+| Capability                  | Murmur | macOS Dictation | iFlytek | Whisper Desktop |
+| --------------------------- | :----: | :-------------: | :-----: | :-------------: |
+| **File Transcription**      |   ✅   |       ❌        |   ✅    |       ✅        |
+| **AI Post-processing**      |   ✅   |       ❌        |   ❌    |       ❌        |
+| **Fully Local**             |   ✅   |       ✅        |   ❌    |       ✅        |
+| **Custom Prompts**          |   ✅   |       ❌        |   ❌    |       ❌        |
+| **11+ AI Models**           |   ✅   |       ❌        |   ❌    |       ❌        |
+| **Desktop (macOS/Windows)** |   ✅   |   macOS only    |   ❌    |       ✅        |
+| Open Source                 |   ✅   |       ❌        |   ❌    |       ✅        |
 
 > System dictation wins on real-time latency (streaming); Murmur wins on "what you can do after transcription" (AI polish + batch files + privacy). They can coexist.
 

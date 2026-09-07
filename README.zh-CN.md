@@ -37,6 +37,12 @@
 
 <!-- [20260731_README_DynamicBadge] END -->
 
+<!-- [20260907_Spec299_ReleaseBadge] T5（Spec #299）：补齐业界徽章三件套
+     license + CI + release 中所缺的 release。 -->
+<!-- [20260907_Spec299_ReleaseBadge] END -->
+
+[![Release](https://img.shields.io/github/v/release/TeFuirnever/Murmur)](https://github.com/TeFuirnever/Murmur/releases/latest)
+
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![Stars](https://img.shields.io/github/stars/TeFuirnever/Murmur?style=social)](https://github.com/TeFuirnever/Murmur)
 
@@ -63,15 +69,20 @@
 
 ### 🆚 与同类工具对比
 
-| 能力                |   Murmur   | macOS 原生听写 |  讯飞语记  | Whisper Desktop |
-| ------------------- | :--------: | :------------: | :--------: | :-------------: |
-| **音频文件转录**    |     ✅     |       ❌       |     ✅     |       ✅        |
-| **AI 后处理**       |     ✅     |       ❌       |     ❌     |       ❌        |
-| **完全本地**        |     ✅     |       ✅       |     ❌     |       ✅        |
-| **自定义 Prompt**   |     ✅     |       ❌       |     ❌     |       ❌        |
-| **11+ AI 模型可选** |     ✅     |       ❌       |     ❌     |       ❌        |
-| 中文识别精度        | ⭐⭐⭐⭐⭐ |     ⭐⭐⭐     | ⭐⭐⭐⭐⭐ |     ⭐⭐⭐      |
-| 开源免费            |     ✅     |       ❌       |     ❌     |       ✅        |
+<!-- [20260907_Spec299_VerifiableTable] T5（Spec #299,基准 B6）：删除 ⭐ 自评行
+     （0/5 基准项目有星级自评对比表），换为可验证属性"桌面端（macOS/Windows）"。
+     表下公平性说明保留。 -->
+<!-- [20260907_Spec299_VerifiableTable] END -->
+
+| 能力                        | Murmur | macOS 原生听写 | 讯飞语记 | Whisper Desktop |
+| --------------------------- | :----: | :------------: | :------: | :-------------: |
+| **音频文件转录**            |   ✅   |       ❌       |    ✅    |       ✅        |
+| **AI 后处理**               |   ✅   |       ❌       |    ❌    |       ❌        |
+| **完全本地**                |   ✅   |       ✅       |    ❌    |       ✅        |
+| **自定义 Prompt**           |   ✅   |       ❌       |    ❌    |       ❌        |
+| **11+ AI 模型可选**         |   ✅   |       ❌       |    ❌    |       ❌        |
+| **桌面端（macOS/Windows）** |   ✅   |    仅 macOS    |    ❌    |       ✅        |
+| 开源免费                    |   ✅   |       ❌       |    ❌    |       ✅        |
 
 > 系统听写在"实时性"上更强（流式低延迟），Murmur 在"转写后能做什么"上更强（AI 润色 + 文件批处理 + 隐私）。两者可以共存。
 
