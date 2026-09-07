@@ -7,32 +7,32 @@
     {
       "id": "inventory",
       "status": "passed",
-      "evidence": "inventory_knowledge.py snapshot -> 341 files enumerated (done-archive.md 补录); 全部分类(20 update / 1 memory hold / 4 vendored-skill size hold / 其余 verified 带清扫证据); inventory_knowledge.py validate -> valid:true, errors:[]"
+      "evidence": "snapshot 342 files -> 全分类(9 update / 322 verified / 5 hold / 6 out_of_scope); inventory_knowledge.py validate -> valid:true, errors:[]"
     },
     {
       "id": "readback",
       "status": "passed",
-      "evidence": "grep 读回 6/6:CONTRIBUTING 含 'Spec #266 T01 起为合并门禁' 与 '1800+ 用例';README '1800+ tests';CHANGELOG '## [Unreleased]';checklist 'T03/#279 已交付';gap-analysis 顶部交付状态注;backlog 3 条 done 2026-09-07"
+      "evidence": "grep 读回: README '2200+ tests'; CONTRIBUTING '88% / 83% / 88% / 89%' + '2200+ 用例'; CHANGELOG Unreleased 含 Spec #259/#193 T1/T2/T3/T7 条目; notepad 计数 157f/2201 + T7 状态"
     },
     {
       "id": "tests",
       "status": "passed",
-      "evidence": "pnpm test -> 152 files / 1823 tests 全绿;pnpm test:e2e -> 61/61 全绿(含 suite 14 axe 2 用例);pnpm ci:check -> All 11 checks passed(含 dev smoke 心跳)"
+      "evidence": "pnpm ci:check 11/11 (含 test+coverage 与 dev smoke); pnpm test 157 files / 2201 tests; pnpm run test:python:unit exit 0 (--fail-under=43)"
     },
     {
       "id": "links",
       "status": "passed",
-      "evidence": "locale-parity 2/2(新增 tray/settings.ai 键双语言成对);rg 已删 20 通道名在活文档(docs/qa、CONTRIBUTING、README、CHANGELOG、backlog)零残留——唯一命中为 dated research/plans 的历史语境,按规则保留"
+      "evidence": "locale-parity 2/2; rg 已删通道在活文档零残留(仅 dated research 历史语境); CHANGELOG 新条目引用的 ticket 号 #273–#276/#228/#229/#230/#234 均为真实已关 issue"
     },
     {
       "id": "diff",
       "status": "passed",
-      "evidence": "reconcile 同步提交 412c7dc(8 文件:CONTRIBUTING/README/CHANGELOG/backlog/done-archive/checklist/gap-analysis/inventory);后续仅剩 .azhou 执行记录与本提交无关的未跟踪 asr 报告已 gitignore"
+      "evidence": "reconcile 提交仅触 README/CONTRIBUTING/CHANGELOG/.omc/notepad/.azhou inventory——无源码/测试改动"
     },
     {
       "id": "coverage",
       "status": "passed",
-      "evidence": "pnpm test + coverage 在 ci:check 内通过(阈值 96/92/94/96, macOS 腿强制);win 腿覆盖率文本报告步骤已由 T05 加入 ci.yml(报告不设卡)"
+      "evidence": "pnpm test:coverage exit 0(全局 88/83/88/89 重定基线 + 六组 per-glob 92 地板强制); 负向验证: updateManager 地板 99 -> 红"
     }
   ],
   "events": [
@@ -42,15 +42,15 @@
     },
     {
       "stage": "scope",
-      "message": "🧭 范围锁定｜authority=维护者直接调用($repo-pedant,Spec #266 交付收尾)｜projects=1"
+      "message": "🧭 范围锁定｜authority=维护者直接调用($repo-pedant,Spec #259+#193 前置链交付收尾)｜projects=1"
     },
     {
       "stage": "inventory",
-      "message": "🗂️ 清单完成｜files=341｜holds=5｜out_of_scope=3"
+      "message": "🗂️ 清单完成｜files=342｜holds=6｜out_of_scope=10"
     },
     {
       "stage": "impact",
-      "message": "🕸️ 影响确认｜surfaces=9｜consumers=12"
+      "message": "🕸️ 影响确认｜surfaces=8｜consumers=7"
     },
     {
       "stage": "sync",
