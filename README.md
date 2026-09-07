@@ -173,7 +173,7 @@ pnpm dev
 
 ```bash
 pnpm dev          # 启动开发模式
-pnpm test         # 运行测试（单测 + E2E）与覆盖率门禁
+pnpm test         # 运行单元测试与覆盖率门禁（E2E 在 CI 单独运行）
 pnpm lint         # 代码检查（0 warnings）
 pnpm typecheck    # TypeScript 类型检查
 pnpm ci:check     # 本地运行所有 CI 门禁

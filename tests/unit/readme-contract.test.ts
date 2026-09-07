@@ -76,11 +76,20 @@ describe("README contract", () => {
       // engines ">=22.5" -> README states the same floor as "**Node.js** 22.5+"
       const floor = enginesNode?.replace(/^>=?/, "") ?? "";
 
+      // All-mentions check (same design as the Electron pin): a stale floor
+      // anywhere in the document must fail, not just a missing correct one.
       const readme = readRenderedRootFile("README.md");
+      const mentions = readme.match(/\*\*Node\.js\*\* \d+(?:\.\d+)*\+/g) ?? [];
       expect(
-        readme.includes(`**Node.js** ${floor}+`),
-        `README Node.js floor must equal engines.node (${enginesNode})`,
-      ).toBe(true);
+        mentions.length,
+        "README must state its Node.js floor at least once",
+      ).toBeGreaterThan(0);
+      for (const mention of mentions) {
+        expect(
+          mention,
+          `stale Node.js floor in README (engines.node = ${enginesNode})`,
+        ).toBe(`**Node.js** ${floor}+`);
+      }
     });
   });
 
@@ -90,8 +99,21 @@ describe("README contract", () => {
 
     function internalLinkTargets(markdown: string): string[] {
       const rendered = stripHtmlComments(markdown);
+      // Strip image syntax first so a badge link's OUTER href becomes the
+      // remaining [text](href) match; otherwise `[![alt](img)](href)` makes
+      // the extractor capture only the img src and silently drop the href.
+      const withoutImages = rendered.replace(/!\[[^\]]*\]\([^)\s]*\)/g, "");
       const linkPattern = /\[[^\]]*\]\(([^)\s]+)\)/g;
-      return [...rendered.matchAll(linkPattern)].map((match) => match[1] ?? "");
+      const targets = [...withoutImages.matchAll(linkPattern)].map(
+        (match) => match[1] ?? "",
+      );
+      // GitHub renders raw <img> tags too (the README logo); their src
+      // points at repo assets the same contract must cover.
+      const imgPattern = /<img\s[^>]*src="([^"]+)"/g;
+      for (const match of rendered.matchAll(imgPattern)) {
+        targets.push(match[1] ?? "");
+      }
+      return targets;
     }
 
     for (const file of readmeFiles) {
@@ -111,7 +133,13 @@ describe("README contract", () => {
           }
           const withoutAnchor = target.split("#")[0] ?? "";
           if (withoutAnchor === "") continue; // pure in-page anchor
-          const decoded = decodeURIComponent(withoutAnchor);
+          let decoded: string;
+          try {
+            decoded = decodeURIComponent(withoutAnchor);
+          } catch {
+            broken.push(target); // malformed percent-encoding IS broken
+            continue;
+          }
           if (!fs.existsSync(path.join(ROOT, decoded))) {
             broken.push(target);
           }
