@@ -40,21 +40,16 @@
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![Stars](https://img.shields.io/github/stars/TeFuirnever/Murmur?style=social)](https://github.com/TeFuirnever/Murmur)
 
-<!-- [20260731_README_RewriteHero] Hero 区强化价值主张。
-     TODO（需项目维护者录制）：录制 10 秒产品演示 GIF，
-     展示「说话 → 文字出现 → AI 润色 → 自动粘贴」完整流程，
-     替换下方占位注释。这是 README 最高 ROI 的转化元素。 -->
-<!-- <img src="assets/demo.gif" width="800" alt="Murmur Demo — speak → text → AI polish → paste" /> -->
-<!-- [20260731_README_RewriteHero] END -->
+<!-- [20260907_Spec299_EmbedMedia] T4（Spec #299）：将归档的 macOS 真机截图
+     嵌入 Hero 区——审计发现零嵌入媒体低于同类底线（5/5 基准项目首屏有图）。
+     替换原 [20260731_README_RewriteHero] 的 demo GIF TODO 占位；录制 GIF
+     仍为维护者后续事项。截图摄于 2026-07-20，早于 Fox rebrand（7/29），
+     后续推广使用前建议重截。 -->
+<!-- [20260907_Spec299_EmbedMedia] END -->
 
-<!-- [20260731_README_Screenshots] 产品截图归档。
-     3 张真机截图（macOS 界面 / 小红书模式 / Windows bug）归档在
-     docs/promotion/screenshots/。注意：制作于 2026-07-20，icon 可能
-     过时（Fox rebrand 7/29）。如需用于 README Hero 区，建议重新截取。 -->
+<img src="docs/promotion/screenshots/screenshot-macos.jpg" width="800" alt="Murmur macOS 界面——语音转写与 AI 润色实际运行效果" />
 
 📦 [产品截图存档](docs/promotion/screenshots/) · macOS 界面 / AI 小红书模式 / Windows bug 故事
-
-<!-- [20260731_README_Screenshots] END -->
 
 </div>
 
@@ -221,7 +216,14 @@ pnpm ci:check     # 本地运行所有 CI 门禁
 
 ## 🤝 参与贡献
 
+<!-- [20260907_Spec299_HelpLinks] T4（Spec #299）：GitHub 官方 README 指引
+     要求回答"哪里获取更多帮助"，opensource.guide 上线清单要求从 README
+     链接社区文件。FAQ、Troubleshooting 与 SECURITY.md 此前存在但成为
+     孤儿文档。 -->
+
 PRs welcome! 见 [CONTRIBUTING.md](CONTRIBUTING.md) 了解开发环境搭建、代码规范和提交流程。
+
+**帮助与社区**：常见问题 → [FAQ](docs/faq.md) · 故障排除 → [故障排除指南](docs/troubleshooting.md) · 安全漏洞 → [安全策略](SECURITY.md)（安全报告请勿提交公开 issue）。
 
 ## 📊 项目状态
 

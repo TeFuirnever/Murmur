@@ -42,21 +42,18 @@ English · [简体中文](./README.zh-CN.md)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![Stars](https://img.shields.io/github/stars/TeFuirnever/Murmur?style=social)](https://github.com/TeFuirnever/Murmur)
 
-<!-- [20260731_README_RewriteHero] Strengthen the hero value proposition.
-     TODO (needs the maintainer to record): capture a 10-second product demo
-     GIF showing "speak → text appears → AI polish → auto paste" and replace
-     the placeholder below. Highest-ROI conversion element of the README. -->
-<!-- <img src="assets/demo.gif" width="800" alt="Murmur Demo — speak → text → AI polish → paste" /> -->
-<!-- [20260731_README_RewriteHero] END -->
+<!-- [20260907_Spec299_EmbedMedia] T4 (Spec #299): embedded the archived
+     macOS screenshot as the hero visual — the audit found zero embedded
+     media was below the peer floor (5/5 benchmark projects render an image
+     in the first screenful). Replaces the [20260731_README_RewriteHero]
+     demo-GIF TODO placeholder; recording the GIF remains a maintainer
+     follow-up. Screenshots taken 2026-07-20 predate the Fox rebrand (7/29)
+     — re-capture before promoting them further. -->
+<!-- [20260907_Spec299_EmbedMedia] END -->
 
-<!-- [20260731_README_Screenshots] Screenshot archive. 3 real-device shots
-     (macOS UI / Xiaohongshu mode / Windows bug) live in
-     docs/promotion/screenshots/. Note: taken 2026-07-20, so the icon may
-     predate the Fox rebrand (7/29). Re-capture before using in the hero. -->
+<img src="docs/promotion/screenshots/screenshot-macos.jpg" width="800" alt="Murmur on macOS — dictation in action with transcript and AI polish" />
 
 📦 [Screenshot archive](docs/promotion/screenshots/) · macOS UI / AI Xiaohongshu mode / Windows bug story
-
-<!-- [20260731_README_Screenshots] END -->
 
 </div>
 
@@ -223,7 +220,14 @@ See [docs/follow-ups.md](docs/follow-ups.md) (open items) and [CHANGELOG.md](CHA
 
 ## 🤝 Contributing
 
+<!-- [20260907_Spec299_HelpLinks] T4 (Spec #299): GitHub's README guidance
+     expects "where to get more help" and opensource.guide's pre-launch
+     checklist requires linking CONTRIBUTING/SECURITY from the README.
+     FAQ, Troubleshooting and SECURITY.md existed but were orphaned. -->
+
 PRs welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, code standards, and the PR process.
+
+**Help & community**: questions → [FAQ](docs/faq.md) · troubleshooting → [Troubleshooting](docs/troubleshooting.md) · security issues → [Security Policy](SECURITY.md) (please report vulnerabilities privately, not as public issues).
 
 ## 📊 Project Status
 
