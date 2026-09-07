@@ -91,6 +91,18 @@ export interface TranscriptionSaveResult {
   error?: string;
 }
 
+// [20260906_Feat_TranscriptionUpdate] Manual polish write-back result
+// (spec #193 T1, ticket #228): echoes the refreshed row fields on success.
+// raw_text is returned for readback only — the DB whitelist makes it
+// unwritable, so it always still holds the original ASR output.
+export interface TranscriptionUpdateResult {
+  success: boolean;
+  text?: string;
+  processed_text?: string;
+  raw_text?: string;
+  error?: string;
+}
+
 export interface FileTranscriptionResult {
   success: boolean;
   text?: string;

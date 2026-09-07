@@ -139,6 +139,9 @@ describe("transcriptionHandlers", () => {
       getTranscriptions: vi.fn(() => []),
       deleteTranscription: vi.fn(() => ({ changes: 1 })),
       clearAllTranscriptions: vi.fn(),
+      // [20260906_Feat_TranscriptionUpdate] Manual polish write-back
+      // (spec #193 T1, ticket #228) — mock for the UPDATE handler tests.
+      updateTranscription: vi.fn(() => ({ changes: 1 })),
     };
 
     mockFunasr = {
@@ -182,7 +185,7 @@ describe("transcriptionHandlers", () => {
   }
 
   describe("register() — channel registration completeness", () => {
-    it("registers all 13 transcription channels", async () => {
+    it("registers all 14 transcription channels", async () => {
       const C = await setup();
 
       const expectedChannels = [
@@ -192,6 +195,9 @@ describe("transcriptionHandlers", () => {
         C.TRANSCRIPTION.TRANSCRIBE_FILE,
         C.TRANSCRIPTION.CANCEL,
         C.TRANSCRIPTION.SAVE,
+        // [20260906_Feat_TranscriptionUpdate] Manual polish write-back
+        // (spec #193 T1, ticket #228).
+        C.TRANSCRIPTION.UPDATE,
         C.TRANSCRIPTION.GET_ALL,
         C.TRANSCRIPTION.DELETE,
         C.TRANSCRIPTION.CLEAR,
@@ -204,7 +210,7 @@ describe("transcriptionHandlers", () => {
       for (const channel of expectedChannels) {
         expect(registeredHandlers.has(channel)).toBe(true);
       }
-      expect(registeredHandlers.size).toBeGreaterThanOrEqual(13);
+      expect(registeredHandlers.size).toBeGreaterThanOrEqual(14);
     });
 
     it("does not register duplicate channels", async () => {
@@ -240,6 +246,53 @@ describe("transcriptionHandlers", () => {
       const result = (await handler({}, { text: "hello" })) as HandlerResult;
       expect(result.success).toBe(false);
       expect(result.error).toContain("DB locked");
+    });
+  });
+
+  // [20260906_Feat_TranscriptionUpdate] Spec #193 T1 (ticket #228): the
+  // manual-polish write-back channel. Missing record -> {success:false};
+  // success -> updateTranscription called with the caller's patch (column
+  // whitelisting itself is enforced one layer down, in database.ts) and the
+  // refreshed row fields echoed back; DB-layer rejections surface through
+  // the normal {success:false, error} envelope.
+  describe("TRANSCRIPTION.UPDATE handler", () => {
+    it("returns error without writing when the record does not exist", async () => {
+      mockDb.getTranscriptionById!.mockReturnValueOnce(null);
+      const C = await setup();
+      const handler = registeredHandlers.get(C.TRANSCRIPTION.UPDATE)!;
+
+      const result = (await handler({}, 999, {
+        processed_text: "润色后",
+        text: "润色后",
+      })) as HandlerResult;
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("转录记录不存在");
+      expect(mockDb.updateTranscription).not.toHaveBeenCalled();
+    });
+
+    it("applies the patch and returns success", async () => {
+      const C = await setup();
+      const handler = registeredHandlers.get(C.TRANSCRIPTION.UPDATE)!;
+
+      const patch = { processed_text: "润色后", text: "润色后" };
+      const result = (await handler({}, 42, patch)) as HandlerResult;
+      expect(mockDb.updateTranscription).toHaveBeenCalledWith(42, patch);
+      expect(result.success).toBe(true);
+    });
+
+    it("surfaces updateTranscription rejections (non-whitelisted column)", async () => {
+      mockDb.updateTranscription!.mockImplementationOnce(() => {
+        throw new Error("不允许更新的字段: raw_text");
+      });
+      const C = await setup();
+      const handler = registeredHandlers.get(C.TRANSCRIPTION.UPDATE)!;
+
+      const result = (await handler({}, 42, { raw_text: "tampered" })) as {
+        success: boolean;
+        error?: string;
+      };
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("不允许更新的字段");
     });
   });
 

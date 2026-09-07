@@ -6,6 +6,7 @@ import type {
   LocalModelDetection,
   TranscriptionRecord,
   TranscriptionSaveResult,
+  TranscriptionUpdateResult,
   FileTranscriptionResult,
   ExportResult,
   ExportAllResult,
@@ -92,6 +93,13 @@ export interface ElectronAPI {
     offset: number,
   ) => Promise<TranscriptionRecord[]>;
   deleteTranscription: (id: number) => Promise<OperationResult>;
+  // [20260906_Feat_TranscriptionUpdate] Manual polish write-back (spec #193
+  // T1, ticket #228): only the polished-text columns are patchable — the DB
+  // whitelist rejects everything else, raw_text is never writable.
+  updateTranscription: (
+    id: number,
+    patch: { processed_text?: string; text?: string },
+  ) => Promise<TranscriptionUpdateResult>;
   diarizeAudio: (id: number) => Promise<{
     success: boolean;
     segments?: Array<{

@@ -85,6 +85,10 @@ export const preloadApi: ElectronAPI = {
     ipcRenderer.invoke(C.TRANSCRIPTION.GET_ALL, limit, offset),
   deleteTranscription: (id: number) =>
     ipcRenderer.invoke(C.TRANSCRIPTION.DELETE, id),
+  // [20260906_Feat_TranscriptionUpdate] Manual polish write-back (spec #193
+  // T1, ticket #228): persist polished text into the saved record.
+  updateTranscription: (id: number, patch: Record<string, unknown>) =>
+    ipcRenderer.invoke(C.TRANSCRIPTION.UPDATE, id, patch),
   clearAllTranscriptions: () => ipcRenderer.invoke(C.TRANSCRIPTION.CLEAR),
   diarizeAudio: (id: number) => ipcRenderer.invoke(C.TRANSCRIPTION.DIARIZE, id),
 

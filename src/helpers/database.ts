@@ -354,6 +354,57 @@ class DatabaseManager {
     return stmt.get(id) as unknown as TranscriptionRecord | undefined;
   }
 
+  // [20260906_Feat_TranscriptionUpdate] Spec #193 T1 (ticket #228): write-back
+  // for manually polished transcriptions — persists the polished text into an
+  // EXISTING record (UPDATE processed_text AND text). The column whitelist is
+  // the security contract: only the polished-text columns are writable;
+  // raw_text ALWAYS keeps the original ASR output, and any other key —
+  // including a SQL fragment smuggled in as a column name — is rejected
+  // before it can reach the SQL string. Values are bound as parameters, so
+  // injection via values is structurally impossible; the whitelist closes the
+  // identifier hole. updated_at is refreshed like the save path does for the
+  // settings table (CURRENT_TIMESTAMP, server-side).
+  updateTranscription(id: number, patch: Record<string, unknown>): RunResult {
+    const UPDATABLE_COLUMNS = new Set(["processed_text", "text"]);
+
+    if (!patch || typeof patch !== "object") {
+      throw new Error("更新数据无效");
+    }
+
+    const columns = Object.keys(patch).filter(
+      (key) => patch[key] !== undefined,
+    );
+    if (columns.length === 0) {
+      throw new Error("更新数据无效");
+    }
+
+    for (const column of columns) {
+      if (!UPDATABLE_COLUMNS.has(column)) {
+        throw new Error(`不允许更新的字段: ${column}`);
+      }
+      const value = patch[column];
+      if (
+        value !== null &&
+        typeof value !== "string" &&
+        typeof value !== "number"
+      ) {
+        throw new Error("更新数据无效");
+      }
+    }
+
+    const setClause = columns.map((column) => `${column} = ?`).join(", ");
+    const stmt = this.db!.prepare(`
+      UPDATE transcriptions
+      SET ${setClause}, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `);
+    return runStmt(
+      stmt,
+      ...columns.map((column) => patch[column] as Primitive),
+      id,
+    );
+  }
+
   // [20260815_Refactor_DeadIpc] getTranscriptionWithSegments removed — the
   // live path (transcriptionHandlers) reads via getTranscriptionById and
   // parses the segments JSON itself. searchTranscriptions/_searchLike and

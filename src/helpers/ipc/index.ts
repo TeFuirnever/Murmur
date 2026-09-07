@@ -43,6 +43,10 @@ function wrapWithRateLimits(ipcMain: Electron.IpcMain): Electron.IpcMain {
     [C.AI.PROCESS]: { maxCalls: 20, windowMs: 60_000 },
     [C.AI.CHECK_STATUS]: { maxCalls: 30, windowMs: 60_000 },
     [C.TRANSCRIPTION.SAVE]: { maxCalls: 30, windowMs: 60_000 },
+    // [20260906_Feat_TranscriptionUpdate] Manual polish write-back (spec #193
+    // T1, ticket #228): fires once per polish action, so it carries the same
+    // budget as the sibling SAVE row.
+    [C.TRANSCRIPTION.UPDATE]: { maxCalls: 30, windowMs: 60_000 },
     [C.MODELS.DOWNLOAD]: { maxCalls: 3, windowMs: 300_000 },
     // [20260906_Refactor_DeadChannelCleanup] Ticket #250: the FUNASR.INSTALL
     // rate-limit entry was removed with the channel (zero renderer callers).
