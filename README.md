@@ -39,24 +39,26 @@ English · [简体中文](./README.zh-CN.md)
 
 <!-- [20260731_README_DynamicBadge] END -->
 
+<!-- [20260907_Spec299_ReleaseBadge] T5 (Spec #299): complete the industry
+     badge trio (license + CI + release) — release was the missing one. -->
+<!-- [20260907_Spec299_ReleaseBadge] END -->
+
+[![Release](https://img.shields.io/github/v/release/TeFuirnever/Murmur)](https://github.com/TeFuirnever/Murmur/releases/latest)
+
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![Stars](https://img.shields.io/github/stars/TeFuirnever/Murmur?style=social)](https://github.com/TeFuirnever/Murmur)
 
-<!-- [20260731_README_RewriteHero] Strengthen the hero value proposition.
-     TODO (needs the maintainer to record): capture a 10-second product demo
-     GIF showing "speak → text appears → AI polish → auto paste" and replace
-     the placeholder below. Highest-ROI conversion element of the README. -->
-<!-- <img src="assets/demo.gif" width="800" alt="Murmur Demo — speak → text → AI polish → paste" /> -->
-<!-- [20260731_README_RewriteHero] END -->
+<!-- [20260907_Spec299_EmbedMedia] T4 (Spec #299): embedded the archived XHS-mode screenshot (real app UI: transcript → AI polish → Xiaohongshu post) as the hero visual — the audit found zero embedded
+     media was below the peer floor (5/5 benchmark projects render an image
+     in the first screenful). Replaces the [20260731_README_RewriteHero]
+     demo-GIF TODO placeholder; recording the GIF remains a maintainer
+     follow-up. Screenshots taken 2026-07-20 predate the Fox rebrand (7/29)
+     — re-capture before promoting them further. -->
+<!-- [20260907_Spec299_EmbedMedia] END -->
 
-<!-- [20260731_README_Screenshots] Screenshot archive. 3 real-device shots
-     (macOS UI / Xiaohongshu mode / Windows bug) live in
-     docs/promotion/screenshots/. Note: taken 2026-07-20, so the icon may
-     predate the Fox rebrand (7/29). Re-capture before using in the hero. -->
+<img src="docs/promotion/screenshots/screenshot-xhs-mode.jpg" width="640" alt="Murmur app: a raw transcript is polished into a Xiaohongshu-style post through the AI polish pipeline" />
 
 📦 [Screenshot archive](docs/promotion/screenshots/) · macOS UI / AI Xiaohongshu mode / Windows bug story
-
-<!-- [20260731_README_Screenshots] END -->
 
 </div>
 
@@ -70,15 +72,22 @@ English · [简体中文](./README.zh-CN.md)
 
 ### 🆚 Comparison
 
-| Capability             |   Murmur   | macOS Dictation |  iFlytek   | Whisper Desktop |
-| ---------------------- | :--------: | :-------------: | :--------: | :-------------: |
-| **File Transcription** |     ✅     |       ❌        |     ✅     |       ✅        |
-| **AI Post-processing** |     ✅     |       ❌        |     ❌     |       ❌        |
-| **Fully Local**        |     ✅     |       ✅        |     ❌     |       ✅        |
-| **Custom Prompts**     |     ✅     |       ❌        |     ❌     |       ❌        |
-| **11+ AI Models**      |     ✅     |       ❌        |     ❌     |       ❌        |
-| Chinese Accuracy       | ⭐⭐⭐⭐⭐ |     ⭐⭐⭐      | ⭐⭐⭐⭐⭐ |     ⭐⭐⭐      |
-| Open Source            |     ✅     |       ❌        |     ❌     |       ✅        |
+<!-- [20260907_Spec299_VerifiableTable] T5 (Spec #299, benchmark §B6): the
+     star-self-rating row is gone — 0/5 benchmark projects publish a
+     competitor table with graded self-ratings. Replaced with the
+     verifiable "Desktop (macOS/Windows)" attribute. The fairness caveat
+     below is retained. -->
+<!-- [20260907_Spec299_VerifiableTable] END -->
+
+| Capability                  | Murmur | macOS Dictation | iFlytek | Whisper Desktop |
+| --------------------------- | :----: | :-------------: | :-----: | :-------------: |
+| **File Transcription**      |   ✅   |       ❌        |   ✅    |       ✅        |
+| **AI Post-processing**      |   ✅   |       ❌        |   ❌    |       ❌        |
+| **Fully Local**             |   ✅   |       ✅        |   ❌    |       ✅        |
+| **Custom Prompts**          |   ✅   |       ❌        |   ❌    |       ❌        |
+| **11+ AI Models**           |   ✅   |       ❌        |   ❌    |       ❌        |
+| **Desktop (macOS/Windows)** |   ✅   |   macOS only    |   ❌    |  Windows only   |
+| Open Source                 |   ✅   |       ❌        |   ❌    |       ✅        |
 
 > System dictation wins on real-time latency (streaming); Murmur wins on "what you can do after transcription" (AI polish + batch files + privacy). They can coexist.
 
@@ -223,7 +232,16 @@ See [docs/follow-ups.md](docs/follow-ups.md) (open items) and [CHANGELOG.md](CHA
 
 ## 🤝 Contributing
 
+<!-- [20260907_Spec299_HelpLinks] T4 (Spec #299): GitHub's README guidance
+     expects "where to get more help" and opensource.guide's pre-launch
+     checklist requires linking CONTRIBUTING/SECURITY from the README.
+     FAQ, Troubleshooting and SECURITY.md existed but were orphaned. -->
+
+<!-- [20260907_Spec299_HelpLinks] END -->
+
 PRs welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, code standards, and the PR process.
+
+**Help & community**: questions → [FAQ](docs/faq.md) · troubleshooting → [Troubleshooting](docs/troubleshooting.md) · security issues → [Security Policy](SECURITY.md) (please report vulnerabilities privately, not as public issues).
 
 ## 📊 Project Status
 

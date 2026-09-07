@@ -37,24 +37,25 @@
 
 <!-- [20260731_README_DynamicBadge] END -->
 
+<!-- [20260907_Spec299_ReleaseBadge] T5（Spec #299）：补齐业界徽章三件套
+     license + CI + release 中所缺的 release。 -->
+<!-- [20260907_Spec299_ReleaseBadge] END -->
+
+[![Release](https://img.shields.io/github/v/release/TeFuirnever/Murmur)](https://github.com/TeFuirnever/Murmur/releases/latest)
+
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![Stars](https://img.shields.io/github/stars/TeFuirnever/Murmur?style=social)](https://github.com/TeFuirnever/Murmur)
 
-<!-- [20260731_README_RewriteHero] Hero 区强化价值主张。
-     TODO（需项目维护者录制）：录制 10 秒产品演示 GIF，
-     展示「说话 → 文字出现 → AI 润色 → 自动粘贴」完整流程，
-     替换下方占位注释。这是 README 最高 ROI 的转化元素。 -->
-<!-- <img src="assets/demo.gif" width="800" alt="Murmur Demo — speak → text → AI polish → paste" /> -->
-<!-- [20260731_README_RewriteHero] END -->
+<!-- [20260907_Spec299_EmbedMedia] T4（Spec #299）：将归档的小红书模式真机截图（真实应用界面：转写 → AI 润色 → 小红书文案）
+     嵌入 Hero 区——审计发现零嵌入媒体低于同类底线（5/5 基准项目首屏有图）。
+     替换原 [20260731_README_RewriteHero] 的 demo GIF TODO 占位；录制 GIF
+     仍为维护者后续事项。截图摄于 2026-07-20，早于 Fox rebrand（7/29），
+     后续推广使用前建议重截。 -->
+<!-- [20260907_Spec299_EmbedMedia] END -->
 
-<!-- [20260731_README_Screenshots] 产品截图归档。
-     3 张真机截图（macOS 界面 / 小红书模式 / Windows bug）归档在
-     docs/promotion/screenshots/。注意：制作于 2026-07-20，icon 可能
-     过时（Fox rebrand 7/29）。如需用于 README Hero 区，建议重新截取。 -->
+<img src="docs/promotion/screenshots/screenshot-xhs-mode.jpg" width="640" alt="Murmur 界面——口述原文经 AI 润色一键转为小红书风格文案" />
 
 📦 [产品截图存档](docs/promotion/screenshots/) · macOS 界面 / AI 小红书模式 / Windows bug 故事
-
-<!-- [20260731_README_Screenshots] END -->
 
 </div>
 
@@ -68,15 +69,20 @@
 
 ### 🆚 与同类工具对比
 
-| 能力                |   Murmur   | macOS 原生听写 |  讯飞语记  | Whisper Desktop |
-| ------------------- | :--------: | :------------: | :--------: | :-------------: |
-| **音频文件转录**    |     ✅     |       ❌       |     ✅     |       ✅        |
-| **AI 后处理**       |     ✅     |       ❌       |     ❌     |       ❌        |
-| **完全本地**        |     ✅     |       ✅       |     ❌     |       ✅        |
-| **自定义 Prompt**   |     ✅     |       ❌       |     ❌     |       ❌        |
-| **11+ AI 模型可选** |     ✅     |       ❌       |     ❌     |       ❌        |
-| 中文识别精度        | ⭐⭐⭐⭐⭐ |     ⭐⭐⭐     | ⭐⭐⭐⭐⭐ |     ⭐⭐⭐      |
-| 开源免费            |     ✅     |       ❌       |     ❌     |       ✅        |
+<!-- [20260907_Spec299_VerifiableTable] T5（Spec #299,基准 B6）：删除 ⭐ 自评行
+     （0/5 基准项目有星级自评对比表），换为可验证属性"桌面端（macOS/Windows）"。
+     表下公平性说明保留。 -->
+<!-- [20260907_Spec299_VerifiableTable] END -->
+
+| 能力                        | Murmur | macOS 原生听写 | 讯飞语记 | Whisper Desktop |
+| --------------------------- | :----: | :------------: | :------: | :-------------: |
+| **音频文件转录**            |   ✅   |       ❌       |    ✅    |       ✅        |
+| **AI 后处理**               |   ✅   |       ❌       |    ❌    |       ❌        |
+| **完全本地**                |   ✅   |       ✅       |    ❌    |       ✅        |
+| **自定义 Prompt**           |   ✅   |       ❌       |    ❌    |       ❌        |
+| **11+ AI 模型可选**         |   ✅   |       ❌       |    ❌    |       ❌        |
+| **桌面端（macOS/Windows）** |   ✅   |    仅 macOS    |    ❌    |   仅 Windows    |
+| 开源免费                    |   ✅   |       ❌       |    ❌    |       ✅        |
 
 > 系统听写在"实时性"上更强（流式低延迟），Murmur 在"转写后能做什么"上更强（AI 润色 + 文件批处理 + 隐私）。两者可以共存。
 
@@ -221,7 +227,16 @@ pnpm ci:check     # 本地运行所有 CI 门禁
 
 ## 🤝 参与贡献
 
+<!-- [20260907_Spec299_HelpLinks] T4（Spec #299）：GitHub 官方 README 指引
+     要求回答"哪里获取更多帮助"，opensource.guide 上线清单要求从 README
+     链接社区文件。FAQ、Troubleshooting 与 SECURITY.md 此前存在但成为
+     孤儿文档。 -->
+
+<!-- [20260907_Spec299_HelpLinks] END -->
+
 PRs welcome! 见 [CONTRIBUTING.md](CONTRIBUTING.md) 了解开发环境搭建、代码规范和提交流程。
+
+**帮助与社区**：常见问题 → [FAQ](docs/faq.md) · 故障排除 → [故障排除指南](docs/troubleshooting.md) · 安全漏洞 → [安全策略](SECURITY.md)（安全报告请勿提交公开 issue）。
 
 ## 📊 项目状态
 
