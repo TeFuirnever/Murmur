@@ -142,3 +142,6 @@ design/icon-rebrand/candidates/
 
 # machine-local ASR regression run report (scripts/asr-regression.js)
 scripts/asr_regression_results.json
+
+# coverage.py data file (python suite gate)
+.coverage

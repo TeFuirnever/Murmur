@@ -24,7 +24,9 @@ const TESTS_DIR = path.join(ROOT, "tests", "python");
 // [20260906_Spec259_T4] Branch-inclusive coverage floor, set AT the first
 // measured value (43%, 2026-09-07, embedded python 3.11 + coverage 7.16).
 // Ratchet plan: raise as the funasr_server protocol arms gain tests (34%
-// today is the big reserve) — never lower without a spec.
+// today is the big reserve) — never lower without a spec. Note:
+// --fail-under compares the UNROUNDED total while the table prints
+// rounded integers (a 42.6% actual prints 43% yet fails the gate).
 const PYTHON_FAIL_UNDER = 43;
 
 // Modules exercised by tests/python; everything else in the repo is out of
@@ -94,7 +96,7 @@ function run(interpreter, deps = {}) {
   if (runResult.status !== 0) {
     const code = runResult.status === null ? 1 : runResult.status;
     console.error(`run-python-tests: unittest suite failed (exit ${code})`);
-    return code === 0 ? 1 : code;
+    return code;
   }
 
   const report = spawn(
