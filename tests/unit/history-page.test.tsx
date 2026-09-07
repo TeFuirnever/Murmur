@@ -473,6 +473,11 @@ describe("[20260816_Test_HistoryPage] history window entry", () => {
     // electronAPI both actions are no-ops (no crash, no toast possible).
     apiMocks.getTranscriptions.mockResolvedValue([makeRecord(1, "x")]);
     await mountHistory();
+    // [20260906_Test_Deflake] Wait for the seeded record to actually render
+    // before stripping the bridge — on a slow win runner the async fetch
+    // could still be pending, and the synchronous asserts below would see
+    // an empty list (CI flake, run 34099230134).
+    await screen.findByText("x");
     (globalThis.window as unknown as TestWindow).electronAPI = undefined;
     fireEvent.click(await screen.findByTestId("export-all"));
     fireEvent.click(screen.getByTestId("clear-all"));
