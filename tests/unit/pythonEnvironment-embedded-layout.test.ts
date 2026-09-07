@@ -368,6 +368,15 @@ describe("[20260906_Spec259_T2] pythonEnvironment branch close-out", () => {
   }
 
   beforeEach(() => {
+    // [20260906_Spec259_T2_WinFix] Pin the posix layout so the block is
+    // host-independent: writeEmbeddedInterpreter() and the PATH/PYTHONHOME
+    // assertions target bin/python3.11, and on a win32 runner without a pin
+    // embeddedPythonLayout resolved python/python.exe, never found the
+    // stubbed interpreter, and every spawn/env arm degraded to the
+    // "嵌入式Python环境不可用" production throw. The win32 layout shape is
+    // already covered by the [20260817_T1] describes, which force both
+    // platforms via setPlatform on every host.
+    setPlatform("darwin");
     process.env.NODE_ENV = "production";
     tmpRes = fs.mkdtempSync(path.join(os.tmpdir(), "pyenv-branch-"));
     unpackedRoot = path.join(tmpRes, "app.asar.unpacked");
@@ -375,6 +384,7 @@ describe("[20260906_Spec259_T2] pythonEnvironment branch close-out", () => {
   });
 
   afterEach(() => {
+    setPlatform(ORIG_PLATFORM);
     process.env.NODE_ENV = ORIG_NODE_ENV;
     setResourcesPath(ORIG_RESOURCES_PATH as string);
     delete process.env.PYTHONHOME;

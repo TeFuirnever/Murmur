@@ -416,8 +416,12 @@ describe("[20260906_Spec259_T2] updateManager register() IPC behavior", () => {
         body: "release notes",
         assets: [
           {
-            name: "Murmur-9.9.9.exe",
-            browser_download_url: "https://example.com/win",
+            // [20260906_Spec259_T2_WinFix] The distractor must carry the
+            // opposite platform's extension: with a hardcoded ".exe" it
+            // collided with the host asset on win32, and getPlatformAsset
+            // (scanning assets in order) returned the distractor's URL.
+            name: `Murmur-9.9.9${EXT === ".dmg" ? ".exe" : ".dmg"}`,
+            browser_download_url: "https://example.com/other-platform",
             size: 111,
           },
           {
