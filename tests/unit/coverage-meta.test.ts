@@ -20,20 +20,32 @@ const ciWorkflow = fs.readFileSync(
   "utf8",
 );
 
+// [20260906_Spec259_T1] Re-baselined 2026-09-07: the six newly instrumented
+// module groups (modelManager, ipc/**, windowManager, updateManager,
+// logManager, pythonEnvironment) enter the aggregate at their measured
+// values, so the global floor moves 96/92/94/96 -> 88/83/88/89. The gate is
+// NOT weakened overall: per-glob floors (see thresholds config) pin each new
+// group at its measured branches, and the ratchet path is T2 (#274) +
+// T3 (#275) raising those groups to 92, after which the global floor rises
+// again. Thresholds may RISE freely; any drop fails here.
 const COVERAGE_FLOOR = {
-  statements: 96,
-  branches: 92,
-  functions: 94,
-  lines: 96,
+  statements: 88,
+  branches: 83,
+  functions: 88,
+  lines: 89,
 } as const;
 
 function parseThresholds(config: string): Record<string, number> {
-  const match = /thresholds:\s*\{([^}]*)\}/.exec(config);
-  if (!match?.[1]) return {};
-  const body = match[1];
+  // [20260906_Spec259_T1] Line-based scan: the thresholds block now contains
+  // nested per-glob objects whose `branches: <n>` entries must not shadow
+  // the global metrics. Global entries sit at exactly 8-space indent.
+  const start = config.indexOf("thresholds: {");
+  if (start === -1) return {};
   const out: Record<string, number> = {};
-  for (const m of body.matchAll(/(\w+):\s*(\d+)/g)) {
-    out[m[1] ?? ""] = Number(m[2]);
+  for (const line of config.slice(start).split("\n").slice(1)) {
+    if (/^ {6}\}/.test(line)) break;
+    const m = /^ {8}(\w+): (\d+),$/.exec(line);
+    if (m) out[m[1]!] = Number(m[2]);
   }
   return out;
 }
