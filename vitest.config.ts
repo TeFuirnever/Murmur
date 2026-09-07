@@ -95,14 +95,14 @@ export default defineConfig({
         // First measured values recorded inline (2026-09-07); floors only
         // ratchet UP:
         //   - helpers five: DONE — raised to the global 92 by T2 (#274)
-        //   - ipc/**: T3 (#275) raises the handler floor to the global 92
+        //   - ipc/**: DONE — raised to the global 92 by T3 (#275)
         // Measured origins recorded inline; never lower a floor.
         "src/helpers/modelManager.ts": { branches: 92 }, // raised to global 92 (Spec #259 T2, #274); first measured 55.04 (2026-09-07)
         "src/helpers/windowManager.ts": { branches: 92 }, // raised to global 92 (Spec #259 T2, #274); first measured 48.21 (2026-09-07)
         "src/helpers/updateManager.ts": { branches: 92 }, // raised to global 92 (Spec #259 T2, #274); first measured 14.60 (2026-09-07)
         "src/helpers/logManager.ts": { branches: 92 }, // raised to global 92 (Spec #259 T2, #274); first measured 79.31 (2026-09-07)
         "src/helpers/pythonEnvironment.ts": { branches: 92 }, // raised to global 92 (Spec #259 T2, #274); first measured 28.57 (2026-09-07)
-        "src/helpers/ipc/**": { branches: 67 }, // dir aggregate first measured 67.18 (2026-09-07)
+        "src/helpers/ipc/**": { branches: 92 }, // raised to global 92 (Spec #259 T3, #275); dir aggregate first measured 67.18 (2026-09-07)
       },
     },
   },

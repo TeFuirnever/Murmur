@@ -115,5 +115,53 @@ describe("settingsHandlers", () => {
     expect(result.ai_base_url).toBe("https://api.openai.com/v1");
   });
 
-  // [20260816_Refactor_DeadChannels] legacy get-settings masking test removed.
+  // ======================================================================
+  // [20260906_Spec259_T3] Validation + masking arms (Spec #259 T3, #275).
+  // ======================================================================
+
+  it("set-setting rejects a key outside the allowlist without touching the DB", () => {
+    const result = ipcMain._handlers["set-setting"]!({}, "evil_key", "x") as {
+      success: boolean;
+      error?: string;
+    };
+    expect(result).toEqual({
+      success: false,
+      error: "Invalid setting key or value",
+    });
+    expect(managers.databaseManager.setSetting).not.toHaveBeenCalled();
+    expect(managers.databaseManager.syncToFileConfig).not.toHaveBeenCalled();
+  });
+
+  it("set-setting pushes language changes to the tray manager", () => {
+    const setLanguage = vi.fn();
+    const trayManagers = {
+      databaseManager: managers.databaseManager,
+      windowManager: { mainWindow: null },
+      trayManager: { setLanguage },
+    };
+    register(
+      ipcMain as unknown as Parameters<typeof register>[0],
+      trayManagers as unknown as Parameters<typeof register>[1],
+    );
+    const result = ipcMain._handlers["set-setting"]!({}, "language", "en");
+    // The handler returns the raw databaseManager.setSetting result.
+    expect(result).toBe(true);
+    expect(setLanguage).toHaveBeenCalledWith("en");
+  });
+
+  it("get-all-settings masks a short API key entirely", () => {
+    managers.databaseManager.getAllSettings = vi.fn(() => ({
+      ai_api_key: "abc",
+    }));
+    const result = ipcMain._handlers["get-all-settings"]!();
+    expect(result.ai_api_key).toBe("****");
+  });
+
+  it("get-all-settings leaves a non-string API key untouched", () => {
+    managers.databaseManager.getAllSettings = vi.fn(() => ({
+      ai_api_key: 12345,
+    }));
+    const result = ipcMain._handlers["get-all-settings"]!();
+    expect(result.ai_api_key).toBe(12345);
+  });
 });

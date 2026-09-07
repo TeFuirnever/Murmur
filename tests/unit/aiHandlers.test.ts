@@ -105,6 +105,8 @@ describe("aiHandlers", () => {
   const processTextWithAI = aiHandlers.processTextWithAI;
   const checkAIStatus = aiHandlers.checkAIStatus;
   const getAIModes = aiHandlers.getAIModes;
+  // [20260906_Spec259_T3] Exported URL validator exercised directly below.
+  const validateAIBaseUrl = aiHandlers.validateAIBaseUrl;
 
   describe("register", () => {
     it("registers process-text and check-ai-status handlers", () => {
@@ -441,6 +443,434 @@ describe("aiHandlers", () => {
         expect(mode.name).toBeTruthy();
         expect(mode.label).toBeTruthy();
       }
+    });
+  });
+
+  // ======================================================================
+  // [20260906_Spec259_T3] URL-validation, fetch edge and error-mapping
+  // arms (Spec #259 T3, #275).
+  // ======================================================================
+  describe("validateAIBaseUrl", () => {
+    it("accepts a public https endpoint", () => {
+      expect(validateAIBaseUrl("https://api.openai.com/v1")).toBe(true);
+    });
+
+    it("rejects http when localhost is not allowed", () => {
+      expect(validateAIBaseUrl("http://api.openai.com/v1")).toBe(false);
+    });
+
+    it("accepts http for an allowed localhost endpoint", () => {
+      expect(
+        validateAIBaseUrl("http://localhost:1234/v1", {
+          allowLocalhost: true,
+        }),
+      ).toBe(true);
+    });
+
+    it("accepts https for an allowed localhost endpoint", () => {
+      expect(
+        validateAIBaseUrl("https://localhost:1234/v1", {
+          allowLocalhost: true,
+        }),
+      ).toBe(true);
+    });
+
+    it.each([
+      "https://localhost/v1",
+      "https://sub.localhost/v1",
+      "https://0.0.0.0/v1",
+      "https://[::1]/v1",
+      "https://127.0.0.1/v1",
+    ])("rejects loopback host %s", (baseUrl) => {
+      expect(validateAIBaseUrl(baseUrl)).toBe(false);
+    });
+
+    it.each([
+      "https://10.1.2.3/v1",
+      "https://192.168.0.5/v1",
+      "https://172.16.0.1/v1",
+      "https://172.31.255.255/v1",
+      "https://169.254.9.9/v1",
+    ])("rejects private-network host %s", (baseUrl) => {
+      expect(validateAIBaseUrl(baseUrl)).toBe(false);
+    });
+
+    it("accepts a host that only looks like the 172 range", () => {
+      expect(validateAIBaseUrl("https://172.15.0.1/v1")).toBe(true);
+      expect(validateAIBaseUrl("https://172.32.0.1/v1")).toBe(true);
+    });
+
+    it("rejects a URL with an empty hostname", () => {
+      expect(validateAIBaseUrl("https://#")).toBe(false);
+    });
+
+    it("rejects unparseable input", () => {
+      expect(validateAIBaseUrl("not a url")).toBe(false);
+    });
+  });
+
+  describe("processTextWithAI — request and error-mapping arms", () => {
+    it("falls back to the default base URL when the setting is empty", async () => {
+      const db = setupDb({ ai_base_url: "" });
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      mockFetch({ choices: [{ message: { content: "ok" } }] });
+
+      const result = await processTextWithAI("t", "optimize", db, logger);
+      expect(result.success).toBe(true);
+      const fetchMock = global.fetch as unknown as FetchMock;
+      expect(fetchMock.mock.calls[0]![0]).toBe(
+        "https://api.openai.com/v1/chat/completions",
+      );
+    });
+
+    it("uses caller-supplied system/user prompts verbatim", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      mockFetch({ choices: [{ message: { content: "ok" } }] });
+
+      await processTextWithAI("t", "optimize", db, logger, {
+        systemPrompt: "SYS",
+        userPrompt: "USR",
+      });
+      const fetchMock = global.fetch as unknown as FetchMock;
+      const body = JSON.parse(
+        (fetchMock.mock.calls[0]![1] as { body: string }).body,
+      );
+      expect(body.messages[0].content).toBe("SYS");
+      expect(body.messages[1].content).toBe("USR");
+    });
+
+    it("maps a timed-out request to the TIMEOUT message", async () => {
+      vi.useFakeTimers();
+      try {
+        const db = setupDb();
+        const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+        // A fetch that never resolves but rejects when its abort signal
+        // fires — lets the real AbortController timer run out.
+        global.fetch = vi.fn(
+          (_input: unknown, init?: { signal?: AbortSignal }) =>
+            new Promise<FetchResponseStub>((_resolve, reject) => {
+              init?.signal?.addEventListener("abort", () => {
+                const err = new Error("The operation was aborted");
+                err.name = "AbortError";
+                reject(err);
+              });
+            }),
+        ) as unknown as typeof global.fetch;
+
+        const pending = processTextWithAI("t", "optimize", db, logger);
+        await vi.advanceTimersByTimeAsync(150_000);
+        const result = await pending;
+        expect(result.success).toBe(false);
+        expect(result.error).toContain("超时");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("surfaces a generic fetch failure message", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      global.fetch = vi.fn(async () => {
+        throw new Error("socket boom");
+      }) as unknown as typeof global.fetch;
+
+      const result = await processTextWithAI("t", "optimize", db, logger);
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("socket boom");
+    });
+
+    it("maps an ENOTFOUND failure to the network hint", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      global.fetch = vi.fn(async () => {
+        throw Object.assign(new Error("getaddrinfo failed"), {
+          code: "ENOTFOUND",
+        });
+      }) as unknown as typeof global.fetch;
+
+      const result = await processTextWithAI("t", "optimize", db, logger);
+      expect(result.error).toBe("无法连接到AI服务器，请检查网络");
+    });
+
+    it("logs and forwards a non-JSON error body", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      global.fetch = vi.fn(async () => ({
+        ok: false,
+        status: 500,
+        statusText: "Internal Server Error",
+        text: async () => "<html>oops</html>",
+      })) as unknown as typeof global.fetch;
+
+      const result = await processTextWithAI("t", "optimize", db, logger);
+      expect(result.success).toBe(false);
+      expect(logger.warn).toHaveBeenCalledWith(
+        "AI错误响应非JSON格式:",
+        expect.any(String),
+      );
+      expect(String(result.error)).toContain("<html>oops</html>");
+    });
+
+    it("falls back to the status code when the error body has no message", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      mockFetchError(500, { error: null });
+
+      const result = await processTextWithAI("t", "optimize", db, logger);
+      expect(result.success).toBe(false);
+      expect(String(result.error)).toContain("AI服务请求失败 (500)");
+    });
+
+    it("tolerates an empty non-JSON error body (falls back to statusText)", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      global.fetch = vi.fn(async () => ({
+        ok: false,
+        status: 503,
+        statusText: "Service Unavailable",
+        text: async () => "",
+      })) as unknown as typeof global.fetch;
+
+      const result = await processTextWithAI("t", "optimize", db, logger);
+      expect(result.success).toBe(false);
+      expect(String(result.error)).toContain("Service Unavailable");
+    });
+
+    it("reports empty content without a token cap as retryable", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      mockFetch({ choices: [{ message: {} }] });
+
+      const result = await processTextWithAI("t", "optimize", db, logger);
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("AI返回了空内容，请重试或更换模型");
+    });
+
+    it("reports the token cap when usage alone proves it", async () => {
+      const db = setupDb({ ai_max_tokens: 2000 });
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      mockFetch({
+        choices: [{ message: { content: "  " }, finish_reason: "stop" }],
+        usage: { completion_tokens: 2000 },
+      });
+
+      const result = await processTextWithAI("t", "optimize", db, logger);
+      expect(result.success).toBe(false);
+      expect(String(result.error)).toContain("max_tokens");
+    });
+  });
+
+  describe("checkAIStatus — config and error-mapping arms", () => {
+    it("uses a temporary test config when provided", async () => {
+      const db = { getSetting: vi.fn(async () => null) };
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      mockFetch({
+        choices: [{ message: { content: "测试成功" } }],
+        usage: { total_tokens: 5 },
+      });
+
+      const result = await checkAIStatus(
+        {
+          ai_api_key: "temp-key",
+          ai_base_url: "https://temp.example.com/v1",
+          ai_model: "temp-model",
+        },
+        db,
+        logger,
+      );
+      expect(result.available).toBe(true);
+      expect(result.model).toBe("temp-model");
+      expect(result.status).toBe("connected");
+      // The saved config must not have been read.
+      expect(db.getSetting).not.toHaveBeenCalled();
+    });
+
+    it("defaults missing temp-config fields to the OpenAI presets", async () => {
+      const db = { getSetting: vi.fn(async () => null) };
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      mockFetch({ choices: [{ message: { content: "测试成功" } }] });
+
+      const result = await checkAIStatus(
+        { ai_api_key: "temp-key" },
+        db,
+        logger,
+      );
+      expect(result.available).toBe(true);
+      expect(result.model).toBe("gpt-3.5-turbo");
+      const fetchMock = global.fetch as unknown as FetchMock;
+      expect(fetchMock.mock.calls[0]![0]).toBe(
+        "https://api.openai.com/v1/chat/completions",
+      );
+    });
+
+    it("maps an HTTP 403 to the permission message", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      mockFetchError(403, { error: { message: "Forbidden" } });
+
+      const result = await checkAIStatus(null, db, logger);
+      expect(result.available).toBe(false);
+      expect(result.error).toBe("API密钥权限不足");
+    });
+
+    it("falls back to the HTTP status when the body has no message", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      mockFetchError(502, { error: null });
+
+      const result = await checkAIStatus(null, db, logger);
+      expect(result.available).toBe(false);
+      expect(String(result.error)).toContain("HTTP 502");
+      expect(result.details).toContain("HTTP 502");
+    });
+
+    it("maps an AbortError to the timeout message", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      global.fetch = vi.fn(async () => {
+        const err = new Error("The operation was aborted");
+        err.name = "AbortError";
+        throw err;
+      }) as unknown as typeof global.fetch;
+
+      const result = await checkAIStatus(null, db, logger);
+      expect(result.available).toBe(false);
+      expect(result.error).toBe("请求超时，请检查网络连接");
+    });
+
+    it.each([
+      [
+        "getaddrinfo ENOTFOUND api.example.com",
+        "无法连接到AI服务器，请检查网络和Base URL",
+      ],
+      [
+        "connect ECONNREFUSED 1.2.3.4:443",
+        "连接被拒绝，请检查Base URL是否正确",
+      ],
+      ["socket timeout waiting for response", "请求超时，请检查网络连接"],
+      ["upstream replied 401 to probe", "API密钥无效"],
+      ["upstream replied 403 to probe", "API密钥权限不足"],
+      ["upstream replied 429 to probe", "API调用频率超限"],
+    ])("maps %s to %s", async (message, expected) => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      global.fetch = vi.fn(async () => {
+        throw new Error(message);
+      }) as unknown as typeof global.fetch;
+
+      const result = await checkAIStatus(null, db, logger);
+      expect(result.available).toBe(false);
+      expect(result.error).toBe(expected);
+    });
+
+    it("reports connected with an empty reply when content is absent", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      mockFetch({ choices: [{ message: {} }], usage: { total_tokens: 1 } });
+
+      const result = await checkAIStatus(null, db, logger);
+      expect(result.available).toBe(true);
+      expect(result.response).toBe("");
+    });
+  });
+
+  describe("register — handler invocation (Spec #259 T3)", () => {
+    // Handler shape for invocation asserts: unknown args, unknown result.
+    type AsyncMockHandler = (...args: unknown[]) => unknown;
+
+    // UNREACHABLE ARM (documented per Spec #259 T3): the
+    // managers.templatesDir fallback at aiHandlers.ts L578-585 (lazy
+    // require("electron") → app.getPath) cannot resolve in the test
+    // environment — vi.mock does not intercept CJS require, the real
+    // electron package exports a binary path string outside Electron, so
+    // register() without templatesDir always throws there. The handlers
+    // below therefore pass templatesDir explicitly.
+    function createCapturingIpcMain() {
+      const handlers: Record<string, AsyncMockHandler | undefined> = {};
+      const ipcMain = {
+        handle: vi.fn((channel: string, fn: AsyncMockHandler) => {
+          handlers[channel] = fn;
+        }),
+      };
+      return { handlers, ipcMain };
+    }
+
+    function createManagers() {
+      return {
+        databaseManager: setupDb(),
+        logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
+        templatesDir: "/tmp/test-templates",
+      } as unknown as Parameters<typeof register>[1];
+    }
+
+    it("serves the info handlers through the registered channels", async () => {
+      const { handlers, ipcMain } = createCapturingIpcMain();
+      register(
+        ipcMain as unknown as Parameters<typeof register>[0],
+        createManagers(),
+      );
+
+      // GET_MODES through the explicit templatesDir.
+      const modes = (await handlers["get-ai-modes"]!()) as Array<{
+        name: string;
+      }>;
+      expect(modes.length).toBeGreaterThanOrEqual(6);
+
+      // GET_PROVIDER_PRESETS passthrough.
+      const presets = (await handlers[
+        "get-ai-provider-presets"
+      ]!()) as unknown[];
+      expect(Array.isArray(presets)).toBe(true);
+
+      // DETECT_LOCAL_MODELS — probes localhost; offline yields an array.
+      const detected = (await handlers["detect-local-models"]!()) as unknown[];
+      expect(Array.isArray(detected)).toBe(true);
+    });
+
+    it("PROCESS applies the default mode and the template cache", async () => {
+      const { handlers, ipcMain } = createCapturingIpcMain();
+      register(
+        ipcMain as unknown as Parameters<typeof register>[0],
+        createManagers(),
+      );
+      mockFetch({ choices: [{ message: { content: "ok" } }] });
+
+      const first = (await handlers["process-text"]!({}, "raw")) as {
+        success: boolean;
+      };
+      // Second call inside the template-cache TTL exercises the hit path.
+      const second = (await handlers["process-text"]!({}, "raw")) as {
+        success: boolean;
+      };
+      expect(first.success).toBe(true);
+      expect(second.success).toBe(true);
+
+      const fetchMock = global.fetch as unknown as FetchMock;
+      expect(fetchMock.mock.calls.length).toBe(2);
+      const body = JSON.parse(
+        (fetchMock.mock.calls[0]![1] as { body: string }).body,
+      );
+      expect(body.model).toBe("gpt-3.5-turbo");
+    });
+
+    it("CHECK_STATUS handler defaults to the saved config", async () => {
+      const { handlers, ipcMain } = createCapturingIpcMain();
+      register(
+        ipcMain as unknown as Parameters<typeof register>[0],
+        createManagers(),
+      );
+      mockFetch({
+        choices: [{ message: { content: "测试成功" } }],
+        usage: { total_tokens: 5 },
+      });
+
+      const result = (await handlers["check-ai-status"]!()) as {
+        available: boolean;
+        model?: string;
+      };
+      expect(result.available).toBe(true);
+      expect(result.model).toBe("gpt-3.5-turbo");
     });
   });
 });

@@ -351,4 +351,174 @@ describe("hotkeyHandlers", () => {
   // [20260906_Refactor_DeadChannelCleanup] Ticket #250: the HOTKEY.GET_STATE
   // handler describe block was removed with the handler (zero renderer
   // callers); its success/failure arms pinned a deleted channel.
+
+  // ======================================================================
+  // [20260906_Spec259_T3] Trigger-callback, sender-cleanup and error-path
+  // arms (Spec #259 T3, #275).
+  // ======================================================================
+
+  describe("HOTKEY.REGISTER — trigger callback", () => {
+    it("sends HOTKEY_TRIGGERED to a live main window when the hotkey fires", async () => {
+      const C = await setup();
+      const handler = registeredHandlers.get(C.HOTKEY.REGISTER)!;
+      await handler(mockEvent, "CommandOrControl+Shift+Space");
+
+      const trigger = mockHotkeyManager.registerHotkey!.mock
+        .calls[0]![1] as () => void;
+      trigger();
+
+      expect(mockMainWindow.webContents.send).toHaveBeenCalledWith(
+        C.EVENTS.HOTKEY_TRIGGERED,
+        { hotkey: "CommandOrControl+Shift+Space" },
+      );
+    });
+
+    it("is a no-op when the main window is gone", async () => {
+      const { register } = await import("../../src/helpers/ipc/hotkeyHandlers");
+      registeredHandlers.clear();
+      register(
+        mockIpcMain as never,
+        {
+          hotkeyManager: mockHotkeyManager,
+          windowManager: { mainWindow: null },
+          logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        } as never,
+      );
+      const C = await import("../../src/helpers/ipc-contracts");
+      const handler = registeredHandlers.get(C.HOTKEY.REGISTER)!;
+      await handler(mockEvent, "CommandOrControl+Shift+Space");
+
+      const trigger = mockHotkeyManager.registerHotkey!.mock
+        .calls[0]![1] as () => void;
+      expect(() => trigger()).not.toThrow();
+      expect(mockMainWindow.webContents.send).not.toHaveBeenCalled();
+    });
+
+    it("does not send to a destroyed main window", async () => {
+      const C = await setup();
+      const handler = registeredHandlers.get(C.HOTKEY.REGISTER)!;
+      mockMainWindow.isDestroyed = vi.fn(() => true);
+      await handler(mockEvent, "CommandOrControl+Shift+Space");
+
+      const trigger = mockHotkeyManager.registerHotkey!.mock
+        .calls[0]![1] as () => void;
+      trigger();
+      expect(mockMainWindow.webContents.send).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("HOTKEY.REGISTER — sender destroyed cleanup", () => {
+    it("drops the sender mapping on destroyed so re-registration rebinds", async () => {
+      const C = await setup();
+      const handler = registeredHandlers.get(C.HOTKEY.REGISTER)!;
+      await handler(mockEvent, "CommandOrControl+Shift+Space");
+
+      const destroyed = mockSender.on.mock.calls[0]![1] as () => void;
+      destroyed();
+
+      // With the mapping gone, the same combo must be REGISTERED again
+      // (not deduped) and a fresh destroyed listener attached.
+      mockHotkeyManager.registerHotkey!.mockClear();
+      await handler(mockEvent, "CommandOrControl+Shift+Space");
+      expect(mockHotkeyManager.registerHotkey).toHaveBeenCalledTimes(1);
+      expect(mockSender.on).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe("error paths (Spec #259 T3)", () => {
+    it("REGISTER returns a failure shape when registerHotkey throws", async () => {
+      const C = await setup();
+      const handler = registeredHandlers.get(C.HOTKEY.REGISTER)!;
+      mockHotkeyManager.registerHotkey!.mockImplementation(() => {
+        throw new Error("accelerator rejected");
+      });
+      const result = (await handler(
+        mockEvent,
+        "CommandOrControl+Shift+Space",
+      )) as HandlerResult;
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("accelerator rejected");
+    });
+
+    it("UNREGISTER returns a failure shape when hotkeyManager is null", async () => {
+      const { register } = await import("../../src/helpers/ipc/hotkeyHandlers");
+      registeredHandlers.clear();
+      register(
+        mockIpcMain as never,
+        {
+          hotkeyManager: null,
+          windowManager: { mainWindow: mockMainWindow },
+          logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        } as never,
+      );
+      const C = await import("../../src/helpers/ipc-contracts");
+      const handler = registeredHandlers.get(C.HOTKEY.UNREGISTER)!;
+      const result = (await handler(
+        mockEvent,
+        "CommandOrControl+Shift+Space",
+      )) as HandlerResult;
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("未初始化");
+    });
+
+    it("UNREGISTER returns a failure shape when unregisterHotkey throws", async () => {
+      const C = await setup();
+      const handler = registeredHandlers.get(C.HOTKEY.UNREGISTER)!;
+      mockHotkeyManager.unregisterHotkey!.mockImplementation(() => {
+        throw new Error("unregister blew up");
+      });
+      const result = (await handler(
+        mockEvent,
+        "CommandOrControl+Shift+Space",
+      )) as HandlerResult;
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("unregister blew up");
+    });
+
+    it("GET_CURRENT falls back to the default when hotkeyManager is null", async () => {
+      const { register } = await import("../../src/helpers/ipc/hotkeyHandlers");
+      registeredHandlers.clear();
+      register(
+        mockIpcMain as never,
+        {
+          hotkeyManager: null,
+          windowManager: { mainWindow: mockMainWindow },
+          logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        } as never,
+      );
+      const C = await import("../../src/helpers/ipc-contracts");
+      const handler = registeredHandlers.get(C.HOTKEY.GET_CURRENT)!;
+      const result = (await handler(mockEvent)) as string;
+      expect(result).toBe("CommandOrControl+Shift+Space");
+    });
+
+    it("GET_CURRENT falls back to the default when nothing is registered", async () => {
+      const C = await setup();
+      const handler = registeredHandlers.get(C.HOTKEY.GET_CURRENT)!;
+      mockHotkeyManager.getRegisteredHotkeys!.mockReturnValueOnce([]);
+      const result = (await handler(mockEvent)) as string;
+      expect(result).toBe("CommandOrControl+Shift+Space");
+    });
+
+    it("GET_CURRENT falls back to the default when the lookup throws", async () => {
+      const C = await setup();
+      const handler = registeredHandlers.get(C.HOTKEY.GET_CURRENT)!;
+      mockHotkeyManager.getRegisteredHotkeys!.mockImplementation(() => {
+        throw new Error("lookup failed");
+      });
+      const result = (await handler(mockEvent)) as string;
+      expect(result).toBe("CommandOrControl+Shift+Space");
+    });
+
+    it("SET_STATE returns a failure shape when setRecordingState throws", async () => {
+      const C = await setup();
+      const handler = registeredHandlers.get(C.HOTKEY.SET_STATE)!;
+      mockHotkeyManager.setRecordingState!.mockImplementation(() => {
+        throw new Error("state blew up");
+      });
+      const result = (await handler(mockEvent, true)) as HandlerResult;
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("state blew up");
+    });
+  });
 });
