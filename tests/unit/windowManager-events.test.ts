@@ -26,8 +26,11 @@
 //
 // Template reference: preload-bridge-contract.test.ts (vi.hoisted pattern),
 // updateManager-behavioral.test.ts (vi.mock("electron") shape).
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import * as C from "../../src/helpers/ipc-contracts";
+// [20260906_Spec259_T2] path join keeps packaged-HTML load assertions
+// separator-correct on both CI platforms (mirrors deferred-load suite).
+import path from "path";
 
 // [20260726_Tier32_WindowManagerEvents] vi.mock factories are hoisted above
 // all imports, so the shared state they close over must also be hoisted.
@@ -72,6 +75,10 @@ interface BrowserWindowInstance {
   isMaximized: ReturnType<typeof vi.fn>;
   isDestroyed: ReturnType<typeof vi.fn>;
   setAlwaysOnTop: ReturnType<typeof vi.fn>;
+  // [20260906_Spec259_T2] close/hide are exercised by the branch close-out
+  // describe below (hide/close window guards).
+  close: ReturnType<typeof vi.fn>;
+  hide: ReturnType<typeof vi.fn>;
 }
 
 // [20260726_Tier32_WindowManagerEvents] event-name -> listener. The
@@ -292,5 +299,343 @@ describe("windowManager — real module execution with mocked electron", () => {
     expect(wm.mainWindow!.focus).toHaveBeenCalled();
     // [CodeReview] restoreMainWindow must also restore alwaysOnTop
     expect(wm.mainWindow!.setAlwaysOnTop).toHaveBeenCalled();
+  });
+});
+
+// [20260906_Spec259_T2] Branch close-out for the instrumented helpers
+// (Spec #259 T2, ticket #274): drive the remaining windowManager branch
+// arms through public behavior only — CSP header registration, child-window
+// reuse vs creation, show/hide/close guards, closeAllWindows, and the
+// in-flight createMainWindow guard. Same harness pattern as the describe
+// above: vi.hoisted electronMock + per-test BrowserWindow constructor spy +
+// resetModules/dynamic import.
+describe("[20260906_Spec259_T2] windowManager branch close-out", () => {
+  const ORIG_NODE_ENV = process.env.NODE_ENV;
+
+  let onHandlers: Record<string, EventListener>;
+  let MockBrowserWindow: ViFn;
+
+  // Constructor-style vi.fn shared with the hoisted electronMock; each test
+  // rebinds electronMock.BrowserWindow to a fresh spy (same as above).
+  function installBrowserWindow(loadURLImpl?: () => Promise<void>): void {
+    MockBrowserWindow = vi.fn(function (this: BrowserWindowInstance) {
+      this.webContents = { send: vi.fn() };
+      this.on = vi.fn((event: string, handler: EventListener) => {
+        onHandlers[event] = handler;
+      });
+      this.loadURL = loadURLImpl
+        ? vi.fn(loadURLImpl)
+        : vi.fn(() => Promise.resolve());
+      this.loadFile = vi.fn(() => Promise.resolve());
+      this.focus = vi.fn();
+      this.show = vi.fn();
+      this.setAlwaysOnTop = vi.fn();
+      this.maximize = vi.fn();
+      this.isMaximized = vi.fn(() => false);
+      this.isDestroyed = vi.fn(() => false);
+      this.close = vi.fn();
+      this.hide = vi.fn();
+      return this;
+    });
+    electronMock.BrowserWindow = MockBrowserWindow;
+  }
+
+  async function loadWindowManager(): Promise<
+    typeof import("../../src/helpers/windowManager").default
+  > {
+    const mod = await import("../../src/helpers/windowManager");
+    return mod.default;
+  }
+
+  beforeEach(() => {
+    vi.resetModules();
+    onHandlers = {};
+    electronMock.app.getAppPath = vi.fn(() => "/fake/app/path");
+    electronMock.session.defaultSession.webRequest.onHeadersReceived = vi.fn();
+    installBrowserWindow();
+  });
+
+  afterEach(() => {
+    process.env.NODE_ENV = ORIG_NODE_ENV;
+  });
+
+  it("CSP header handler registers once and rewrites headers with the strict production policy", async () => {
+    process.env.NODE_ENV = "production";
+    const WindowManager = await loadWindowManager();
+    const wm = new WindowManager();
+
+    wm._setupCSP();
+    wm._setupCSP(); // second call must be a no-op (idempotent guard)
+
+    const register = electronMock.session.defaultSession.webRequest
+      .onHeadersReceived as ViFn;
+    expect(register).toHaveBeenCalledTimes(1);
+
+    const handler = register.mock.calls[0]![0] as (
+      details: { responseHeaders?: Record<string, string[]> },
+      callback: (response: {
+        responseHeaders: Record<string, string[]>;
+      }) => void,
+    ) => void;
+    const callback = vi.fn();
+    handler({ responseHeaders: { "x-existing": ["1"] } }, callback);
+
+    expect(callback).toHaveBeenCalledWith({
+      responseHeaders: {
+        "x-existing": ["1"],
+        // Production policy: no unsafe-eval / no localhost connect-src.
+        "Content-Security-Policy": [
+          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https:",
+        ],
+      },
+    });
+  });
+
+  it("CSP header handler allows dev-only sources in development", async () => {
+    process.env.NODE_ENV = "development";
+    const WindowManager = await loadWindowManager();
+    const wm = new WindowManager();
+    wm._setupCSP();
+
+    const register = electronMock.session.defaultSession.webRequest
+      .onHeadersReceived as ViFn;
+    const handler = register.mock.calls[0]![0] as (
+      details: object,
+      callback: (response: {
+        responseHeaders: Record<string, string[]>;
+      }) => void,
+    ) => void;
+    const callback = vi.fn();
+    handler({}, callback);
+
+    const headers = callback.mock.calls[0]![0].responseHeaders;
+    expect(headers["Content-Security-Policy"]![0]).toContain("unsafe-eval");
+    expect(headers["Content-Security-Policy"]![0]).toContain(
+      "ws://localhost:*",
+    );
+  });
+
+  it("createMainWindow returns null while another creation is still in flight", async () => {
+    process.env.NODE_ENV = "development";
+    // Hold loadURL open so the first createMainWindow stays in-flight and
+    // the _creatingMainWindow guard is observable from the outside.
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    installBrowserWindow(() => gate);
+
+    const WindowManager = await loadWindowManager();
+    const wm = new WindowManager();
+    const first = wm.createMainWindow();
+    // The window exists but the load is still pending; closing it nulls
+    // mainWindow while _creatingMainWindow is still true — the exact state
+    // in which a concurrent createMainWindow must bail out with null.
+    onHandlers["closed"]!();
+    const second = await wm.createMainWindow();
+    expect(second).toBeNull();
+
+    release();
+    const win = await first;
+    expect(win).toBeDefined();
+  });
+
+  it("createHistoryWindow focuses and returns the existing window on a second call", async () => {
+    process.env.NODE_ENV = "development";
+    const WindowManager = await loadWindowManager();
+    const wm = new WindowManager();
+    const first = await wm.createHistoryWindow();
+    const second = await wm.createHistoryWindow();
+
+    expect(second).toBe(first);
+    expect(first.focus).toHaveBeenCalled();
+    expect(MockBrowserWindow).toHaveBeenCalledTimes(1);
+  });
+
+  it("createHistoryWindow loads the packaged history.html outside development", async () => {
+    process.env.NODE_ENV = "production";
+    const WindowManager = await loadWindowManager();
+    const wm = new WindowManager();
+    const win = await wm.createHistoryWindow();
+
+    expect(win.loadFile).toHaveBeenCalledWith(
+      path.join("/fake/app/path", "src", "dist", "history.html"),
+    );
+    expect(win.loadURL).not.toHaveBeenCalled();
+  });
+
+  it("createSettingsWindow focuses and returns the existing window on a second call", async () => {
+    process.env.NODE_ENV = "development";
+    const WindowManager = await loadWindowManager();
+    const wm = new WindowManager();
+    const first = await wm.createSettingsWindow();
+    const second = await wm.createSettingsWindow();
+
+    expect(second).toBe(first);
+    expect(first.focus).toHaveBeenCalled();
+    expect(MockBrowserWindow).toHaveBeenCalledTimes(1);
+  });
+
+  it("createSettingsWindow loads the packaged settings.html outside development", async () => {
+    process.env.NODE_ENV = "production";
+    const WindowManager = await loadWindowManager();
+    const wm = new WindowManager();
+    const win = await wm.createSettingsWindow();
+
+    expect(win.loadFile).toHaveBeenCalledWith(
+      path.join("/fake/app/path", "src", "dist", "settings.html"),
+    );
+    expect(win.loadURL).not.toHaveBeenCalled();
+  });
+
+  it("showHistoryWindow shows an existing history window without touching a missing main window", async () => {
+    process.env.NODE_ENV = "development";
+    const WindowManager = await loadWindowManager();
+    const wm = new WindowManager();
+    const history = await wm.createHistoryWindow();
+
+    wm.showHistoryWindow();
+
+    expect(history.show).toHaveBeenCalled();
+    expect(history.focus).toHaveBeenCalled();
+  });
+
+  it("showHistoryWindow skips alwaysOnTop juggling when the main window is destroyed", async () => {
+    process.env.NODE_ENV = "development";
+    const WindowManager = await loadWindowManager();
+    const wm = new WindowManager();
+    const main = (await wm.createMainWindow())!;
+    const history = await wm.createHistoryWindow();
+    main.isDestroyed = vi.fn(() => true);
+
+    wm.showHistoryWindow();
+
+    expect(main.setAlwaysOnTop).not.toHaveBeenCalled();
+    expect(history.show).toHaveBeenCalled();
+  });
+
+  it("showHistoryWindow creates and then shows the history window when absent", async () => {
+    process.env.NODE_ENV = "development";
+    const WindowManager = await loadWindowManager();
+    const wm = new WindowManager();
+    const main = (await wm.createMainWindow())!;
+
+    wm.showHistoryWindow();
+    // show() runs in createHistoryWindow().then(...) — wait on the visible
+    // effect, not on the window reference (assigned before the load awaits).
+    await vi.waitFor(() => expect(wm.historyWindow).not.toBeNull());
+    await vi.waitFor(() => expect(wm.historyWindow!.show).toHaveBeenCalled());
+
+    expect(main.setAlwaysOnTop).toHaveBeenCalledWith(false);
+    expect(wm.historyWindow!.focus).toHaveBeenCalled();
+  });
+
+  it("hideHistoryWindow and closeHistoryWindow are safe no-ops when absent", async () => {
+    process.env.NODE_ENV = "development";
+    const WindowManager = await loadWindowManager();
+    const wm = new WindowManager();
+
+    expect(() => wm.hideHistoryWindow()).not.toThrow();
+    expect(() => wm.closeHistoryWindow()).not.toThrow();
+  });
+
+  it("hideHistoryWindow and closeHistoryWindow act on an open history window", async () => {
+    process.env.NODE_ENV = "development";
+    const WindowManager = await loadWindowManager();
+    const wm = new WindowManager();
+    const history = await wm.createHistoryWindow();
+
+    wm.hideHistoryWindow();
+    expect(history.hide).toHaveBeenCalledTimes(1);
+
+    wm.closeHistoryWindow();
+    expect(history.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("showSettingsWindow shows an existing settings window without a main window present", async () => {
+    process.env.NODE_ENV = "development";
+    const WindowManager = await loadWindowManager();
+    const wm = new WindowManager();
+    const settings = await wm.createSettingsWindow();
+
+    wm.showSettingsWindow();
+
+    expect(settings.show).toHaveBeenCalled();
+    expect(settings.focus).toHaveBeenCalled();
+  });
+
+  it("showSettingsWindow skips alwaysOnTop juggling when the main window is destroyed", async () => {
+    process.env.NODE_ENV = "development";
+    const WindowManager = await loadWindowManager();
+    const wm = new WindowManager();
+    const main = (await wm.createMainWindow())!;
+    const settings = await wm.createSettingsWindow();
+    main.isDestroyed = vi.fn(() => true);
+
+    wm.showSettingsWindow();
+
+    expect(main.setAlwaysOnTop).not.toHaveBeenCalled();
+    expect(settings.show).toHaveBeenCalled();
+  });
+
+  it("showSettingsWindow creates and then shows the settings window when absent", async () => {
+    process.env.NODE_ENV = "development";
+    const WindowManager = await loadWindowManager();
+    const wm = new WindowManager();
+    const main = (await wm.createMainWindow())!;
+
+    wm.showSettingsWindow();
+    await vi.waitFor(() => expect(wm.settingsWindow).not.toBeNull());
+    await vi.waitFor(() => expect(wm.settingsWindow!.show).toHaveBeenCalled());
+
+    expect(main.setAlwaysOnTop).toHaveBeenCalledWith(false);
+    expect(wm.settingsWindow!.focus).toHaveBeenCalled();
+  });
+
+  it("hideSettingsWindow and closeSettingsWindow are safe no-ops when absent, and act when open", async () => {
+    process.env.NODE_ENV = "development";
+    const WindowManager = await loadWindowManager();
+    const wm = new WindowManager();
+
+    expect(() => wm.hideSettingsWindow()).not.toThrow();
+    expect(() => wm.closeSettingsWindow()).not.toThrow();
+
+    const settings = await wm.createSettingsWindow();
+    wm.hideSettingsWindow();
+    expect(settings.hide).toHaveBeenCalledTimes(1);
+    wm.closeSettingsWindow();
+    expect(settings.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("restoreMainWindow ignores a destroyed main window", async () => {
+    process.env.NODE_ENV = "development";
+    const WindowManager = await loadWindowManager();
+    const wm = new WindowManager();
+    const main = (await wm.createMainWindow())!;
+    main.isDestroyed = vi.fn(() => true);
+
+    wm.restoreMainWindow();
+
+    expect(main.setAlwaysOnTop).not.toHaveBeenCalled();
+    expect(main.show).not.toHaveBeenCalled();
+    expect(main.focus).not.toHaveBeenCalled();
+  });
+
+  it("closeAllWindows closes every open window and is a safe no-op on a fresh manager", async () => {
+    process.env.NODE_ENV = "development";
+    const WindowManager = await loadWindowManager();
+    const wm = new WindowManager();
+    const main = await wm.createMainWindow({ deferLoad: true });
+    const history = await wm.createHistoryWindow();
+    const settings = await wm.createSettingsWindow();
+
+    wm.closeAllWindows();
+
+    expect(main!.close).toHaveBeenCalledTimes(1);
+    expect(history.close).toHaveBeenCalledTimes(1);
+    expect(settings.close).toHaveBeenCalledTimes(1);
+
+    const fresh = new WindowManager();
+    expect(() => fresh.closeAllWindows()).not.toThrow();
   });
 });

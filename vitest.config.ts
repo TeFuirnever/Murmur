@@ -92,16 +92,16 @@ export default defineConfig({
         lines: 89,
         // Per-glob branch floors for the newly instrumented groups: files
         // matching a glob are additionally checked against its floor.
-        // Floors sit AT the first measured values (2026-09-07) — they only
+        // First measured values recorded inline (2026-09-07); floors only
         // ratchet UP:
-        //   - helpers five: T2 (#274) raises each to the global 92
+        //   - helpers five: DONE — raised to the global 92 by T2 (#274)
         //   - ipc/**: T3 (#275) raises the handler floor to the global 92
         // Measured origins recorded inline; never lower a floor.
-        "src/helpers/modelManager.ts": { branches: 55 }, // first measured 55.04 (2026-09-07)
-        "src/helpers/windowManager.ts": { branches: 48 }, // first measured 48.21 (2026-09-07)
-        "src/helpers/updateManager.ts": { branches: 14 }, // first measured 14.60 (2026-09-07)
-        "src/helpers/logManager.ts": { branches: 79 }, // first measured 79.31 (2026-09-07)
-        "src/helpers/pythonEnvironment.ts": { branches: 28 }, // first measured 28.57 (2026-09-07)
+        "src/helpers/modelManager.ts": { branches: 92 }, // raised to global 92 (Spec #259 T2, #274); first measured 55.04 (2026-09-07)
+        "src/helpers/windowManager.ts": { branches: 92 }, // raised to global 92 (Spec #259 T2, #274); first measured 48.21 (2026-09-07)
+        "src/helpers/updateManager.ts": { branches: 92 }, // raised to global 92 (Spec #259 T2, #274); first measured 14.60 (2026-09-07)
+        "src/helpers/logManager.ts": { branches: 92 }, // raised to global 92 (Spec #259 T2, #274); first measured 79.31 (2026-09-07)
+        "src/helpers/pythonEnvironment.ts": { branches: 92 }, // raised to global 92 (Spec #259 T2, #274); first measured 28.57 (2026-09-07)
         "src/helpers/ipc/**": { branches: 67 }, // dir aggregate first measured 67.18 (2026-09-07)
       },
     },
