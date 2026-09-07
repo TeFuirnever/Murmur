@@ -20,6 +20,8 @@ const ciWorkflow = fs.readFileSync(
   "utf8",
 );
 
+// [20260906_Spec259_T1] Pinned floor re-baselined 2026-09-07 (was 96/92/94/96
+// over 71 files computed while the six measured groups were excluded).
 // [20260906_Spec259_T1] Re-baselined 2026-09-07: the six newly instrumented
 // module groups (modelManager, ipc/**, windowManager, updateManager,
 // logManager, pythonEnvironment) enter the aggregate at their measured

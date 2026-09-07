@@ -78,13 +78,15 @@ describe("[20260906_Spec259_T1] coverage instrumentation close-out", () => {
     for (const group of EXEMPT_GROUPS) {
       expect(exclude.includes(group)).toBe(true);
     }
-    // The exemption reason must survive next to the exclusions: deleting
-    // the [20260906_Spec259_T1] tag (or the whole comment) while keeping
-    // the exclusions fails here.
+    // [20260906_Spec259_T1_ReviewFix] The pin must survive SURGICAL removal
+    // of just the exemption comment: assert the distinctive reason prose
+    // INSIDE the coverage exclude slice (the tag alone appears elsewhere in
+    // the file, so a file-global includes() would pass a stripped comment).
     expect(
-      config.includes(EXEMPTION_TAG),
-      "exemption reason comment was removed — restore it or consciously rewrite it with a new ticket tag",
-    ).toBe(true);
+      exclude,
+      "exemption reason comment was stripped while the exclusions remain — restore the reason or consciously rewrite it with a new ticket tag",
+    ).toContain("thin Electron wrappers");
+    expect(exclude).toContain("mock-driven execution");
   });
 
   it("never lowers a per-glob branch floor below first-measured values", () => {
