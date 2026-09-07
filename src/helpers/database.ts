@@ -29,6 +29,12 @@ export interface TranscriptionRecord {
   source_type?: string;
   source_file_path?: string;
   segments?: string;
+  // [20260906_Feat_ManualEditProtection] Spec #193 T2 (ticket #229): SQLite
+  // has no boolean type, so the record-level "user edited this" flag is an
+  // INTEGER 0/1 column (added by _migrateSchema). 1 = the user manually
+  // edited and saved the record; the end-of-recording auto-polish must then
+  // never overwrite its text/processed_text (see updateTranscription).
+  manually_edited?: number;
   parsedSegments?: Array<{ start_ms: number; end_ms: number; text: string }>;
   created_at?: string;
   updated_at?: string;
@@ -255,6 +261,15 @@ class DatabaseManager {
         column: "segments",
         sql: "ALTER TABLE transcriptions ADD COLUMN segments TEXT",
       },
+      // [20260906_Feat_ManualEditProtection] Spec #193 T2 (ticket #229):
+      // record-level manual-edit flag. Lossless by construction — ALTER TABLE
+      // ADD COLUMN keeps every existing row; old rows read back the DEFAULT 0
+      // (never manually edited), so the auto-polish behavior is unchanged
+      // after an upgrade.
+      {
+        column: "manually_edited",
+        sql: "ALTER TABLE transcriptions ADD COLUMN manually_edited INTEGER DEFAULT 0",
+      },
     ];
 
     for (const migration of migrations) {
@@ -364,10 +379,36 @@ class DatabaseManager {
   // injection via values is structurally impossible; the whitelist closes the
   // identifier hole. updated_at is refreshed like the save path does for the
   // settings table (CURRENT_TIMESTAMP, server-side).
-  updateTranscription(id: number, patch: Record<string, unknown>): RunResult {
+  //
+  // [20260906_Feat_ManualEditProtection] Spec #193 T2 (ticket #229):
+  // 1. The whitelist gains `manually_edited` (chosen over a dedicated flag
+  //    channel: one IPC call persists the edited text AND the flag
+  //    atomically; a separate seam would double the IPC surface and force a
+  //    non-atomic two-call save). Boolean patches are bound as SQLite 0/1.
+  // 2. `options.skipWhenManuallyEdited` is the AUTO-polish write seam: the
+  //    end-of-recording polish pipeline (and the future orchestrator
+  //    write-back) must pass it so a record the user has manually edited
+  //    (manually_edited = 1) is never overwritten — the call is a no-op that
+  //    reports skipped. Callers that omit the option (the user-triggered
+  //    polish/edit path) stay unrestricted by design.
+  updateTranscription(
+    id: number,
+    patch: Record<string, unknown>,
+    options?: { skipWhenManuallyEdited?: boolean },
+  ): RunResult & { skipped?: boolean } {
     // [20260906_Feat_TranscriptionUpdate_Review] Hoisted to module scope —
     // no per-call re-allocation (review LOW finding).
-    const UPDATABLE_COLUMNS = new Set(["processed_text", "text"]);
+    const UPDATABLE_COLUMNS = new Set([
+      "processed_text",
+      "text",
+      // [20260906_Feat_ManualEditProtection] The manual-edit flag itself is
+      // patchable (see block comment above); it is stored as INTEGER 0/1.
+      "manually_edited",
+    ]);
+    // [20260906_Feat_ManualEditProtection] Columns that carry SQLite booleans
+    // (INTEGER 0/1). Their patch values may be JS booleans or the numbers
+    // 0/1; anything else is rejected, and booleans are bound as 1/0.
+    const BOOLEAN_COLUMNS = new Set(["manually_edited"]);
 
     if (!patch || typeof patch !== "object") {
       throw new Error("更新数据无效");
@@ -392,8 +433,25 @@ class DatabaseManager {
       if (value === null) {
         throw new Error("更新数据无效");
       }
-      if (typeof value !== "string" && typeof value !== "number") {
+      if (BOOLEAN_COLUMNS.has(column)) {
+        // [20260906_Feat_ManualEditProtection] Flag columns admit only
+        // boolean / 0 / 1 — a stray string or object must not coerce its
+        // way into the row.
+        if (typeof value !== "boolean" && value !== 0 && value !== 1) {
+          throw new Error("更新数据无效");
+        }
+      } else if (typeof value !== "string" && typeof value !== "number") {
         throw new Error("更新数据无效");
+      }
+    }
+
+    // [20260906_Feat_ManualEditProtection] Auto-polish guard: read the mark
+    // BEFORE any write so a record the user edited keeps its content even
+    // if a second auto-polish races in.
+    if (options?.skipWhenManuallyEdited) {
+      const existing = this.getTranscriptionById(id);
+      if (existing && Number(existing.manually_edited) === 1) {
+        return { changes: 0, lastInsertRowid: 0, skipped: true };
       }
     }
 
@@ -405,7 +463,15 @@ class DatabaseManager {
     `);
     return runStmt(
       stmt,
-      ...columns.map((column) => patch[column] as Primitive),
+      ...columns.map((column) => {
+        const value = patch[column];
+        // [20260906_Feat_ManualEditProtection] SQLite has no boolean type:
+        // bind flags as INTEGER 1/0 so reads return stable numeric values.
+        if (BOOLEAN_COLUMNS.has(column)) {
+          return value ? 1 : 0;
+        }
+        return value as Primitive;
+      }),
       id,
     );
   }

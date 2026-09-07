@@ -104,6 +104,12 @@ type TestWindow = Omit<Window, "electronAPI"> & {
       offset: number,
     ) => Promise<Array<Record<string, unknown>>>;
     deleteTranscription: (id: number) => Promise<unknown>;
+    // [20260906_Feat_ManualEditProtection] History-window inline edit saves
+    // through the TRANSCRIPTION.UPDATE write-back channel.
+    updateTranscription: (
+      id: number,
+      patch: Record<string, unknown>,
+    ) => Promise<unknown>;
     copyText: (text: string) => Promise<unknown>;
     exportTranscriptions: (format: string) => Promise<unknown>;
     clearAllTranscriptions: () => Promise<unknown>;
@@ -130,6 +136,7 @@ const apiMocks = {
   onSettingsUpdate: vi.fn(() => () => {}),
   getTranscriptions: vi.fn(),
   deleteTranscription: vi.fn(),
+  updateTranscription: vi.fn(),
   copyText: vi.fn(),
   exportTranscriptions: vi.fn(),
   clearAllTranscriptions: vi.fn(),
@@ -143,6 +150,7 @@ async function mountHistory(apiOverrides: Record<string, unknown> = {}) {
   (globalThis.window as unknown as TestWindow).electronAPI = {
     getTranscriptions: apiMocks.getTranscriptions,
     deleteTranscription: apiMocks.deleteTranscription,
+    updateTranscription: apiMocks.updateTranscription,
     copyText: apiMocks.copyText,
     exportTranscriptions: apiMocks.exportTranscriptions,
     clearAllTranscriptions: apiMocks.clearAllTranscriptions,
@@ -295,6 +303,99 @@ describe("[20260816_Test_HistoryPage] history window entry", () => {
       expect(toast.error).toHaveBeenCalledWith("加载历史记录失败");
     });
     errSpy.mockRestore();
+  });
+
+  // [20260906_Feat_ManualEditProtection] Spec #193 T2 (ticket #229): the
+  // history window's inline edit is the minimal edit-save entry. Saving must
+  // route through the TRANSCRIPTION.UPDATE channel with manually_edited set
+  // so the end-of-recording auto-polish can never overwrite the edit.
+  it("saves an inline edit through the UPDATE channel with the flag set", async () => {
+    apiMocks.getTranscriptions.mockResolvedValue([
+      makeRecord(7, "原始最终文本", { processed_text: "原始润色" }),
+    ]);
+    apiMocks.updateTranscription.mockResolvedValue({
+      success: true,
+      text: "用户改过的文本",
+      processed_text: "用户改过的文本",
+      manually_edited: 1,
+    });
+    await mountHistory();
+    await screen.findByText("原始最终文本");
+
+    fireEvent.click(screen.getByTitle("编辑记录"));
+
+    const textarea = await screen.findByTestId("edit-textarea");
+    fireEvent.change(textarea, { target: { value: "用户改过的文本" } });
+    fireEvent.click(screen.getByTestId("edit-save"));
+
+    await waitFor(() => {
+      expect(apiMocks.updateTranscription).toHaveBeenCalledWith(7, {
+        text: "用户改过的文本",
+        processed_text: "用户改过的文本",
+        manually_edited: true,
+      });
+    });
+    // The list reflects the saved edit without refetching. The edited text
+    // is the record's final content AND its processed_text (same two-column
+    // rule as the T1 polish write-back), so both result cards show it.
+    expect(await screen.findAllByText("用户改过的文本")).toHaveLength(2);
+    expect(screen.queryByText("原始最终文本")).not.toBeInTheDocument();
+    const { toast } = await import("sonner");
+    expect(toast.success).toHaveBeenCalledWith("记录已更新");
+  });
+
+  it("cancels the inline editor without touching the bridge", async () => {
+    apiMocks.getTranscriptions.mockResolvedValue([makeRecord(3, "不修改")]);
+    await mountHistory();
+    await screen.findByText("不修改");
+
+    fireEvent.click(screen.getByTitle("编辑记录"));
+    fireEvent.change(await screen.findByTestId("edit-textarea"), {
+      target: { value: "草稿改动" },
+    });
+    fireEvent.click(screen.getByTestId("edit-cancel"));
+
+    expect(apiMocks.updateTranscription).not.toHaveBeenCalled();
+    expect(screen.getByText("不修改")).toBeInTheDocument();
+    expect(screen.queryByTestId("edit-textarea")).not.toBeInTheDocument();
+  });
+
+  it("keeps the editor open and toasts failure when the update rejects", async () => {
+    apiMocks.getTranscriptions.mockResolvedValue([makeRecord(5, "待编辑")]);
+    apiMocks.updateTranscription.mockResolvedValue({
+      success: false,
+      error: "更新失败",
+    });
+    const { toast } = await import("sonner");
+    await mountHistory();
+    await screen.findByText("待编辑");
+
+    fireEvent.click(screen.getByTitle("编辑记录"));
+    fireEvent.change(await screen.findByTestId("edit-textarea"), {
+      target: { value: "未落库的改动" },
+    });
+    fireEvent.click(screen.getByTestId("edit-save"));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith("更新记录失败");
+    });
+    // The edit did not land: the record keeps its original text and the
+    // editor stays open so the user's typing is not lost.
+    expect(screen.getByTestId("edit-textarea")).toBeInTheDocument();
+  });
+
+  it("does not call the bridge when the edited text is blank", async () => {
+    apiMocks.getTranscriptions.mockResolvedValue([makeRecord(9, "有内容")]);
+    await mountHistory();
+    await screen.findByText("有内容");
+
+    fireEvent.click(screen.getByTitle("编辑记录"));
+    fireEvent.change(await screen.findByTestId("edit-textarea"), {
+      target: { value: "   " },
+    });
+    fireEvent.click(screen.getByTestId("edit-save"));
+
+    expect(apiMocks.updateTranscription).not.toHaveBeenCalled();
   });
 
   it("exports all records as txt when the export button is clicked", async () => {

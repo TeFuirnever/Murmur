@@ -100,6 +100,10 @@ export interface TranscriptionUpdateResult {
   text?: string;
   processed_text?: string;
   raw_text?: string;
+  // [20260906_Feat_ManualEditProtection] Spec #193 T2 (ticket #229): the
+  // refreshed record's manual-edit flag (SQLite INTEGER 0/1) echoed back so
+  // the edit-save caller can observe the persisted mark.
+  manually_edited?: number;
   error?: string;
 }
 

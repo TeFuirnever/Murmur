@@ -535,6 +535,9 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
   // output. Whitelist rejections from database.updateTranscription surface
   // through the normal {success:false, error} envelope; a missing record is
   // rejected before any write, matching the sibling DIARIZE/AI_REVIEW guards.
+  // [20260906_Feat_ManualEditProtection] Spec #193 T2 (ticket #229): the
+  // success echo carries the refreshed manually_edited flag so the edit-save
+  // caller can observe the persisted mark.
   ipcMain.handle(
     C.TRANSCRIPTION.UPDATE,
     (_event, id: number, patch: Record<string, unknown>) => {
@@ -555,6 +558,7 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
           text: updated?.text,
           processed_text: updated?.processed_text,
           raw_text: updated?.raw_text,
+          manually_edited: updated?.manually_edited,
         };
       } catch (error) {
         logger.error?.("更新转录记录失败:", error);

@@ -316,7 +316,12 @@
     "daysAgo": "{{days}}天前",
     "formatLabel": "导出格式",
     "clearSuccess": "已清空所有转录记录",
-    "clearFailed": "清空失败"
+    "clearFailed": "清空失败",
+    "editTooltip": "编辑记录",
+    "editSave": "保存",
+    "editCancel": "取消",
+    "editSaved": "记录已更新",
+    "editFailed": "更新记录失败"
   },
   "recording": {
     "recording": "录音中",

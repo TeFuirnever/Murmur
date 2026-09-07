@@ -96,9 +96,16 @@ export interface ElectronAPI {
   // [20260906_Feat_TranscriptionUpdate] Manual polish write-back (spec #193
   // T1, ticket #228): only the polished-text columns are patchable — the DB
   // whitelist rejects everything else, raw_text is never writable.
+  // [20260906_Feat_ManualEditProtection] Spec #193 T2 (ticket #229): the
+  // manual-edit flag joins the whitelist — the history-window edit-save sets
+  // it in the SAME atomic call that writes the edited text.
   updateTranscription: (
     id: number,
-    patch: { processed_text?: string; text?: string },
+    patch: {
+      processed_text?: string;
+      text?: string;
+      manually_edited?: boolean;
+    },
   ) => Promise<TranscriptionUpdateResult>;
   diarizeAudio: (id: number) => Promise<{
     success: boolean;

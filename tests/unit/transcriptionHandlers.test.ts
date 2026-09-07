@@ -294,6 +294,36 @@ describe("transcriptionHandlers", () => {
       expect(result.success).toBe(false);
       expect(result.error).toContain("不允许更新的字段");
     });
+
+    // [20260906_Feat_ManualEditProtection] Spec #193 T2 (ticket #229): the
+    // refreshed-row echo includes the manual-edit flag so callers (the
+    // history-window edit-save) can observe the persisted state.
+    it("echoes the manually_edited flag from the refreshed row", async () => {
+      // The handler reads the row twice (existence guard + refreshed echo);
+      // both reads must see the marked row.
+      mockDb.getTranscriptionById!.mockReturnValue({
+        id: 42,
+        text: "编辑后的文本",
+        processed_text: "编辑后的文本",
+        raw_text: "原始识别",
+        manually_edited: 1,
+      });
+      const C = await setup();
+      const handler = registeredHandlers.get(C.TRANSCRIPTION.UPDATE)!;
+
+      const result = (await handler({}, 42, {
+        text: "编辑后的文本",
+        processed_text: "编辑后的文本",
+        manually_edited: true,
+      })) as {
+        success: boolean;
+        manually_edited?: number;
+        text?: string;
+      };
+      expect(result.success).toBe(true);
+      expect(result.manually_edited).toBe(1);
+      expect(result.text).toBe("编辑后的文本");
+    });
   });
 
   describe("TRANSCRIPTION.VALIDATE_FILE handler", () => {
