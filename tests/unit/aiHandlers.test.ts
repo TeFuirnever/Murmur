@@ -8,6 +8,7 @@
 // `.mock.calls` is read via a vi.Mock cast. Template reference:
 // phase4-i18n.test.ts (commit d52f2e0).
 import { describe, it, expect, vi } from "vitest";
+import type { Mock } from "vitest";
 import fs from "fs";
 import path from "path";
 
@@ -1199,6 +1200,369 @@ describe("aiHandlers", () => {
       )) as Record<string, unknown>;
       expect(result).toEqual({ success: false, error: "转录记录不存在" });
       expect(global.fetch).not.toHaveBeenCalled();
+    });
+  });
+
+  // [20260906_Feat_OrchestratorGenCancel] Spec #193 T7 (ticket #234): the
+  // orchestrator gains generation invalidation (double-fire: only the newest
+  // request lands), cancel semantics (AbortController through the provider
+  // fetch, silent cancel outcome) and output clamping (minimal-edit budget
+  // clamp with the 4096 floor + absolute response char guard). All three
+  // activate through PolishRequest options; omitted options keep the legacy
+  // behavior pinned by the suites above — those must stay green unedited.
+  describe("polish orchestrator — generation, cancel, clamping (Spec #193 T7)", () => {
+    const runPolishOrchestrator = aiHandlersNS.runPolishOrchestrator;
+
+    function loggerOf(): { info: Mock; warn: Mock; error: Mock } {
+      return { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    }
+
+    // Fetch stub whose responses are settled by hand: each provider call
+    // registers a resolver in call order. With honorAbort the stub rejects
+    // like real fetch when the run's signal is (or becomes) aborted — the
+    // same never-resolving pattern the timeout test above uses.
+    function mockDeferredFetch(options: { honorAbort: boolean }): {
+      resolvers: Array<(response: FetchResponseStub) => void>;
+      inits: Array<{ signal?: AbortSignal }>;
+    } {
+      const resolvers: Array<(response: FetchResponseStub) => void> = [];
+      const inits: Array<{ signal?: AbortSignal }> = [];
+      global.fetch = vi.fn(
+        (_input: unknown, init?: { signal?: AbortSignal }) =>
+          new Promise<FetchResponseStub>((resolve, reject) => {
+            inits.push({ signal: init?.signal });
+            const abortError = () => {
+              const err = new Error("The operation was aborted");
+              err.name = "AbortError";
+              reject(err);
+            };
+            if (options.honorAbort) {
+              if (init?.signal?.aborted) {
+                abortError();
+                return;
+              }
+              init?.signal?.addEventListener("abort", abortError, {
+                once: true,
+              });
+            }
+            resolvers.push(resolve);
+          }),
+      ) as unknown as typeof global.fetch;
+      return { resolvers, inits };
+    }
+
+    function okResponse(content: string): FetchResponseStub {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          choices: [{ message: { content } }],
+          usage: { total_tokens: 1 },
+        }),
+      };
+    }
+
+    // ---- 代际失效 (generation invalidation) --------------------------------
+
+    it("generation: a newer run in the same scope supersedes the older one, which never reaches the provider", async () => {
+      const db = setupDb();
+      const logger = loggerOf();
+      const { resolvers } = mockDeferredFetch({ honorAbort: true });
+
+      const older = runPolishOrchestrator(
+        { databaseManager: db, logger },
+        { text: "旧文本", mode: "optimize", generationScope: "transcript-1" },
+      );
+      const newer = runPolishOrchestrator(
+        { databaseManager: db, logger },
+        { text: "新文本", mode: "optimize", generationScope: "transcript-1" },
+      );
+
+      const olderResult = await older;
+      // Generation-lost outcome: observable via the result shape, no text.
+      expect(olderResult.success).toBe(false);
+      expect(olderResult.code).toBe("SUPERSEDED");
+      expect(olderResult.text).toBeUndefined();
+
+      // The stale run was short-circuited before the provider call; only the
+      // newer run may talk to the provider.
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+
+      resolvers[0]!(okResponse("最新结果"));
+      const newerResult = await newer;
+      expect(newerResult.success).toBe(true);
+      expect(newerResult.text).toBe("最新结果");
+    });
+
+    it("generation: a stale run's late provider response is discarded, never mapped or allowed to overwrite the newer result", async () => {
+      const db = setupDb();
+      const logger = loggerOf();
+      // Abort-ignoring provider: the stale response still "arrives" after the
+      // newer request started — the orchestrator must discard it on its own.
+      const { resolvers } = mockDeferredFetch({ honorAbort: false });
+
+      const older = runPolishOrchestrator(
+        { databaseManager: db, logger },
+        { text: "旧文本", mode: "optimize", generationScope: "transcript-2" },
+      );
+      // Let the older run reach the provider first.
+      await vi.waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+
+      const newer = runPolishOrchestrator(
+        { databaseManager: db, logger },
+        { text: "新文本", mode: "optimize", generationScope: "transcript-2" },
+      );
+      await vi.waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+
+      let staleJsonRead = false;
+      resolvers[0]!({
+        ok: true,
+        status: 200,
+        json: async () => {
+          staleJsonRead = true;
+          return { choices: [{ message: { content: "过期结果" } }] };
+        },
+      });
+      const olderResult = await older;
+      expect(olderResult.success).toBe(false);
+      expect(olderResult.code).toBe("SUPERSEDED");
+      expect(olderResult.text).toBeUndefined();
+      // The stale provider response body was never even read/mapped.
+      expect(staleJsonRead).toBe(false);
+
+      resolvers[1]!(okResponse("最新结果"));
+      const newerResult = await newer;
+      expect(newerResult.success).toBe(true);
+      expect(newerResult.text).toBe("最新结果");
+    });
+
+    it("generation: different scopes do not invalidate each other", async () => {
+      const db = setupDb();
+      const logger = loggerOf();
+      mockFetch({ choices: [{ message: { content: "各自生效" } }] });
+
+      const [first, second] = await Promise.all([
+        runPolishOrchestrator(
+          { databaseManager: db, logger },
+          { text: "甲", mode: "optimize", generationScope: "scope-a" },
+        ),
+        runPolishOrchestrator(
+          { databaseManager: db, logger },
+          { text: "乙", mode: "optimize", generationScope: "scope-b" },
+        ),
+      ]);
+      expect(first.success).toBe(true);
+      expect(second.success).toBe(true);
+    });
+
+    // ---- 取消语义 (cancel semantics) ---------------------------------------
+
+    it("cancel: aborting the caller signal terminates the in-flight fetch and settles silently with the cancel outcome", async () => {
+      const db = setupDb();
+      const logger = loggerOf();
+      const controller = new AbortController();
+      const { resolvers, inits } = mockDeferredFetch({ honorAbort: true });
+
+      const pending = runPolishOrchestrator(
+        { databaseManager: db, logger },
+        { text: "长文本", mode: "optimize", signal: controller.signal },
+      );
+      await vi.waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+
+      controller.abort();
+      const result = await pending;
+
+      // Cancel-shaped outcome, not the TIMEOUT mapping and no mapped text.
+      expect(result.success).toBe(false);
+      expect(result.code).toBe("CANCELLED");
+      expect(result.text).toBeUndefined();
+      expect(String(result.error)).not.toContain("超时");
+      // The upstream fetch observed the abort (request terminated).
+      expect(inits[0]!.signal!.aborted).toBe(true);
+      // Even if a response body "arrives" after the abort, the run stays
+      // settled with the cancel outcome — it is never mapped.
+      resolvers[0]?.(okResponse("迟到内容"));
+      const settled = await pending;
+      expect(settled.code).toBe("CANCELLED");
+      expect(settled.text).toBeUndefined();
+      // Silent cancel: no error log, so no error toast can be driven from it.
+      expect(logger.error).not.toHaveBeenCalled();
+    });
+
+    it("cancel: an already-aborted signal settles before touching the provider", async () => {
+      const db = setupDb();
+      const logger = loggerOf();
+      const controller = new AbortController();
+      controller.abort();
+      mockDeferredFetch({ honorAbort: true });
+
+      const result = await runPolishOrchestrator(
+        { databaseManager: db, logger },
+        { text: "长文本", mode: "optimize", signal: controller.signal },
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe("CANCELLED");
+      expect(global.fetch).not.toHaveBeenCalled();
+      expect(logger.error).not.toHaveBeenCalled();
+    });
+
+    it("cancel via the processTextWithAI adapter: T7 options flow through the positional-args contract", async () => {
+      const controller = new AbortController();
+      controller.abort();
+      mockDeferredFetch({ honorAbort: true });
+
+      const result = await processTextWithAI(
+        "t",
+        "optimize",
+        setupDb(),
+        loggerOf(),
+        { signal: controller.signal },
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe("CANCELLED");
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    // ---- 输出钳制 (output clamping) -----------------------------------------
+
+    it("clamp budget: floor 4096 wins when input×factor is small (reasoning-budget guard)", async () => {
+      const db = setupDb({ ai_max_tokens: 2000 });
+      mockFetch({ choices: [{ message: { content: "润色完成" } }] });
+
+      const result = await runPolishOrchestrator(
+        { databaseManager: db, logger: loggerOf() },
+        {
+          text: "字".repeat(2000), // 2000 × 2 = 4000, below the floor
+          mode: "optimize",
+          clampOutputTokens: true,
+        },
+      );
+
+      expect(result.success).toBe(true);
+      const body = JSON.parse(
+        (
+          (global.fetch as unknown as FetchMock).mock.calls[0]![1] as {
+            body: string;
+          }
+        ).body,
+      ) as { max_tokens: number };
+      expect(body.max_tokens).toBe(aiHandlersNS.POLISH_CLAMP_MIN_TOKENS);
+    });
+
+    it("clamp budget: input×factor binds above the floor", async () => {
+      const db = setupDb({ ai_max_tokens: 8192 });
+      mockFetch({ choices: [{ message: { content: "润色完成" } }] });
+
+      await runPolishOrchestrator(
+        { databaseManager: db, logger: loggerOf() },
+        {
+          text: "字".repeat(2049), // 2049 × 2 = 4098, just above the floor
+          mode: "optimize",
+          clampOutputTokens: true,
+        },
+      );
+
+      const body = JSON.parse(
+        (
+          (global.fetch as unknown as FetchMock).mock.calls[0]![1] as {
+            body: string;
+          }
+        ).body,
+      ) as { max_tokens: number };
+      expect(body.max_tokens).toBe(4098);
+    });
+
+    it("clamp budget: the user-configured cap still binds when input×factor exceeds it", async () => {
+      const db = setupDb({ ai_max_tokens: 6000 });
+      mockFetch({ choices: [{ message: { content: "润色完成" } }] });
+
+      await runPolishOrchestrator(
+        { databaseManager: db, logger: loggerOf() },
+        {
+          text: "字".repeat(5000), // 5000 × 2 = 10000 > 6000
+          mode: "optimize_long",
+          clampOutputTokens: true,
+        },
+      );
+
+      const body = JSON.parse(
+        (
+          (global.fetch as unknown as FetchMock).mock.calls[0]![1] as {
+            body: string;
+          }
+        ).body,
+      ) as { max_tokens: number };
+      expect(body.max_tokens).toBe(6000);
+    });
+
+    it("clamp budget: rewrite-class modes are never clamped", async () => {
+      const db = setupDb({ ai_max_tokens: 2000 });
+      mockFetch({ choices: [{ message: { content: "摘要" } }] });
+
+      await runPolishOrchestrator(
+        { databaseManager: db, logger: loggerOf() },
+        {
+          text: "字".repeat(5000),
+          mode: "summarize",
+          clampOutputTokens: true,
+        },
+      );
+
+      const body = JSON.parse(
+        (
+          (global.fetch as unknown as FetchMock).mock.calls[0]![1] as {
+            body: string;
+          }
+        ).body,
+      ) as { max_tokens: number };
+      expect(body.max_tokens).toBe(2000);
+    });
+
+    it("clamp budget: omitted option keeps the user max_tokens verbatim (legacy behavior)", async () => {
+      const db = setupDb({ ai_max_tokens: 2000 });
+      mockFetch({ choices: [{ message: { content: "润色完成" } }] });
+
+      await runPolishOrchestrator(
+        { databaseManager: db, logger: loggerOf() },
+        { text: "字".repeat(5000), mode: "optimize" },
+      );
+
+      const body = JSON.parse(
+        (
+          (global.fetch as unknown as FetchMock).mock.calls[0]![1] as {
+            body: string;
+          }
+        ).body,
+      ) as { max_tokens: number };
+      expect(body.max_tokens).toBe(2000);
+    });
+
+    it("output guard: provider text beyond the absolute char cap is truncated before mapping", async () => {
+      const cap = aiHandlersNS.POLISH_OUTPUT_MAX_CHARS;
+      mockFetch({ choices: [{ message: { content: "x".repeat(cap + 1) } }] });
+
+      const result = await runPolishOrchestrator(
+        { databaseManager: setupDb(), logger: loggerOf() },
+        { text: "t", mode: "optimize" },
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.text).toHaveLength(cap);
+    });
+
+    it("output guard: provider text exactly at the cap passes through untouched", async () => {
+      const cap = aiHandlersNS.POLISH_OUTPUT_MAX_CHARS;
+      mockFetch({ choices: [{ message: { content: "y".repeat(cap) } }] });
+
+      const result = await runPolishOrchestrator(
+        { databaseManager: setupDb(), logger: loggerOf() },
+        { text: "t", mode: "optimize" },
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.text).toHaveLength(cap);
     });
   });
 });
