@@ -1219,9 +1219,11 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
       // into streaming — chunk events are sent to THIS window only, and the
       // requestId becomes the abort/generation scope key.
       let stream: PolishRequest["stream"];
+      let ownedController: AbortController | undefined;
       if (requestId) {
         const senderId = event.sender.id;
         const controller = new AbortController();
+        ownedController = controller;
         streamAbortTargets.set(requestId, { controller, senderId });
         stream = {
           requestId,
@@ -1231,9 +1233,6 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
             }
           },
         };
-        (
-          controller as AbortController & { __ownerSenderId?: number }
-        ).__ownerSenderId = senderId;
       }
       try {
         return await runPolishOrchestrator(
@@ -1250,7 +1249,12 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
           },
         );
       } finally {
-        if (requestId) streamAbortTargets.delete(requestId);
+        // [20260907_Fix_235_ReviewMinor1] Delete ONLY our own entry: a
+        // superseding run reusing the requestId owns the map slot now.
+        const entry = requestId ? streamAbortTargets.get(requestId) : undefined;
+        if (entry && entry.controller === ownedController) {
+          streamAbortTargets.delete(requestId as string);
+        }
       }
     },
   );
