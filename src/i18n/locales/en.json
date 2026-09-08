@@ -363,6 +363,7 @@
     "aboutDescription": "Free and open-source AI voice input tool"
   },
   "transcription": {
-    "polishSaveFailed": "Couldn't save the polished text — it will revert after restart"
+    "polishSaveFailed": "Couldn't save the polished text — it will revert after restart",
+    "cancelPolish": "Cancel"
   }
 }

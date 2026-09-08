@@ -138,6 +138,8 @@ describe("TranscriptionResult — AI optimize paths", () => {
     await waitFor(() => {
       expect(screen.getByText("优化后文本")).toBeInTheDocument();
     });
+    // [20260907_Feat_236_StreamingUi] no chunk channel in this stub →
+    // non-streaming fallback: the classic two-argument invoke.
     expect(processText).toHaveBeenCalledWith("原始待优化", expect.any(String));
   });
 
@@ -659,5 +661,147 @@ describe("TranscriptionResult — polish write-back failure (#314)", () => {
     // Not wiped: the polished text stays on screen.
     expect(screen.getByText("润色后文本")).toBeInTheDocument();
     consoleSpy2.mockRestore();
+  });
+});
+
+// [20260907_Feat_236_StreamingUi] T9 ①: manual polish streams via
+// onPolishChunk (subscribe-before-invoke, unsubscribe on settle) and a
+// cancel button aborts via abortPolish — a user cancel shows NO error.
+describe("TranscriptionResult — streaming manual polish (#236 ①)", () => {
+  type Chunk = {
+    type: string;
+    requestId?: string;
+    text?: string;
+    reason?: string;
+    error?: string;
+  };
+  type TestWindow = Omit<Window, "electronAPI"> & {
+    electronAPI?: {
+      processText?: (
+        text: string,
+        mode: string,
+        timeout?: number,
+        requestId?: string,
+      ) => Promise<unknown>;
+      onPolishChunk?: (cb: (chunk: Chunk) => void) => () => void;
+      abortPolish?: (requestId: string) => Promise<unknown>;
+      updateTranscription?: (
+        id: number,
+        patch: Record<string, unknown>,
+      ) => Promise<unknown>;
+      getAIModes?: () => Promise<unknown[]>;
+    };
+  };
+
+  const originalAPI = (globalThis.window as unknown as TestWindow).electronAPI;
+  let chunkListener: ((chunk: Chunk) => void) | null = null;
+  let unsubSpy: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    chunkListener = null;
+    unsubSpy = vi.fn(() => {});
+    (globalThis.window as unknown as TestWindow).electronAPI = {
+      processText: vi.fn(
+        () => new Promise(() => {}) /* pends until chunks drive it */,
+      ),
+      onPolishChunk: vi.fn((cb: (chunk: Chunk) => void) => {
+        chunkListener = cb;
+        return unsubSpy;
+      }),
+      abortPolish: vi.fn().mockResolvedValue({ success: true }),
+      updateTranscription: vi
+        .fn()
+        .mockResolvedValue({ success: true, changes: 1 }),
+      getAIModes: vi
+        .fn()
+        .mockResolvedValue([
+          { name: "optimize", label: "智能润色", description: "" },
+        ]),
+    };
+  });
+
+  afterEach(() => {
+    const win = globalThis.window as unknown as TestWindow;
+    if (originalAPI === undefined) delete win.electronAPI;
+    else win.electronAPI = originalAPI;
+    vi.clearAllMocks();
+  });
+
+  function renderManual() {
+    return render(
+      React.createElement(TranscriptionResult, {
+        text: "原始文本",
+        onCopy: vi.fn(),
+      }),
+    );
+  }
+
+  it("renders streamed deltas incrementally before the finish", async () => {
+    renderManual();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "应用 AI 处理" }),
+    );
+
+    // Subscribed BEFORE the invoke (no listener leak).
+    await vi.waitFor(() => {
+      expect(
+        (globalThis.window as unknown as TestWindow).electronAPI!.onPolishChunk,
+      ).toHaveBeenCalled();
+    });
+    const api = (globalThis.window as unknown as TestWindow).electronAPI!;
+    const requestId = (api.processText as ReturnType<typeof vi.fn>).mock
+      .calls[0]![3] as string;
+    expect(typeof requestId).toBe("string");
+
+    chunkListener!({ type: "start", requestId });
+    chunkListener!({ type: "delta", requestId, text: "流式" });
+    await screen.findByText("流式");
+    chunkListener!({ type: "delta", requestId, text: "文本" });
+    await screen.findByText("流式文本");
+  });
+
+  it("finish chunk replaces the stream with the final text and unsubscribes", async () => {
+    renderManual();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "应用 AI 处理" }),
+    );
+    await vi.waitFor(() => expect(chunkListener).not.toBeNull());
+    const api = (globalThis.window as unknown as TestWindow).electronAPI!;
+    const requestId = (api.processText as ReturnType<typeof vi.fn>).mock
+      .calls[0]![3] as string;
+
+    chunkListener!({ type: "delta", requestId, text: "部分" });
+    chunkListener!({
+      type: "finish",
+      requestId,
+      text: "最终润色结果",
+      reasoningChars: 0,
+    });
+
+    await screen.findByText("最终润色结果");
+    await vi.waitFor(() => expect(unsubSpy).toHaveBeenCalled());
+  });
+
+  it("cancel button aborts via abortPolish and shows no error", async () => {
+    renderManual();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "应用 AI 处理" }),
+    );
+    await vi.waitFor(() => expect(chunkListener).not.toBeNull());
+    const api = (globalThis.window as unknown as TestWindow).electronAPI!;
+    const requestId = (api.processText as ReturnType<typeof vi.fn>).mock
+      .calls[0]![3] as string;
+    chunkListener!({ type: "delta", requestId, text: "部分输出" });
+
+    const cancel = await screen.findByRole("button", { name: "取消" });
+    fireEvent.click(cancel);
+
+    await vi.waitFor(() => {
+      expect(api.abortPolish).toHaveBeenCalledWith(requestId);
+    });
+    // The abort chunk arrives; the UI must NOT surface an error.
+    chunkListener!({ type: "abort", requestId });
+    await vi.waitFor(() => expect(unsubSpy).toHaveBeenCalled());
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });

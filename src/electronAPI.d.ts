@@ -65,6 +65,7 @@ export interface ElectronAPI {
     text: string,
     mode: string,
     timeout?: number,
+    requestId?: string,
   ) => Promise<AIProcessResult>;
   checkAIStatus: (testConfig?: {
     ai_api_key?: string;

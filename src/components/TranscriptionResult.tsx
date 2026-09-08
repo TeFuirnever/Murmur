@@ -3,6 +3,8 @@ import * as React from "react";
 // failure; useTranslation routes the warning through i18n.
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
+// [20260907_Feat_236_StreamingUi] T9 ①: streaming polish coordinator.
+import { usePolishStream } from "../hooks/usePolishStream";
 import { LoadingDots } from "./ui/loading-dots";
 import ExportPanel from "./ExportPanel";
 import ProcessingPanel from "./ProcessingPanel";
@@ -62,6 +64,9 @@ export default function TranscriptionResult({
 }: TranscriptionResultProps) {
   // [20260907_Fix_314_PolishSaveToast] i18n for the write-back failure toast.
   const { t } = useTranslation();
+  // [20260907_Feat_236_StreamingUi] T9 ①: streaming polish coordinator —
+  // owns chunk subscription, incremental delta state and the cancel channel.
+  const polishStream = usePolishStream();
   const [expandedSegment, setExpandedSegment] = React.useState<
     string | number | null
   >(null);
@@ -118,7 +123,10 @@ export default function TranscriptionResult({
 
   const hasSegments = segments && segments.length > 0;
 
-  const displayText = optimizedText || text || "";
+  // [20260907_Feat_236_StreamingUi] T9 ①: the in-flight stream renders in
+  // place of the text (deltas replace it word by word); once finished the
+  // optimized text takes over via optimizedText.
+  const displayText = optimizedText || polishStream.streamText || text || "";
   const displayRawText = rawText && rawText !== displayText ? rawText : null;
   const hasAIResult = displayRawText !== null;
 
@@ -170,6 +178,10 @@ export default function TranscriptionResult({
     }
   };
 
+  // [20260907_Feat_236_StreamingUi] T9 ①: cancel the in-flight streaming
+  // run; the abort chunk settles the run silently (no error surfaced).
+  const handleCancelPolish = polishStream.cancel;
+
   const handleAIOptimize = async () => {
     if (!text) return;
     setIsOptimizingInternal(true);
@@ -184,13 +196,32 @@ export default function TranscriptionResult({
         // (file import's aiReviewTranscription review-by-id).
         polishedText = await onAIOptimize(text);
         setOptimizedText(polishedText);
-      } else if (window.electronAPI?.processText) {
-        // [20260907_Fix_T9_RaceRemoval] 120s renderer race removed — the
-        // orchestrator's deadline matrix owns timeout semantics.
-        const result = (await window.electronAPI.processText(
-          text,
-          currentMode,
-        )) as { success?: boolean; text?: string; error?: string };
+      } else if (typeof window.electronAPI?.processText === "function") {
+        // [20260907_Feat_236_StreamingUi] T9 ①: streaming when the chunk
+        // channel exists; timeout semantics live in the orchestrator's
+        // deadline matrix (T8). A user cancel is silent.
+        const api = window.electronAPI;
+        const streamingCapable =
+          typeof api.onPolishChunk === "function" &&
+          typeof api.abortPolish === "function";
+        let result: {
+          success?: boolean;
+          text?: string;
+          error?: string;
+          cancelled?: boolean;
+        };
+        if (streamingCapable) {
+          result = await polishStream.start(api, text, currentMode);
+          if (result.cancelled) {
+            return; // silent user cancel — no error surfaced
+          }
+        } else {
+          result = (await api.processText(text, currentMode)) as {
+            success?: boolean;
+            text?: string;
+            error?: string;
+          };
+        }
         if (result?.success && result?.text) {
           polishedText = result.text;
           setOptimizedText(result.text);
@@ -277,7 +308,22 @@ export default function TranscriptionResult({
               </button>
             )}
           </div>
-          {showOptimizing ? (
+          {polishStream.isStreaming ? (
+            /* [20260907_Feat_236_StreamingUi] T9 ①: word-by-word rendering
+               with a cancel button; a user cancel is silent. */
+            <div className="space-y-2">
+              <p className="text-sm text-[#1d1d1d] dark:text-[#f5f5f7]/80 whitespace-pre-wrap">
+                {displayText}
+              </p>
+              <button
+                type="button"
+                onClick={handleCancelPolish}
+                className="px-3 py-1.5 text-xs font-medium text-[#ff5f57] hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+              >
+                {t("transcription.cancelPolish", "取消")}
+              </button>
+            </div>
+          ) : showOptimizing ? (
             <div className="flex items-center space-x-2 text-[#0071e3] dark:text-[#2997ff]">
               <LoadingDots />
               <span className="text-sm">AI正在优化文本...</span>
