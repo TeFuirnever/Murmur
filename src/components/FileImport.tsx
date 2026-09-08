@@ -113,6 +113,7 @@ export default function FileImport({
           id={result.id}
           onCopy={handleCopy}
           onAIOptimize={handleAIOptimize}
+          preferOnAIOptimize={true}
         />
         <button
           onClick={reset}

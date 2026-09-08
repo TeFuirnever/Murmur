@@ -59,10 +59,12 @@ describe("[20260906_Spec259_T4] python coverage runner", () => {
     expect(exit).toBe(1);
   });
 
-  it("pins the fail-under floor to the first measured value", () => {
+  it("pins the fail-under floor to the measured value", () => {
     // First measured 2026-09-07 (embedded python 3.11 + coverage 7.16):
     // TOTAL 43% (funasr_server 34 / audio_preprocessing 87 / download_models 90).
-    expect(runner.PYTHON_FAIL_UNDER).toBe(43);
+    // [20260907_Fix_317_PythonBranchFill] raised 43→46 after the protocol/
+    // lifecycle branch tests lifted funasr_server 34%→39% (TOTAL 47%).
+    expect(runner.PYTHON_FAIL_UNDER).toBe(46);
     expect(runner.COVERAGE_INCLUDE).toContain("funasr_server.py");
   });
 });

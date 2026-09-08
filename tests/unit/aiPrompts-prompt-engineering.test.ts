@@ -7,7 +7,7 @@
 // mirroring tests/unit/aiHandlers.test.ts) so each assertion fails for the
 // right reason before the implementation lands.
 import { describe, it, expect } from "vitest";
-import { buildPrompt } from "../../src/helpers/aiPrompts";
+import { buildPrompt, INJECTION_GUARD } from "../../src/helpers/aiPrompts";
 
 // [20260906_Feat_PromptEngineering] Golden expectations for the shared
 // prefix block. Test-owned literals: the source may reword around them, but
@@ -211,7 +211,8 @@ describe("AI prompt engineering package (Spec #193 T4 / ticket #231)", () => {
       const result = buildPrompt("templated", "正文", {
         customTemplates: templates,
       });
-      expect(result.user).toBe("语言：\n\n内容：正文");
+      // [20260907_Fix_315_TemplateTrustBoundary] guard appended (ticket #315).
+      expect(result.user).toBe(`语言：\n\n内容：正文\n${INJECTION_GUARD}`);
     });
   });
 
@@ -223,12 +224,13 @@ describe("AI prompt engineering package (Spec #193 T4 / ticket #231)", () => {
       const result = buildPrompt("review", "唯一文本", {
         customTemplates: templates,
       });
-      expect(result.user).toBe("Review: 唯一文本");
-      // Exactly one occurrence of the raw text — no appended duplicate.
+      // [20260907_Fix_315_TemplateTrustBoundary] guard appended after the
+      // interpolated body (ticket #315); the dedup contract still holds.
+      expect(result.user).toBe(`Review: 唯一文本\n${INJECTION_GUARD}`);
       expect(result.user.split("唯一文本")).toHaveLength(2);
     });
 
-    it("legacy {text}-only templates keep working byte-for-byte", () => {
+    it("legacy {text}-only templates keep working (guard appended since #315)", () => {
       const templates = [
         {
           name: "meeting",
@@ -241,7 +243,12 @@ describe("AI prompt engineering package (Spec #193 T4 / ticket #231)", () => {
         customTemplates: templates,
       });
       expect(result.system).toBe("你是会议助手。");
-      expect(result.user).toBe("<meeting>讨论了项目进展</meeting>");
+      // [20260907_Fix_315_TemplateTrustBoundary] the pre-#315 byte-identical
+      // guarantee for the user body is superseded by the appended guard;
+      // the system prompt stays verbatim.
+      expect(result.user).toBe(
+        `<meeting>讨论了项目进展</meeting>\n${INJECTION_GUARD}`,
+      );
     });
 
     it("template without any {text}: wrapped transcript is appended so the model still sees the body", () => {
@@ -252,8 +259,48 @@ describe("AI prompt engineering package (Spec #193 T4 / ticket #231)", () => {
         customTemplates: templates,
       });
       expect(result.user).toBe(
-        "请总结以下内容。\n<transcript>\n正文内容\n</transcript>",
+        `请总结以下内容。\n<transcript>\n正文内容\n</transcript>\n${INJECTION_GUARD}`,
       );
+    });
+  });
+
+  // [20260907_Fix_315_TemplateTrustBoundary] Ticket #315 plan A: shared
+  // templates are a prompt-injection surface — the injection guard is
+  // appended to the rendered USER body (never to the user-authored system
+  // prompt, which stays verbatim). The 2M-char absolute output cap already
+  // covers template outputs at the orchestrator level, so no extra cap here.
+  describe("custom template injection guard (#315)", () => {
+    it("appends the injection guard after the transcript wrap (no {text})", () => {
+      const templates = [
+        { name: "t", label: "T", system: "系统提示", user: "请总结以下内容。" },
+      ];
+      const result = buildPrompt("t", "正文内容", {
+        customTemplates: templates,
+      });
+      expect(result.user).toBe(
+        `请总结以下内容。\n<transcript>\n正文内容\n</transcript>\n${INJECTION_GUARD}`,
+      );
+    });
+
+    it("appends the injection guard after the interpolated {text}", () => {
+      const templates = [
+        { name: "review", label: "R", system: "S", user: "Review: {text}" },
+      ];
+      const result = buildPrompt("review", "唯一文本", {
+        customTemplates: templates,
+      });
+      expect(result.user).toBe(`Review: 唯一文本\n${INJECTION_GUARD}`);
+    });
+
+    it("keeps the user-authored system prompt verbatim (no shared prefix)", () => {
+      const templates = [
+        { name: "t", label: "T", system: "系统提示", user: "请总结以下内容。" },
+      ];
+      const result = buildPrompt("t", "正文内容", {
+        customTemplates: templates,
+      });
+      expect(result.system).toBe("系统提示");
+      expect(result.system).not.toContain("INJECTION");
     });
   });
 });

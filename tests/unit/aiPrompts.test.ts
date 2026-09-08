@@ -20,6 +20,7 @@ import {
   buildPrompt,
   parseTemplateFile,
   loadCustomTemplates,
+  INJECTION_GUARD,
 } from "../../src/helpers/aiPrompts";
 
 describe("aiPrompts", () => {
@@ -165,7 +166,10 @@ user_template: "请处理: {text}"
         customTemplates,
       });
       expect(result.system).toBe("你是会议助手。");
-      expect(result.user).toBe("<meeting>讨论了项目进展</meeting>");
+      // [20260907_Fix_315_TemplateTrustBoundary] guard appended to the user body
+      expect(result.user).toBe(
+        `<meeting>讨论了项目进展</meeting>\n${INJECTION_GUARD}`,
+      );
     });
 
     it("custom template overrides built-in mode", () => {
@@ -191,7 +195,9 @@ user_template: "请处理: {text}"
         },
       ];
       const result = buildPrompt("review", "the content", { customTemplates });
-      expect(result.user).toBe("Review: the content\nPlease check.");
+      expect(result.user).toBe(
+        `Review: the content\nPlease check.\n${INJECTION_GUARD}`,
+      );
     });
   });
 

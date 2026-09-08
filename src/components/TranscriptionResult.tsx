@@ -1,4 +1,8 @@
 import * as React from "react";
+// [20260907_Fix_314_PolishSaveToast] Toast surfaces a polish write-back
+// failure; useTranslation routes the warning through i18n.
+import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
 import { LoadingDots } from "./ui/loading-dots";
 import ExportPanel from "./ExportPanel";
 import ProcessingPanel from "./ProcessingPanel";
@@ -20,6 +24,13 @@ interface TranscriptionResultProps {
   isOptimizing?: boolean;
   onCopy?: (text: string) => void;
   onAIOptimize?: (text: string) => Promise<string>;
+  // [20260907_Fix_316_PreferReviewProp] When the parent provides its own
+  // optimize channel (e.g. file import's server-side review by record id),
+  // it must take precedence over the ambient processText — otherwise the
+  // injected channel is unreachable in production. Default false keeps the
+  // recording path's mode-selector UX. If the flag is set but the channel
+  // is absent, the ambient processText path is used (graceful degradation).
+  preferOnAIOptimize?: boolean;
 }
 
 function formatTimestamp(ms?: number): string {
@@ -47,7 +58,10 @@ export default function TranscriptionResult({
   isOptimizing,
   onCopy,
   onAIOptimize,
+  preferOnAIOptimize,
 }: TranscriptionResultProps) {
+  // [20260907_Fix_314_PolishSaveToast] i18n for the write-back failure toast.
+  const { t } = useTranslation();
   const [expandedSegment, setExpandedSegment] = React.useState<
     string | number | null
   >(null);
@@ -121,12 +135,38 @@ export default function TranscriptionResult({
   ): Promise<void> => {
     if (!window.electronAPI?.updateTranscription) return;
     try {
-      await window.electronAPI.updateTranscription(recordId, {
+      // [20260907_Fix_314_ReviewFix] The handler wraps every failure (DB
+      // locked, missing record, zero changes, whitelist rejection) in a
+      // RESOLVED {success:false, error} envelope — only invoke-level faults
+      // reject. Both shapes must warn.
+      const result = await window.electronAPI.updateTranscription(recordId, {
         processed_text: polishedText,
         text: polishedText,
       });
+      if (!result?.success) {
+        console.warn(
+          "Failed to persist polished transcription:",
+          result?.error,
+        );
+        toast.warning(
+          t(
+            "transcription.polishSaveFailed",
+            "润色结果保存失败，重启后将显示原文本",
+          ),
+        );
+        return;
+      }
     } catch (err) {
+      // [20260907_Fix_314_PolishSaveToast] The polished text stays on screen
+      // (do not erase what the user is reading), but a persistence failure
+      // must be visible: after a restart the record reverts to the original.
       console.warn("Failed to persist polished transcription:", err);
+      toast.warning(
+        t(
+          "transcription.polishSaveFailed",
+          "润色结果保存失败，重启后将显示原文本",
+        ),
+      );
     }
   };
 
@@ -139,7 +179,12 @@ export default function TranscriptionResult({
       // processText and the injected onAIOptimize flow) converge here so
       // the write-back fires exactly once per successful polish.
       let polishedText: string | null = null;
-      if (window.electronAPI?.processText) {
+      if (preferOnAIOptimize && onAIOptimize) {
+        // [20260907_Fix_316_PreferReviewProp] Parent-declared channel wins
+        // (file import's aiReviewTranscription review-by-id).
+        polishedText = await onAIOptimize(text);
+        setOptimizedText(polishedText);
+      } else if (window.electronAPI?.processText) {
         const result = (await Promise.race([
           window.electronAPI.processText(text, currentMode),
           new Promise((_, reject) =>
