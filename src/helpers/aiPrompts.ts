@@ -166,7 +166,9 @@ export function buildPrompt(
     // {output_lang} renders the explicit output language and {speakers} the
     // assembled speaker lines — both render as "" when the corresponding
     // option is absent. Custom system prompts stay verbatim (no built-in
-    // shared prefix), and legacy {text}-only templates are byte-identical.
+    // shared prefix). Legacy {text}-only templates were byte-identical until
+    // [20260907_Fix_315_TemplateTrustBoundary] appended the injection guard
+    // to the rendered user body (ticket #315).
     // [20260906_Feat_PromptEngineering_Review] Function-form replacements:
     // transcript/speaker text may contain "$&"-style sequences that the
     // string form of replace() would interpret as special patterns.

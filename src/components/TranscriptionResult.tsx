@@ -24,6 +24,12 @@ interface TranscriptionResultProps {
   isOptimizing?: boolean;
   onCopy?: (text: string) => void;
   onAIOptimize?: (text: string) => Promise<string>;
+  // [20260907_Fix_316_PreferReviewProp] When the parent provides its own
+  // optimize channel (e.g. file import's server-side review by record id),
+  // it must take precedence over the ambient processText — otherwise the
+  // injected channel is unreachable in production. Default false keeps the
+  // recording path's mode-selector UX.
+  preferOnAIOptimize?: boolean;
 }
 
 function formatTimestamp(ms?: number): string {
@@ -51,6 +57,7 @@ export default function TranscriptionResult({
   isOptimizing,
   onCopy,
   onAIOptimize,
+  preferOnAIOptimize,
 }: TranscriptionResultProps) {
   // [20260907_Fix_314_PolishSaveToast] i18n for the write-back failure toast.
   const { t } = useTranslation();
@@ -171,7 +178,12 @@ export default function TranscriptionResult({
       // processText and the injected onAIOptimize flow) converge here so
       // the write-back fires exactly once per successful polish.
       let polishedText: string | null = null;
-      if (window.electronAPI?.processText) {
+      if (preferOnAIOptimize && onAIOptimize) {
+        // [20260907_Fix_316_PreferReviewProp] Parent-declared channel wins
+        // (file import's aiReviewTranscription review-by-id).
+        polishedText = await onAIOptimize(text);
+        setOptimizedText(polishedText);
+      } else if (window.electronAPI?.processText) {
         const result = (await Promise.race([
           window.electronAPI.processText(text, currentMode),
           new Promise((_, reject) =>

@@ -367,6 +367,13 @@ describe("[20260816_Test_FileImportExpanded] FileImport — remaining branches",
         id: 42,
         duration: 3,
       }),
+      // [20260907_Fix_316_PreferReviewProp] processText IS present in
+      // production — the stub must include it so the test proves the
+      // preferOnAIOptimize flag (not the stub's omission) routes the file
+      // import to aiReviewTranscription.
+      processText: vi
+        .fn()
+        .mockResolvedValue({ success: true, text: "错误通道的文本" }),
       getAIModes: vi
         .fn()
         .mockResolvedValue([

@@ -460,6 +460,99 @@ describe("TranscriptionResult — branch push", () => {
 // result fails (updateTranscription rejects), the user keeps looking at text
 // that was never saved — a silent console.warn is not enough. The failure
 // must surface a warning toast while keeping the polished text on screen.
+// [20260907_Fix_316_PreferReviewProp] File import's server-side review
+// channel (aiReviewTranscription via onAIOptimize) must win over the ambient
+// processText when the parent opts in — without the flag the injected
+// channel is unreachable in production.
+describe("TranscriptionResult — preferOnAIOptimize (#316)", () => {
+  type TestWindow = Omit<Window, "electronAPI"> & {
+    electronAPI?: {
+      processText?: (text: string, mode: string) => Promise<unknown>;
+      getAIModes?: () => Promise<unknown[]>;
+    };
+  };
+
+  const originalAPI = (globalThis.window as unknown as TestWindow).electronAPI;
+
+  afterEach(() => {
+    const win = globalThis.window as unknown as TestWindow;
+    if (originalAPI === undefined) delete win.electronAPI;
+    else win.electronAPI = originalAPI;
+    vi.clearAllMocks();
+  });
+
+  it("prefers onAIOptimize over processText when preferOnAIOptimize is set", async () => {
+    const processText = vi
+      .fn()
+      .mockResolvedValue({ success: true, text: "错误通道的文本" });
+    const onAIOptimize = vi.fn().mockResolvedValue("评审通道的文本");
+    (globalThis.window as unknown as TestWindow).electronAPI = {
+      processText: processText as unknown as (
+        text: string,
+        mode: string,
+      ) => Promise<unknown>,
+      getAIModes: vi
+        .fn()
+        .mockResolvedValue([
+          { name: "optimize", label: "智能润色", description: "" },
+        ]),
+    };
+
+    render(
+      React.createElement(TranscriptionResult, {
+        text: "原始文本",
+        onCopy: vi.fn(),
+        onAIOptimize,
+        preferOnAIOptimize: true,
+      }),
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "应用 AI 处理" }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("评审通道的文本")).toBeInTheDocument();
+    });
+    expect(processText).not.toHaveBeenCalled();
+  });
+
+  it("keeps processText preferred without the flag (recording mode-selector UX)", async () => {
+    const processText = vi
+      .fn()
+      .mockResolvedValue({ success: true, text: "默认通道的文本" });
+    const onAIOptimize = vi.fn().mockResolvedValue("错误通道的文本");
+    (globalThis.window as unknown as TestWindow).electronAPI = {
+      processText: processText as unknown as (
+        text: string,
+        mode: string,
+      ) => Promise<unknown>,
+      getAIModes: vi
+        .fn()
+        .mockResolvedValue([
+          { name: "optimize", label: "智能润色", description: "" },
+        ]),
+    };
+
+    render(
+      React.createElement(TranscriptionResult, {
+        text: "原始文本",
+        onCopy: vi.fn(),
+        onAIOptimize,
+      }),
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "应用 AI 处理" }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("默认通道的文本")).toBeInTheDocument();
+    });
+    expect(onAIOptimize).not.toHaveBeenCalled();
+  });
+});
+
 describe("TranscriptionResult — polish write-back failure (#314)", () => {
   type TestWindow = Omit<Window, "electronAPI"> & {
     electronAPI?: {
