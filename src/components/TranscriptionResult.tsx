@@ -229,7 +229,15 @@ export default function TranscriptionResult({
           // [20260815_Fix_AiEmptyContent] Surface the main-process error
           // (e.g. max_tokens exhausted by model reasoning) instead of a
           // generic message that hides the actionable cause.
-          setOptimizeError(result?.error || "AI处理失败，请重试");
+          // [20260907_Fix_236_Review] Hook sentinels map to localized text
+          // here (the hook layer carries no user-visible strings).
+          const machineError = result?.error;
+          const localizedError =
+            machineError === "STREAM_INVOKE_FAILED"
+              ? t("transcription.polishInvokeFailed", "AI处理失败，请重试")
+              : machineError ||
+                t("transcription.polishFailed", "AI处理失败，请重试");
+          setOptimizeError(localizedError);
         }
       } else if (onAIOptimize) {
         const result = await onAIOptimize(text);

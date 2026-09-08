@@ -27,6 +27,7 @@ type StreamingApi = {
 
 export function usePolishStream() {
   const [streamText, setStreamText] = React.useState<string | null>(null);
+  const [streamBytes, setStreamBytes] = React.useState(0);
   const [isStreaming, setIsStreaming] = React.useState(false);
   const requestIdRef = React.useRef<string | null>(null);
   const abortRef = React.useRef<StreamingApi["abortPolish"] | null>(null);
@@ -34,7 +35,12 @@ export function usePolishStream() {
   const cancel = React.useCallback(() => {
     const id = requestIdRef.current;
     if (id && abortRef.current) {
-      void abortRef.current(id);
+      abortRef.current(id).catch((error) => {
+        // [20260907_Fix_236_Review] An abort IPC failure must not surface
+        // as an unhandled rejection — the run still settles via the
+        // orchestrator's deadline matrix.
+        console.warn("abortPolish failed:", error);
+      });
     }
   }, []);
 
@@ -47,11 +53,23 @@ export function usePolishStream() {
       text: string,
       mode: string,
     ): Promise<PolishResult> => {
-      const requestId = crypto.randomUUID();
+      // [20260907_Fix_236_Review] Guard against overlapping runs — checked
+      // BEFORE the ref is claimed: one coordinator, one live stream (the UI
+      // disables apply during a run; this makes it explicit at the boundary).
+      if (requestIdRef.current !== null) {
+        return { success: false, error: "STREAM_IN_FLIGHT" };
+      }
+      // [20260907_Fix_236_Review] jsdom lacks crypto.randomUUID — fall back
+      // to a time-based id (uniqueness within one window is sufficient).
+      const requestId =
+        typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : `polish-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       requestIdRef.current = requestId;
       abortRef.current = api.abortPolish;
       setIsStreaming(true);
       setStreamText("");
+      setStreamBytes(0);
 
       return await new Promise<PolishResult>((resolve) => {
         let settled = false;
@@ -63,8 +81,11 @@ export function usePolishStream() {
           requestIdRef.current = null;
           abortRef.current = null;
           setIsStreaming(false);
-          if (result.success && result.text) setStreamText(null);
-          if (result.cancelled) setStreamText(null);
+          // [20260907_Fix_236_Review] Clear the stream on EVERY terminal
+          // outcome: a mid-stream error must not leave the truncated
+          // partial rendered as the user's transcription. Success hands
+          // over to optimizedText; cancel/error restore the original.
+          setStreamText(null);
           resolve(result);
         };
         const unsubscribe = api.onPolishChunk((chunk) => {
@@ -72,6 +93,17 @@ export function usePolishStream() {
           if (chunk.type === "delta" && chunk.text) {
             streamedSoFar += chunk.text;
             setStreamText(streamedSoFar);
+          } else if (chunk.type === "degraded") {
+            // [20260907_Fix_236_Review] Intentionally ignored here: the
+            // degraded run settles via the invoke's own JSON result (no
+            // finish chunk ever arrives); the static optimizing indicator
+            // keeps showing until then.
+          } else if (chunk.type === "progress") {
+            // [20260907_Feat_236_StreamingUi] T9 ③: block progress (bytes)
+            // for consumers without per-word rendering (file import).
+            setStreamBytes(
+              (prev) => prev + ((chunk as { bytes?: number }).bytes ?? 0),
+            );
           } else if (chunk.type === "finish") {
             settle({ success: true, text: chunk.text });
           } else if (chunk.type === "error") {
@@ -85,11 +117,32 @@ export function usePolishStream() {
           .then((invokeResult) => {
             settle(invokeResult as PolishResult);
           })
-          .catch(() => settle({ success: false, error: "AI处理失败，请重试" }));
+          .catch((error) => {
+            // [20260907_Fix_236_Review] Log the IPC-level cause, settle with
+            // a machine sentinel — the component maps it to an i18n message.
+            console.warn("streaming polish invoke failed:", error);
+            settle({ success: false, error: "STREAM_INVOKE_FAILED" });
+          });
       });
     },
     [],
   );
 
-  return { streamText, isStreaming, start, cancel };
+  // [20260907_Fix_236_Review] Unmount teardown: release the chunk listener
+  // and abort the orphaned run instead of letting it burn tokens until the
+  // deadline matrix kills it.
+  React.useEffect(() => {
+    return () => {
+      const id = requestIdRef.current;
+      requestIdRef.current = null;
+      abortRef.current = null;
+      if (id && window.electronAPI?.abortPolish) {
+        window.electronAPI.abortPolish(id).catch(() => {
+          // window torn down — nothing to abort
+        });
+      }
+    };
+  }, []);
+
+  return { streamText, streamBytes, isStreaming, start, cancel };
 }

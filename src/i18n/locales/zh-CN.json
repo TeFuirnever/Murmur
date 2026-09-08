@@ -364,6 +364,8 @@
   },
   "transcription": {
     "polishSaveFailed": "润色结果保存失败，重启后将显示原文本",
-    "cancelPolish": "取消"
+    "cancelPolish": "取消",
+    "polishInvokeFailed": "AI处理失败，请重试",
+    "polishFailed": "AI处理失败，请重试"
   }
 }

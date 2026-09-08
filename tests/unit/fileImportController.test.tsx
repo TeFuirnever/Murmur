@@ -21,6 +21,8 @@ function stubController(
     error: null,
     isOptimizing: false,
     optimizedText: null,
+    polishChunkBytes: 0,
+    isPolishStreaming: false,
     selectFile: vi.fn(),
     selectFileFromPath: vi.fn(),
     startTranscription: vi.fn(),

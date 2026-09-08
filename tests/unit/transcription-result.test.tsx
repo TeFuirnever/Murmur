@@ -674,6 +674,7 @@ describe("TranscriptionResult — streaming manual polish (#236 ①)", () => {
     text?: string;
     reason?: string;
     error?: string;
+    reasoningChars?: number;
   };
   type TestWindow = Omit<Window, "electronAPI"> & {
     electronAPI?: {
@@ -706,7 +707,7 @@ describe("TranscriptionResult — streaming manual polish (#236 ①)", () => {
       ),
       onPolishChunk: vi.fn((cb: (chunk: Chunk) => void) => {
         chunkListener = cb;
-        return unsubSpy;
+        return unsubSpy as unknown as () => void;
       }),
       abortPolish: vi.fn().mockResolvedValue({ success: true }),
       updateTranscription: vi
@@ -803,5 +804,112 @@ describe("TranscriptionResult — streaming manual polish (#236 ①)", () => {
     chunkListener!({ type: "abort", requestId });
     await vi.waitFor(() => expect(unsubSpy).toHaveBeenCalled());
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+});
+
+// [20260907_Fix_236_Review] Regression: a mid-stream ERROR must not leave
+// the truncated partial rendered as the transcription, and the invoke
+// rejection path surfaces a localized message.
+describe("TranscriptionResult — streaming error paths (#236 review)", () => {
+  type Chunk = {
+    type: string;
+    requestId?: string;
+    text?: string;
+    error?: string;
+    reasoningChars?: number;
+  };
+  type TestWindow = Omit<Window, "electronAPI"> & {
+    electronAPI?: {
+      processText?: (
+        text: string,
+        mode: string,
+        timeout?: number,
+        requestId?: string,
+      ) => Promise<unknown>;
+      onPolishChunk?: (cb: (chunk: Chunk) => void) => () => void;
+      abortPolish?: (requestId: string) => Promise<unknown>;
+      updateTranscription?: (
+        id: number,
+        patch: Record<string, unknown>,
+      ) => Promise<unknown>;
+      getAIModes?: () => Promise<unknown[]>;
+    };
+  };
+  const originalAPI = (globalThis.window as unknown as TestWindow).electronAPI;
+  let chunkListener: ((chunk: Chunk) => void) | null = null;
+  let unsubSpy: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    chunkListener = null;
+    unsubSpy = vi.fn(() => {});
+    (globalThis.window as unknown as TestWindow).electronAPI = {
+      processText: vi.fn(() => new Promise(() => {})),
+      onPolishChunk: vi.fn((cb: (chunk: Chunk) => void) => {
+        chunkListener = cb;
+        return unsubSpy as unknown as () => void;
+      }),
+      abortPolish: vi.fn().mockResolvedValue({ success: true }),
+      updateTranscription: vi.fn().mockResolvedValue({ success: true }),
+      getAIModes: vi
+        .fn()
+        .mockResolvedValue([
+          { name: "optimize", label: "智能润色", description: "" },
+        ]),
+    };
+  });
+
+  afterEach(() => {
+    const win = globalThis.window as unknown as TestWindow;
+    if (originalAPI === undefined) delete win.electronAPI;
+    else win.electronAPI = originalAPI;
+    vi.clearAllMocks();
+  });
+
+  it("restores the original text after a mid-stream error chunk", async () => {
+    render(
+      React.createElement(TranscriptionResult, {
+        text: "原始转写内容",
+        onCopy: vi.fn(),
+      }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "应用 AI 处理" }),
+    );
+    await vi.waitFor(() => expect(chunkListener).not.toBeNull());
+    const api = (globalThis.window as unknown as TestWindow).electronAPI!;
+    const requestId = (api.processText as ReturnType<typeof vi.fn>).mock
+      .calls[0]![3] as string;
+
+    chunkListener!({ type: "delta", requestId, text: "被截断的部分" });
+    await screen.findByText("被截断的部分");
+    chunkListener!({ type: "error", requestId, error: "上游 500" });
+
+    // Original transcription restored; error surfaced; partial gone.
+    await vi.waitFor(() => {
+      expect(screen.getByText("原始转写内容")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("被截断的部分")).not.toBeInTheDocument();
+    expect(screen.getByText("上游 500")).toBeInTheDocument();
+    await vi.waitFor(() => expect(unsubSpy).toHaveBeenCalled());
+  });
+
+  it("maps the invoke-rejection sentinel to a localized message", async () => {
+    (globalThis.window as unknown as TestWindow).electronAPI!.processText = vi
+      .fn()
+      .mockRejectedValue(new Error("ipc gone"));
+    render(
+      React.createElement(TranscriptionResult, {
+        text: "原始转写内容",
+        onCopy: vi.fn(),
+      }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "应用 AI 处理" }),
+    );
+
+    await vi.waitFor(() => {
+      expect(screen.getByText("AI处理失败，请重试")).toBeInTheDocument();
+    });
+    expect(screen.getByText("原始转写内容")).toBeInTheDocument();
   });
 });

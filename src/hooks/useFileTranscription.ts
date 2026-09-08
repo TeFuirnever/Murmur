@@ -1,4 +1,6 @@
 import * as React from "react";
+// [20260907_Feat_236_StreamingUi] T9 ③: chunk-progress coordinator.
+import { usePolishStream } from "./usePolishStream";
 
 // [20260905_Feat_BloubFileLift] exported so App/lib can map file state to the
 // bot mascot without redefining the union
@@ -48,6 +50,9 @@ export function useFileTranscription() {
   const [error, setError] = React.useState<string | null>(null);
   const [isOptimizing, setOptimizing] = React.useState(false);
   const [optimizedText, setOptimizedText] = React.useState<string | null>(null);
+  // [20260907_Feat_236_StreamingUi] T9 ③: streaming polish coordinator —
+  // exposes chunk progress (bytes) for the file-import optimizing UI.
+  const polishStream = usePolishStream();
   const progressCleanup = React.useRef<(() => void) | null>(null);
 
   const cleanupProgress = () => {
@@ -180,7 +185,12 @@ export function useFileTranscription() {
         setState("done");
 
         // 触发AI处理（如果启用）
-        if (window.electronAPI?.processText && window.electronAPI?.getSetting) {
+        // [20260907_Feat_236_StreamingUi] Boolean() wrappers keep the runtime
+        // truthiness semantics without tripping TS2774 on the optional chain.
+        if (
+          Boolean(window.electronAPI?.processText) &&
+          Boolean(window.electronAPI?.getSetting)
+        ) {
           try {
             const defaultMode = (await window.electronAPI.getSetting(
               "default_mode",
@@ -203,14 +213,25 @@ export function useFileTranscription() {
                     : "optimize"
                   : defaultMode;
               setOptimizing(true);
-              // [20260907_Fix_T9_RaceRemoval] The renderer-side 120s timeout
-              // race is removed — timeout semantics are owned by the
-              // orchestrator's deadline matrix (first-delta/idle/total),
-              // which aborts the upstream and classifies the failure.
-              const aiResult = (await window.electronAPI.processText(
-                response.text,
-                mode,
-              )) as { success?: boolean; text?: string };
+              // [20260907_Feat_236_StreamingUi] T9 ③: consume the stream when
+              // the chunk channel exists — progress chunks surface as block
+              // progress; timeout semantics stay in the orchestrator (T8).
+              const api = window.electronAPI;
+              const streamingCapable =
+                Boolean(api.onPolishChunk) && Boolean(api.abortPolish);
+              let aiResult: { success?: boolean; text?: string };
+              if (streamingCapable) {
+                aiResult = (await polishStream.start(
+                  api,
+                  response.text,
+                  mode,
+                )) as { success?: boolean; text?: string };
+              } else {
+                aiResult = (await api.processText(response.text, mode)) as {
+                  success?: boolean;
+                  text?: string;
+                };
+              }
               if (aiResult?.success && aiResult?.text) {
                 setOptimizedText(aiResult.text);
               }
@@ -231,7 +252,10 @@ export function useFileTranscription() {
       setError((err as Error).message || "转录过程中出错");
       setState("error");
     }
-  }, [fileInfo]);
+    // [20260907_Fix_236_StreamingUi] polishStream.start is a stable
+    // useCallback; the ref-stable object satisfies exhaustive-deps without
+    // invalidating the transcription callback per render.
+  }, [fileInfo, polishStream]);
 
   const cancelTranscription = React.useCallback(async () => {
     try {
@@ -264,6 +288,8 @@ export function useFileTranscription() {
     result,
     error,
     isOptimizing,
+    polishChunkBytes: polishStream.streamBytes,
+    isPolishStreaming: polishStream.isStreaming,
     optimizedText,
     selectFile,
     selectFileFromPath,
