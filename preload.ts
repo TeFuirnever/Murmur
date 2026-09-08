@@ -73,6 +73,16 @@ export const preloadApi: ElectronAPI = {
   // [20260907_Feat_233_ListModels] Provider model-list derivation (T6).
   listAIModels: (baseUrl: string, apiKey: string) =>
     ipcRenderer.invoke(C.AI.LIST_MODELS, baseUrl, apiKey),
+  // [20260907_Feat_235_StreamPipeline] T8: streaming abort + chunk push.
+  abortPolish: (requestId: string) =>
+    ipcRenderer.invoke(C.AI.POLISH_ABORT, requestId),
+  onPolishChunk: (
+    callback: (chunk: import("./src/types/ipc").PolishChunk) => void,
+  ) =>
+    makeListener<import("./src/types/ipc").PolishChunk>(
+      C.EVENTS.AI_POLISH_CHUNK,
+      callback,
+    ),
   getAIModes: () => ipcRenderer.invoke(C.AI.GET_MODES),
   getAIProviderPresets: () => ipcRenderer.invoke(C.AI.GET_PROVIDER_PRESETS),
   detectLocalModels: () => ipcRenderer.invoke(C.AI.DETECT_LOCAL_MODELS),

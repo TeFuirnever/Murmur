@@ -8,6 +8,13 @@ import { buildPrompt, loadCustomTemplates } from "../aiPrompts";
 import type { PromptTemplate } from "../aiPrompts";
 import { getProviderPresets } from "../providerPresets";
 import { detectLocalModels } from "../detectLocalModels";
+// [20260907_Feat_235_StreamPipeline] T8 chunk protocol union.
+import type { PolishChunk } from "../../types/ipc";
+import {
+  createSseMerger,
+  STREAM_MAX_CHUNKS,
+  streamDeadlineViolation,
+} from "../polish-stream";
 
 interface Logger {
   info?(message: string, ...args: unknown[]): void;
@@ -298,6 +305,179 @@ async function postChatCompletion(
   return response;
 }
 
+// [20260907_Feat_235_StreamPipeline] T8: consume the streaming response
+// body — merge upstream SSE via createSseMerger, push PolishChunk events to
+// the initiating window, enforce the deadline matrix (first-delta / idle /
+// total) and the cumulative output caps. Chunk TEXT never reaches the
+// logger: only counts, byte sizes and durations are logged.
+async function consumePolishStream(
+  response: Response,
+  stream: {
+    requestId: string;
+    notify: (chunk: PolishChunk) => void;
+    timeouts?: { firstDeltaMs: number; idleMs: number };
+  },
+  runHandle: PolishRunHandle | null,
+  logger: Logger | undefined,
+  timeoutMs: number,
+): Promise<{
+  success: boolean;
+  text?: string;
+  error?: string;
+  code?: PolishOutcomeCode;
+}> {
+  const requestId = stream.requestId;
+  const notify = (chunk: PolishChunk) => stream.notify(chunk);
+  const startedAt = Date.now();
+  let lastActivity = startedAt;
+  let receivedFirst = false;
+  let chunkCount = 0;
+  let outputChars = 0;
+  let reasoningChars = 0;
+  let fullText = "";
+  const timeouts = stream.timeouts ?? {
+    firstDeltaMs: STREAM_FIRST_DELTA_MS,
+    idleMs: STREAM_IDLE_MS,
+  };
+
+  notify({ type: "start", requestId });
+  const merger = createSseMerger({
+    now: Date.now,
+    onDelta: (t) => {
+      receivedFirst = true;
+      fullText += t;
+      outputChars += t.length;
+      notify({ type: "delta", requestId, text: t });
+    },
+    onReasoning: (t) => {
+      reasoningChars += t.length;
+    },
+  });
+
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  const failWith = (message: string, errorCode: string) => {
+    runHandle?.controller.abort();
+    notify({ type: "error", requestId, error: message });
+    logger?.error?.(
+      "流式润色失败:",
+      JSON.stringify({ requestId, code: errorCode, outputChars, chunkCount }),
+    );
+    return { success: false as const, error: message };
+  };
+
+  try {
+    // Deadline matrix: first-delta before any content, idle between deltas,
+    // total across the whole body ([20260907_Fix_235_TotalDeadline] — the
+    // response-headers timer cleared on arrival, so body consumption needs
+    // this explicit total bound). The read is raced against the nearest
+    // remaining deadline so a stalled upstream wakes the loop for
+    // classification.
+    let pendingRead: Promise<ReadableStreamReadResult<Uint8Array>> | null =
+      null;
+    while (true) {
+      const stage = receivedFirst ? "streaming" : "awaiting_first";
+      const stageDeadline = receivedFirst
+        ? lastActivity + timeouts.idleMs
+        : startedAt + timeouts.firstDeltaMs;
+      const totalDeadline = startedAt + timeoutMs;
+      const deadline = Math.min(stageDeadline, totalDeadline);
+      const remainingMs = Math.max(deadline - Date.now(), 1);
+      let timerId: ReturnType<typeof setTimeout> | undefined;
+      if (!pendingRead) pendingRead = reader.read();
+      const raced = await Promise.race([
+        pendingRead.then((r) => ({ kind: "read" as const, r })),
+        new Promise<{ kind: "deadline" }>((resolve) => {
+          timerId = setTimeout(
+            () => resolve({ kind: "deadline" }),
+            remainingMs,
+          );
+        }),
+      ]);
+      // A read-win clears its deadline timer; a deadline-win keeps the
+      // queued read alive for the next iteration (no orphaned reads).
+      clearTimeout(timerId);
+      if (process.env.POLISH_MERGER_DEBUG) {
+        console.log(
+          "DBG raced kind:",
+          raced.kind,
+          "now-started:",
+          Date.now() - startedAt,
+        );
+      }
+      if (raced.kind === "deadline") {
+        if (Date.now() >= totalDeadline) {
+          return failWith("AI 流式响应总时长超时", "STREAM_TOTAL_TIMEOUT");
+        }
+        const violation = streamDeadlineViolation(
+          stage,
+          startedAt,
+          lastActivity,
+          Date.now(),
+          timeouts,
+        );
+        if (violation === "first_delta") {
+          return failWith("AI 流式响应首块超时", "STREAM_FIRST_DELTA_TIMEOUT");
+        }
+        if (violation === "idle") {
+          return failWith("AI 流式响应空闲超时", "STREAM_IDLE_TIMEOUT");
+        }
+        // Early wake (wall-clock jitter before the strict threshold):
+        // re-arm the deadline and keep waiting on the SAME queued read.
+        continue;
+      }
+      pendingRead = null;
+      const { done, value } = raced.r;
+      if (done) break;
+      chunkCount++;
+      lastActivity = Date.now();
+      if (chunkCount > STREAM_MAX_CHUNKS) {
+        return failWith("AI 流式响应块数超过上限", "STREAM_CHUNK_CAP");
+      }
+      notify({ type: "progress", requestId, bytes: value.length });
+      merger.push(decoder.decode(value, { stream: true }));
+      if (merger.contentChars() > 0) receivedFirst = true;
+      if (outputChars > POLISH_OUTPUT_MAX_CHARS) {
+        return failWith("AI 输出超过上限", "OUTPUT_CAP");
+      }
+      // T7 gates stay live mid-stream: a cancelled/superseded run settles
+      // immediately without touching the renderer state again. Flush the
+      // window BEFORE the terminal abort chunk so no delta trails it.
+      const settled = polishRunOutcomeIfSettledAside(runHandle);
+      if (settled) {
+        merger.flush();
+        notify({ type: "abort", requestId });
+        return settled;
+      }
+    }
+    decoder.decode(); // flush a possibly-split multi-byte tail
+    merger.flush();
+    if (!fullText) {
+      return failWith("AI返回了空内容，请重试或更换模型", "EMPTY_CONTENT");
+    }
+    notify({ type: "finish", requestId, text: fullText, reasoningChars });
+    logger?.info?.(
+      "流式润色完成:",
+      JSON.stringify({
+        requestId,
+        outputChars,
+        reasoningChars,
+        chunkCount,
+        totalMs: Date.now() - startedAt,
+      }),
+    );
+    return { success: true, text: fullText };
+  } catch (error) {
+    if (runHandle?.controller.signal.aborted) {
+      notify({ type: "abort", requestId });
+      const outcome = polishRunOutcomeIfSettledAside(runHandle);
+      if (outcome) return outcome;
+      return { success: false, error: "已取消", code: "CANCELLED" };
+    }
+    return failWith((error as Error).message || "流式处理失败", "STREAM_ERROR");
+  }
+}
+
 /**
  * Extract the human-readable message from an OpenAI-style error body.
  * Returns "" when the body has no usable message; the caller supplies its
@@ -358,6 +538,17 @@ export interface PolishRequest {
   // processTextWithAI option contract; after T3 no production caller uses it.
   systemPrompt?: string;
   userPrompt?: string;
+  // [20260907_Feat_235_StreamPipeline] T8: when present the run streams —
+  // the provider is called with stream:true, upstream SSE deltas are merged
+  // (16ms window / 2048-char cap) and pushed via notify as PolishChunk
+  // events; the deadline matrix (first-delta / idle / total) and the
+  // cumulative output cap abort the upstream on violation. Timeouts are
+  // injectable for tests.
+  stream?: {
+    requestId: string;
+    notify: (chunk: PolishChunk) => void;
+    timeouts?: { firstDeltaMs: number; idleMs: number };
+  };
   // [20260906_Feat_OrchestratorGenCancel] Spec #193 T7 (ticket #234):
   // generation-scope key for last-write-wins race protection. When two runs
   // share a scope, starting a newer run invalidates the older one: the stale
@@ -412,6 +603,11 @@ const MINIMAL_EDIT_MODES: ReadonlySet<string> = new Set([
 // a provider (or malicious gateway) response longer than this is truncated
 // before mapping, so oversized/absurd output never flows to the renderer.
 export const POLISH_OUTPUT_MAX_CHARS = 2_000_000;
+// [20260907_Feat_235_StreamPipeline] T8 streaming consumption guards: chunk
+// count cap (per-read events) and the deadline matrix values. The total
+// duration reuses the existing 150s/180s timeout passed by the entry.
+const STREAM_FIRST_DELTA_MS = 15_000;
+const STREAM_IDLE_MS = 30_000;
 
 // One in-flight run per generation scope: the epoch orders runs within the
 // scope, the controller aborts the run's provider fetch when it is
@@ -630,7 +826,9 @@ export async function runPolishOrchestrator(
       ],
       temperature: temperature,
       max_tokens: effectiveMaxTokens,
-      stream: false,
+      // [20260907_Feat_235_StreamPipeline] T8: stream the response body when
+      // the caller requested it; chunk events flow through request.stream.
+      stream: request.stream !== undefined,
     };
 
     logger.info?.("AI文本处理请求:", {
@@ -664,6 +862,27 @@ export async function runPolishOrchestrator(
     const staleOutcome = polishRunOutcomeIfSettledAside(runHandle);
     if (staleOutcome) {
       return staleOutcome;
+    }
+
+    // [20260907_Feat_235_StreamPipeline] T8: consume the SSE body via the
+    // merger + deadline matrix. A gateway that ignored stream:true (200 with
+    // a non-SSE content-type) degrades to the non-stream JSON path below.
+    if (request.stream) {
+      const contentType = response.headers.get("content-type") ?? "";
+      if (contentType.includes("text/event-stream")) {
+        return await consumePolishStream(
+          response,
+          request.stream,
+          runHandle,
+          logger,
+          timeoutMs,
+        );
+      }
+      request.stream.notify({
+        type: "degraded",
+        requestId: request.stream.requestId,
+        reason: "non_sse_response",
+      });
     }
 
     if (!response.ok) {
@@ -958,6 +1177,13 @@ interface Managers {
 
 export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
   const { databaseManager, logger } = managers;
+  // [20260907_Feat_235_StreamPipeline] T8: requestId → abort controller for
+  // the initiating sender. POLISH_ABORT resolves through this map with a
+  // sender-ownership check.
+  const streamAbortTargets = new Map<
+    string,
+    { controller: AbortController; senderId: number }
+  >();
   const templatesDir =
     managers.templatesDir ||
     (() => {
@@ -971,7 +1197,13 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
 
   ipcMain.handle(
     C.AI.PROCESS,
-    async (_event, text: string, mode = "optimize", timeout?: number) => {
+    async (
+      event,
+      text: string,
+      mode = "optimize",
+      timeout?: number,
+      requestId?: string,
+    ) => {
       // [20260906_Refactor_PolishOrchestrator] Spec #193 T3 (ticket #230):
       // route the PROCESS entry straight through the shared orchestrator
       // (entry resolves its own default mode; the orchestrator owns prompt
@@ -982,18 +1214,66 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
       // orchestrator only clamps when the caller opts in, and without this
       // the 2026-08-15 empty-content fix never bound on a live path. Rewrite
       // modes and custom templates stay unclamped by design.
-      return await runPolishOrchestrator(
-        { databaseManager, logger },
-        {
-          text,
-          mode,
-          templatesDir,
-          timeout,
-          clampOutputTokens: MINIMAL_EDIT_MODES.has(mode),
-        },
-      );
+      //
+      // [20260907_Feat_235_StreamPipeline] T8: a requestId opts the call
+      // into streaming — chunk events are sent to THIS window only, and the
+      // requestId becomes the abort/generation scope key.
+      let stream: PolishRequest["stream"];
+      let ownedController: AbortController | undefined;
+      if (requestId) {
+        const senderId = event.sender.id;
+        const controller = new AbortController();
+        ownedController = controller;
+        streamAbortTargets.set(requestId, { controller, senderId });
+        stream = {
+          requestId,
+          notify: (chunk: PolishChunk) => {
+            if (!event.sender.isDestroyed()) {
+              event.sender.send(C.EVENTS.AI_POLISH_CHUNK, chunk);
+            }
+          },
+        };
+      }
+      try {
+        return await runPolishOrchestrator(
+          { databaseManager, logger },
+          {
+            text,
+            mode,
+            templatesDir,
+            timeout,
+            clampOutputTokens: MINIMAL_EDIT_MODES.has(mode),
+            generationScope: requestId,
+            signal: streamAbortTargets.get(requestId ?? "")?.controller.signal,
+            stream,
+          },
+        );
+      } finally {
+        // [20260907_Fix_235_ReviewMinor1] Delete ONLY our own entry: a
+        // superseding run reusing the requestId owns the map slot now.
+        const entry = requestId ? streamAbortTargets.get(requestId) : undefined;
+        if (entry && entry.controller === ownedController) {
+          streamAbortTargets.delete(requestId as string);
+        }
+      }
     },
   );
+
+  // [20260907_Feat_235_StreamPipeline] T8 abort channel — rate-limit exempt
+  // (an abort must never be throttled) and sender-checked so one window
+  // cannot cancel another window's run.
+  ipcMain.handle(C.AI.POLISH_ABORT, (event, requestId: string) => {
+    const target = streamAbortTargets.get(requestId);
+    if (!target) {
+      return { success: false, reason: "unknown_request" };
+    }
+    if (target.senderId !== event.sender.id) {
+      logger.warn?.("POLISH_ABORT 拒绝：请求 id 不属于该发送者");
+      return { success: false, reason: "forbidden" };
+    }
+    target.controller.abort();
+    return { success: true };
+  });
 
   // [20260907_Feat_233_ListModels] Ticket #233: provider model-list
   // derivation. Same SSRF gate as the chat request (private https rejected,
