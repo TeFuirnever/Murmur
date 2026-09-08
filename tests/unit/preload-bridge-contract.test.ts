@@ -141,4 +141,24 @@ describe("preload bridge contract", () => {
 
     expect(invokeMock).toHaveBeenCalledTimes(10);
   });
+
+  // [20260907_Fix_236_Review] T9 ①: the streaming requestId MUST reach the
+  // main process — a dropped 4th argument makes streaming inert and the
+  // cancel button dead (review HIGH on #236).
+  it("processText forwards the requestId as the 4th invoke argument", () => {
+    const api = mockState.exposed.electronAPI as Record<
+      string,
+      (...args: unknown[]) => unknown
+    >;
+    const invokeMock = ipcRenderer.invoke as ReturnType<typeof vi.fn>;
+    invokeMock.mockClear();
+    api.processText!("hello", "optimize", undefined, "req-42");
+    expect(invokeMock).toHaveBeenCalledWith(
+      expect.any(String),
+      "hello",
+      "optimize",
+      undefined,
+      "req-42",
+    );
+  });
 });

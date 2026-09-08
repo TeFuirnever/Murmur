@@ -66,8 +66,12 @@ export const preloadApi: ElectronAPI = {
   downloadModels: () => ipcRenderer.invoke(C.MODELS.DOWNLOAD),
 
   // AI text processing
-  processText: (text: string, mode: string, timeout?: number) =>
-    ipcRenderer.invoke(C.AI.PROCESS, text, mode, timeout),
+  processText: (
+    text: string,
+    mode: string,
+    timeout?: number,
+    requestId?: string,
+  ) => ipcRenderer.invoke(C.AI.PROCESS, text, mode, timeout, requestId),
   checkAIStatus: (testConfig: unknown) =>
     ipcRenderer.invoke(C.AI.CHECK_STATUS, testConfig),
   // [20260907_Feat_233_ListModels] Provider model-list derivation (T6).

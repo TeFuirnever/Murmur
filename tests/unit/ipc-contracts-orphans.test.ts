@@ -192,10 +192,9 @@ describe("ipc-contracts renderer-caller dimension", () => {
     // the renderer UI consumers land with T9 (#236) — consciously yellow
     // until then. Stale entries fail the stale check above, so these must
     // be removed when T9 wires the callers.
-    const KNOWN_RENDERER_ORPHANS = new Set<string>([
-      "AI.POLISH_ABORT",
-      "EVENTS.AI_POLISH_CHUNK",
-    ]);
+    // [20260907_Feat_236_StreamingUi] T9 ① wired abortPolish
+    // (usePolishStream.cancel) — removed from the conscious yellow list.
+    const KNOWN_RENDERER_ORPHANS = new Set<string>(["EVENTS.AI_POLISH_CHUNK"]);
 
     const unexpected = yellow.filter((c) => !KNOWN_RENDERER_ORPHANS.has(c));
     const stale = [...KNOWN_RENDERER_ORPHANS].filter(
