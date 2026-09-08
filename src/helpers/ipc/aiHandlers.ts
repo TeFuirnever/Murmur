@@ -367,22 +367,48 @@ async function consumePolishStream(
   };
 
   try {
+    // Deadline matrix: first-delta before any content, idle between deltas,
+    // total across the whole body ([20260907_Fix_235_TotalDeadline] — the
+    // response-headers timer cleared on arrival, so body consumption needs
+    // this explicit total bound). The read is raced against the nearest
+    // remaining deadline so a stalled upstream wakes the loop for
+    // classification.
+    let pendingRead: Promise<ReadableStreamReadResult<Uint8Array>> | null =
+      null;
     while (true) {
-      // Deadline matrix: first-delta before any content, idle between
-      // deltas. The read is raced against the nearest remaining deadline so
-      // a stalled upstream wakes the loop for classification.
       const stage = receivedFirst ? "streaming" : "awaiting_first";
-      const deadline = receivedFirst
+      const stageDeadline = receivedFirst
         ? lastActivity + timeouts.idleMs
         : startedAt + timeouts.firstDeltaMs;
+      const totalDeadline = startedAt + timeoutMs;
+      const deadline = Math.min(stageDeadline, totalDeadline);
       const remainingMs = Math.max(deadline - Date.now(), 1);
+      let timerId: ReturnType<typeof setTimeout> | undefined;
+      if (!pendingRead) pendingRead = reader.read();
       const raced = await Promise.race([
-        reader.read().then((r) => ({ kind: "read" as const, r })),
-        new Promise<{ kind: "deadline" }>((resolve) =>
-          setTimeout(() => resolve({ kind: "deadline" }), remainingMs),
-        ),
+        pendingRead.then((r) => ({ kind: "read" as const, r })),
+        new Promise<{ kind: "deadline" }>((resolve) => {
+          timerId = setTimeout(
+            () => resolve({ kind: "deadline" }),
+            remainingMs,
+          );
+        }),
       ]);
+      // A read-win clears its deadline timer; a deadline-win keeps the
+      // queued read alive for the next iteration (no orphaned reads).
+      clearTimeout(timerId);
+      if (process.env.POLISH_MERGER_DEBUG) {
+        console.log(
+          "DBG raced kind:",
+          raced.kind,
+          "now-started:",
+          Date.now() - startedAt,
+        );
+      }
       if (raced.kind === "deadline") {
+        if (Date.now() >= totalDeadline) {
+          return failWith("AI 流式响应总时长超时", "STREAM_TOTAL_TIMEOUT");
+        }
         const violation = streamDeadlineViolation(
           stage,
           startedAt,
@@ -396,32 +422,35 @@ async function consumePolishStream(
         if (violation === "idle") {
           return failWith("AI 流式响应空闲超时", "STREAM_IDLE_TIMEOUT");
         }
+        // Early wake (wall-clock jitter before the strict threshold):
+        // re-arm the deadline and keep waiting on the SAME queued read.
         continue;
       }
+      pendingRead = null;
       const { done, value } = raced.r;
       if (done) break;
       chunkCount++;
       lastActivity = Date.now();
       if (chunkCount > STREAM_MAX_CHUNKS) {
-        runHandle?.controller.abort();
         return failWith("AI 流式响应块数超过上限", "STREAM_CHUNK_CAP");
       }
       notify({ type: "progress", requestId, bytes: value.length });
       merger.push(decoder.decode(value, { stream: true }));
       if (merger.contentChars() > 0) receivedFirst = true;
       if (outputChars > POLISH_OUTPUT_MAX_CHARS) {
-        runHandle?.controller.abort();
         return failWith("AI 输出超过上限", "OUTPUT_CAP");
       }
       // T7 gates stay live mid-stream: a cancelled/superseded run settles
-      // immediately without touching the renderer state again.
+      // immediately without touching the renderer state again. Flush the
+      // window BEFORE the terminal abort chunk so no delta trails it.
       const settled = polishRunOutcomeIfSettledAside(runHandle);
       if (settled) {
-        notify({ type: "abort", requestId });
         merger.flush();
+        notify({ type: "abort", requestId });
         return settled;
       }
     }
+    decoder.decode(); // flush a possibly-split multi-byte tail
     merger.flush();
     if (!fullText) {
       return failWith("AI返回了空内容，请重试或更换模型", "EMPTY_CONTENT");

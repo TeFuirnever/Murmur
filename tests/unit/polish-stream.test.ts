@@ -8,7 +8,7 @@
 //     the content stream
 //   - [DONE] terminates; frames after it are ignored
 //   - malformed JSON frames are skipped without killing the stream
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import {
   createSseMerger,
   SSE_MERGE_WINDOW_MS,

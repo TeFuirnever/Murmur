@@ -32,10 +32,6 @@ export interface SseMergerOptions {
   onDone?: () => void;
 }
 
-interface SseFrame {
-  data: string;
-}
-
 export function createSseMerger(options: SseMergerOptions): SseMerger {
   const now = options.now ?? (() => 0);
   const windowMs = SSE_MERGE_WINDOW_MS;

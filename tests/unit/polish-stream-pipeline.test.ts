@@ -2,8 +2,7 @@
 // streaming branch end-to-end — SSE consumption, chunk emission order,
 // deadline matrix, output caps, abort channel and logging discipline.
 // SSE Response stubs drive real timers with tiny injected timeouts.
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { EventEmitter } from "events";
+import { describe, it, expect, vi } from "vitest";
 
 const fetchMock = vi.hoisted(() => vi.fn());
 vi.stubGlobal("fetch", fetchMock);
@@ -22,7 +21,6 @@ import {
   runPolishOrchestrator,
   POLISH_OUTPUT_MAX_CHARS,
 } from "../../src/helpers/ipc/aiHandlers";
-import * as C from "../../src/helpers/ipc-contracts";
 
 function frame(delta: Record<string, unknown>): string {
   return `data: ${JSON.stringify({
@@ -48,24 +46,6 @@ function sseResponse(
     headers: new Headers({ "content-type": "text/event-stream" }),
     body,
   } as unknown as Response;
-}
-
-// Streaming read that yields the given frames, then pends; abort-aware via
-// the orchestrator's signal (read never rejects, it just keeps pending).
-function pendingAfterFrames(
-  frames: string[],
-): (abort: AbortSignal) => Promise<{ done: boolean; value?: Uint8Array }> {
-  const queue = frames.map((f) => new TextEncoder().encode(f));
-  return (abort) => {
-    if (queue.length > 0) {
-      return Promise.resolve({ done: false, value: queue.shift() });
-    }
-    return new Promise((_resolve, reject) => {
-      const onAbort = () => reject(new DOMException("aborted", "AbortError"));
-      if (abort.aborted) onAbort();
-      else abort.addEventListener("abort", onAbort, { once: true });
-    });
-  };
 }
 
 function jsonCompletion(text: string): Response {

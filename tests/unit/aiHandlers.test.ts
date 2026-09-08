@@ -1611,3 +1611,185 @@ describe("aiHandlers", () => {
     });
   });
 });
+// [20260907_Feat_235_StreamPipeline] T8 abort channel + total timeout:
+// POLISH_ABORT ownership (sender check), unknown_request, and the
+// STREAM_TOTAL_TIMEOUT leg of the deadline matrix. Self-contained harness:
+// the fetch stub's SSE reader PENDS forever (and rejects when the fetch
+// init signal fires), so the run stays in flight until aborted or timed
+// out.
+describe("[20260907_Feat_235_StreamPipeline] POLISH_ABORT / total timeout", () => {
+  let registeredHandlers: Record<string, (...args: unknown[]) => unknown>;
+  let sendBySender: Map<number, ReturnType<typeof vi.fn>>;
+
+  beforeEach(() => {
+    sendBySender = new Map([
+      [1, vi.fn()],
+      [2, vi.fn()],
+    ]);
+  });
+
+  function senderEvent(id: number) {
+    return {
+      sender: {
+        id,
+        isDestroyed: vi.fn(() => false),
+        send: sendBySender.get(id) ?? vi.fn(),
+      },
+    };
+  }
+
+  function setup() {
+    registeredHandlers = {};
+    const ipcMain = {
+      handle: vi.fn((channel: string, fn: (...args: unknown[]) => unknown) => {
+        registeredHandlers[channel] = fn;
+      }),
+    };
+    const db = {
+      getSetting: vi.fn(async (key: string) =>
+        key === "ai_base_url"
+          ? "https://api.example.com/v1"
+          : key === "ai_api_key"
+            ? "sk"
+            : key === "ai_model"
+              ? "gpt-x"
+              : null,
+      ),
+    };
+    const register = aiHandlersNS.register;
+    register(
+      ipcMain as never,
+      {
+        databaseManager: db,
+        funasrManager: null,
+        processTextWithAI: vi.fn(),
+        windowManager: { mainWindow: null },
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        templatesDir: "/tmp/test-templates",
+      } as never,
+    );
+    return import("../../src/helpers/ipc-contracts");
+  }
+
+  // SSE body whose read() pends until the FETCH signal aborts, then rejects.
+  function sseResponsePending(initSignal?: AbortSignal): unknown {
+    return {
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": "text/event-stream" }),
+      body: {
+        getReader: () => ({
+          read: () =>
+            new Promise((_resolve, reject) => {
+              const onAbort = () =>
+                reject(new DOMException("aborted", "AbortError"));
+              if (initSignal?.aborted) onAbort();
+              else
+                initSignal?.addEventListener("abort", onAbort, { once: true });
+            }),
+        }),
+      },
+    } as unknown;
+  }
+
+  it("abort via POLISH_ABORT cancels the in-flight run and emits abort chunk", async () => {
+    const C = await setup();
+    // PROCESS from sender 1, streaming with requestId r1.
+    // [20260907_Feat_235_StreamPipeline] SSE stub bound to THIS test only.
+    const prevFetch = global.fetch;
+    global.fetch = vi.fn(
+      async (_url: unknown, init?: { signal?: AbortSignal }) =>
+        sseResponsePending(init?.signal),
+    ) as unknown as typeof fetch;
+    void prevFetch;
+    const processPromise = registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      "原文",
+      "optimize",
+      10_000,
+      "r1",
+    ) as Promise<unknown>;
+
+    // POLISH_ABORT from the SAME sender: ownership passes → controller aborts
+    // → the mocked SSE read rejects → CANCELLED result.
+    const abortResult = (await registeredHandlers[C.AI.POLISH_ABORT]!(
+      senderEvent(1),
+      "r1",
+    )) as { success: boolean };
+    expect(abortResult).toEqual({ success: true });
+
+    const result = (await processPromise) as {
+      success: boolean;
+      code?: string;
+      error?: string;
+    };
+    expect(result.success).toBe(false);
+    expect(result.code).toBe("CANCELLED");
+  });
+
+  it(
+    "ignores cross-sender POLISH_ABORT (ownership check)",
+    { timeout: 10_000 },
+    async () => {
+      const C = await setup();
+      const prevFetch = global.fetch;
+      global.fetch = vi.fn(
+        async (_url: unknown, init?: { signal?: AbortSignal }) =>
+          sseResponsePending(init?.signal),
+      ) as unknown as typeof fetch;
+      const processPromise = registeredHandlers[C.AI.PROCESS]!(
+        senderEvent(1),
+        "原文",
+        "optimize",
+        300, // tiny total: the run settles even if the abort was ignored
+        "r2",
+      ) as Promise<unknown>;
+
+      // Sender 999 is not the owner: forbidden, the run keeps streaming
+      // and settles via its own total deadline.
+      const abortResult = (await registeredHandlers[C.AI.POLISH_ABORT]!(
+        senderEvent(999),
+        "r2",
+      )) as { success: boolean; reason?: string };
+      expect(abortResult).toMatchObject({
+        success: false,
+        reason: "forbidden",
+      });
+
+      global.fetch = prevFetch;
+      const settled = (await processPromise) as { success: boolean };
+      expect(settled).toMatchObject({ success: false });
+    },
+  );
+
+  it("returns unknown_request for a never-registered requestId", async () => {
+    const C = await setup();
+    const result = (await registeredHandlers[C.AI.POLISH_ABORT]!(
+      senderEvent(1),
+      "ghost",
+    )) as { success: boolean; reason?: string };
+    expect(result).toMatchObject({ success: false, reason: "unknown_request" });
+  });
+
+  it("enforces the total-duration deadline on the body consumption", async () => {
+    const C = await setup();
+    // [20260907_Feat_235_StreamPipeline] SSE stub bound to THIS test only.
+    const prevFetch = global.fetch;
+    global.fetch = vi.fn(
+      async (_url: unknown, init?: { signal?: AbortSignal }) =>
+        sseResponsePending(init?.signal),
+    ) as unknown as typeof fetch;
+    void prevFetch;
+    global.fetch = prevFetch;
+    const result = (await registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      "原文",
+      "optimize",
+      120, // tiny total → the STREAM_TOTAL_TIMEOUT leg fires
+      "r-total",
+    )) as { success: boolean; error?: string };
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("总时长超时");
+  });
+});
