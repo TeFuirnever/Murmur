@@ -70,6 +70,9 @@ export const preloadApi: ElectronAPI = {
     ipcRenderer.invoke(C.AI.PROCESS, text, mode, timeout),
   checkAIStatus: (testConfig: unknown) =>
     ipcRenderer.invoke(C.AI.CHECK_STATUS, testConfig),
+  // [20260907_Feat_233_ListModels] Provider model-list derivation (T6).
+  listAIModels: (baseUrl: string, apiKey: string) =>
+    ipcRenderer.invoke(C.AI.LIST_MODELS, baseUrl, apiKey),
   getAIModes: () => ipcRenderer.invoke(C.AI.GET_MODES),
   getAIProviderPresets: () => ipcRenderer.invoke(C.AI.GET_PROVIDER_PRESETS),
   detectLocalModels: () => ipcRenderer.invoke(C.AI.DETECT_LOCAL_MODELS),

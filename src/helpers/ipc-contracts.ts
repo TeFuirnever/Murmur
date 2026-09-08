@@ -61,6 +61,9 @@ export const TRANSCRIPTION = {
 export const AI = {
   PROCESS: "process-text",
   CHECK_STATUS: "check-ai-status",
+  // [20260907_Feat_233_ListModels] Provider model-list derivation (T6): a
+  // GET primitive that passes the same SSRF validation as the chat request.
+  LIST_MODELS: "ai-list-models",
   GET_MODES: "get-ai-modes",
   GET_PROVIDER_PRESETS: "get-ai-provider-presets",
   DETECT_LOCAL_MODELS: "detect-local-models",

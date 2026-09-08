@@ -136,12 +136,40 @@ function isLocalhost(host: string | null | undefined): boolean {
   return false;
 }
 
+// [20260907_Fix_233_SsrfHardening] Security-review MEDIUM: the IPv4-text
+// checks missed IPv4-mapped IPv6 (::ffff:a00:1), IPv6 ULA fc00::/7,
+// link-local fe80::/10, loopback ::/128, and CGNAT 100.64.0.0/10 — all
+// resolve to private/internal addresses while canonicalizing to hostnames
+// that matched no regex. Bracket stripping + mapped-address reduction close
+// the gap for every AI channel that shares this gate.
 function isPrivateNetwork(host: string): boolean {
   if (!host) return false;
-  if (/^10\./.test(host)) return true;
-  if (/^192\.168\./.test(host)) return true;
-  if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return true;
-  if (/^169\.254\./.test(host)) return true;
+  const bare = host.replace(/^\[|\]$/g, "").toLowerCase();
+  if (bare === "::1" || bare === "::") return true;
+  const mapped = bare.match(/^::ffff:(.+)$/);
+  if (mapped) {
+    // WHATWG canonicalizes mapped addresses to hex form ([::ffff:a00:1]);
+    // convert the trailing 32 bits back to dotted-decimal for the IPv4
+    // checks below.
+    const hex = mapped[1]!.match(/^([0-9a-f]+):([0-9a-f]+)$/);
+    if (hex) {
+      const hi = parseInt(hex[1]!, 16);
+      const lo = parseInt(hex[2]!, 16);
+      return isPrivateNetwork(
+        `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`,
+      );
+    }
+    return isPrivateNetwork(mapped[1]!);
+  }
+  if (/^f[cd][0-9a-f]{2}:/.test(bare)) return true; // IPv6 ULA fc00::/7
+  if (/^fe[89ab][0-9a-f]:/.test(bare)) return true; // IPv6 link-local
+  if (/^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(bare)) return true; // CGNAT
+  if (/^198\.(1[89]|0)\./.test(bare)) return true; // benchmark 198.18.0.0/15
+  if (/^10\./.test(bare)) return true;
+  if (/^192\.168\./.test(bare)) return true;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(bare)) return true;
+  if (/^169\.254\./.test(bare)) return true;
+  if (/^127\./.test(bare)) return true;
   return false;
 }
 
@@ -174,6 +202,32 @@ export function validateAIBaseUrl(
 // genuinely different parts (request shape, response interpretation, and the
 // user-facing error text).
 // [20260815_Refactor_AiFetchDedup] END
+
+// [20260907_Feat_233_ListModels] Ticket #233: derive the /models endpoint
+// from the base URL with the URL constructor only — never whole-URL string
+// concatenation. Bases that already end in a version segment get exactly
+// one candidate ({base}/models); other bases try {base}/models first and
+// {base}/v1/models second (the common "no /v1 in base_url" gateway shape).
+function modelEndpointCandidates(baseUrl: string): string[] {
+  const url = new URL(baseUrl);
+  const basePath = url.pathname.replace(/\/+$/, "");
+  const withPath = (suffix: string) => {
+    const derived = new URL(baseUrl);
+    derived.pathname = basePath + suffix;
+    return derived.toString();
+  };
+  if (/\/v\d+$/.test(basePath)) {
+    return [withPath("/models")];
+  }
+  return [withPath("/models"), withPath("/v1/models")];
+}
+
+// [20260907_Feat_233_ListModels] Response contract for the provider /models
+// listing. Anything outside the shape silently degrades the renderer to the
+// manual-input path (ticket #233: 非法即静默回退手输).
+const MODELS_MAX_ITEMS = 500;
+const MODELS_MAX_ID_BYTES = 200;
+const MODELS_MAX_BODY_BYTES = 512 * 1024;
 
 function isLocalBaseUrl(baseUrl: string): boolean {
   try {
@@ -938,6 +992,87 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
           clampOutputTokens: MINIMAL_EDIT_MODES.has(mode),
         },
       );
+    },
+  );
+
+  // [20260907_Feat_233_ListModels] Ticket #233: provider model-list
+  // derivation. Same SSRF gate as the chat request (private https rejected,
+  // local-gateway exception allowed), URL-constructor endpoint derivation,
+  // strict response shape with silent fallback to the manual-input path.
+  ipcMain.handle(
+    C.AI.LIST_MODELS,
+    async (_event, baseUrl: string, apiKey = "") => {
+      const isLocal = isLocalBaseUrl(baseUrl);
+      if (!validateAIBaseUrl(baseUrl, { allowLocalhost: isLocal })) {
+        return { success: false, reason: "invalid_url", models: [] };
+      }
+      let key = typeof apiKey === "string" ? apiKey : "";
+      // Masked renderer keys resolve against the stored credential, mirroring
+      // the save/test paths (the mask is not a usable secret).
+      if (!key || key.startsWith("****")) {
+        key =
+          ((await databaseManager.getSetting("ai_api_key")) as string) || "";
+      }
+      const headers: Record<string, string> = key
+        ? { Authorization: `Bearer ${key}` }
+        : {};
+      const candidates = modelEndpointCandidates(baseUrl);
+      for (let i = 0; i < candidates.length; i++) {
+        const candidateUrl = candidates[i]!;
+        try {
+          const response = await fetch(candidateUrl, {
+            headers,
+            signal: AbortSignal.timeout(10_000),
+          });
+          if (response.status === 404 && i < candidates.length - 1) {
+            continue;
+          }
+          if (!response.ok) {
+            return {
+              success: false,
+              reason: `http_${response.status}`,
+              models: [],
+            };
+          }
+          const raw = await response.text();
+          if (Buffer.byteLength(raw) > MODELS_MAX_BODY_BYTES) {
+            return { success: false, reason: "body_too_large", models: [] };
+          }
+          const parsed = JSON.parse(raw) as {
+            data?: Array<{ id?: unknown }>;
+          };
+          const rows = parsed?.data;
+          if (
+            !Array.isArray(rows) ||
+            rows.length === 0 ||
+            rows.length > MODELS_MAX_ITEMS
+          ) {
+            return { success: false, reason: "invalid_shape", models: [] };
+          }
+          const models: string[] = [];
+          for (const row of rows) {
+            const id = row?.id;
+            if (
+              typeof id !== "string" ||
+              !id.trim() ||
+              Buffer.byteLength(id) > MODELS_MAX_ID_BYTES
+            ) {
+              return { success: false, reason: "invalid_shape", models: [] };
+            }
+            models.push(id);
+          }
+          return { success: true, models };
+        } catch (error) {
+          // A failed candidate on the two-candidate path falls through to
+          // the /v1 retry; on the last candidate it degrades to the manual
+          // input path (silent, per ticket #233).
+          if (i >= candidates.length - 1) {
+            logger.warn?.("模型列表获取失败:", error);
+            return { success: false, reason: "fetch_failed", models: [] };
+          }
+        }
+      }
+      return { success: false, reason: "unreachable", models: [] };
     },
   );
 

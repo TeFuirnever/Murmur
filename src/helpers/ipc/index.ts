@@ -42,6 +42,9 @@ function wrapWithRateLimits(ipcMain: Electron.IpcMain): Electron.IpcMain {
   const RATE_LIMITS: Record<string, RateLimitConfig> = {
     [C.AI.PROCESS]: { maxCalls: 20, windowMs: 60_000 },
     [C.AI.CHECK_STATUS]: { maxCalls: 30, windowMs: 60_000 },
+    // [20260907_Feat_233_ListModels] Model-list derivation (T6): small
+    // quota — it fires on base_url edits, not per keystroke.
+    [C.AI.LIST_MODELS]: { maxCalls: 10, windowMs: 60_000 },
     [C.TRANSCRIPTION.SAVE]: { maxCalls: 30, windowMs: 60_000 },
     // [20260906_Feat_TranscriptionUpdate] Manual polish write-back (spec #193
     // T1, ticket #228): fires once per polish action, so it carries the same

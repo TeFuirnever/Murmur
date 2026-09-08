@@ -7,6 +7,7 @@ import type {
   TranscriptionRecord,
   TranscriptionSaveResult,
   TranscriptionUpdateResult,
+  ListModelsResult,
   FileTranscriptionResult,
   ExportResult,
   ExportAllResult,
@@ -69,6 +70,8 @@ export interface ElectronAPI {
     ai_base_url?: string;
     ai_model?: string;
   }) => Promise<AICheckStatusResult>;
+  // [20260907_Feat_233_ListModels] Provider model-list derivation (T6).
+  listAIModels: (baseUrl: string, apiKey: string) => Promise<ListModelsResult>;
   getAIModes: () => Promise<AIMode[]>;
   getAIProviderPresets: () => Promise<AIProviderPreset[]>;
   detectLocalModels: () => Promise<LocalModelDetection[]>;
