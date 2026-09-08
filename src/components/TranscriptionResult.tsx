@@ -28,7 +28,8 @@ interface TranscriptionResultProps {
   // optimize channel (e.g. file import's server-side review by record id),
   // it must take precedence over the ambient processText — otherwise the
   // injected channel is unreachable in production. Default false keeps the
-  // recording path's mode-selector UX.
+  // recording path's mode-selector UX. If the flag is set but the channel
+  // is absent, the ambient processText path is used (graceful degradation).
   preferOnAIOptimize?: boolean;
 }
 

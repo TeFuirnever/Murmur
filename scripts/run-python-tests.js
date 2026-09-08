@@ -27,7 +27,9 @@ const TESTS_DIR = path.join(ROOT, "tests", "python");
 // today is the big reserve) — never lower without a spec. Note:
 // --fail-under compares the UNROUNDED total while the table prints
 // rounded integers (a 42.6% actual prints 43% yet fails the gate).
-const PYTHON_FAIL_UNDER = 43;
+// [20260907_Fix_317_PythonBranchFill] raised from 43 after the protocol/
+// lifecycle branch tests lifted funasr_server.py 34%→39% (total 47%).
+const PYTHON_FAIL_UNDER = 46;
 
 // Modules exercised by tests/python; everything else in the repo is out of
 // the Python measurement scope.
