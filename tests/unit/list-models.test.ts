@@ -183,6 +183,36 @@ describe("[20260907_Feat_233_ListModels] LIST_MODELS handler", () => {
     expect(init.headers.Authorization).toBeUndefined();
   });
 
+  // [20260907_Fix_233_SsrfHardening] Security-review MEDIUM: the shared gate
+  // had IPv6/CGNAT blind spots — these URLs passed as "public https" while
+  // resolving to private/internal addresses. All must be rejected.
+  it.each([
+    ["https://[::ffff:10.0.0.1]/v1"], // IPv4-mapped IPv6 → 10.0.0.1
+    ["https://[::ffff:127.0.0.1]/v1"], // mapped loopback
+    ["https://[fd00::1]/v1"], // IPv6 ULA fc00::/7
+    ["https://[fe80::1]/v1"], // IPv6 link-local
+    ["https://100.64.0.1/v1"], // CGNAT 100.64.0.0/10
+    ["https://198.18.0.1/v1"], // benchmark range
+  ])("rejects the internal-address base %s", async (base) => {
+    const { handler } = await setup();
+    const result = (await handler({}, base, "k")) as {
+      success: boolean;
+      models: string[];
+    };
+    expect(result.success).toBe(false);
+    expect(result.models).toEqual([]);
+    expect(FetchMock).not.toHaveBeenCalled();
+  });
+
+  it("still accepts legit public providers after the hardening", async () => {
+    const { handler } = await setup();
+    respond(modelsBody(["m"]));
+    const result = (await handler({}, "https://api.example.com/v1", "k")) as {
+      success: boolean;
+    };
+    expect(result.success).toBe(true);
+  });
+
   it("falls back silently when an id is not a string", async () => {
     const { handler } = await setup();
     respond(modelsBody(["good", 42]));

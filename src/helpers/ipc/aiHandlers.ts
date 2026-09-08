@@ -136,12 +136,40 @@ function isLocalhost(host: string | null | undefined): boolean {
   return false;
 }
 
+// [20260907_Fix_233_SsrfHardening] Security-review MEDIUM: the IPv4-text
+// checks missed IPv4-mapped IPv6 (::ffff:a00:1), IPv6 ULA fc00::/7,
+// link-local fe80::/10, loopback ::/128, and CGNAT 100.64.0.0/10 — all
+// resolve to private/internal addresses while canonicalizing to hostnames
+// that matched no regex. Bracket stripping + mapped-address reduction close
+// the gap for every AI channel that shares this gate.
 function isPrivateNetwork(host: string): boolean {
   if (!host) return false;
-  if (/^10\./.test(host)) return true;
-  if (/^192\.168\./.test(host)) return true;
-  if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return true;
-  if (/^169\.254\./.test(host)) return true;
+  const bare = host.replace(/^\[|\]$/g, "").toLowerCase();
+  if (bare === "::1" || bare === "::") return true;
+  const mapped = bare.match(/^::ffff:(.+)$/);
+  if (mapped) {
+    // WHATWG canonicalizes mapped addresses to hex form ([::ffff:a00:1]);
+    // convert the trailing 32 bits back to dotted-decimal for the IPv4
+    // checks below.
+    const hex = mapped[1]!.match(/^([0-9a-f]+):([0-9a-f]+)$/);
+    if (hex) {
+      const hi = parseInt(hex[1]!, 16);
+      const lo = parseInt(hex[2]!, 16);
+      return isPrivateNetwork(
+        `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`,
+      );
+    }
+    return isPrivateNetwork(mapped[1]!);
+  }
+  if (/^f[cd][0-9a-f]{2}:/.test(bare)) return true; // IPv6 ULA fc00::/7
+  if (/^fe[89ab][0-9a-f]:/.test(bare)) return true; // IPv6 link-local
+  if (/^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(bare)) return true; // CGNAT
+  if (/^198\.(1[89]|0)\./.test(bare)) return true; // benchmark 198.18.0.0/15
+  if (/^10\./.test(bare)) return true;
+  if (/^192\.168\./.test(bare)) return true;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(bare)) return true;
+  if (/^169\.254\./.test(bare)) return true;
+  if (/^127\./.test(bare)) return true;
   return false;
 }
 
