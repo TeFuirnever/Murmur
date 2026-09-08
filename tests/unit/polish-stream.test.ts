@@ -38,7 +38,7 @@ describe("[20260907_Feat_235_StreamMerger] SSE → merged deltas", () => {
     push: (raw: string) => void;
     advance: (ms: number) => void;
     flush: () => void;
-    done: boolean;
+    done: () => boolean;
   }
 
   function make(): Harness {
@@ -50,7 +50,7 @@ describe("[20260907_Feat_235_StreamMerger] SSE → merged deltas", () => {
         now += ms;
       },
       flush: () => {},
-      done: false,
+      done: () => false,
     };
     const merger = createSseMerger({
       now: clock,
@@ -59,7 +59,7 @@ describe("[20260907_Feat_235_StreamMerger] SSE → merged deltas", () => {
         h.reasoningChars += text.length;
       },
       onDone: () => {
-        h.done = true;
+        h.done = () => true;
       },
     });
     h.push = merger.push;
@@ -123,7 +123,7 @@ describe("[20260907_Feat_235_StreamMerger] SSE → merged deltas", () => {
     const h = make();
     h.push(`data: [DONE]\n\n${frame({ content: "迟到" })}`);
     h.flush();
-    expect(h.done).toBe(true);
+    expect(h.done()).toBe(true);
     expect(h.deltas).toEqual([]);
   });
 

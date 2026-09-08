@@ -112,18 +112,18 @@ describe("[20260907_Feat_235_StreamPipeline] orchestrator streaming branch", () 
     expect(types[0]).toBe("start");
     expect(types).toContain("delta");
     expect(types[types.length - 1]).toBe("finish");
-    const finish = notify.mock.calls[notify.mock.calls.length - 1][0] as {
+    const finish = notify.mock.calls[notify.mock.calls.length - 1]![0] as {
       type: string;
       text: string;
       requestId: string;
+      reasoningChars?: number;
     };
     expect(finish).toMatchObject({
       type: "finish",
       text: "你好，世界",
       requestId: "r1",
+      reasoningChars: 0,
     });
-    // reasoning absent → zero count on finish
-    expect(finish.reasoningChars).toBe(0);
   });
 
   it("classifies first-delta stalls as STREAM_FIRST_DELTA_TIMEOUT", async () => {
@@ -332,10 +332,11 @@ describe("[20260907_Feat_235_StreamPipeline] orchestrator streaming branch", () 
     );
     expect(result.success).toBe(true);
     expect(result.text).toBe("增量");
-    const finish = notify.mock.calls[notify.mock.calls.length - 1][0] as {
+    const finish = notify.mock.calls[notify.mock.calls.length - 1]![0] as {
       type: string;
       text: string;
     };
     expect(finish).toMatchObject({ type: "finish", text: "增量" });
+    expect(finish).toBeDefined();
   });
 });
