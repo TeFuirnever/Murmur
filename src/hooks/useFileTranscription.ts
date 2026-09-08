@@ -203,15 +203,14 @@ export function useFileTranscription() {
                     : "optimize"
                   : defaultMode;
               setOptimizing(true);
-              const aiResult = (await Promise.race([
-                window.electronAPI.processText(response.text, mode),
-                new Promise((_, reject) =>
-                  setTimeout(
-                    () => reject(new Error("AI优化超时，已使用原文")),
-                    120000,
-                  ),
-                ),
-              ])) as { success?: boolean; text?: string };
+              // [20260907_Fix_T9_RaceRemoval] The renderer-side 120s timeout
+              // race is removed — timeout semantics are owned by the
+              // orchestrator's deadline matrix (first-delta/idle/total),
+              // which aborts the upstream and classifies the failure.
+              const aiResult = (await window.electronAPI.processText(
+                response.text,
+                mode,
+              )) as { success?: boolean; text?: string };
               if (aiResult?.success && aiResult?.text) {
                 setOptimizedText(aiResult.text);
               }

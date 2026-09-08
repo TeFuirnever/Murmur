@@ -185,15 +185,12 @@ export default function TranscriptionResult({
         polishedText = await onAIOptimize(text);
         setOptimizedText(polishedText);
       } else if (window.electronAPI?.processText) {
-        const result = (await Promise.race([
-          window.electronAPI.processText(text, currentMode),
-          new Promise((_, reject) =>
-            setTimeout(
-              () => reject(new Error("AI优化超时，已使用原文")),
-              120000,
-            ),
-          ),
-        ])) as { success?: boolean; text?: string; error?: string };
+        // [20260907_Fix_T9_RaceRemoval] 120s renderer race removed — the
+        // orchestrator's deadline matrix owns timeout semantics.
+        const result = (await window.electronAPI.processText(
+          text,
+          currentMode,
+        )) as { success?: boolean; text?: string; error?: string };
         if (result?.success && result?.text) {
           polishedText = result.text;
           setOptimizedText(result.text);
