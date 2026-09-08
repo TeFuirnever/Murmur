@@ -180,6 +180,13 @@ export function buildPrompt(
           ? assembleSpeakerSegments(speakerSegments)
           : "",
       );
+    // [20260907_Fix_315_TemplateTrustBoundary] Ticket #315 plan A: shared
+    // templates interpolate the raw transcript, so the injection guard is
+    // appended to the rendered USER body (the user-authored system prompt
+    // stays verbatim). Output size for templates is already bounded by the
+    // orchestrator's absolute char cap; the token-budget clamp intentionally
+    // does not apply to rewrite-class template outputs.
+    user = `${user}\n${INJECTION_GUARD}`;
     return { system: custom.system, user };
   }
 

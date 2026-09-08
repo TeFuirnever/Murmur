@@ -29,6 +29,7 @@ type AiHandlersModule = typeof import("../../src/helpers/ipc/aiHandlers");
 // all tests, so per-test isolation via resetModules was never needed here.
 // The require shim (_tsresolve.setup) was only needed to load .ts source.
 import * as aiHandlersNS from "../../src/helpers/ipc/aiHandlers";
+import { INJECTION_GUARD } from "../../src/helpers/aiPrompts";
 
 // [20260906_Refactor_PolishOrchestrator] Spec #193 T3 (ticket #230): the
 // SECOND polish entry is the file-import review handler registered by
@@ -1066,7 +1067,12 @@ describe("aiHandlers", () => {
         const body = readRequestBody();
         expect(body.messages).toEqual([
           { role: "system", content: "你是会议纪要助手。" },
-          { role: "user", content: "整理：正文" },
+          // [20260907_Fix_315_TemplateTrustBoundary] template user body
+          // carries the appended injection guard (issue #315).
+          {
+            role: "user",
+            content: `整理：正文\n${INJECTION_GUARD}`,
+          },
         ]);
       } finally {
         fs.rmSync(dir, { recursive: true });
