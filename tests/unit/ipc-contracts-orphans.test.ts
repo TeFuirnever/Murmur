@@ -188,7 +188,14 @@ describe("ipc-contracts renderer-caller dimension", () => {
     // ticket. The set is kept EMPTY and non-deleted so the bidirectional
     // asserts below now enforce the net-zero invariant directly: any
     // channel that preloads without a renderer caller fails immediately.
-    const KNOWN_RENDERER_ORPHANS = new Set<string>([]);
+    // [20260907_Feat_235_StreamPipeline] T8 ships the preload surface;
+    // the renderer UI consumers land with T9 (#236) — consciously yellow
+    // until then. Stale entries fail the stale check above, so these must
+    // be removed when T9 wires the callers.
+    const KNOWN_RENDERER_ORPHANS = new Set<string>([
+      "AI.POLISH_ABORT",
+      "EVENTS.AI_POLISH_CHUNK",
+    ]);
 
     const unexpected = yellow.filter((c) => !KNOWN_RENDERER_ORPHANS.has(c));
     const stale = [...KNOWN_RENDERER_ORPHANS].filter(

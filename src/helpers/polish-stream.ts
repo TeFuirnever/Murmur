@@ -21,6 +21,8 @@ export interface SseMerger {
   flush(): void;
   /** True once `data: [DONE]` has been seen. */
   isDone(): boolean;
+  /** Total content chars RECEIVED (including ones still inside the window). */
+  contentChars(): number;
 }
 
 export interface SseMergerOptions {
@@ -41,6 +43,7 @@ export function createSseMerger(options: SseMergerOptions): SseMerger {
   let done = false;
   let pending = "";
   let pendingSince = -1;
+  let contentReceived = 0;
 
   const emitDelta = (text: string) => {
     if (!text) return;
@@ -84,6 +87,7 @@ export function createSseMerger(options: SseMergerOptions): SseMerger {
         options.onReasoning?.(delta.reasoning);
       }
       if (typeof delta.content === "string" && delta.content) {
+        contentReceived += delta.content.length;
         bufferContent(delta.content);
       }
     } catch {
@@ -125,5 +129,45 @@ export function createSseMerger(options: SseMergerOptions): SseMerger {
     isDone() {
       return done;
     },
+    contentChars() {
+      return contentReceived;
+    },
   };
+}
+
+// [20260907_Feat_235_TimeoutMatrix] Ticket #235: the response-body
+// consumption deadline matrix. Stages: no content delta within
+// firstDeltaMs of the response headers; no delta at all within idleMs of
+// the last activity; total duration is enforced by the caller (the
+// existing 150s/180s timeout). All values overridable for tests.
+export interface StreamTimeouts {
+  firstDeltaMs: number;
+  idleMs: number;
+}
+
+export const DEFAULT_STREAM_TIMEOUTS: StreamTimeouts = {
+  firstDeltaMs: 15_000,
+  idleMs: 30_000,
+};
+
+export const STREAM_MAX_CHUNKS = 100_000;
+
+export type StreamDeadlineViolation = "first_delta" | "idle" | null;
+
+/**
+ * Pure deadline check for one iteration of the stream-consumption loop.
+ * `receivedDelta` is false until the first content delta arrives; after
+ * that the idle deadline takes over. Returns the violated stage or null.
+ */
+export function streamDeadlineViolation(
+  stage: "awaiting_first" | "streaming",
+  startedAtMs: number,
+  lastActivityAtMs: number,
+  nowMs: number,
+  timeouts: StreamTimeouts = DEFAULT_STREAM_TIMEOUTS,
+): StreamDeadlineViolation {
+  if (stage === "awaiting_first") {
+    return nowMs - startedAtMs > timeouts.firstDeltaMs ? "first_delta" : null;
+  }
+  return nowMs - lastActivityAtMs > timeouts.idleMs ? "idle" : null;
 }

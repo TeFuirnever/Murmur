@@ -64,6 +64,10 @@ export const AI = {
   // [20260907_Feat_233_ListModels] Provider model-list derivation (T6): a
   // GET primitive that passes the same SSRF validation as the chat request.
   LIST_MODELS: "ai-list-models",
+  // [20260907_Feat_235_StreamPipeline] T8: abort an in-flight streaming
+  // polish run by requestId. Rate-limit exempt by design (an abort must
+  // never be throttled); ownership is checked against the initiating sender.
+  POLISH_ABORT: "ai-polish-abort",
   GET_MODES: "get-ai-modes",
   GET_PROVIDER_PRESETS: "get-ai-provider-presets",
   DETECT_LOCAL_MODELS: "detect-local-models",
@@ -114,6 +118,8 @@ export const SYSTEM = {
 } as const;
 
 export const EVENTS = {
+  // [20260907_Feat_235_StreamPipeline] T8 streaming chunk push events.
+  AI_POLISH_CHUNK: "ai-polish-chunk",
   HOTKEY_TRIGGERED: "hotkey-triggered",
   WINDOW_MAXIMIZE_CHANGE: "window-maximize-change",
   SETTINGS_UPDATE: "settings-update",

@@ -144,6 +144,17 @@ export interface ExportResult {
 // [20260907_Feat_233_ListModels] Ticket #233: provider model derivation.
 // success=false carries a reason and an empty list — the renderer silently
 // degrades to the manual-input path.
+// [20260907_Feat_235_StreamPipeline] T8 chunk protocol — a tagged union
+// pushed to the initiating window while a streaming polish runs.
+export type PolishChunk =
+  | { type: "start"; requestId: string }
+  | { type: "delta"; requestId: string; text: string }
+  | { type: "progress"; requestId: string; bytes: number }
+  | { type: "degraded"; requestId: string; reason: string }
+  | { type: "finish"; requestId: string; text: string; reasoningChars: number }
+  | { type: "abort"; requestId: string }
+  | { type: "error"; requestId: string; error: string };
+
 export interface ListModelsResult {
   success: boolean;
   reason?: string;

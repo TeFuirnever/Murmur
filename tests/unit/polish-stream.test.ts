@@ -13,6 +13,7 @@ import {
   createSseMerger,
   SSE_MERGE_WINDOW_MS,
   SSE_MAX_CHUNK_CHARS,
+  streamDeadlineViolation,
 } from "../../src/helpers/polish-stream";
 
 function frame(delta: Record<string, unknown>): string {
@@ -140,5 +141,30 @@ describe("[20260907_Feat_235_StreamMerger] SSE → merged deltas", () => {
     h.push(frame({ content: "行" }).replaceAll("\n", "\r\n"));
     h.flush();
     expect(h.deltas).toEqual(["行"]);
+  });
+});
+
+// [20260907_Feat_235_TimeoutMatrix] deadline matrix: first-delta vs idle
+describe("[20260907_Feat_235_TimeoutMatrix] stream deadline guard", () => {
+  const T = { firstDeltaMs: 15_000, idleMs: 30_000 };
+
+  it("flags first_delta when no content within firstDeltaMs", () => {
+    expect(
+      streamDeadlineViolation("awaiting_first", 0, 0, 15_000, T),
+    ).toBeNull();
+    expect(streamDeadlineViolation("awaiting_first", 0, 0, 15_001, T)).toBe(
+      "first_delta",
+    );
+  });
+
+  it("flags idle when streaming stalls past idleMs", () => {
+    expect(streamDeadlineViolation("streaming", 0, 0, 30_000, T)).toBeNull();
+    expect(streamDeadlineViolation("streaming", 0, 0, 30_001, T)).toBe("idle");
+  });
+
+  it("never flags a first_delta inside the window", () => {
+    expect(
+      streamDeadlineViolation("awaiting_first", 0, 0, 14_999, T),
+    ).toBeNull();
   });
 });

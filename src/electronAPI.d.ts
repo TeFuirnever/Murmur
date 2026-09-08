@@ -8,6 +8,7 @@ import type {
   TranscriptionSaveResult,
   TranscriptionUpdateResult,
   ListModelsResult,
+  PolishChunk,
   FileTranscriptionResult,
   ExportResult,
   ExportAllResult,
@@ -72,6 +73,9 @@ export interface ElectronAPI {
   }) => Promise<AICheckStatusResult>;
   // [20260907_Feat_233_ListModels] Provider model-list derivation (T6).
   listAIModels: (baseUrl: string, apiKey: string) => Promise<ListModelsResult>;
+  // [20260907_Feat_235_StreamPipeline] T8 streaming abort + chunk push.
+  abortPolish: (requestId: string) => Promise<OperationResult>;
+  onPolishChunk: (callback: (chunk: PolishChunk) => void) => () => void;
   getAIModes: () => Promise<AIMode[]>;
   getAIProviderPresets: () => Promise<AIProviderPreset[]>;
   detectLocalModels: () => Promise<LocalModelDetection[]>;
