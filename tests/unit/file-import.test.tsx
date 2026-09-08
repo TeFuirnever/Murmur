@@ -46,6 +46,7 @@ interface MockApi {
   diarizeAudio: ReturnType<typeof vi.fn>;
   copyText: ReturnType<typeof vi.fn>;
   aiReviewTranscription: ReturnType<typeof vi.fn>;
+  processText?: ReturnType<typeof vi.fn>;
 }
 
 function makeElectronAPI(overrides: Partial<MockApi> = {}): MockApi {
