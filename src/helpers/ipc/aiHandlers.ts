@@ -175,6 +175,32 @@ export function validateAIBaseUrl(
 // user-facing error text).
 // [20260815_Refactor_AiFetchDedup] END
 
+// [20260907_Feat_233_ListModels] Ticket #233: derive the /models endpoint
+// from the base URL with the URL constructor only — never whole-URL string
+// concatenation. Bases that already end in a version segment get exactly
+// one candidate ({base}/models); other bases try {base}/models first and
+// {base}/v1/models second (the common "no /v1 in base_url" gateway shape).
+function modelEndpointCandidates(baseUrl: string): string[] {
+  const url = new URL(baseUrl);
+  const basePath = url.pathname.replace(/\/+$/, "");
+  const withPath = (suffix: string) => {
+    const derived = new URL(baseUrl);
+    derived.pathname = basePath + suffix;
+    return derived.toString();
+  };
+  if (/\/v\d+$/.test(basePath)) {
+    return [withPath("/models")];
+  }
+  return [withPath("/models"), withPath("/v1/models")];
+}
+
+// [20260907_Feat_233_ListModels] Response contract for the provider /models
+// listing. Anything outside the shape silently degrades the renderer to the
+// manual-input path (ticket #233: 非法即静默回退手输).
+const MODELS_MAX_ITEMS = 500;
+const MODELS_MAX_ID_BYTES = 200;
+const MODELS_MAX_BODY_BYTES = 512 * 1024;
+
 function isLocalBaseUrl(baseUrl: string): boolean {
   try {
     return isLocalhost(new URL(baseUrl).hostname);
@@ -938,6 +964,87 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
           clampOutputTokens: MINIMAL_EDIT_MODES.has(mode),
         },
       );
+    },
+  );
+
+  // [20260907_Feat_233_ListModels] Ticket #233: provider model-list
+  // derivation. Same SSRF gate as the chat request (private https rejected,
+  // local-gateway exception allowed), URL-constructor endpoint derivation,
+  // strict response shape with silent fallback to the manual-input path.
+  ipcMain.handle(
+    C.AI.LIST_MODELS,
+    async (_event, baseUrl: string, apiKey = "") => {
+      const isLocal = isLocalBaseUrl(baseUrl);
+      if (!validateAIBaseUrl(baseUrl, { allowLocalhost: isLocal })) {
+        return { success: false, reason: "invalid_url", models: [] };
+      }
+      let key = typeof apiKey === "string" ? apiKey : "";
+      // Masked renderer keys resolve against the stored credential, mirroring
+      // the save/test paths (the mask is not a usable secret).
+      if (!key || key.startsWith("****")) {
+        key =
+          ((await databaseManager.getSetting("ai_api_key")) as string) || "";
+      }
+      const headers: Record<string, string> = key
+        ? { Authorization: `Bearer ${key}` }
+        : {};
+      const candidates = modelEndpointCandidates(baseUrl);
+      for (let i = 0; i < candidates.length; i++) {
+        const candidateUrl = candidates[i]!;
+        try {
+          const response = await fetch(candidateUrl, {
+            headers,
+            signal: AbortSignal.timeout(10_000),
+          });
+          if (response.status === 404 && i < candidates.length - 1) {
+            continue;
+          }
+          if (!response.ok) {
+            return {
+              success: false,
+              reason: `http_${response.status}`,
+              models: [],
+            };
+          }
+          const raw = await response.text();
+          if (Buffer.byteLength(raw) > MODELS_MAX_BODY_BYTES) {
+            return { success: false, reason: "body_too_large", models: [] };
+          }
+          const parsed = JSON.parse(raw) as {
+            data?: Array<{ id?: unknown }>;
+          };
+          const rows = parsed?.data;
+          if (
+            !Array.isArray(rows) ||
+            rows.length === 0 ||
+            rows.length > MODELS_MAX_ITEMS
+          ) {
+            return { success: false, reason: "invalid_shape", models: [] };
+          }
+          const models: string[] = [];
+          for (const row of rows) {
+            const id = row?.id;
+            if (
+              typeof id !== "string" ||
+              !id.trim() ||
+              Buffer.byteLength(id) > MODELS_MAX_ID_BYTES
+            ) {
+              return { success: false, reason: "invalid_shape", models: [] };
+            }
+            models.push(id);
+          }
+          return { success: true, models };
+        } catch (error) {
+          // A failed candidate on the two-candidate path falls through to
+          // the /v1 retry; on the last candidate it degrades to the manual
+          // input path (silent, per ticket #233).
+          if (i >= candidates.length - 1) {
+            logger.warn?.("模型列表获取失败:", error);
+            return { success: false, reason: "fetch_failed", models: [] };
+          }
+        }
+      }
+      return { success: false, reason: "unreachable", models: [] };
     },
   );
 

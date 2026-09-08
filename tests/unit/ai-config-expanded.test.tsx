@@ -139,6 +139,7 @@ type ElectronAPIStub = {
   setSetting: ReturnType<typeof vi.fn>;
   saveSetting: ReturnType<typeof vi.fn>;
   openExternal: ReturnType<typeof vi.fn>;
+  listAIModels?: ReturnType<typeof vi.fn>;
 };
 
 describe("[20260729_Test_AIConfigExpanded] AIConfigSection uncovered branches", () => {
@@ -816,5 +817,124 @@ describe("[20260729_Test_AIConfigExpanded] AIConfigSection uncovered branches", 
     // key exists in the locale). Both resolve to the label string.
     const matches = screen.getAllByText("My Unknown Provider");
     expect(matches.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+// [20260907_Feat_233_ListModels] Ticket #233: the custom-model input offers
+// provider-derived suggestions via a datalist; any derivation failure
+// silently degrades to plain manual input.
+describe("[20260907_Feat_233_ListModels] provider model derivation", () => {
+  let stubApi: {
+    listAIModels: ReturnType<typeof vi.fn>;
+    getAIModes: ReturnType<typeof vi.fn>;
+    processText: ReturnType<typeof vi.fn>;
+  };
+
+  const renderSectionCalls = { onInputChange: vi.fn() };
+
+  function renderSection(props: Record<string, unknown>) {
+    const base = {
+      settings: {
+        ai_api_key: "sk-test",
+        ai_base_url: "https://api.example.com/v1",
+        ai_model: "",
+        ai_temperature: 0.3,
+        ai_max_tokens: 8192,
+        enable_ai_optimization: true,
+        default_mode: "auto",
+        window_always_on_top: true,
+        auto_paste: "paste",
+        close_behavior: "hide",
+        theme: "system",
+        hotkey: "CommandOrControl+Shift+Space",
+        hotwords: "",
+        bot_shape: "circle",
+        bot_color: "auto",
+        bot_expression: "neutral",
+      },
+      onInputChange: renderSectionCalls.onInputChange,
+      customModel: true,
+      setCustomModel: vi.fn(),
+      testResult: null,
+      isTesting: false,
+      onTestAI: vi.fn(),
+      detectedLocalModels: [],
+      getDetectedModels: vi.fn(),
+      isLocalDetected: vi.fn(() => false),
+      resolvedProviderPresets: [],
+      providerPresets: [],
+      applyProviderPreset: vi.fn(),
+      showApiKey: false,
+      setShowApiKey: vi.fn(),
+      showQuickStart: false,
+      onMarkQuickStartDone: vi.fn(),
+    };
+    const merged = { ...base, ...props } as unknown as React.ComponentProps<
+      typeof AIConfigSection
+    >;
+    return render(<AIConfigSection {...merged} />);
+  }
+
+  beforeEach(() => {
+    stubApi = {
+      listAIModels: vi.fn(),
+      getAIModes: vi.fn().mockResolvedValue([]),
+      processText: vi.fn(),
+    };
+    (window as unknown as { electronAPI?: unknown }).electronAPI = stubApi;
+  });
+
+  afterEach(() => {
+    (window as unknown as { electronAPI?: unknown }).electronAPI = undefined;
+    vi.clearAllMocks();
+  });
+
+  it("offers provider-derived models in the custom input datalist", async () => {
+    stubApi.listAIModels.mockResolvedValue({
+      success: true,
+      models: ["m-alpha", "m-beta"],
+    });
+
+    renderSection({});
+
+    // The text input carries list="provider-model-list" (the radio with the
+    // same label text is a different element).
+    const input = document.querySelector(
+      'input[list="provider-model-list"]',
+    ) as HTMLInputElement | null;
+    expect(input).not.toBeNull();
+    // 400ms derivation debounce + IPC round trip.
+    await vi.waitFor(
+      () => {
+        const list = document.querySelector("#provider-model-list");
+        expect(list?.querySelectorAll("option")).toHaveLength(2);
+      },
+      { timeout: 2000 },
+    );
+    expect(
+      document
+        .querySelector("#provider-model-list")
+        ?.children[0]?.getAttribute("value"),
+    ).toBe("m-alpha");
+    // Free-text entry still works — the manual path is never blocked. The
+    // input is controlled by the parent, so assert the change callback.
+    const onInputChange = renderSectionCalls.onInputChange;
+    await userEvent.type(input!, "x");
+    expect(onInputChange).toHaveBeenCalledWith("ai_model", "x");
+  });
+
+  it("degrades to plain manual input when derivation fails", async () => {
+    stubApi.listAIModels.mockResolvedValue({ success: false, models: [] });
+
+    renderSection({});
+
+    await vi.waitFor(
+      () => {
+        expect(stubApi.listAIModels).toHaveBeenCalled();
+      },
+      { timeout: 2000 },
+    );
+    const list = document.querySelector("#provider-model-list");
+    expect(list?.querySelectorAll("option")).toHaveLength(0);
   });
 });

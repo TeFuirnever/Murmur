@@ -73,6 +73,35 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
   // [ADR-015] savedFlash: briefly show "✓ 已保存" on the save button after
   // a successful save. Only triggers when saveSettings returns true.
   const [savedFlash, setSavedFlash] = useState(false);
+
+  // [20260907_Feat_233_ListModels] Ticket #233: derive the provider's model
+  // list from ai_base_url and offer it as datalist suggestions on the custom
+  // model input. Debounced (base_url edits fire per keystroke); ANY failure
+  // silently degrades to the manual-input path per the ticket.
+  const [providerModels, setProviderModels] = useState<string[]>([]);
+  const baseUrl = settings.ai_base_url;
+  const apiKey = settings.ai_api_key;
+  useEffect(() => {
+    if (!window.electronAPI?.listAIModels || !baseUrl) {
+      setProviderModels([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      window.electronAPI!.listAIModels!(baseUrl, apiKey)
+        .then((result) => {
+          if (cancelled) return;
+          setProviderModels(result?.success ? (result.models ?? []) : []);
+        })
+        .catch(() => {
+          if (!cancelled) setProviderModels([]);
+        });
+    }, 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [baseUrl, apiKey]);
   // [CodeReview] Track timeout so it can be cleared on unmount to prevent
   // React "state update on unmounted component" warning.
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -366,6 +395,7 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
               type="text"
               value={settings.ai_model}
               onChange={(e) => onInputChange("ai_model", e.target.value)}
+              list="provider-model-list"
               placeholder={t(
                 "settings.ai.modelPlaceholder",
                 "输入自定义模型名称",
@@ -377,6 +407,14 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
         <p className="mt-1 text-xs text-[#86868b]">
           {t("settings.ai.modelDesc", "选择用于文本优化的AI模型")}
         </p>
+        {/* [20260907_Feat_233_ListModels] Provider-derived suggestions; an
+            empty list (derivation failed or unsupported provider) renders as
+            pure manual input, per ticket #233's silent-fallback contract. */}
+        <datalist id="provider-model-list">
+          {providerModels.map((model) => (
+            <option key={model} value={model} />
+          ))}
+        </datalist>
       </div>
 
       {/* AI 参数调节 */}

@@ -141,6 +141,15 @@ export interface ExportResult {
   canceled?: boolean;
 }
 
+// [20260907_Feat_233_ListModels] Ticket #233: provider model derivation.
+// success=false carries a reason and an empty list — the renderer silently
+// degrades to the manual-input path.
+export interface ListModelsResult {
+  success: boolean;
+  reason?: string;
+  models: string[];
+}
+
 export interface ExportAllResult {
   success: boolean;
   path?: string;
