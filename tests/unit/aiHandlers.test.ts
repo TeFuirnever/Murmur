@@ -1793,3 +1793,61 @@ describe("[20260907_Feat_235_StreamPipeline] POLISH_ABORT / total timeout", () =
     expect(result.error).toContain("总时长超时");
   });
 });
+
+// [20260908_Fix_BatchReview_M1] Non-streaming body reads are raced against
+// the total budget: a gateway that sends headers then stalls the body must
+// resolve with a TIMEOUT-classified error instead of hanging the invoke.
+describe("[20260908_Fix_BatchReview_M1] non-streaming body deadline", () => {
+  it("resolves with a timeout error when the JSON body stalls after headers", async () => {
+    const db = {
+      getSetting: vi.fn(async (key: string) =>
+        key === "ai_base_url"
+          ? "https://api.example.com/v1"
+          : key === "ai_api_key"
+            ? "sk"
+            : key === "ai_model"
+              ? "gpt-x"
+              : null,
+      ),
+    };
+    const handlers: Record<string, (...args: unknown[]) => unknown> = {};
+    const ipcMain = {
+      handle: vi.fn((channel: string, fn: (...args: unknown[]) => unknown) => {
+        handlers[channel] = fn;
+      }),
+    };
+    aiHandlersNS.register(
+      ipcMain as never,
+      {
+        databaseManager: db,
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        templatesDir: "/tmp/test-templates",
+      } as never,
+    );
+    const prevFetch = global.fetch;
+    global.fetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": "application/json" }),
+      // Body never settles — headers arrived, then the stall.
+      json: () => new Promise(() => {}),
+    })) as unknown as typeof fetch;
+
+    const result = (await handlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      "原文",
+      "optimize",
+      120, // tiny total budget
+    )) as { success: boolean; error?: string; code?: string };
+
+    global.fetch = prevFetch;
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("AI请求超时");
+  }, 10_000);
+});
+
+// Hoisted minimal sender for this describe (the file's existing harnesses
+// bind sender shapes locally per describe).
+function senderEvent(id: number): { sender: { id: number } } {
+  return { sender: { id } };
+}

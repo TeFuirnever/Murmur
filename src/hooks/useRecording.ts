@@ -266,15 +266,15 @@ export const useRecording = ({
                     defaultMode === "auto" || !defaultMode
                       ? determineProcessingMode(raw_text)
                       : defaultMode;
-                  const result = (await Promise.race([
-                    window.electronAPI.processText(raw_text, mode),
-                    new Promise((_, reject) =>
-                      setTimeout(
-                        () => reject(new Error("AI优化超时，已使用原文")),
-                        60000,
-                      ),
-                    ),
-                  ])) as import("../types/ipc").AIProcessResult;
+                  // [20260908_Fix_BatchReview_M2] T9④ completion: the 60s
+                  // renderer race is removed — the orchestrator's deadline
+                  // matrix (first-delta/idle/total) owns timeout semantics.
+                  // (This removal was lost when the earlier INSERT→UPDATE
+                  // restructure was reverted wholesale.)
+                  const result = (await window.electronAPI.processText(
+                    raw_text,
+                    mode,
+                  )) as import("../types/ipc").AIProcessResult;
 
                   if (result && result.success) {
                     const processed_text = result.text;
