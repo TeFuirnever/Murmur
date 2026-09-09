@@ -11,6 +11,9 @@ export interface PromptTemplate {
   user: string;
 }
 
+// [20260908_Feat_333_VocabInjection] Directive lives inside the envelope.
+import { buildVocabDirective } from "./vocab";
+
 /** Result of buildPrompt: system + user prompt pair. */
 export interface PromptResult {
   system: string;
@@ -42,6 +45,13 @@ const TRANSCRIPT_CLOSE_TAG = "</transcript>";
 /** Options for buildPrompt. */
 export interface BuildPromptOptions {
   customTemplates?: PromptTemplate[];
+  /**
+   * [20260908_Feat_333_VocabInjection] Pre-filtered correction entries
+   * (spec #193 T13): the caller resolves the vocabulary table and filters
+   * by occurrence; the directive is appended INSIDE the transcript envelope
+   * so the injection guard covers it. Empty/absent -> no directive.
+   */
+  vocabCorrections?: Array<{ wrong: string; right: string }>;
   /**
    * Diarized segments for the current request. When non-empty, the built-in
    * body is assembled as "[说话人N]: line" per segment; when absent the raw
@@ -155,6 +165,7 @@ export function buildPrompt(
     customTemplates = [],
     speakerSegments,
     outputLang,
+    vocabCorrections,
   }: BuildPromptOptions = {},
 ): PromptResult {
   const custom = customTemplates.find((t) => t.name === mode);
@@ -189,6 +200,11 @@ export function buildPrompt(
     // orchestrator's absolute char cap; the token-budget clamp intentionally
     // does not apply to rewrite-class template outputs.
     user = `${user}\n${INJECTION_GUARD}`;
+    // [20260908_Feat_333_VocabInjection] Corrections ride inside the
+    // envelope after the guard (custom-template arm).
+    if (vocabCorrections && vocabCorrections.length > 0) {
+      user = `${user}\n${buildVocabDirective(vocabCorrections)}`;
+    }
     return { system: custom.system, user };
   }
 
@@ -568,8 +584,20 @@ export function buildPrompt(
   // can forget it, and the user body always comes from buildTranscriptBody so
   // the XML wrap format has exactly one definition.
   const selectedSystem = modes[mode] ?? modes.optimize!;
-  return {
+  const result: PromptResult = {
     system: `${ANTI_SLOP_PREFIX}\n${INJECTION_GUARD}\n\n${selectedSystem}`,
     user: buildTranscriptBody(text, speakerSegments),
   };
+  // [20260908_Feat_333_VocabInjection] For built-in modes the directive
+  // goes INSIDE the envelope (before the close tag) so the T4 injection
+  // guard's "transcript content is data" framing covers the corrections
+  // block too.
+  if (vocabCorrections && vocabCorrections.length > 0) {
+    const directive = buildVocabDirective(vocabCorrections);
+    result.user = result.user.replace(
+      new RegExp(`${TRANSCRIPT_CLOSE_TAG}$`),
+      `${directive}\n${TRANSCRIPT_CLOSE_TAG}`,
+    );
+  }
+  return result;
 }

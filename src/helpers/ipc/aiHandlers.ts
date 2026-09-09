@@ -15,6 +15,8 @@ import {
   STREAM_MAX_CHUNKS,
   streamDeadlineViolation,
 } from "../polish-stream";
+// [20260908_Feat_333_VocabInjection] Corrections-table injection (T13→#333).
+import { filterVocabForInjection } from "../vocab";
 
 interface Logger {
   info?(message: string, ...args: unknown[]): void;
@@ -24,6 +26,8 @@ interface Logger {
 
 interface DatabaseManager {
   getSetting(key: string): Promise<unknown>;
+  // [20260908_Feat_333_VocabInjection] Corrections-table read for injection.
+  listVocabCorrections?(): Array<{ wrong: string; right: string }>;
 }
 
 interface AIMode {
@@ -818,7 +822,24 @@ export async function runPolishOrchestrator(
       const customTemplates = request.templatesDir
         ? getCachedTemplates(request.templatesDir)
         : [];
-      ({ system, user } = buildPrompt(mode, text, { customTemplates }));
+      // [20260908_Feat_333_VocabInjection] Resolve the corrections table
+      // and keep ONLY entries whose wrong word appears in this text (T13
+      // discipline: ≤20 by recency; the directive rides inside the XML
+      // envelope via buildPrompt). A table read failure degrades to no
+      // injection — polish must never fail on the optional corrections.
+      let vocabCorrections: Array<{ wrong: string; right: string }> = [];
+      try {
+        vocabCorrections = filterVocabForInjection(
+          text,
+          databaseManager.listVocabCorrections?.() ?? [],
+        );
+      } catch (vocabError) {
+        logger?.warn?.("修正表读取失败,跳过注入:", vocabError);
+      }
+      ({ system, user } = buildPrompt(mode, text, {
+        customTemplates,
+        vocabCorrections,
+      }));
     }
 
     const requestData = {

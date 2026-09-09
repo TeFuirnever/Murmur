@@ -136,7 +136,7 @@ describe("TranscriptionResult — AI optimize paths", () => {
     render(<TranscriptionResult text="原始待优化" />);
     fireEvent.click(await findOptimizeButton());
     await waitFor(() => {
-      expect(screen.getByText("优化后文本")).toBeInTheDocument();
+      expect(screen.getAllByText("优化后文本").length).toBeGreaterThan(0);
     });
     // [20260907_Feat_236_StreamingUi] no chunk channel in this stub →
     // non-streaming fallback: the classic two-argument invoke.
@@ -162,7 +162,7 @@ describe("TranscriptionResult — AI optimize paths", () => {
     render(<TranscriptionResult text="走属性" onAIOptimize={onAIOptimize} />);
     fireEvent.click(await findOptimizeButton());
     await waitFor(() => {
-      expect(screen.getByText("属性优化结果")).toBeInTheDocument();
+      expect(screen.getAllByText("属性优化结果").length).toBeGreaterThan(0);
     });
     expect(onAIOptimize).toHaveBeenCalledWith("走属性");
   });
@@ -514,7 +514,7 @@ describe("TranscriptionResult — preferOnAIOptimize (#316)", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("评审通道的文本")).toBeInTheDocument();
+      expect(screen.getAllByText("评审通道的文本").length).toBeGreaterThan(0);
     });
     expect(processText).not.toHaveBeenCalled();
   });
@@ -549,7 +549,7 @@ describe("TranscriptionResult — preferOnAIOptimize (#316)", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("默认通道的文本")).toBeInTheDocument();
+      expect(screen.getAllByText("默认通道的文本").length).toBeGreaterThan(0);
     });
     expect(onAIOptimize).not.toHaveBeenCalled();
   });
@@ -616,7 +616,7 @@ describe("TranscriptionResult — polish write-back failure (#314)", () => {
       );
     });
     // The polished result stays on screen (documented intent).
-    expect(screen.getByText("润色后文本")).toBeInTheDocument();
+    expect(screen.getAllByText("润色后文本").length).toBeGreaterThan(0);
     consoleSpy.mockRestore();
   });
 
@@ -659,7 +659,7 @@ describe("TranscriptionResult — polish write-back failure (#314)", () => {
       );
     });
     // Not wiped: the polished text stays on screen.
-    expect(screen.getByText("润色后文本")).toBeInTheDocument();
+    expect(screen.getAllByText("润色后文本").length).toBeGreaterThan(0);
     consoleSpy2.mockRestore();
   });
 });
@@ -779,7 +779,9 @@ describe("TranscriptionResult — streaming manual polish (#236 ①)", () => {
       reasoningChars: 0,
     });
 
-    await screen.findByText("最终润色结果");
+    expect((await screen.findAllByText("最终润色结果")).length).toBeGreaterThan(
+      0,
+    );
     await vi.waitFor(() => expect(unsubSpy).toHaveBeenCalled());
   });
 
@@ -911,5 +913,128 @@ describe("TranscriptionResult — streaming error paths (#236 review)", () => {
       expect(screen.getByText("AI处理失败，请重试")).toBeInTheDocument();
     });
     expect(screen.getByText("原始转写内容")).toBeInTheDocument();
+  });
+});
+
+// [20260908_Feat_333_PanelIntegration] Mode split: after a successful
+// polish, minimal-edit modes stage the diff review panel and rewrite modes
+// stage the whole-text panel — until then neither is mounted.
+describe("TranscriptionResult — post-polish review staging (#333)", () => {
+  function makeApi(extra: Record<string, unknown> = {}) {
+    return {
+      processText: vi
+        .fn()
+        .mockResolvedValue({ success: true, text: "润色完成" }),
+      getAIModes: vi.fn().mockResolvedValue([
+        { name: "optimize", label: "智能润色", description: "" },
+        { name: "summarize", label: "摘要总结", description: "" },
+      ]),
+      updateTranscription: vi.fn().mockResolvedValue({ success: true }),
+      addVocabCorrection: vi.fn().mockResolvedValue({ success: true }),
+      ...extra,
+    };
+  }
+  function mountWith(mode: string, api: Record<string, unknown>) {
+    (globalThis.window as unknown as { electronAPI?: unknown }).electronAPI =
+      api;
+    const onCopy = vi.fn();
+    render(
+      React.createElement(TranscriptionResult, {
+        text: "原文内容",
+        id: 42,
+        onCopy,
+      }),
+    );
+    return { onCopy };
+  }
+
+  const originalAPI = (
+    globalThis.window as unknown as { electronAPI?: unknown }
+  ).electronAPI;
+  afterEach(() => {
+    (globalThis.window as unknown as { electronAPI?: unknown }).electronAPI =
+      originalAPI;
+    vi.clearAllMocks();
+  });
+
+  it("minimal-edit mode mounts the diff review after polish", async () => {
+    const api = makeApi();
+    mountWith("optimize", api);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "应用 AI 处理" }),
+    );
+    expect(await screen.findByTestId("polish-review")).toBeInTheDocument();
+    expect(screen.getByTestId("diff-review")).toBeInTheDocument();
+  });
+
+  it("rewrite mode mounts the whole-text review after polish", async () => {
+    const api = makeApi();
+    mountWith("summarize", api);
+    fireEvent.change(await screen.findByDisplayValue("智能润色"), {
+      target: { value: "summarize" },
+    });
+    fireEvent.click(
+      await screen.findByRole("button", { name: "应用 AI 处理" }),
+    );
+    expect(await screen.findByTestId("polish-review")).toBeInTheDocument();
+    expect(screen.getByTestId("rewrite-review")).toBeInTheDocument();
+  });
+
+  it("rewrite accept persists via updateTranscription and clears the panel", async () => {
+    const api = makeApi();
+    mountWith("summarize", api);
+    fireEvent.change(await screen.findByDisplayValue("智能润色"), {
+      target: { value: "summarize" },
+    });
+    fireEvent.click(
+      await screen.findByRole("button", { name: "应用 AI 处理" }),
+    );
+    fireEvent.click(await screen.findByTestId("rewrite-accept"));
+    expect(api.updateTranscription).toHaveBeenCalledWith(42, {
+      processed_text: "润色完成",
+      text: "润色完成",
+    });
+    await waitFor(() => {
+      expect(screen.queryByTestId("polish-review")).not.toBeInTheDocument();
+    });
+  });
+
+  it("rewrite revert restores the original and persists it", async () => {
+    const api = makeApi();
+    mountWith("summarize", api);
+    fireEvent.change(await screen.findByDisplayValue("智能润色"), {
+      target: { value: "summarize" },
+    });
+    fireEvent.click(
+      await screen.findByRole("button", { name: "应用 AI 处理" }),
+    );
+    fireEvent.click(await screen.findByTestId("rewrite-revert"));
+    expect(api.updateTranscription).toHaveBeenCalledWith(42, {
+      processed_text: "原文内容",
+      text: "原文内容",
+    });
+    await waitFor(() => {
+      expect(screen.queryByTestId("polish-review")).not.toBeInTheDocument();
+    });
+  });
+
+  it("rewrite annotate routes to addVocabCorrection", async () => {
+    const api = makeApi();
+    mountWith("summarize", api);
+    fireEvent.change(await screen.findByDisplayValue("智能润色"), {
+      target: { value: "summarize" },
+    });
+    fireEvent.click(
+      await screen.findByRole("button", { name: "应用 AI 处理" }),
+    );
+    fireEvent.click(await screen.findByTestId("rewrite-annotate"));
+    fireEvent.change(screen.getByLabelText("错误词"), {
+      target: { value: "会义室" },
+    });
+    fireEvent.change(screen.getByLabelText("正确词"), {
+      target: { value: "会议室" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "记入修正表" }));
+    expect(api.addVocabCorrection).toHaveBeenCalledWith("会义室", "会议室");
   });
 });
