@@ -111,7 +111,16 @@
       "defaultModeCorrect": "校对纠错",
       "defaultModeSummarize": "摘要总结",
       "defaultModeOff": "关闭 AI 处理",
-      "defaultModeDesc": "录音与文件导入完成后自动应用的 AI 处理方式；单次结果面板仍可临时切换。"
+      "defaultModeDesc": "录音与文件导入完成后自动应用的 AI 处理方式；单次结果面板仍可临时切换。",
+      "vocabTitle": "修正表",
+      "vocabPrivacy": "隐私说明：修正表内容会随润色请求发送至你所配置的 AI 服务商，用于纠正惯用错词；不会发送到其他任何地方。可随时在此编辑或清空。",
+      "vocabEmpty": "暂无修正词对",
+      "vocabAdd": "添加词对",
+      "vocabClear": "清空全部",
+      "vocabCount": "{{count}} 条词对",
+      "vocabAddFailed": "添加失败",
+      "vocabClearConfirm": "确定清空全部修正词对吗？",
+      "vocabDelete": "删除"
     },
     "quickStart": {
       "title": "快速开始",
@@ -375,5 +384,15 @@
     "apply": "应用修改",
     "discard": "放弃修改",
     "emptySide": "（空）"
+  },
+  "rewrite": {
+    "originalLabel": "原文",
+    "rewrittenLabel": "重写结果",
+    "revert": "回退原文",
+    "annotate": "标注修正",
+    "accept": "采用重写",
+    "wrongWord": "错误词",
+    "rightWord": "正确词",
+    "saveCorrection": "记入修正表"
   }
 }

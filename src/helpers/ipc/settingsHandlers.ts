@@ -6,6 +6,11 @@ interface DatabaseManager {
   setSetting(key: string, value: unknown): unknown;
   getAllSettings(): Record<string, unknown>;
   syncToFileConfig(): void;
+  // [20260908_Feat_240_VocabCorrections] T13 corrections-table CRUD.
+  listVocabCorrections(): Array<{ wrong: string; right: string }>;
+  addVocabCorrection(wrong: string, right: string): void;
+  deleteVocabCorrection(wrong: string): void;
+  clearVocabCorrections(): void;
 }
 
 interface WindowManager {
@@ -127,6 +132,46 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
   // [20260816_Refactor_DeadChannels] The GET_LEGACY alias and the IMPORT/
   // EXPORT handlers (dialog-backed but with no UI entry point anywhere) were
   // removed with their contract constants.
+
+  // [20260908_Feat_240_VocabCorrections] T13: vocabulary CRUD for the
+  // settings page. Small quotas — the settings page edits, not polls.
+  ipcMain.handle(C.AI.VOCAB_LIST, () => {
+    try {
+      return {
+        success: true,
+        entries: databaseManager.listVocabCorrections(),
+      };
+    } catch {
+      return { success: false, entries: [] };
+    }
+  });
+
+  ipcMain.handle(C.AI.VOCAB_ADD, (_event, wrong: string, right: string) => {
+    try {
+      databaseManager.addVocabCorrection(wrong, right);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
+  });
+
+  ipcMain.handle(C.AI.VOCAB_DELETE, (_event, wrong: string) => {
+    try {
+      databaseManager.deleteVocabCorrection(wrong);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
+  });
+
+  ipcMain.handle(C.AI.VOCAB_CLEAR, () => {
+    try {
+      databaseManager.clearVocabCorrections();
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
+  });
 
   // [20260906_Refactor_DeadChannelCleanup] Ticket #250: the SETTINGS.SAVE and
   // SETTINGS.RESET handlers were removed — zero renderer callers (orphans

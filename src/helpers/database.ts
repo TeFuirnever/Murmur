@@ -15,6 +15,8 @@ import path from "path";
 import fs from "fs";
 import { loadFileConfig } from "./fileConfig";
 import { saveFileConfig, FILE_CONFIGURABLE_KEYS } from "./fileConfig";
+// [20260908_Feat_240_VocabCorrections] T13 correction-table contracts.
+import { VOCAB_MAX_ENTRIES, isValidVocabTerm } from "./vocab";
 
 /** A transcription record as stored in SQLite. */
 export interface TranscriptionRecord {
@@ -242,6 +244,17 @@ class DatabaseManager {
         key TEXT PRIMARY KEY,
         value TEXT,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // [20260908_Feat_240_VocabCorrections] T13: the vocabulary corrections
+    // table — wrong-word UNIQUE (re-insert replaces + touches recency),
+    // FIFO-evicted at VOCAB_MAX_ENTRIES by the add path.
+    this.db!.exec(`
+      CREATE TABLE IF NOT EXISTS vocabulary (
+        wrong TEXT PRIMARY KEY,
+        right TEXT NOT NULL,
+        used_ms INTEGER NOT NULL DEFAULT 0
       )
     `);
 
@@ -573,6 +586,60 @@ class DatabaseManager {
     }
     saveFileConfig(this._fileConfigPath, filtered);
     this._fileConfigCache = loadFileConfig(this._fileConfigPath);
+  }
+
+  // [20260908_Feat_240_VocabCorrections] T13: upsert a correction pair.
+  // Re-inserting an existing wrong word replaces the pair and touches
+  // recency (used_at). Evicts the oldest rows beyond the FIFO cap.
+  addVocabCorrection(wrong: string, right: string): void {
+    if (!isValidVocabTerm(wrong) || !isValidVocabTerm(right)) {
+      throw new Error("修正表词对不合法（空/过长/含控制字符或孤立代理项）");
+    }
+    const tx = this.db!;
+    tx.prepare(
+      `INSERT INTO vocabulary (wrong, right, used_ms)
+       VALUES (?, ?, ?)
+       ON CONFLICT(wrong) DO UPDATE SET
+         right = excluded.right,
+         used_ms = excluded.used_ms`,
+    ).run(wrong, right, this._nextVocabStamp());
+    const count = tx.prepare("SELECT COUNT(*) AS n FROM vocabulary").get() as {
+      n: number;
+    };
+    if (count.n > VOCAB_MAX_ENTRIES) {
+      tx.prepare(
+        `DELETE FROM vocabulary WHERE wrong IN (
+           SELECT wrong FROM vocabulary
+           ORDER BY used_ms ASC, rowid ASC
+           LIMIT ?
+         )`,
+      ).run(count.n - VOCAB_MAX_ENTRIES);
+    }
+  }
+
+  // [20260908_Feat_240_VocabCorrections] Monotonic stamp: Date.now() can
+  // tie within one millisecond for rapid successive calls, collapsing the
+  // recency order — always strictly greater than the stored maximum.
+  private _nextVocabStamp(): number {
+    const max = this.db!.prepare(
+      "SELECT MAX(used_ms) AS m FROM vocabulary",
+    ).get() as { m: number | null };
+    return Math.max(Date.now(), (max.m ?? 0) + 1);
+  }
+
+  // Oldest-first (injection picks the most recent from the tail).
+  listVocabCorrections(): Array<{ wrong: string; right: string }> {
+    return this.db!.prepare(
+      "SELECT wrong, right FROM vocabulary ORDER BY used_ms ASC, rowid ASC",
+    ).all() as Array<{ wrong: string; right: string }>;
+  }
+
+  deleteVocabCorrection(wrong: string): void {
+    this.db!.prepare("DELETE FROM vocabulary WHERE wrong = ?").run(wrong);
+  }
+
+  clearVocabCorrections(): void {
+    this.db!.exec("DELETE FROM vocabulary");
   }
 
   close(): void {

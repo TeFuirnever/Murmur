@@ -76,6 +76,17 @@ export interface ElectronAPI {
   listAIModels: (baseUrl: string, apiKey: string) => Promise<ListModelsResult>;
   // [20260907_Feat_235_StreamPipeline] T8 streaming abort + chunk push.
   abortPolish: (requestId: string) => Promise<OperationResult>;
+  // [20260908_Feat_240_VocabCorrections] T13 vocabulary CRUD.
+  listVocabCorrections: () => Promise<{
+    success: boolean;
+    entries: Array<{ wrong: string; right: string }>;
+  }>;
+  addVocabCorrection: (
+    wrong: string,
+    right: string,
+  ) => Promise<OperationResult>;
+  deleteVocabCorrection: (wrong: string) => Promise<OperationResult>;
+  clearVocabCorrections: () => Promise<OperationResult>;
   onPolishChunk: (callback: (chunk: PolishChunk) => void) => () => void;
   getAIModes: () => Promise<AIMode[]>;
   getAIProviderPresets: () => Promise<AIProviderPreset[]>;

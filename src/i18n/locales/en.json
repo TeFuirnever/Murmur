@@ -111,7 +111,16 @@
       "defaultModeCorrect": "Proofread",
       "defaultModeSummarize": "Summarize",
       "defaultModeOff": "Turn AI off",
-      "defaultModeDesc": "AI processing applied automatically after recording or file import; the per-result panel still allows a one-off switch."
+      "defaultModeDesc": "AI processing applied automatically after recording or file import; the per-result panel still allows a one-off switch.",
+      "vocabTitle": "Corrections",
+      "vocabPrivacy": "Privacy: correction entries are sent with polish requests to your configured AI provider to fix recurring mistakes — nowhere else. Edit or clear them here at any time.",
+      "vocabEmpty": "No correction pairs yet",
+      "vocabAdd": "Add pair",
+      "vocabClear": "Clear all",
+      "vocabCount": "{{count}} pairs",
+      "vocabAddFailed": "Add failed",
+      "vocabClearConfirm": "Clear ALL correction pairs?",
+      "vocabDelete": "Delete"
     },
     "quickStart": {
       "title": "Quick Start",
@@ -375,5 +384,15 @@
     "apply": "Apply changes",
     "discard": "Discard changes",
     "emptySide": "(empty)"
+  },
+  "rewrite": {
+    "originalLabel": "Original",
+    "rewrittenLabel": "Rewritten",
+    "revert": "Revert to original",
+    "annotate": "Annotate correction",
+    "accept": "Accept rewrite",
+    "wrongWord": "Wrong word",
+    "rightWord": "Right word",
+    "saveCorrection": "Save to corrections"
   }
 }

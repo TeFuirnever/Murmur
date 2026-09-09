@@ -5,6 +5,8 @@ import type { SettingsState } from "../useSettings";
 // [20260905_Fix_246_HotkeySettingsUi] Hotkey recorder (issue #246: the
 // settings entry the main-window failure toast pointed at did not exist).
 import { buildAccelerator, formatAccelerator } from "../hotkeyRecorder";
+// [20260908_Feat_240_VocabCorrections] T13: corrections-table management.
+import { VocabManager } from "./VocabManager";
 
 interface GeneralSectionProps {
   settings: SettingsState;
@@ -326,6 +328,8 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
           </div>
         )}
       </div>
+      {/* [20260908_Feat_240_VocabCorrections] T13 corrections management. */}
+      <VocabManager />
     </div>
   );
 };
