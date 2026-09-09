@@ -5,6 +5,13 @@ import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 // [20260907_Feat_236_StreamingUi] T9 ①: streaming polish coordinator.
 import { usePolishStream } from "../hooks/usePolishStream";
+// [20260908_Feat_333_PanelIntegration] Post-polish review panels (#333):
+// minimal-edit modes get the diff review; rewrite modes get the whole-text
+// comparison with correction annotation.
+import { DiffReviewPanel } from "./DiffReviewPanel";
+import { RewriteReviewPanel } from "./RewriteReviewPanel";
+// [20260909_Fix_333_Review] Shared minimal-edit mode set.
+import { MINIMAL_EDIT_MODES } from "../helpers/polish-diff";
 import { LoadingDots } from "./ui/loading-dots";
 import ExportPanel from "./ExportPanel";
 import ProcessingPanel from "./ProcessingPanel";
@@ -67,6 +74,17 @@ export default function TranscriptionResult({
   // [20260907_Feat_236_StreamingUi] T9 ①: streaming polish coordinator —
   // owns chunk subscription, incremental delta state and the cancel channel.
   const polishStream = usePolishStream();
+  // [20260908_Feat_333_PanelIntegration] Pending post-polish review (spec
+  // #193 S4): after a successful polish the accepted text is staged here
+  // with its mode class until the user accepts/reverts in the panel.
+  const [pendingReview, setPendingReview] = React.useState<{
+    modeClass: "minimal-edit" | "rewrite";
+    original: string;
+    revised: string;
+  } | null>(null);
+  // [20260909_Fix_333_Review] Shared set — see polish-diff.ts.
+  const isMinimalEditMode = (modeName: string): boolean =>
+    MINIMAL_EDIT_MODES.has(modeName);
   const [expandedSegment, setExpandedSegment] = React.useState<
     string | number | null
   >(null);
@@ -196,6 +214,13 @@ export default function TranscriptionResult({
         // (file import's aiReviewTranscription review-by-id).
         polishedText = await onAIOptimize(text);
         setOptimizedText(polishedText);
+        setPendingReview({
+          modeClass: isMinimalEditMode(currentMode)
+            ? "minimal-edit"
+            : "rewrite",
+          original: text,
+          revised: polishedText,
+        });
       } else if (typeof window.electronAPI?.processText === "function") {
         // [20260907_Feat_236_StreamingUi] T9 ①: streaming when the chunk
         // channel exists; timeout semantics live in the orchestrator's
@@ -225,6 +250,13 @@ export default function TranscriptionResult({
         if (result?.success && result?.text) {
           polishedText = result.text;
           setOptimizedText(result.text);
+          setPendingReview({
+            modeClass: isMinimalEditMode(currentMode)
+              ? "minimal-edit"
+              : "rewrite",
+            original: text,
+            revised: polishedText,
+          });
         } else {
           // [20260815_Fix_AiEmptyContent] Surface the main-process error
           // (e.g. max_tokens exhausted by model reasoning) instead of a
@@ -248,6 +280,13 @@ export default function TranscriptionResult({
         const result = await onAIOptimize(text);
         polishedText = result;
         setOptimizedText(result);
+        setPendingReview({
+          modeClass: isMinimalEditMode(currentMode)
+            ? "minimal-edit"
+            : "rewrite",
+          original: text,
+          revised: result,
+        });
       } else {
         setOptimizeError("AI功能不可用");
       }
@@ -484,6 +523,64 @@ export default function TranscriptionResult({
                 );
               })}
             </div>
+          )}
+        </div>
+      )}
+
+      {/* [20260908_Feat_333_PanelIntegration] Post-polish review: minimal-edit
+          modes -> diff hunks with per-hunk accept/reject; rewrite modes ->
+          whole-text comparison with correction annotation. Accept writes back
+          through the T1 UPDATE channel; revert restores the original. */}
+      {pendingReview && !showOptimizing && (
+        <div data-testid="polish-review">
+          {pendingReview.modeClass === "minimal-edit" ? (
+            <DiffReviewPanel
+              original={pendingReview.original}
+              revised={pendingReview.revised}
+              onApply={(merged) => {
+                setOptimizedText(merged);
+                if (id != null) {
+                  // [20260909_Fix_333_Review] Route through the hardened
+                  // writer — void-discard regressed #314's toast on failure.
+                  void persistPolishedText(id, merged);
+                }
+                setPendingReview(null);
+              }}
+              onCancel={() => {
+                setPendingReview(null);
+              }}
+            />
+          ) : (
+            <RewriteReviewPanel
+              original={pendingReview.original}
+              rewritten={pendingReview.revised}
+              onAddCorrection={(wrong, right) => {
+                // [20260909_Fix_333_Review] Surface IPC failures, never
+                // discard them silently.
+                window.electronAPI
+                  ?.addVocabCorrection?.(wrong, right)
+                  .catch((error: unknown) => {
+                    console.warn("修正表写入失败:", error);
+                    toast.warning(
+                      t("transcription.vocabSaveFailed", "修正词对保存失败"),
+                    );
+                  });
+              }}
+              onAccept={(finalText) => {
+                setOptimizedText(finalText);
+                if (id != null) {
+                  void persistPolishedText(id, finalText);
+                }
+                setPendingReview(null);
+              }}
+              onRevert={() => {
+                setOptimizedText(null);
+                if (id != null) {
+                  void persistPolishedText(id, pendingReview.original);
+                }
+                setPendingReview(null);
+              }}
+            />
           )}
         </div>
       )}

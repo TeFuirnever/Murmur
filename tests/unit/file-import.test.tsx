@@ -399,7 +399,7 @@ describe("[20260816_Test_FileImportExpanded] FileImport — remaining branches",
     });
     expect(api.aiReviewTranscription).toHaveBeenCalledWith(42);
     await waitFor(() => {
-      expect(screen.getByText("审校后的文本")).toBeInTheDocument();
+      expect(screen.getAllByText("审校后的文本").length).toBeGreaterThan(0);
     });
   });
 });

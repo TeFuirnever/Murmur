@@ -1851,3 +1851,247 @@ describe("[20260908_Fix_BatchReview_M1] non-streaming body deadline", () => {
 function senderEvent(id: number): { sender: { id: number } } {
   return { sender: { id } };
 }
+
+// [20260908_Feat_333_VocabInjection] End-to-end injection: the orchestrator
+// resolves the corrections table, filters by occurrence, and the directive
+// rides INSIDE the transcript envelope. No match / read failure → no
+// directive (polish never fails on the optional table).
+describe("[20260908_Feat_333_VocabInjection] corrections injection", () => {
+  function makeDb(entries: Array<{ wrong: string; right: string }>) {
+    return {
+      getSetting: vi.fn(async (key: string) =>
+        key === "ai_base_url"
+          ? "https://api.example.com/v1"
+          : key === "ai_api_key"
+            ? "sk"
+            : key === "ai_model"
+              ? "gpt-x"
+              : null,
+      ),
+      listVocabCorrections: vi.fn(() => entries),
+    };
+  }
+  function makeDbNoVocab() {
+    return {
+      getSetting: vi.fn(async (key: string) =>
+        key === "ai_base_url"
+          ? "https://api.example.com/v1"
+          : key === "ai_api_key"
+            ? "sk"
+            : key === "ai_model"
+              ? "gpt-x"
+              : null,
+      ),
+    };
+  }
+  function captureBody(): Record<string, unknown> {
+    const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
+    return JSON.parse(
+      (fetchMock.mock.calls[0]![1] as { body: string }).body,
+    ) as Record<string, unknown>;
+  }
+  // [20260908_Feat_333_VocabInjection] handlers map values are possibly
+  // undefined under noUncheckedIndexedAccess — non-null helper.
+  const processHandler = (
+    map: Record<string, (...args: unknown[]) => unknown>,
+  ): ((...args: unknown[]) => Promise<unknown>) =>
+    map[C.AI.PROCESS]! as (...args: unknown[]) => Promise<unknown>;
+  function messagesOf(body: Record<string, unknown>): string {
+    return (body.messages as Array<{ role: string; content: string }>)
+      .map((m) => m.content)
+      .join("\n---\n");
+  }
+
+  it("injects matching corrections inside the transcript envelope", async () => {
+    const handlers: Record<string, (...args: unknown[]) => unknown> = {};
+    const ipcMain = {
+      handle: vi.fn((channel: string, fn: (...args: unknown[]) => unknown) => {
+        handlers[channel] = fn;
+      }),
+    };
+    const prevFetch = global.fetch;
+    global.fetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": "application/json" }),
+      json: async () => ({
+        choices: [{ message: { content: "润色结果" }, finish_reason: "stop" }],
+      }),
+    })) as unknown as typeof fetch;
+    const db = makeDb([
+      { wrong: "会义室", right: "会议室" },
+      { wrong: "不出现的词", right: "某词" },
+    ]);
+    aiHandlersNS.register(
+      ipcMain as never,
+      {
+        databaseManager: db,
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        templatesDir: "/tmp/test-templates",
+      } as never,
+    );
+
+    await processHandler(handlers)(
+      { sender: { id: 1 } },
+      "我们明天在会义室开会",
+      "optimize",
+    );
+    // Capture BEFORE restoring the real fetch.
+    const userMsg = messagesOf(captureBody());
+    global.fetch = prevFetch;
+    expect(userMsg).toContain("会义室");
+    expect(userMsg).toContain("会议室");
+    expect(userMsg).not.toContain("不出现的词");
+    // Inside the envelope: directive appears BEFORE the close tag.
+    const closeIdx = userMsg.indexOf("</transcript>");
+    const dirIdx = userMsg.indexOf("修正表");
+    expect(closeIdx).toBeGreaterThan(-1);
+    expect(dirIdx).toBeGreaterThan(-1);
+    expect(dirIdx).toBeLessThan(closeIdx);
+  });
+
+  it("no matching corrections → no directive in the prompt", async () => {
+    const handlers: Record<string, (...args: unknown[]) => unknown> = {};
+    const ipcMain = {
+      handle: vi.fn((channel: string, fn: (...args: unknown[]) => unknown) => {
+        handlers[channel] = fn;
+      }),
+    };
+    const prevFetch = global.fetch;
+    global.fetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": "application/json" }),
+      json: async () => ({
+        choices: [{ message: { content: "润色结果" }, finish_reason: "stop" }],
+      }),
+    })) as unknown as typeof fetch;
+    aiHandlersNS.register(
+      ipcMain as never,
+      {
+        databaseManager: makeDb([{ wrong: "无关词", right: "x" }]),
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        templatesDir: "/tmp/test-templates",
+      } as never,
+    );
+
+    await processHandler(handlers)(
+      { sender: { id: 1 } },
+      "完全无关的文本",
+      "optimize",
+    );
+    const noMatchMsg = messagesOf(captureBody());
+    global.fetch = prevFetch;
+    expect(noMatchMsg).not.toContain("修正表");
+  });
+
+  it("missing vocab surface on the manager → polish proceeds without injection", async () => {
+    const handlers: Record<string, (...args: unknown[]) => unknown> = {};
+    const ipcMain = {
+      handle: vi.fn((channel: string, fn: (...args: unknown[]) => unknown) => {
+        handlers[channel] = fn;
+      }),
+    };
+    const prevFetch = global.fetch;
+    global.fetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": "application/json" }),
+      json: async () => ({
+        choices: [{ message: { content: "润色结果" }, finish_reason: "stop" }],
+      }),
+    })) as unknown as typeof fetch;
+    aiHandlersNS.register(
+      ipcMain as never,
+      {
+        databaseManager: makeDbNoVocab(),
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        templatesDir: "/tmp/test-templates",
+      } as never,
+    );
+
+    const result = (await processHandler(handlers)(
+      { sender: { id: 1 } },
+      "普通文本",
+      "optimize",
+    )) as { success: boolean };
+    const noVocabMsg = messagesOf(captureBody());
+    global.fetch = prevFetch;
+    expect(result.success).toBe(true);
+    expect(noVocabMsg).not.toContain("修正表");
+  });
+});
+
+// [20260909_Fix_333_Review] Custom-arm directive placement + $&-safe replacer.
+describe("[20260909_Fix_333_Review] injection placement regressions", () => {
+  it("custom-template arm injects the directive INSIDE the envelope", async () => {
+    const handlers: Record<string, (...args: unknown[]) => unknown> = {};
+    const ipcMain = {
+      handle: vi.fn((channel: string, fn: (...args: unknown[]) => unknown) => {
+        handlers[channel] = fn;
+      }),
+    };
+    const prevFetch = global.fetch;
+    global.fetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": "application/json" }),
+      json: async () => ({
+        choices: [{ message: { content: "润色结果" }, finish_reason: "stop" }],
+      }),
+    })) as unknown as typeof fetch;
+    const db = {
+      getSetting: vi.fn(async (key: string) =>
+        key === "ai_base_url"
+          ? "https://api.example.com/v1"
+          : key === "ai_api_key"
+            ? "sk"
+            : key === "ai_model"
+              ? "gpt-x"
+              : null,
+      ),
+      listVocabCorrections: vi.fn(() => [{ wrong: "会义室", right: "会议室" }]),
+    };
+    aiHandlersNS.register(
+      ipcMain as never,
+      {
+        databaseManager: db,
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        templatesDir: "/tmp/tpl-333",
+      } as never,
+    );
+
+    // Stub a custom template via the templatesDir cache: register() reads
+    // the dir; simplest reliable route is monkeypatching getCachedTemplates
+    // behavior via fs — instead exercise buildPrompt directly for placement
+    // (the orchestrator wiring is covered above).
+    global.fetch = prevFetch;
+    const { buildPrompt } = await import("../../src/helpers/aiPrompts");
+    const result = buildPrompt("custom-with-envelope", "我们在会义室开会", {
+      customTemplates: [
+        {
+          name: "custom-with-envelope",
+          label: "模板",
+          system: "系统",
+          user: "整理：<transcript>\n{text}\n</transcript>",
+        },
+      ],
+      vocabCorrections: [{ wrong: "会义室", right: "会议室" }],
+    });
+    const closeIdx = result.user.lastIndexOf("</transcript>");
+    const dirIdx = result.user.indexOf("修正表");
+    expect(closeIdx).toBeGreaterThan(-1);
+    expect(dirIdx).toBeGreaterThan(-1);
+    expect(dirIdx).toBeLessThan(closeIdx);
+  });
+
+  it("built-in arm directive survives $&-family sequences in vocab terms", async () => {
+    const { buildPrompt } = await import("../../src/helpers/aiPrompts");
+    const result = buildPrompt("optimize", "文本", {
+      vocabCorrections: [{ wrong: "X", right: "cost is $& total" }],
+    });
+    // The $& must appear literally — no expansion into the matched close tag.
+    expect(result.user).toContain("cost is $& total");
+    expect(result.user.match(/<\/transcript>/g)).toHaveLength(1);
+  });
+});

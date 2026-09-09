@@ -15,6 +15,8 @@ import {
   STREAM_MAX_CHUNKS,
   streamDeadlineViolation,
 } from "../polish-stream";
+// [20260908_Feat_333_VocabInjection] Corrections-table injection (T13→#333).
+import { filterVocabForInjection } from "../vocab";
 
 interface Logger {
   info?(message: string, ...args: unknown[]): void;
@@ -24,6 +26,8 @@ interface Logger {
 
 interface DatabaseManager {
   getSetting(key: string): Promise<unknown>;
+  // [20260908_Feat_333_VocabInjection] Corrections-table read for injection.
+  listVocabCorrections?(): Array<{ wrong: string; right: string }>;
 }
 
 interface AIMode {
@@ -594,14 +598,9 @@ const POLISH_SUPERSEDED_MESSAGE = "已发起新的AI处理，本次结果已丢�
 const POLISH_CLAMP_MIN_TOKENS = 4096;
 const POLISH_CLAMP_INPUT_LENGTH_FACTOR = 2;
 export { POLISH_CLAMP_MIN_TOKENS, POLISH_CLAMP_INPUT_LENGTH_FACTOR };
-// Minimal-edit modes (最小修改类) whose output is expected to track the input
-// length; everything else (rewrite-class + custom templates) is never clamped.
-const MINIMAL_EDIT_MODES: ReadonlySet<string> = new Set([
-  "optimize",
-  "optimize_long",
-  "format",
-  "correct",
-]);
+// [20260909_Fix_333_Review] Single shared source in polish-diff.ts.
+export { MINIMAL_EDIT_MODES } from "../polish-diff";
+import { MINIMAL_EDIT_MODES as MINIMAL_MODES_FOR_CLAMP } from "../polish-diff";
 // Absolute response guard (Spec #193 超时与总量上限矩阵: 绝对上限 200 万字符):
 // a provider (or malicious gateway) response longer than this is truncated
 // before mapping, so oversized/absurd output never flows to the renderer.
@@ -739,7 +738,7 @@ function resolvePolishMaxTokens(
   userMaxTokens: number,
   clampEnabled: boolean,
 ): number {
-  if (!clampEnabled || !MINIMAL_EDIT_MODES.has(mode)) {
+  if (!clampEnabled || !MINIMAL_MODES_FOR_CLAMP.has(mode)) {
     return userMaxTokens;
   }
   return Math.max(
@@ -818,7 +817,24 @@ export async function runPolishOrchestrator(
       const customTemplates = request.templatesDir
         ? getCachedTemplates(request.templatesDir)
         : [];
-      ({ system, user } = buildPrompt(mode, text, { customTemplates }));
+      // [20260908_Feat_333_VocabInjection] Resolve the corrections table
+      // and keep ONLY entries whose wrong word appears in this text (T13
+      // discipline: ≤20 by recency; the directive rides inside the XML
+      // envelope via buildPrompt). A table read failure degrades to no
+      // injection — polish must never fail on the optional corrections.
+      let vocabCorrections: Array<{ wrong: string; right: string }> = [];
+      try {
+        vocabCorrections = filterVocabForInjection(
+          text,
+          databaseManager.listVocabCorrections?.() ?? [],
+        );
+      } catch (vocabError) {
+        logger?.warn?.("修正表读取失败,跳过注入:", vocabError);
+      }
+      ({ system, user } = buildPrompt(mode, text, {
+        customTemplates,
+        vocabCorrections,
+      }));
     }
 
     const requestData = {
@@ -1270,7 +1286,7 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
             mode,
             templatesDir,
             timeout,
-            clampOutputTokens: MINIMAL_EDIT_MODES.has(mode),
+            clampOutputTokens: MINIMAL_MODES_FOR_CLAMP.has(mode),
             generationScope: requestId,
             signal: streamAbortTargets.get(requestId ?? "")?.controller.signal,
             stream,

@@ -375,7 +375,8 @@
     "polishSaveFailed": "Couldn't save the polished text — it will revert after restart",
     "cancelPolish": "Cancel",
     "polishInvokeFailed": "AI processing failed, please retry",
-    "polishFailed": "AI processing failed, please retry"
+    "polishFailed": "AI processing failed, please retry",
+    "vocabSaveFailed": "Failed to save the correction pair"
   },
   "diff": {
     "noChanges": "No changes",
