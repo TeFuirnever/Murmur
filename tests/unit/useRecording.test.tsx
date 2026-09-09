@@ -1595,13 +1595,17 @@ describe("[20260816_Test_BranchPush] useRecording — branch arcs", () => {
     expect(result.current.audioData).toBeNull();
   });
 
-  it("falls back to the raw text when the AI optimization times out", async () => {
-    // Capture the real timer before swapping: the armed 100ms callback must
-    // still fire on the real clock while the nested 60s race timeout runs on
-    // fake timers so the test does not wait a minute.
-    const realSetTimeout = globalThis.setTimeout.bind(globalThis);
+  it("falls back to the raw text when the orchestrator reports a timeout", async () => {
+    // [20260908_Fix_BatchReview_M2] T9④: the renderer 60s race is gone —
+    // timeout semantics come from the orchestrator's deadline matrix, which
+    // resolves {success:false, error} instead of the renderer abandoning
+    // the call. The hook falls back to the raw text via the existing
+    // failure path.
     const log = vi.fn().mockResolvedValue(undefined);
-    const processText = vi.fn(() => new Promise(() => undefined)); // never settles
+    const processText = vi.fn().mockResolvedValue({
+      success: false,
+      error: "AI请求超时（150秒），请尝试缩短文本或检查网络",
+    });
     const saveTranscription = vi.fn().mockResolvedValue({ success: true });
     const onAIOptimizationComplete = vi.fn();
     setElectronAPI({
@@ -1625,27 +1629,15 @@ describe("[20260816_Test_BranchPush] useRecording — branch arcs", () => {
       useRecording({ onAIOptimizationComplete }),
     );
     await startAndStop(result);
+    // The polish chain arms after a 100ms timeout — wait for it to START
+    // before waiting for completion.
     await waitFor(() => expect(result.current.isOptimizing).toBe(true));
-
-    vi.useFakeTimers();
-    try {
-      // Let the real 100ms callback run so the race timer becomes fake.
-      await act(async () => {
-        await new Promise<void>((resolve) => {
-          realSetTimeout(() => resolve(undefined), 150);
-        });
-      });
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(60000);
-      });
-    } finally {
-      vi.useRealTimers();
-    }
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
 
     expect(log).toHaveBeenCalledWith(
       "error",
-      "AI文本优化捕获到错误:",
-      expect.any(Error),
+      "AI文本优化失败:",
+      expect.objectContaining({ success: false }),
     );
     expect(saveTranscription).toHaveBeenCalledTimes(1);
     const saved = saveTranscription.mock.calls[0]![0] as Record<

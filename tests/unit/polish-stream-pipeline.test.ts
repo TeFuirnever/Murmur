@@ -340,3 +340,62 @@ describe("[20260907_Feat_235_StreamPipeline] orchestrator streaming branch", () 
     expect(finish).toBeDefined();
   });
 });
+
+// [20260908_Fix_BatchReview_M3] Reasoning-aware first-delta: a thinking
+// model streaming delta.reasoning for WELL past firstDeltaMs before any
+// content must survive (activity refreshes the window); a silent stream
+// still trips first_delta.
+describe("[20260908_Fix_BatchReview_M3] reasoning-aware first delta", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("survives when reasoning flows past firstDeltaMs before content", async () => {
+    const reasoningFrames = Array.from({ length: 40 }, (_, i) =>
+      new TextEncoder().encode(
+        `data: ${JSON.stringify({
+          id: "c",
+          choices: [{ delta: { reasoning: `思${i} ` }, finish_reason: null }],
+        })}\n\n`,
+      ),
+    );
+    const contentFrame = new TextEncoder().encode(
+      `data: ${JSON.stringify({
+        id: "c",
+        choices: [{ delta: { content: "正文" }, finish_reason: null }],
+      })}\n\n`,
+    );
+    const doneFrame = new TextEncoder().encode("data: [DONE]\n\n");
+    const queue = [...reasoningFrames, contentFrame, doneFrame];
+    // 40 frames × 25ms apart = 1s of reasoning BEFORE any content — well
+    // past firstDeltaMs(100), each frame inside the activity window so the
+    // reasoning-aware deadline keeps extending. The OLD start-anchored
+    // deadline would have tripped STREAM_FIRST_DELTA_TIMEOUT at t=100ms.
+    fetchMock.mockImplementationOnce(async () =>
+      sseResponse(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+        return queue.length > 0
+          ? { done: false, value: queue.shift() }
+          : { done: true };
+      }),
+    );
+    const notify = vi.fn();
+    const result = await runPolishOrchestrator(
+      MANAGERS() as never,
+      {
+        text: "原文",
+        mode: "optimize",
+        stream: {
+          requestId: "r-reasoning",
+          notify,
+          // Each reasoning frame arrives well within idleMs; the OLD code
+          // would still have killed this at firstDeltaMs from startedAt.
+          timeouts: { firstDeltaMs: 100, idleMs: 200 },
+        },
+      } as never,
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.text).toBe("正文");
+  });
+});

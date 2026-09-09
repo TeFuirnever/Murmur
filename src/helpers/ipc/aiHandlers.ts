@@ -235,6 +235,8 @@ function modelEndpointCandidates(baseUrl: string): string[] {
 const MODELS_MAX_ITEMS = 500;
 const MODELS_MAX_ID_BYTES = 200;
 const MODELS_MAX_BODY_BYTES = 512 * 1024;
+// [20260908_Fix_BatchReview_M8] Named per the no-magic-numbers rule.
+const LIST_MODELS_TIMEOUT_MS = 10_000;
 
 function isLocalBaseUrl(baseUrl: string): boolean {
   try {
@@ -377,9 +379,16 @@ async function consumePolishStream(
       null;
     while (true) {
       const stage = receivedFirst ? "streaming" : "awaiting_first";
-      const stageDeadline = receivedFirst
-        ? lastActivity + timeouts.idleMs
-        : startedAt + timeouts.firstDeltaMs;
+      // [20260908_Fix_BatchReview_M3] Reasoning-aware first-delta: the
+      // awaiting-first window measures from the LAST ACTIVITY, not from
+      // stream start. Thinking models stream delta.reasoning for well past
+      // 15s before any content (the T5 spike's ② warning; the exact
+      // profile of the 2026-08-15 production incident) — reasoning bytes
+      // refresh lastActivity, so a live-thinking model survives; a truly
+      // silent upstream still trips first_delta after 15 quiet seconds.
+      const stageDeadline =
+        lastActivity +
+        (receivedFirst ? timeouts.idleMs : timeouts.firstDeltaMs);
       const totalDeadline = startedAt + timeoutMs;
       const deadline = Math.min(stageDeadline, totalDeadline);
       const remainingMs = Math.max(deadline - Date.now(), 1);
@@ -397,21 +406,15 @@ async function consumePolishStream(
       // A read-win clears its deadline timer; a deadline-win keeps the
       // queued read alive for the next iteration (no orphaned reads).
       clearTimeout(timerId);
-      if (process.env.POLISH_MERGER_DEBUG) {
-        console.log(
-          "DBG raced kind:",
-          raced.kind,
-          "now-started:",
-          Date.now() - startedAt,
-        );
-      }
       if (raced.kind === "deadline") {
         if (Date.now() >= totalDeadline) {
           return failWith("AI 流式响应总时长超时", "STREAM_TOTAL_TIMEOUT");
         }
         const violation = streamDeadlineViolation(
           stage,
-          startedAt,
+          // [20260908_Fix_BatchReview_M3] Same base as the armed deadline
+          // above: activity-relative for awaiting_first.
+          receivedFirst ? startedAt : lastActivity,
           lastActivity,
           Date.now(),
           timeouts,
@@ -885,15 +888,40 @@ export async function runPolishOrchestrator(
       });
     }
 
+    // [20260908_Fix_BatchReview_M1] The response-headers timer cleared on
+    // arrival, so the non-streaming body read (JSON path — also where the
+    // degraded fallback routes streaming users, and the only bound for the
+    // AI_REVIEW entry) had NO deadline: a body-stalling gateway hung the
+    // invoke forever. Race the body reads against the same total budget
+    // the streaming path enforces.
+    const readBodyWithDeadline = <T>(read: () => Promise<T>): Promise<T> =>
+      Promise.race([
+        read(),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () =>
+              reject(
+                Object.assign(
+                  new Error(
+                    `AI请求超时（${Math.round(timeoutMs / 1000)}秒），请尝试缩短文本或检查网络`,
+                  ),
+                  { code: "TIMEOUT" },
+                ),
+              ),
+            timeoutMs,
+          ),
+        ),
+      ]);
+
     if (!response.ok) {
-      const errorText = await response.text();
+      const errorText = await readBodyWithDeadline(() => response.text());
       throw new Error(
         extractAIErrorMessage(response, errorText, logger) ||
           `AI服务请求失败 (${response.status})`,
       );
     }
 
-    const data = (await response.json()) as {
+    const data = (await readBodyWithDeadline(() => response.json())) as {
       choices?: Array<{
         message?: { content?: string };
         finish_reason?: string;
@@ -1302,7 +1330,7 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
         try {
           const response = await fetch(candidateUrl, {
             headers,
-            signal: AbortSignal.timeout(10_000),
+            signal: AbortSignal.timeout(LIST_MODELS_TIMEOUT_MS),
           });
           if (response.status === 404 && i < candidates.length - 1) {
             continue;

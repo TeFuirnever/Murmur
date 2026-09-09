@@ -231,12 +231,17 @@ export default function TranscriptionResult({
           // generic message that hides the actionable cause.
           // [20260907_Fix_236_Review] Hook sentinels map to localized text
           // here (the hook layer carries no user-visible strings).
+          // [20260908_Fix_BatchReview_M4] Machine sentinels map to localized
+          // text; unknown sentinels fall through to the generic message so
+          // raw English never reaches the UI.
           const machineError = result?.error;
-          const localizedError =
-            machineError === "STREAM_INVOKE_FAILED"
-              ? t("transcription.polishInvokeFailed", "AI处理失败，请重试")
-              : machineError ||
-                t("transcription.polishFailed", "AI处理失败，请重试");
+          const isMachineSentinel =
+            machineError === "STREAM_INVOKE_FAILED" ||
+            machineError === "STREAM_IN_FLIGHT";
+          const localizedError = isMachineSentinel
+            ? t("transcription.polishInvokeFailed", "AI处理失败，请重试")
+            : machineError ||
+              t("transcription.polishFailed", "AI处理失败，请重试");
           setOptimizeError(localizedError);
         }
       } else if (onAIOptimize) {
