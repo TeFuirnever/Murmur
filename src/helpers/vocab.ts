@@ -47,7 +47,12 @@ export function filterVocabForInjection(
   pendingText: string,
   entries: VocabEntry[],
 ): VocabEntry[] {
-  const matching = entries.filter((e) => pendingText.includes(e.wrong));
+  // [20260908_Fix_240_Review] Defense-in-depth per the hotwords doctrine:
+  // re-validate at the injection read — a corrupted DB row with an empty
+  // wrong word would otherwise match EVERY text ("".includes semantics).
+  const matching = entries.filter(
+    (e) => e.wrong.length > 0 && pendingText.includes(e.wrong),
+  );
   if (matching.length <= VOCAB_MAX_INJECTED) return matching;
   return matching.slice(matching.length - VOCAB_MAX_INJECTED);
 }

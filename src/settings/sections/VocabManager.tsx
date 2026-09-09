@@ -46,8 +46,15 @@ export const VocabManager: React.FC = () => {
     }
   };
 
+  // [20260908_Fix_240_Review] Uniform failure surface: the rate limiter
+  // resolves {success:false} instead of rejecting, so EVERY mutation must
+  // check the envelope or fail invisibly.
   const remove = async (target: string) => {
-    await window.electronAPI?.deleteVocabCorrection?.(target);
+    const result = await window.electronAPI?.deleteVocabCorrection?.(target);
+    if (!result?.success) {
+      toast.error(t("settings.general.vocabAddFailed", "添加失败"));
+      return;
+    }
     await reload();
   };
 
@@ -59,7 +66,11 @@ export const VocabManager: React.FC = () => {
     ) {
       return;
     }
-    await window.electronAPI?.clearVocabCorrections?.();
+    const result = await window.electronAPI?.clearVocabCorrections?.();
+    if (!result?.success) {
+      toast.error(t("settings.general.vocabAddFailed", "添加失败"));
+      return;
+    }
     await reload();
   };
 
@@ -118,8 +129,8 @@ export const VocabManager: React.FC = () => {
           {t("settings.general.vocabEmpty", "暂无修正词对")}
         </p>
       ) : (
-        <ul className="space-y-1">
-          {entries.map((e) => (
+        <ul className="space-y-1 max-h-48 overflow-y-auto">
+          {[...entries].reverse().map((e) => (
             <li
               key={e.wrong}
               className="flex items-center gap-2 text-sm text-[#1d1d1f] dark:text-[#f5f5f7]"

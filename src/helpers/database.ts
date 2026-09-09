@@ -249,7 +249,7 @@ class DatabaseManager {
 
     // [20260908_Feat_240_VocabCorrections] T13: the vocabulary corrections
     // table — wrong-word UNIQUE (re-insert replaces + touches recency),
-    // FIFO-evicted at VOCAB_MAX_ENTRIES by the add path.
+    // Recency-evicted (LRU with touch) at VOCAB_MAX_ENTRIES by the add path.
     this.db!.exec(`
       CREATE TABLE IF NOT EXISTS vocabulary (
         wrong TEXT PRIMARY KEY,
@@ -591,7 +591,11 @@ class DatabaseManager {
   // [20260908_Feat_240_VocabCorrections] T13: upsert a correction pair.
   // Re-inserting an existing wrong word replaces the pair and touches
   // recency (used_at). Evicts the oldest rows beyond the FIFO cap.
-  addVocabCorrection(wrong: string, right: string): void {
+  addVocabCorrection(wrongRaw: string, rightRaw: string): void {
+    // [20260908_Fix_240_Review] Trim at the write boundary — whitespace-only
+    // terms would pass length checks but match nothing meaningful.
+    const wrong = wrongRaw.trim();
+    const right = rightRaw.trim();
     if (!isValidVocabTerm(wrong) || !isValidVocabTerm(right)) {
       throw new Error("修正表词对不合法（空/过长/含控制字符或孤立代理项）");
     }

@@ -5,7 +5,7 @@
 // eviction at 1000 entries. Injection filter: ≤20 entries by most-recent
 // use, ONLY entries whose wrong word appears in the pending text, wrapped
 // inside the XML envelope so the injection guard covers it.
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -24,6 +24,12 @@ beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vocab-test-"));
   db = new DatabaseManager();
   db.initialize(tmpDir);
+});
+
+afterEach(() => {
+  // [20260908_Fix_240_Review] DB-test convention: close + rmSync per run.
+  db.close();
+  fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
 describe("[20260908_Feat_240_VocabCorrections] DB layer", () => {
@@ -224,7 +230,8 @@ describe("[20260908_Feat_240_RewriteReview] RewriteReviewPanel", () => {
     fireEvent.click(screen.getByTestId("rewrite-annotate"));
     fireEvent.click(screen.getByRole("button", { name: "记入修正表" }));
     expect(onAddCorrection).not.toHaveBeenCalled();
-    // The form collapsed without persisting anything.
-    expect(screen.queryByTestId("correction-form")).not.toBeInTheDocument();
+    // [20260908_Fix_240_Review] A half-filled/empty submit keeps the form
+    // open with its contents (no silent input loss).
+    expect(screen.getByTestId("correction-form")).toBeInTheDocument();
   });
 });

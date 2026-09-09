@@ -30,10 +30,11 @@ export const RewriteReviewPanel: React.FC<RewriteReviewPanelProps> = ({
   const [right, setRight] = React.useState("");
   const [annotating, setAnnotating] = React.useState(false);
 
+  // [20260908_Fix_240_Review] An invalid (half-filled) submit keeps the
+  // form open with its contents — only a successful save collapses it.
   const submitPair = () => {
-    if (wrong.trim() && right.trim()) {
-      onAddCorrection(wrong.trim(), right.trim());
-    }
+    if (!wrong.trim() || !right.trim()) return;
+    onAddCorrection(wrong.trim(), right.trim());
     setWrong("");
     setRight("");
     setAnnotating(false);

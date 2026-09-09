@@ -141,8 +141,12 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
         success: true,
         entries: databaseManager.listVocabCorrections(),
       };
-    } catch {
-      return { success: false, entries: [] };
+    } catch (error) {
+      return {
+        success: false,
+        entries: [],
+        error: (error as Error).message,
+      };
     }
   });
 
