@@ -2021,3 +2021,77 @@ describe("[20260908_Feat_333_VocabInjection] corrections injection", () => {
     expect(noVocabMsg).not.toContain("修正表");
   });
 });
+
+// [20260909_Fix_333_Review] Custom-arm directive placement + $&-safe replacer.
+describe("[20260909_Fix_333_Review] injection placement regressions", () => {
+  it("custom-template arm injects the directive INSIDE the envelope", async () => {
+    const handlers: Record<string, (...args: unknown[]) => unknown> = {};
+    const ipcMain = {
+      handle: vi.fn((channel: string, fn: (...args: unknown[]) => unknown) => {
+        handlers[channel] = fn;
+      }),
+    };
+    const prevFetch = global.fetch;
+    global.fetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": "application/json" }),
+      json: async () => ({
+        choices: [{ message: { content: "润色结果" }, finish_reason: "stop" }],
+      }),
+    })) as unknown as typeof fetch;
+    const db = {
+      getSetting: vi.fn(async (key: string) =>
+        key === "ai_base_url"
+          ? "https://api.example.com/v1"
+          : key === "ai_api_key"
+            ? "sk"
+            : key === "ai_model"
+              ? "gpt-x"
+              : null,
+      ),
+      listVocabCorrections: vi.fn(() => [{ wrong: "会义室", right: "会议室" }]),
+    };
+    aiHandlersNS.register(
+      ipcMain as never,
+      {
+        databaseManager: db,
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        templatesDir: "/tmp/tpl-333",
+      } as never,
+    );
+
+    // Stub a custom template via the templatesDir cache: register() reads
+    // the dir; simplest reliable route is monkeypatching getCachedTemplates
+    // behavior via fs — instead exercise buildPrompt directly for placement
+    // (the orchestrator wiring is covered above).
+    global.fetch = prevFetch;
+    const { buildPrompt } = await import("../../src/helpers/aiPrompts");
+    const result = buildPrompt("custom-with-envelope", "我们在会义室开会", {
+      customTemplates: [
+        {
+          name: "custom-with-envelope",
+          label: "模板",
+          system: "系统",
+          user: "整理：<transcript>\n{text}\n</transcript>",
+        },
+      ],
+      vocabCorrections: [{ wrong: "会义室", right: "会议室" }],
+    });
+    const closeIdx = result.user.lastIndexOf("</transcript>");
+    const dirIdx = result.user.indexOf("修正表");
+    expect(closeIdx).toBeGreaterThan(-1);
+    expect(dirIdx).toBeGreaterThan(-1);
+    expect(dirIdx).toBeLessThan(closeIdx);
+  });
+
+  it("built-in arm directive survives $&-family sequences in vocab terms", async () => {
+    const { buildPrompt } = await import("../../src/helpers/aiPrompts");
+    const result = buildPrompt("optimize", "文本", {
+      vocabCorrections: [{ wrong: "X", right: "cost is $& total" }],
+    });
+    // The $& must appear literally — no expansion into the matched close tag.
+    expect(result.user).toContain("cost is $& total");
+    expect(result.user.match(/<\/transcript>/g)).toHaveLength(1);
+  });
+});

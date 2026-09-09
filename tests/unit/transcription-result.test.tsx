@@ -934,7 +934,8 @@ describe("TranscriptionResult — post-polish review staging (#333)", () => {
       ...extra,
     };
   }
-  function mountWith(mode: string, api: Record<string, unknown>) {
+  // mode selects the panel class via the mode selector after mount.
+  function mountWith(_mode: string, api: Record<string, unknown>) {
     (globalThis.window as unknown as { electronAPI?: unknown }).electronAPI =
       api;
     const onCopy = vi.fn();

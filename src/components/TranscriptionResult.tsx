@@ -10,6 +10,8 @@ import { usePolishStream } from "../hooks/usePolishStream";
 // comparison with correction annotation.
 import { DiffReviewPanel } from "./DiffReviewPanel";
 import { RewriteReviewPanel } from "./RewriteReviewPanel";
+// [20260909_Fix_333_Review] Shared minimal-edit mode set.
+import { MINIMAL_EDIT_MODES } from "../helpers/polish-diff";
 import { LoadingDots } from "./ui/loading-dots";
 import ExportPanel from "./ExportPanel";
 import ProcessingPanel from "./ProcessingPanel";
@@ -80,8 +82,9 @@ export default function TranscriptionResult({
     original: string;
     revised: string;
   } | null>(null);
+  // [20260909_Fix_333_Review] Shared set — see polish-diff.ts.
   const isMinimalEditMode = (modeName: string): boolean =>
-    ["optimize", "optimize_long", "format", "correct"].includes(modeName);
+    MINIMAL_EDIT_MODES.has(modeName);
   const [expandedSegment, setExpandedSegment] = React.useState<
     string | number | null
   >(null);
@@ -278,7 +281,9 @@ export default function TranscriptionResult({
         polishedText = result;
         setOptimizedText(result);
         setPendingReview({
-          modeClass: "rewrite",
+          modeClass: isMinimalEditMode(currentMode)
+            ? "minimal-edit"
+            : "rewrite",
           original: text,
           revised: result,
         });
@@ -535,10 +540,9 @@ export default function TranscriptionResult({
               onApply={(merged) => {
                 setOptimizedText(merged);
                 if (id != null) {
-                  void window.electronAPI?.updateTranscription?.(id, {
-                    processed_text: merged,
-                    text: merged,
-                  });
+                  // [20260909_Fix_333_Review] Route through the hardened
+                  // writer — void-discard regressed #314's toast on failure.
+                  void persistPolishedText(id, merged);
                 }
                 setPendingReview(null);
               }}
@@ -551,25 +555,28 @@ export default function TranscriptionResult({
               original={pendingReview.original}
               rewritten={pendingReview.revised}
               onAddCorrection={(wrong, right) => {
-                void window.electronAPI?.addVocabCorrection?.(wrong, right);
+                // [20260909_Fix_333_Review] Surface IPC failures, never
+                // discard them silently.
+                window.electronAPI
+                  ?.addVocabCorrection?.(wrong, right)
+                  .catch((error: unknown) => {
+                    console.warn("修正表写入失败:", error);
+                    toast.warning(
+                      t("transcription.vocabSaveFailed", "修正词对保存失败"),
+                    );
+                  });
               }}
               onAccept={(finalText) => {
                 setOptimizedText(finalText);
                 if (id != null) {
-                  void window.electronAPI?.updateTranscription?.(id, {
-                    processed_text: finalText,
-                    text: finalText,
-                  });
+                  void persistPolishedText(id, finalText);
                 }
                 setPendingReview(null);
               }}
               onRevert={() => {
                 setOptimizedText(null);
                 if (id != null) {
-                  void window.electronAPI?.updateTranscription?.(id, {
-                    processed_text: pendingReview.original,
-                    text: pendingReview.original,
-                  });
+                  void persistPolishedText(id, pendingReview.original);
                 }
                 setPendingReview(null);
               }}

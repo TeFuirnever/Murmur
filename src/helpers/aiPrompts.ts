@@ -200,10 +200,19 @@ export function buildPrompt(
     // orchestrator's absolute char cap; the token-budget clamp intentionally
     // does not apply to rewrite-class template outputs.
     user = `${user}\n${INJECTION_GUARD}`;
-    // [20260908_Feat_333_VocabInjection] Corrections ride inside the
-    // envelope after the guard (custom-template arm).
+    // [20260909_Fix_333_Review] Corrections ride INSIDE the envelope in the
+    // custom arm too: inject before the LAST close tag when the rendered
+    // template has one; a template without an envelope keeps the directive
+    // appended after the guard (nothing to be inside of).
     if (vocabCorrections && vocabCorrections.length > 0) {
-      user = `${user}\n${buildVocabDirective(vocabCorrections)}`;
+      const directive = buildVocabDirective(vocabCorrections);
+      const lastClose = user.lastIndexOf(TRANSCRIPT_CLOSE_TAG);
+      if (lastClose !== -1) {
+        user =
+          user.slice(0, lastClose) + `${directive}\n` + user.slice(lastClose);
+      } else {
+        user = `${user}\n${directive}`;
+      }
     }
     return { system: custom.system, user };
   }
@@ -594,9 +603,11 @@ export function buildPrompt(
   // block too.
   if (vocabCorrections && vocabCorrections.length > 0) {
     const directive = buildVocabDirective(vocabCorrections);
+    // [20260909_Fix_333_Review] Function-form replacer: vocab terms may
+    // contain "$&"-family sequences that a string replacement would expand.
     result.user = result.user.replace(
       new RegExp(`${TRANSCRIPT_CLOSE_TAG}$`),
-      `${directive}\n${TRANSCRIPT_CLOSE_TAG}`,
+      () => `${directive}\n${TRANSCRIPT_CLOSE_TAG}`,
     );
   }
   return result;

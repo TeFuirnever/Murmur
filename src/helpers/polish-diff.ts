@@ -21,6 +21,16 @@
 // (transcript-length texts).
 import DiffMatchPatch from "diff-match-patch";
 
+// [20260909_Fix_333_Review] Single source for the minimal-edit mode set —
+// consumed by the orchestrator's token clamp AND the renderer's panel
+// routing, so a new mode cannot drift between the two.
+export const MINIMAL_EDIT_MODES: ReadonlySet<string> = new Set([
+  "optimize",
+  "optimize_long",
+  "format",
+  "correct",
+]);
+
 /** Above this input size the diff degrades to a single whole-text hunk. */
 export const DIFF_MAX_INPUT_CHARS = 200_000;
 /** Diff computation budget in seconds (dmp's Diff_Timeout unit). */
