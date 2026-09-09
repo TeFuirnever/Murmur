@@ -80,6 +80,13 @@ export const preloadApi: ElectronAPI = {
   // [20260907_Feat_235_StreamPipeline] T8: streaming abort + chunk push.
   abortPolish: (requestId: string) =>
     ipcRenderer.invoke(C.AI.POLISH_ABORT, requestId),
+  // [20260908_Feat_240_VocabCorrections] T13 vocabulary CRUD.
+  listVocabCorrections: () => ipcRenderer.invoke(C.AI.VOCAB_LIST),
+  addVocabCorrection: (wrong: string, right: string) =>
+    ipcRenderer.invoke(C.AI.VOCAB_ADD, wrong, right),
+  deleteVocabCorrection: (wrong: string) =>
+    ipcRenderer.invoke(C.AI.VOCAB_DELETE, wrong),
+  clearVocabCorrections: () => ipcRenderer.invoke(C.AI.VOCAB_CLEAR),
   onPolishChunk: (
     callback: (chunk: import("./src/types/ipc").PolishChunk) => void,
   ) =>

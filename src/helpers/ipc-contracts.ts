@@ -68,6 +68,12 @@ export const AI = {
   // polish run by requestId. Rate-limit exempt by design (an abort must
   // never be throttled); ownership is checked against the initiating sender.
   POLISH_ABORT: "ai-polish-abort",
+  // [20260908_Feat_240_VocabCorrections] T13: vocabulary corrections CRUD
+  // (settings-page management; the injection read is server-side).
+  VOCAB_LIST: "vocab-list",
+  VOCAB_ADD: "vocab-add",
+  VOCAB_DELETE: "vocab-delete",
+  VOCAB_CLEAR: "vocab-clear",
   GET_MODES: "get-ai-modes",
   GET_PROVIDER_PRESETS: "get-ai-provider-presets",
   DETECT_LOCAL_MODELS: "detect-local-models",

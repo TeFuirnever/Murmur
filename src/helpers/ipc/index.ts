@@ -45,6 +45,11 @@ function wrapWithRateLimits(ipcMain: Electron.IpcMain): Electron.IpcMain {
     // [20260907_Feat_233_ListModels] Model-list derivation (T6): small
     // quota — it fires on base_url edits, not per keystroke.
     [C.AI.LIST_MODELS]: { maxCalls: 10, windowMs: 60_000 },
+    // [20260908_Feat_240_VocabCorrections] T13 settings-page CRUD.
+    [C.AI.VOCAB_LIST]: { maxCalls: 30, windowMs: 60_000 },
+    [C.AI.VOCAB_ADD]: { maxCalls: 30, windowMs: 60_000 },
+    [C.AI.VOCAB_DELETE]: { maxCalls: 30, windowMs: 60_000 },
+    [C.AI.VOCAB_CLEAR]: { maxCalls: 5, windowMs: 60_000 },
     [C.TRANSCRIPTION.SAVE]: { maxCalls: 30, windowMs: 60_000 },
     // [20260906_Feat_TranscriptionUpdate] Manual polish write-back (spec #193
     // T1, ticket #228): fires once per polish action, so it carries the same
