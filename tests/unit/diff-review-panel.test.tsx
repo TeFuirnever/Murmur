@@ -15,6 +15,7 @@ vi.mock("react-i18next", () => ({
 }));
 
 import { DiffReviewPanel } from "../../src/components/DiffReviewPanel";
+import { DIFF_MAX_INPUT_CHARS } from "../../src/helpers/polish-diff";
 
 const ORIG = [
   "我们明天上午十点在会义室开会，",
@@ -56,7 +57,10 @@ describe("[20260908_Feat_239_DiffReview] DiffReviewPanel", () => {
     ).toBeGreaterThanOrEqual(2);
   });
 
-  it("shows the 无改动 state for identical texts", () => {
+  // [20260908_Fix_239_Review] moved above its usage
+  const MOOD = "这个方案吧，我觉得还挺不错的呀。";
+
+  it("shows the no-change state for identical texts", () => {
     render(
       <DiffReviewPanel
         original={MOOD}
@@ -67,7 +71,6 @@ describe("[20260908_Feat_239_DiffReview] DiffReviewPanel", () => {
     );
     expect(screen.getByText("无改动")).toBeInTheDocument();
   });
-  const MOOD = "这个方案吧，我觉得还挺不错的呀。";
 
   it("toggling a hunk updates the merged preview", () => {
     render(
@@ -126,8 +129,8 @@ describe("[20260908_Feat_239_DiffReview] DiffReviewPanel", () => {
   it("oversized input renders the whole-text fallback", () => {
     render(
       <DiffReviewPanel
-        original={"甲".repeat(200_001)}
-        revised={"乙".repeat(200_001)}
+        original={"甲".repeat(DIFF_MAX_INPUT_CHARS + 1)}
+        revised={"乙".repeat(DIFF_MAX_INPUT_CHARS + 1)}
         onApply={onApply}
         onCancel={onCancel}
       />,

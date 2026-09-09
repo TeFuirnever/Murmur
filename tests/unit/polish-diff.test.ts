@@ -35,9 +35,6 @@ describe("[20260908_Feat_239_DiffReview] buildHunks", () => {
   it("groups filler-removal edits into hunks with original/revised pairs", () => {
     const hunks = buildHunks(FILLER_ORIG, FILLER_POLISHED);
     expect(hunks.length).toBeGreaterThan(0);
-    for (const h of hunks) {
-      expect(h.type === "modified" || h.type === "unchanged").toBe(true);
-    }
     const modified = hunks.filter((h) => h.type === "modified");
     expect(modified.length).toBeGreaterThanOrEqual(2);
     // The homophone fix 場所: 会义室 → 会议室
@@ -48,21 +45,14 @@ describe("[20260908_Feat_239_DiffReview] buildHunks", () => {
     expect(filler?.revised.includes("嗯，")).toBe(false);
   });
 
-  it("preserves unchanged context between hunks", () => {
-    // The third line differs (我我我 → 我), but the unchanged PARTS of a
-    // modified line-pair stay addressable: the filler line's revision keeps
-    // the shared content minus only the removed filler.
-    const hunks = buildHunks(FILLER_ORIG, FILLER_POLISHED);
-    const filler = hunks.find((h) => h.original.includes("嗯，"));
-    expect(filler?.revised).toContain("记得带上周报");
-    // And a fully-identical paragraph survives as an unchanged hunk.
-    const hunks2 = buildHunks(
+  it("skips fully-identical lines (no hunk for unchanged context)", () => {
+    const hunks = buildHunks(
       "同样的一行\n变了的一行",
       "同样的一行\n变化的一行",
     );
-    expect(hunks2.find((h) => h.type === "unchanged")?.original).toContain(
-      "同样的一行",
-    );
+    expect(hunks).toHaveLength(1);
+    expect(hunks[0]!.original).toContain("变了的一行");
+    expect(hunks[0]!.start).toBe("同样的一行\n".length);
   });
 
   it("handles homophone punctuation fixes as minimal hunks", () => {
@@ -81,6 +71,42 @@ describe("[20260908_Feat_239_DiffReview] buildHunks", () => {
     expect(hunks[0]!.revised).toBe(huge + "尾");
   });
 
+  // [20260908_Fix_239_ReviewByteDrift] The hunk model must represent blank
+  // lines, trailing newlines and CRLF — reject-all is byte-identical to the
+  // original, accept-all to the revised, on ALL shapes (review HIGH ×3).
+  it("reject-all is byte-identical for blank-line / trailing-newline / CRLF shapes", () => {
+    const shapes: Array<[string, string]> = [
+      ["第一行\n第二行\n", "第一行\n第二行"],
+      ["段一\n\n段二", "段一\n段二"],
+      ["\n开头", "开头"],
+      ["甲\r\n乙\r\n", "甲\r\n乙"],
+      ["一\n二\n三", "一\n二三"],
+    ];
+    for (const [orig, rev] of shapes) {
+      const hunks = buildHunks(orig, rev);
+      const rejected = mergeHunkDecisions(
+        orig,
+        hunks.map((h) => ({ index: h.index, accepted: false })),
+        hunks,
+      );
+      expect(rejected, JSON.stringify([orig, rev])).toBe(orig);
+      const accepted = mergeHunkDecisions(
+        orig,
+        hunks.map((h) => ({ index: h.index, accepted: true })),
+        hunks,
+      );
+      expect(accepted, JSON.stringify([orig, rev])).toBe(rev);
+    }
+  });
+
+  it("blank-line-only differences produce a visible modified hunk (not 无改动)", () => {
+    const hunks = buildHunks("a\n\nb", "a\nb");
+    expect(hunks.some((h) => h.type === "modified")).toBe(true);
+    expect(buildHunks("a\n", "a").some((h) => h.type === "modified")).toBe(
+      true,
+    );
+  });
+
   it("is deterministic (idempotent on re-run)", () => {
     const a = buildHunks(FILLER_ORIG, FILLER_POLISHED);
     const b = buildHunks(FILLER_ORIG, FILLER_POLISHED);
@@ -92,6 +118,7 @@ describe("[20260908_Feat_239_DiffReview] mergeHunkDecisions", () => {
   it("accept-all yields the polished text", () => {
     const hunks = buildHunks(FILLER_ORIG, FILLER_POLISHED);
     const merged = mergeHunkDecisions(
+      FILLER_ORIG,
       hunks.map((h) => ({ index: h.index, accepted: true })),
       hunks,
     );
@@ -101,6 +128,7 @@ describe("[20260908_Feat_239_DiffReview] mergeHunkDecisions", () => {
   it("reject-all yields the original text", () => {
     const hunks = buildHunks(FILLER_ORIG, FILLER_POLISHED);
     const merged = mergeHunkDecisions(
+      FILLER_ORIG,
       hunks.map((h) => ({ index: h.index, accepted: false })),
       hunks,
     );
@@ -117,7 +145,7 @@ describe("[20260908_Feat_239_DiffReview] mergeHunkDecisions", () => {
       index: h.index,
       accepted: h === acceptRoom,
     }));
-    const merged = mergeHunkDecisions(decisions, hunks);
+    const merged = mergeHunkDecisions(FILLER_ORIG, decisions, hunks);
     expect(merged).toContain("会议室");
     expect(merged).toContain("嗯，");
     expect(merged).not.toContain("会义室");
@@ -128,10 +156,20 @@ describe("[20260908_Feat_239_DiffReview] mergeHunkDecisions", () => {
     // force whole-text shape via one-char texts is not oversized; use API
     const whole = buildHunks("x".repeat(DIFF_MAX_INPUT_CHARS + 1), "y");
     expect(whole[0]!.type).toBe("whole-text");
-    expect(mergeHunkDecisions([{ index: 0, accepted: true }], whole)).toBe("y");
-    expect(mergeHunkDecisions([{ index: 0, accepted: false }], whole)).toBe(
-      "x".repeat(DIFF_MAX_INPUT_CHARS + 1),
-    );
+    expect(
+      mergeHunkDecisions(
+        "x".repeat(DIFF_MAX_INPUT_CHARS + 1),
+        [{ index: 0, accepted: true }],
+        whole,
+      ),
+    ).toBe("y");
+    expect(
+      mergeHunkDecisions(
+        "x".repeat(DIFF_MAX_INPUT_CHARS + 1),
+        [{ index: 0, accepted: false }],
+        whole,
+      ),
+    ).toBe("x".repeat(DIFF_MAX_INPUT_CHARS + 1));
     void hunks;
   });
 });
