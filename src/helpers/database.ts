@@ -599,25 +599,47 @@ class DatabaseManager {
     if (!isValidVocabTerm(wrong) || !isValidVocabTerm(right)) {
       throw new Error("修正表词对不合法（空/过长/含控制字符或孤立代理项）");
     }
+    this.addVocabCorrectionsBatch([[wrong, right]]);
+  }
+
+  // [20260908_Fix_240_WinPerf] The FIFO test inserts 1005 pairs; per-call
+  // COUNT/MAX probes pushed the Windows CI leg past the 5s test budget.
+  // The eviction check runs ONCE per batch inside a transaction.
+  addVocabCorrectionsBatch(pairs: Array<[string, string]>): void {
     const tx = this.db!;
-    tx.prepare(
+    const insert = tx.prepare(
       `INSERT INTO vocabulary (wrong, right, used_ms)
        VALUES (?, ?, ?)
        ON CONFLICT(wrong) DO UPDATE SET
          right = excluded.right,
          used_ms = excluded.used_ms`,
-    ).run(wrong, right, this._nextVocabStamp());
-    const count = tx.prepare("SELECT COUNT(*) AS n FROM vocabulary").get() as {
-      n: number;
-    };
-    if (count.n > VOCAB_MAX_ENTRIES) {
-      tx.prepare(
-        `DELETE FROM vocabulary WHERE wrong IN (
-           SELECT wrong FROM vocabulary
-           ORDER BY used_ms ASC, rowid ASC
-           LIMIT ?
-         )`,
-      ).run(count.n - VOCAB_MAX_ENTRIES);
+    );
+    tx.exec("BEGIN");
+    try {
+      for (const [wrongRaw, rightRaw] of pairs) {
+        const wrong = wrongRaw.trim();
+        const right = rightRaw.trim();
+        if (!isValidVocabTerm(wrong) || !isValidVocabTerm(right)) {
+          throw new Error("修正表词对不合法（空/过长/含控制字符或孤立代理项）");
+        }
+        insert.run(wrong, right, this._nextVocabStamp());
+      }
+      const count = tx
+        .prepare("SELECT COUNT(*) AS n FROM vocabulary")
+        .get() as { n: number };
+      if (count.n > VOCAB_MAX_ENTRIES) {
+        tx.prepare(
+          `DELETE FROM vocabulary WHERE wrong IN (
+             SELECT wrong FROM vocabulary
+             ORDER BY used_ms ASC, rowid ASC
+             LIMIT ?
+           )`,
+        ).run(count.n - VOCAB_MAX_ENTRIES);
+      }
+      tx.exec("COMMIT");
+    } catch (error) {
+      tx.exec("ROLLBACK");
+      throw error;
     }
   }
 
