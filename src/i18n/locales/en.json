@@ -367,5 +367,13 @@
     "cancelPolish": "Cancel",
     "polishInvokeFailed": "AI processing failed, please retry",
     "polishFailed": "AI processing failed, please retry"
+  },
+  "diff": {
+    "noChanges": "No changes",
+    "accept": "Accept",
+    "reject": "Reject",
+    "apply": "Apply changes",
+    "discard": "Discard changes",
+    "emptySide": "(empty)"
   }
 }
