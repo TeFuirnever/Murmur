@@ -367,5 +367,13 @@
     "cancelPolish": "取消",
     "polishInvokeFailed": "AI处理失败，请重试",
     "polishFailed": "AI处理失败，请重试"
+  },
+  "diff": {
+    "noChanges": "无改动",
+    "accept": "接受",
+    "reject": "拒绝",
+    "apply": "应用修改",
+    "discard": "放弃修改",
+    "emptySide": "（空）"
   }
 }
