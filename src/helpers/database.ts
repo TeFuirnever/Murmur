@@ -525,6 +525,16 @@ class DatabaseManager {
     return runStmt(stmt, key, serialized);
   }
 
+  // [20260910_Feat_237_StreamDegradation] Per-key delete for the T10
+  // degradation memory (reset + oldest-first eviction). The settings table
+  // previously only had a delete-ALL; deleting by key keeps tombstones out
+  // of the store.
+  deleteSetting(key: string): RunResult {
+    const stmt = this.db!.prepare("DELETE FROM settings WHERE key = ?");
+    return runStmt(stmt, key);
+  }
+  // [20260910_Feat_237_StreamDegradation] END
+
   getSetting(key: string, defaultValue: unknown = null): unknown {
     const stmt = this.db!.prepare("SELECT value FROM settings WHERE key = ?");
     // [20260726_TechDebt_TypedRows] Using getRow helper instead of cast

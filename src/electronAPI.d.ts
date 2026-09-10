@@ -87,6 +87,18 @@ export interface ElectronAPI {
   ) => Promise<OperationResult>;
   deleteVocabCorrection: (wrong: string) => Promise<OperationResult>;
   clearVocabCorrections: () => Promise<OperationResult>;
+  // [20260910_Feat_237_StreamDegradation] T10 degradation-memory view/reset.
+  listStreamDegradations: () => Promise<{
+    success: boolean;
+    entries: Array<{ baseUrl: string; at: number }>;
+    error?: string;
+  }>;
+  resetStreamDegradations: () => Promise<
+    OperationResult & {
+      removed?: number;
+    }
+  >;
+  // [20260910_Feat_237_StreamDegradation] END
   onPolishChunk: (callback: (chunk: PolishChunk) => void) => () => void;
   getAIModes: () => Promise<AIMode[]>;
   getAIProviderPresets: () => Promise<AIProviderPreset[]>;

@@ -50,6 +50,9 @@ function wrapWithRateLimits(ipcMain: Electron.IpcMain): Electron.IpcMain {
     [C.AI.VOCAB_ADD]: { maxCalls: 30, windowMs: 60_000 },
     [C.AI.VOCAB_DELETE]: { maxCalls: 30, windowMs: 60_000 },
     [C.AI.VOCAB_CLEAR]: { maxCalls: 5, windowMs: 60_000 },
+    // [20260910_Feat_237_StreamDegradation] T10 settings-page view/reset.
+    [C.AI.STREAM_DEGRADATION_LIST]: { maxCalls: 30, windowMs: 60_000 },
+    [C.AI.STREAM_DEGRADATION_RESET]: { maxCalls: 5, windowMs: 60_000 },
     [C.TRANSCRIPTION.SAVE]: { maxCalls: 30, windowMs: 60_000 },
     // [20260906_Feat_TranscriptionUpdate] Manual polish write-back (spec #193
     // T1, ticket #228): fires once per polish action, so it carries the same

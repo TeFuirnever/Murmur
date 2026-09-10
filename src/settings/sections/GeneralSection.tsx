@@ -7,6 +7,8 @@ import type { SettingsState } from "../useSettings";
 import { buildAccelerator, formatAccelerator } from "../hotkeyRecorder";
 // [20260908_Feat_240_VocabCorrections] T13: corrections-table management.
 import { VocabManager } from "./VocabManager";
+// [20260910_Feat_237_StreamDegradation] T10 degradation-memory panel.
+import { StreamDegradationManager } from "./StreamDegradationManager";
 
 interface GeneralSectionProps {
   settings: SettingsState;
@@ -330,6 +332,8 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
       </div>
       {/* [20260908_Feat_240_VocabCorrections] T13 corrections management. */}
       <VocabManager />
+      {/* [20260910_Feat_237_StreamDegradation] T10 degradation memory. */}
+      <StreamDegradationManager />
     </div>
   );
 };

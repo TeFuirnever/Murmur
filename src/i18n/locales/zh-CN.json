@@ -120,7 +120,14 @@
       "vocabCount": "{{count}} 条词对",
       "vocabAddFailed": "添加失败",
       "vocabClearConfirm": "确定清空全部修正词对吗？",
-      "vocabDelete": "删除"
+      "vocabDelete": "删除",
+      "streamDegradationTitle": "流式降级记忆",
+      "streamDegradationHint": "当某个 AI 网关不支持流式响应时，Murmur 会记住它，之后直接发送整段请求，不再每次先失败一次。本地地址不会被记录。",
+      "streamDegradationEmpty": "暂无记录",
+      "streamDegradationCount": "{{count}} 个网关",
+      "streamDegradationReset": "重置",
+      "streamDegradationResetConfirm": "确定重置全部流式降级记忆吗？",
+      "streamDegradationResetFailed": "重置失败"
     },
     "quickStart": {
       "title": "快速开始",

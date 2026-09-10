@@ -1,5 +1,10 @@
 // [20260724_TS_BigBang_SettingsHandlers] Migrated from .js to .ts (ADR-010).
 import * as C from "../ipc-contracts";
+// [20260910_Feat_237_StreamDegradation] T10 memory list/reset handlers.
+import {
+  listStreamDegradations,
+  resetStreamDegradations,
+} from "../streamDegradation";
 
 interface DatabaseManager {
   getSetting(key: string, defaultValue?: unknown): unknown;
@@ -176,6 +181,34 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
       return { success: false, error: (error as Error).message };
     }
   });
+
+  // [20260910_Feat_237_StreamDegradation] T10: view/reset the
+  // stream-degradation memory from the settings page. Read-only list is
+  // safe to show (normalized base_url + timestamp, no secrets).
+  ipcMain.handle(C.AI.STREAM_DEGRADATION_LIST, async () => {
+    try {
+      return {
+        success: true,
+        entries: await listStreamDegradations(databaseManager),
+      };
+    } catch (error) {
+      return {
+        success: false,
+        entries: [],
+        error: (error as Error).message,
+      };
+    }
+  });
+
+  ipcMain.handle(C.AI.STREAM_DEGRADATION_RESET, async () => {
+    try {
+      const removed = await resetStreamDegradations(databaseManager);
+      return { success: true, removed };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
+  });
+  // [20260910_Feat_237_StreamDegradation] END
 
   // [20260906_Refactor_DeadChannelCleanup] Ticket #250: the SETTINGS.SAVE and
   // SETTINGS.RESET handlers were removed — zero renderer callers (orphans
