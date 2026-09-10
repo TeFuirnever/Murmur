@@ -120,7 +120,14 @@
       "vocabCount": "{{count}} pairs",
       "vocabAddFailed": "Add failed",
       "vocabClearConfirm": "Clear ALL correction pairs?",
-      "vocabDelete": "Delete"
+      "vocabDelete": "Delete",
+      "streamDegradationTitle": "Streaming fallback memory",
+      "streamDegradationHint": "When an AI gateway cannot serve streaming responses, Murmur remembers it and sends plain whole-message requests from then on, instead of failing once first. Local addresses are never remembered.",
+      "streamDegradationEmpty": "Nothing remembered",
+      "streamDegradationCount": "{{count}} gateways",
+      "streamDegradationReset": "Reset",
+      "streamDegradationResetConfirm": "Reset ALL streaming fallback memory?",
+      "streamDegradationResetFailed": "Reset failed"
     },
     "quickStart": {
       "title": "Quick Start",

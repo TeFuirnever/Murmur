@@ -17,6 +17,11 @@ import {
 } from "../polish-stream";
 // [20260908_Feat_333_VocabInjection] Corrections-table injection (T13→#333).
 import { filterVocabForInjection } from "../vocab";
+// [20260910_Feat_237_StreamDegradation] T10: degradation memory read/write.
+import {
+  isStreamDegradationRemembered,
+  rememberStreamDegradation,
+} from "../streamDegradation";
 
 interface Logger {
   info?(message: string, ...args: unknown[]): void;
@@ -28,6 +33,13 @@ interface DatabaseManager {
   getSetting(key: string): Promise<unknown>;
   // [20260908_Feat_333_VocabInjection] Corrections-table read for injection.
   listVocabCorrections?(): Array<{ wrong: string; right: string }>;
+  // [20260910_Feat_237_StreamDegradation] T10 store surface (optional so
+  // legacy test doubles that only stub getSetting keep compiling; the
+  // degradation paths run only for streaming requests, and a store without
+  // write/enumeration simply cannot remember).
+  setSetting?(key: string, value: unknown): unknown;
+  getAllSettings?(): Record<string, unknown>;
+  deleteSetting?(key: string): unknown;
 }
 
 interface AIMode {
@@ -759,6 +771,22 @@ export async function runPolishOrchestrator(
   // invalidates this one before it even reaches the provider). Null when the
   // request opts out — the legacy path below is untouched.
   const runHandle = beginPolishRun(request);
+  // [20260910_Feat_237_StreamDegradation] T10: settle-aside exits that
+  // bypass consumePolishStream (pre-fetch gate, post-response gates, the
+  // degraded retry, the outer catch) never emitted the abort chunk — a
+  // cancel landing there surfaced "已取消" as an ERROR in the UI, breaking
+  // the silent-cancel contract. Emit it centrally for streaming runs.
+  // Declared before try{} so the catch can reach it.
+  const settleAside = (outcome: AIResult): AIResult => {
+    if (request.stream) {
+      request.stream.notify({
+        type: "abort",
+        requestId: request.stream.requestId,
+      });
+    }
+    return outcome;
+  };
+  // [20260910_Feat_237_StreamDegradation] END
   try {
     const apiKey = (await databaseManager.getSetting("ai_api_key")) as
       | string
@@ -837,6 +865,28 @@ export async function runPolishOrchestrator(
       }));
     }
 
+    // [20260910_Feat_237_StreamDegradation] T10: a gateway REMEMBERED as
+    // stream-incapable skips the doomed streaming attempt entirely — one
+    // plain request, and the UI learns why via a degraded chunk. The memory
+    // read stays behind request.stream so legacy non-streaming callers
+    // never touch the settings store here.
+    const wantsStream = request.stream !== undefined;
+    const rememberedGateway = wantsStream
+      ? await isStreamDegradationRemembered(databaseManager, baseUrl)
+      : false;
+    if (rememberedGateway && request.stream) {
+      request.stream.notify({
+        type: "degraded",
+        requestId: request.stream.requestId,
+        reason: "remembered",
+      });
+    }
+    const useStream = wantsStream && !rememberedGateway;
+    // True once this run proved the gateway cannot stream (any signature);
+    // a successful fallback then persists the memory.
+    let degradedFallback = rememberedGateway;
+    // [20260910_Feat_237_StreamDegradation] END
+
     const requestData = {
       model: model,
       messages: [
@@ -847,7 +897,9 @@ export async function runPolishOrchestrator(
       max_tokens: effectiveMaxTokens,
       // [20260907_Feat_235_StreamPipeline] T8: stream the response body when
       // the caller requested it; chunk events flow through request.stream.
-      stream: request.stream !== undefined,
+      // [20260910_Feat_237_StreamDegradation] T10: ...unless the gateway is
+      // remembered as stream-incapable.
+      stream: useStream,
     };
 
     logger.info?.("AI文本处理请求:", {
@@ -862,16 +914,17 @@ export async function runPolishOrchestrator(
     // while settings/prompt were being resolved.
     const pendingOutcome = polishRunOutcomeIfSettledAside(runHandle);
     if (pendingOutcome) {
-      return pendingOutcome;
+      return settleAside(pendingOutcome);
     }
 
     const timeoutMs = request.timeout || (isLocal ? 180_000 : 150_000);
-    const response = await postChatCompletion(
+    const timeoutMessage = `AI请求超时（${Math.round(timeoutMs / 1000)}秒），请尝试缩短文本或检查网络`;
+    let response = await postChatCompletion(
       baseUrl,
       apiKey,
       requestData,
       timeoutMs,
-      `AI请求超时（${Math.round(timeoutMs / 1000)}秒），请尝试缩短文本或检查网络`,
+      timeoutMessage,
       runHandle?.controller.signal,
     );
 
@@ -880,13 +933,48 @@ export async function runPolishOrchestrator(
     // never overwrite the newer run's result.
     const staleOutcome = polishRunOutcomeIfSettledAside(runHandle);
     if (staleOutcome) {
-      return staleOutcome;
+      return settleAside(staleOutcome);
     }
+
+    // [20260910_Feat_237_StreamDegradation] T10 second signature: an
+    // IMMEDIATE 4xx to the streaming attempt means the gateway rejected the
+    // stream itself — retry ONCE without stream:true. The retry rides the
+    // same run signal, so a user cancel aborts it identically; generation
+    // gates bracket it like the first attempt.
+    if (
+      useStream &&
+      request.stream &&
+      !response.ok &&
+      response.status >= 400 &&
+      response.status < 500
+    ) {
+      request.stream.notify({
+        type: "degraded",
+        requestId: request.stream.requestId,
+        reason: "http_4xx",
+      });
+      degradedFallback = true;
+      response = await postChatCompletion(
+        baseUrl,
+        apiKey,
+        { ...requestData, stream: false },
+        timeoutMs,
+        timeoutMessage,
+        runHandle?.controller.signal,
+      );
+      const retryOutcome = polishRunOutcomeIfSettledAside(runHandle);
+      if (retryOutcome) {
+        return settleAside(retryOutcome);
+      }
+    }
+    // [20260910_Feat_237_StreamDegradation] END
 
     // [20260907_Feat_235_StreamPipeline] T8: consume the SSE body via the
     // merger + deadline matrix. A gateway that ignored stream:true (200 with
     // a non-SSE content-type) degrades to the non-stream JSON path below.
-    if (request.stream) {
+    // [20260910_Feat_237_StreamDegradation] T10: skipped when the run already
+    // degraded (remembered gateway or a completed 4xx retry).
+    if (useStream && !degradedFallback && request.stream) {
       const contentType = response.headers.get("content-type") ?? "";
       if (contentType.includes("text/event-stream")) {
         return await consumePolishStream(
@@ -902,6 +990,9 @@ export async function runPolishOrchestrator(
         requestId: request.stream.requestId,
         reason: "non_sse_response",
       });
+      // [20260910_Feat_237_StreamDegradation] T10: non-SSE 200 is the third
+      // degradation signature — the JSON path below IS the fallback.
+      degradedFallback = true;
     }
 
     // [20260908_Fix_BatchReview_M1] The response-headers timer cleared on
@@ -1001,6 +1092,19 @@ export async function runPolishOrchestrator(
         usage: result.usage,
       });
 
+      // [20260910_Feat_237_StreamDegradation] T10: the fallback SUCCEEDED —
+      // persist "this gateway cannot stream" so later runs skip straight
+      // to the JSON path. Local gateways are excluded inside remember
+      // (their streaming quirks get fixed, not memorized); a memory write
+      // failure must never fail the polish the user already has in hand.
+      if (degradedFallback && !rememberedGateway) {
+        try {
+          await rememberStreamDegradation(databaseManager, baseUrl);
+        } catch (memoryError) {
+          logger?.warn?.("流式降级记忆写入失败:", memoryError);
+        }
+      }
+      // [20260910_Feat_237_StreamDegradation] END
       return result;
     } else {
       logger.error?.("AI API返回数据格式错误:", undefined);
@@ -1013,7 +1117,7 @@ export async function runPolishOrchestrator(
     // shaped outcome — so it never drives an error UI.
     const abortOutcome = polishRunOutcomeIfSettledAside(runHandle);
     if (abortOutcome) {
-      return abortOutcome;
+      return settleAside(abortOutcome);
     }
 
     logger.error?.("AI文本处理失败:", error);

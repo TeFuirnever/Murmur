@@ -2095,3 +2095,297 @@ describe("[20260909_Fix_333_Review] injection placement regressions", () => {
     expect(result.user.match(/<\/transcript>/g)).toHaveLength(1);
   });
 });
+
+// [20260910_Feat_237_StreamDegradation] Spec #193 T10 (ticket #237):
+// degradation detection + memory at the orchestrator level. Fetch is
+// mocked three ways (healthy SSE / non-SSE 200 / immediate 4xx); the
+// databaseManager mock is a Map-backed settings store so the memory
+// module's real key/normalization logic runs unmodified. Self-contained
+// harness mirroring the T8 describe above (sender-scoped chunk capture).
+describe("[20260910_Feat_237_StreamDegradation] T10 degradation + memory", () => {
+  let registeredHandlers: Record<string, (...args: unknown[]) => unknown>;
+  let sendBySender: Map<number, ReturnType<typeof vi.fn>>;
+
+  beforeEach(() => {
+    sendBySender = new Map([[1, vi.fn()]]);
+  });
+
+  function senderEvent(id: number) {
+    return {
+      sender: {
+        id,
+        isDestroyed: vi.fn(() => false),
+        send: sendBySender.get(id) ?? vi.fn(),
+      },
+    };
+  }
+
+  function chunksFor(id: number): Array<{ type: string; reason?: string }> {
+    return sendBySender
+      .get(id)!
+      .mock.calls.map((call) => call[1] as { type: string; reason?: string });
+  }
+
+  function setupDbMock(baseUrl: string) {
+    const store = new Map<string, unknown>([
+      ["ai_api_key", "sk"],
+      ["ai_base_url", baseUrl],
+      ["ai_model", "gpt-x"],
+    ]);
+    return {
+      getSetting: vi.fn(async (key: string) => store.get(key) ?? null),
+      setSetting: vi.fn((key: string, value: unknown) => {
+        store.set(key, value);
+      }),
+      getAllSettings: vi.fn(() => Object.fromEntries(store)),
+      listVocabCorrections: vi.fn(() => []),
+    };
+  }
+
+  function setup(baseUrl = "https://api.example.com/v1") {
+    registeredHandlers = {};
+    const ipcMain = {
+      handle: vi.fn((channel: string, fn: (...args: unknown[]) => unknown) => {
+        registeredHandlers[channel] = fn;
+      }),
+    };
+    const db = setupDbMock(baseUrl);
+    aiHandlersNS.register(
+      ipcMain as never,
+      {
+        databaseManager: db,
+        funasrManager: null,
+        processTextWithAI: vi.fn(),
+        windowManager: { mainWindow: null },
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        templatesDir: "/tmp/test-templates",
+      } as never,
+    );
+    return db;
+  }
+
+  // Response stubs — narrowest shape the pipeline reads.
+  function jsonOk(content: string) {
+    return {
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": "application/json" }),
+      json: async () => ({ choices: [{ message: { content } }] }),
+      text: async () => JSON.stringify({ choices: [{ message: { content } }] }),
+    };
+  }
+
+  function httpError(status: number) {
+    return {
+      ok: false,
+      status,
+      statusText: `HTTP ${status}`,
+      text: async () => "gateway error",
+    };
+  }
+
+  function sseOk(content: string) {
+    const frames = [
+      `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`,
+      "data: [DONE]\n\n",
+    ].map((frame) => new TextEncoder().encode(frame));
+    let index = 0;
+    return {
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": "text/event-stream" }),
+      body: {
+        getReader: () => ({
+          read: async () =>
+            index < frames.length
+              ? { done: false, value: frames[index++] }
+              : { done: true, value: undefined },
+        }),
+      },
+    };
+  }
+
+  function pendingUntilAbort(initSignal?: AbortSignal): Promise<never> {
+    return new Promise((_resolve, reject) => {
+      const onAbort = () => reject(new DOMException("aborted", "AbortError"));
+      if (initSignal?.aborted) onAbort();
+      else initSignal?.addEventListener("abort", onAbort, { once: true });
+    });
+  }
+
+  /** Parsed JSON body of the Nth mocked fetch call. */
+  function requestBodyOf(
+    fetchMock: FetchMock,
+    index: number,
+  ): { stream?: boolean } {
+    const init = fetchMock.mock.calls[index]![1] as { body: string };
+    return JSON.parse(init.body) as { stream?: boolean };
+  }
+
+  function degradationWrites(db: ReturnType<typeof setupDbMock>) {
+    return db.setSetting.mock.calls.filter((call) =>
+      String(call[0]).startsWith("stream_degraded."),
+    );
+  }
+
+  it("healthy SSE streams deltas and writes NO memory", async () => {
+    const db = setup();
+    global.fetch = vi.fn(async () => sseOk("流式结果")) as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const result = (await registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      "原文",
+      "optimize",
+      10_000,
+      "sd-sse",
+    )) as { success: boolean; text?: string };
+
+    expect(result).toMatchObject({ success: true, text: "流式结果" });
+    const types = chunksFor(1).map((c) => c.type);
+    expect(types).toContain("delta");
+    expect(types).toContain("finish");
+    expect(types).not.toContain("degraded");
+    expect(degradationWrites(db)).toHaveLength(0);
+  });
+
+  it("non-SSE 200 degrades to the JSON path, notifies UI, remembers", async () => {
+    const db = setup();
+    global.fetch = vi.fn(async () => jsonOk("降级结果")) as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const result = (await registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      "原文",
+      "optimize",
+      10_000,
+      "sd-nonsse",
+    )) as { success: boolean; text?: string };
+
+    expect(result).toMatchObject({ success: true, text: "降级结果" });
+    expect(chunksFor(1)).toContainEqual(
+      expect.objectContaining({ type: "degraded", reason: "non_sse_response" }),
+    );
+    expect(degradationWrites(db)).toHaveLength(1);
+  });
+
+  it("immediate 4xx on a streaming request retries once non-streaming", async () => {
+    const db = setup();
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(async () => httpError(400))
+      .mockImplementationOnce(async () =>
+        jsonOk("重试成功"),
+      ) as unknown as FetchMock;
+    global.fetch = fetchMock as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const result = (await registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      "原文",
+      "optimize",
+      10_000,
+      "sd-4xx",
+    )) as { success: boolean; text?: string };
+
+    expect(result).toMatchObject({ success: true, text: "重试成功" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // First attempt streamed, the retry did not.
+    expect(requestBodyOf(fetchMock, 0).stream).toBe(true);
+    expect(requestBodyOf(fetchMock, 1).stream).toBe(false);
+    expect(chunksFor(1)).toContainEqual(
+      expect.objectContaining({ type: "degraded", reason: "http_4xx" }),
+    );
+    expect(degradationWrites(db)).toHaveLength(1);
+  });
+
+  it("a REMEMBERED gateway skips streaming entirely (single non-stream fetch)", async () => {
+    const db = setup();
+    const { rememberStreamDegradation } =
+      await import("../../src/helpers/streamDegradation");
+    await rememberStreamDegradation(db, "https://api.example.com/v1");
+    const fetchMock = vi.fn(async () =>
+      jsonOk("直连结果"),
+    ) as unknown as FetchMock;
+    global.fetch = fetchMock as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const result = (await registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      "原文",
+      "optimize",
+      10_000,
+      "sd-remembered",
+    )) as { success: boolean; text?: string };
+
+    expect(result).toMatchObject({ success: true, text: "直连结果" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(requestBodyOf(fetchMock, 0).stream).toBe(false);
+    expect(chunksFor(1)).toContainEqual(
+      expect.objectContaining({ type: "degraded", reason: "remembered" }),
+    );
+  });
+
+  it("local gateways are retried but NEVER remembered", async () => {
+    const db = setup("http://127.0.0.1:8317/v1");
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(async () => httpError(400))
+      .mockImplementationOnce(async () =>
+        jsonOk("本地结果"),
+      ) as unknown as FetchMock;
+    global.fetch = fetchMock as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const result = (await registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      "原文",
+      "optimize",
+      10_000,
+      "sd-local",
+    )) as { success: boolean; text?: string };
+
+    expect(result).toMatchObject({ success: true, text: "本地结果" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(degradationWrites(db)).toHaveLength(0);
+  });
+
+  it("the degradation retry is cancellable via POLISH_ABORT", async () => {
+    setup();
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(async () => httpError(400))
+      .mockImplementationOnce(
+        (_url: unknown, init?: { signal?: AbortSignal }) =>
+          pendingUntilAbort(init?.signal),
+      ) as unknown as FetchMock;
+    global.fetch = fetchMock as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const processPromise = registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      "原文",
+      "optimize",
+      10_000,
+      "sd-cancel",
+    ) as Promise<unknown>;
+
+    // Wait until the retry fetch is in flight, then abort as the owner.
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const abortResult = (await registeredHandlers[C.AI.POLISH_ABORT]!(
+      senderEvent(1),
+      "sd-cancel",
+    )) as { success: boolean };
+    expect(abortResult).toEqual({ success: true });
+
+    const result = (await processPromise) as {
+      success: boolean;
+      code?: string;
+    };
+    expect(result.success).toBe(false);
+    expect(result.code).toBe("CANCELLED");
+    expect(chunksFor(1)).toContainEqual(
+      expect.objectContaining({ type: "abort" }),
+    );
+  });
+});

@@ -87,6 +87,12 @@ export const preloadApi: ElectronAPI = {
   deleteVocabCorrection: (wrong: string) =>
     ipcRenderer.invoke(C.AI.VOCAB_DELETE, wrong),
   clearVocabCorrections: () => ipcRenderer.invoke(C.AI.VOCAB_CLEAR),
+  // [20260910_Feat_237_StreamDegradation] T10 degradation-memory view/reset.
+  listStreamDegradations: () =>
+    ipcRenderer.invoke(C.AI.STREAM_DEGRADATION_LIST),
+  resetStreamDegradations: () =>
+    ipcRenderer.invoke(C.AI.STREAM_DEGRADATION_RESET),
+  // [20260910_Feat_237_StreamDegradation] END
   onPolishChunk: (
     callback: (chunk: import("./src/types/ipc").PolishChunk) => void,
   ) =>

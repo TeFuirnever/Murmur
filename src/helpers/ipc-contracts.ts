@@ -74,6 +74,10 @@ export const AI = {
   VOCAB_ADD: "vocab-add",
   VOCAB_DELETE: "vocab-delete",
   VOCAB_CLEAR: "vocab-clear",
+  // [20260910_Feat_237_StreamDegradation] T10: settings-page view/reset of
+  // the stream-degradation memory (server-side read path is internal).
+  STREAM_DEGRADATION_LIST: "stream-degradation-list",
+  STREAM_DEGRADATION_RESET: "stream-degradation-reset",
   GET_MODES: "get-ai-modes",
   GET_PROVIDER_PRESETS: "get-ai-provider-presets",
   DETECT_LOCAL_MODELS: "detect-local-models",
