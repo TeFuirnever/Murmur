@@ -9,6 +9,22 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import fs from "fs";
 import path from "path";
 import os from "os";
+// [20260910_Fix_WinFlakyFFmpegDetect] The default ffmpeg detector shells
+// out via execSync(`where ffmpeg`); on the Windows CI runner that probe
+// alone takes 20s+. execSync is ONLY used by the detector (spawn stays
+// real for convertAudioFile), so stub it file-wide: the detect test keeps
+// exercising the default-detector code path (catch → null) without a host
+// dependency, fast and deterministic on every platform.
+vi.mock("child_process", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("child_process")>();
+  return {
+    ...mod,
+    execSync: vi.fn(() => {
+      throw new Error("stubbed: not on PATH");
+    }),
+  };
+});
+// [20260910_Fix_WinFlakyFFmpegDetect] END
 // [20260726_Tier32_AudioFileHelpers] Convert CJS require() → ESM namespace
 // import. The `audioHelpers.X` accessor calls below unchanged.
 import * as audioHelpers from "../../src/helpers/audioFileHelpers";
@@ -187,24 +203,17 @@ describe("audioFileHelpers", () => {
   });
 
   describe("_defaultDetectFFmpeg", () => {
-    it(
-      "uses default detector when no custom detector is set",
-      // [20260910_Fix_WinFlakyFFmpegDetect] This test genuinely probes the
-      // host (`where ffmpeg` via execSync); on the Windows CI runner the
-      // probe alone took ~11s, past vitest's 5s default. The assertion is
-      // host-dependent by design — fund the probe, not a rewrite.
-      { timeout: 20_000 },
-      () => {
-        // [20260726_Tier3_AudioFileHelpersMigrate] Source signature is
-        // `(fn: () => string | null) | null` would not match — the impl
-        // accepts null to clear the override. Cast via the function type.
-        _setFFmpegDetector(null as unknown as () => string | null);
-        _resetFFmpegCache();
-        const result = getFFmpegPath();
-        // null when ffmpeg not on PATH, string path when installed
-        expect(result === null || typeof result === "string").toBe(true);
-      },
-    );
+    it("uses default detector when no custom detector is set", () => {
+      // [20260726_Tier3_AudioFileHelpersMigrate] Source signature is
+      // `(fn: () => string | null) | null` would not match — the impl
+      // accepts null to clear the override. Cast via the function type.
+      _setFFmpegDetector(null as unknown as () => string | null);
+      _resetFFmpegCache();
+      const result = getFFmpegPath();
+      // execSync is stubbed file-wide to throw (see the vi.mock header),
+      // so the detector takes its catch branch and resolves to null.
+      expect(result).toBeNull();
+    });
   });
 
   describe("createTempAudioFile .buffer fallback", () => {
