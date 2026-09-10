@@ -69,9 +69,17 @@ describe("[20260908_Feat_240_VocabCorrections] DB layer", () => {
   });
 
   it("evicts the OLDEST entries beyond the FIFO cap", () => {
-    for (let i = 0; i < VOCAB_MAX_ENTRIES + 5; i++) {
-      db.addVocabCorrection(`词${i}`, `正${i}`);
-    }
+    // [20260910_Fix_WinFlakyVocabFifo] Insert via the batch API: 1005
+    // per-call transactions (each with its own fsync) blew past the test
+    // timeout on the Windows CI runner (26s observed). addVocabCorrectionsBatch
+    // exists precisely for this — one transaction, one eviction check
+    // (see 20260908_Fix_240_WinPerf in database.ts).
+    db.addVocabCorrectionsBatch(
+      Array.from({ length: VOCAB_MAX_ENTRIES + 5 }, (_, i) => [
+        `词${i}`,
+        `正${i}`,
+      ]),
+    );
     const rows = db.listVocabCorrections();
     expect(rows).toHaveLength(VOCAB_MAX_ENTRIES);
     // The first five inserted pairs were evicted.

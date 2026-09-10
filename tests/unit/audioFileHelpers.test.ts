@@ -187,16 +187,24 @@ describe("audioFileHelpers", () => {
   });
 
   describe("_defaultDetectFFmpeg", () => {
-    it("uses default detector when no custom detector is set", () => {
-      // [20260726_Tier3_AudioFileHelpersMigrate] Source signature is
-      // `(fn: () => string | null) | null` would not match — the impl
-      // accepts null to clear the override. Cast via the function type.
-      _setFFmpegDetector(null as unknown as () => string | null);
-      _resetFFmpegCache();
-      const result = getFFmpegPath();
-      // null when ffmpeg not on PATH, string path when installed
-      expect(result === null || typeof result === "string").toBe(true);
-    });
+    it(
+      "uses default detector when no custom detector is set",
+      // [20260910_Fix_WinFlakyFFmpegDetect] This test genuinely probes the
+      // host (`where ffmpeg` via execSync); on the Windows CI runner the
+      // probe alone took ~11s, past vitest's 5s default. The assertion is
+      // host-dependent by design — fund the probe, not a rewrite.
+      { timeout: 20_000 },
+      () => {
+        // [20260726_Tier3_AudioFileHelpersMigrate] Source signature is
+        // `(fn: () => string | null) | null` would not match — the impl
+        // accepts null to clear the override. Cast via the function type.
+        _setFFmpegDetector(null as unknown as () => string | null);
+        _resetFFmpegCache();
+        const result = getFFmpegPath();
+        // null when ffmpeg not on PATH, string path when installed
+        expect(result === null || typeof result === "string").toBe(true);
+      },
+    );
   });
 
   describe("createTempAudioFile .buffer fallback", () => {
