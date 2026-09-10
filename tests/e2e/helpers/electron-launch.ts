@@ -309,17 +309,88 @@ async function launchElectronApp({ env = {} } = {}) {
         configurable: true,
       });
     }
-    if (!nav.mediaDevices.getUserMedia) {
-      nav.mediaDevices.getUserMedia = async () => {
-        // Create a silent audio context to produce a real MediaStream
-        const ctx = new AudioContext();
-        const oscillator = ctx.createOscillator();
-        const dest = ctx.createMediaStreamDestination();
-        oscillator.connect(dest);
-        oscillator.start();
-        return dest.stream;
+    // [20260910_Fix_E2e_GetUserMediaStub] Always override. The old
+    // existence guard let the REAL getUserMedia through on any Chromium
+    // new enough to ship mediaDevices natively (Electron 39), turning
+    // every mic-click suite into a TCC permission request that headless
+    // test runs answer with "Permission denied".
+    nav.mediaDevices.getUserMedia = async () => {
+      // Create a silent audio context to produce a real MediaStream
+      const ctx = new AudioContext();
+      const oscillator = ctx.createOscillator();
+      const dest = ctx.createMediaStreamDestination();
+      oscillator.connect(dest);
+      oscillator.start();
+      return dest.stream;
+    };
+    // [20260910_Fix_E2e_GetUserMediaStub] END
+
+    // [20260910_Fix_E2e_MediaRecorderStub] Deterministic MediaRecorder:
+    // the real recorder against the silent oscillator stream yields an
+    // undecodable/empty webm in headless runs (AudioContext starts
+    // suspended without a user gesture), so stop() → decodeAudioData
+    // rejected and no transcription ever completed. The stub replays a
+    // short valid WAV on stop() — decodeAudioData sniffs the RIFF header
+    // regardless of the blob's declared type, so the app's webm→wav
+    // conversion path runs unmodified.
+    const MOCK_WAV_SAMPLE_RATE = 16000;
+    const MOCK_WAV_DURATION_SEC = 0.5;
+    const buildMockWavBytes = () => {
+      const sampleCount = Math.floor(
+        MOCK_WAV_SAMPLE_RATE * MOCK_WAV_DURATION_SEC,
+      );
+      const dataSize = sampleCount * 2;
+      const buffer = new ArrayBuffer(44 + dataSize);
+      const view = new DataView(buffer);
+      const writeAscii = (offset: number, text: string) => {
+        for (let i = 0; i < text.length; i++) {
+          view.setUint8(offset + i, text.charCodeAt(i));
+        }
       };
+      writeAscii(0, "RIFF");
+      view.setUint32(4, 36 + dataSize, true);
+      writeAscii(8, "WAVE");
+      writeAscii(12, "fmt ");
+      view.setUint32(16, 16, true); // PCM chunk size
+      view.setUint16(20, 1, true); // PCM format
+      view.setUint16(22, 1, true); // mono
+      view.setUint32(24, MOCK_WAV_SAMPLE_RATE, true);
+      view.setUint32(28, MOCK_WAV_SAMPLE_RATE * 2, true); // byte rate
+      view.setUint16(32, 2, true); // block align
+      view.setUint16(34, 16, true); // bits per sample
+      writeAscii(36, "data");
+      view.setUint32(40, dataSize, true);
+      // Samples left as zero (silence) — content is irrelevant; the
+      // transcription backend is IPC-mocked in every suite.
+      return new Uint8Array(buffer);
+    };
+    class MockMediaRecorder {
+      state = "inactive";
+      ondataavailable: ((event: { data: Blob }) => void) | null = null;
+      onstop: (() => void) | null = null;
+      onerror: ((event: { error?: Error }) => void) | null = null;
+      static isTypeSupported() {
+        return true;
+      }
+      start() {
+        this.state = "recording";
+      }
+      stop() {
+        if (this.state !== "recording") return;
+        this.state = "inactive";
+        const blob = new Blob([buildMockWavBytes()], {
+          type: "audio/webm;codecs=opus",
+        });
+        // Async like the real recorder: data first, then stop.
+        setTimeout(() => {
+          this.ondataavailable?.({ data: blob });
+          this.onstop?.();
+        }, 50);
+      }
     }
+    (window as unknown as { MediaRecorder: unknown }).MediaRecorder =
+      MockMediaRecorder;
+    // [20260910_Fix_E2e_MediaRecorderStub] END
   });
 
   // Wait for the app to be ready
