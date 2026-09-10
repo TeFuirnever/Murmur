@@ -191,5 +191,44 @@ describe("systemHandlers behavior", () => {
       );
       expect(result).toBe(true);
     });
+
+    // [20260910_Fix_LogHandlerThisBinding] Regression: the handler used to
+    // invoke the looked-up method detached (`fn?.(...)`), so any logger
+    // whose methods rely on `this` (the real LogManager) threw
+    // "Cannot read properties of undefined (reading 'log')" — and the
+    // renderer's unhandledrejection logger turned that into an infinite
+    // IPC flood. vi.fn() mocks above can't see `this`; a stateful class
+    // can.
+    it("invokes the logger method bound to the logger instance", async () => {
+      class StatefulLogger {
+        calls: string[] = [];
+        info(message: string) {
+          this.calls.push(`info:${message}`);
+        }
+        warn(message: string) {
+          this.calls.push(`warn:${message}`);
+        }
+        error(message: string) {
+          this.calls.push(`error:${message}`);
+        }
+      }
+      const handlers: Record<string, MockHandler | undefined> = {};
+      const ipcMain = {
+        handle: vi.fn((channel: string, fn: MockHandler) => {
+          handlers[channel] = fn;
+        }),
+      };
+      const statefulLogger = new StatefulLogger();
+      sysHandlers.register(
+        ipcMain as unknown as Parameters<typeof sysHandlers.register>[0],
+        { logger: statefulLogger } as unknown as Parameters<
+          typeof sysHandlers.register
+        >[1],
+      );
+      const result = await handlers[C.SYSTEM.LOG]!({}, "error", "崩了", null);
+      expect(result).toBe(true);
+      expect(statefulLogger.calls).toEqual(["error:[渲染进程] 崩了"]);
+    });
+    // [20260910_Fix_LogHandlerThisBinding] END
   });
 });

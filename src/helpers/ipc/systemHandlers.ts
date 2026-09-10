@@ -46,7 +46,13 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
           ((...args: unknown[]) => void) | undefined
         >
       )[level];
-      fn?.(`[渲染进程] ${message}`, data || "");
+      // [20260910_Fix_LogHandlerThisBinding] Bind the call to the logger:
+      // a detached `fn?.(...)` runs LogManager's methods with `this`
+      // undefined (they delegate via this.log), throwing on EVERY renderer
+      // log — and the renderer's unhandledrejection handler logs through
+      // this same channel, turning one error into an infinite IPC flood.
+      fn?.call(logger, `[渲染进程] ${message}`, data || "");
+      // [20260910_Fix_LogHandlerThisBinding] END
       return true;
     },
   );
