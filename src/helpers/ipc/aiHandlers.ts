@@ -918,7 +918,13 @@ export async function runPolishOrchestrator(
     }
 
     const timeoutMs = request.timeout || (isLocal ? 180_000 : 150_000);
+    // [20260910_Feat_237_StreamDegradation] T10: one deadline shared by the
+    // streaming attempt AND its degradation retry — a slow-then-4xx gateway
+    // must not double the user's wait. (Also serves the tagged retry below:
+    // `response` is reassigned there.)
+    const deadlineMs = Date.now() + timeoutMs;
     const timeoutMessage = `AI请求超时（${Math.round(timeoutMs / 1000)}秒），请尝试缩短文本或检查网络`;
+    // [20260910_Feat_237_StreamDegradation] END
     let response = await postChatCompletion(
       baseUrl,
       apiKey,
@@ -940,13 +946,20 @@ export async function runPolishOrchestrator(
     // IMMEDIATE 4xx to the streaming attempt means the gateway rejected the
     // stream itself — retry ONCE without stream:true. The retry rides the
     // same run signal, so a user cancel aborts it identically; generation
-    // gates bracket it like the first attempt.
+    // gates bracket it like the first attempt. Auth/quota statuses
+    // (401/403/429) are EXCLUDED: they fail identically non-streaming, and
+    // retrying them would double pressure on an already-limiting gateway.
+    const retryBudgetMs = deadlineMs - Date.now();
     if (
       useStream &&
       request.stream &&
       !response.ok &&
       response.status >= 400 &&
-      response.status < 500
+      response.status < 500 &&
+      response.status !== 401 &&
+      response.status !== 403 &&
+      response.status !== 429 &&
+      retryBudgetMs > 0
     ) {
       request.stream.notify({
         type: "degraded",
@@ -958,7 +971,7 @@ export async function runPolishOrchestrator(
         baseUrl,
         apiKey,
         { ...requestData, stream: false },
-        timeoutMs,
+        retryBudgetMs,
         timeoutMessage,
         runHandle?.controller.signal,
       );

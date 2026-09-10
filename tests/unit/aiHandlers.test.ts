@@ -2384,8 +2384,96 @@ describe("[20260910_Feat_237_StreamDegradation] T10 degradation + memory", () =>
     };
     expect(result.success).toBe(false);
     expect(result.code).toBe("CANCELLED");
-    expect(chunksFor(1)).toContainEqual(
-      expect.objectContaining({ type: "abort" }),
-    );
+    // Pin SINGLE emission: one abort chunk per cancelled run, never two
+    // (settleAside vs consumePolishStream double-notify guard).
+    expect(chunksFor(1).filter((c) => c.type === "abort")).toHaveLength(1);
   });
+
+  // [20260910_Feat_237_ReviewFixes] Review MINOR #1: auth/quota 4xx statuses
+  // fail identically without streaming — retrying them doubles pressure on
+  // an already-limiting gateway and could memorialize a transient failure.
+  it("401/429 are NOT retried and never remembered", async () => {
+    for (const status of [401, 403, 429]) {
+      const db = setup();
+      const fetchMock = vi.fn(async () =>
+        httpError(status),
+      ) as unknown as FetchMock;
+      global.fetch = fetchMock as never;
+      const C = await import("../../src/helpers/ipc-contracts");
+
+      const result = (await registeredHandlers[C.AI.PROCESS]!(
+        senderEvent(1),
+        "原文",
+        "optimize",
+        10_000,
+        `sd-no-retry-${status}`,
+      )) as { success: boolean };
+
+      expect(result.success).toBe(false);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(degradationWrites(db)).toHaveLength(0);
+    }
+  });
+
+  // [20260910_Feat_237_ReviewFixes] Review MINOR #3: failure halves.
+  it("a FAILED retry surfaces the error and writes no memory", async () => {
+    const db = setup();
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(async () => httpError(400))
+      .mockImplementationOnce(async () =>
+        httpError(500),
+      ) as unknown as FetchMock;
+    global.fetch = fetchMock as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const result = (await registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      "原文",
+      "optimize",
+      10_000,
+      "sd-retry-fail",
+    )) as { success: boolean };
+
+    expect(result.success).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(degradationWrites(db)).toHaveLength(0);
+  });
+
+  it("a degraded fallback with EMPTY content writes no memory", async () => {
+    const db = setup();
+    global.fetch = vi.fn(async () => jsonOk("")) as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const result = (await registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      "原文",
+      "optimize",
+      10_000,
+      "sd-empty",
+    )) as { success: boolean };
+
+    expect(result.success).toBe(false);
+    expect(degradationWrites(db)).toHaveLength(0);
+  });
+
+  it("a memory-WRITE failure never fails the polish in hand", async () => {
+    const db = setup();
+    db.setSetting.mockImplementation(() => {
+      throw new Error("disk full");
+    });
+    global.fetch = vi.fn(async () => jsonOk("照样成功")) as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const result = (await registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      "原文",
+      "optimize",
+      10_000,
+      "sd-write-fail",
+    )) as { success: boolean; text?: string };
+
+    expect(result).toMatchObject({ success: true, text: "照样成功" });
+  });
+  // [20260910_Feat_237_ReviewFixes] END
 });

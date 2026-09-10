@@ -78,14 +78,14 @@ describe("[20260910_Feat_237_StreamDegradation] StreamDegradationManager", () =>
       throw new Error("ipc down");
     });
     vi.spyOn(window, "confirm").mockReturnValue(true);
+    const { toast } = await import("sonner");
 
     render(<StreamDegradationManager />);
     await screen.findByText("https://gw.example.com/v1");
     fireEvent.click(screen.getByTestId("stream-degradation-reset"));
 
-    // The entry stays — no silent clear.
-    await waitFor(() =>
-      expect(screen.getByText("https://gw.example.com/v1")).toBeInTheDocument(),
-    );
+    // The failure is surfaced AND the entry stays — no silent clear.
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(screen.getByText("https://gw.example.com/v1")).toBeInTheDocument();
   });
 });

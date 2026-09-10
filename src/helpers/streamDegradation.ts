@@ -40,6 +40,9 @@ export interface StreamDegradationStore {
 export function normalizeDegradationBaseUrl(baseUrl: string): string | null {
   try {
     const url = new URL(baseUrl);
+    // Deliberately a SUBSET of the URL: query strings (e.g. Azure-style
+    // ?api-version=) and userinfo do not distinguish a gateway's streaming
+    // capability, so they share one memory entry.
     return `${url.origin.toLowerCase()}${url.pathname.replace(/\/+$/, "")}`;
   } catch {
     return null;
