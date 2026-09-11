@@ -32,6 +32,9 @@
 // [20260725_E2E_BootHealthGate] END
 
 import { test, expect } from "@playwright/test";
+import fs from "fs";
+import os from "os";
+import path from "path";
 import {
   launchElectronApp,
   closeElectronApp,
@@ -71,6 +74,53 @@ const BOOT_PROBES = {
 };
 // [20260725_E2E_BootHealthGate] END
 
+// [20260912_Test_WinPackagedBootFunasrSettle] v1.5.1 release CI (run
+// 34581815142, both workflow attempts) failed this suite on Windows 4/4
+// sub-runs: the FunASR manager self-check takes ~20s on the 4-core
+// runner, so the Python server spawn lands exactly while 0.3-0.6 probe
+// the app; the interpreter+funasr import storm collided with 0.5's
+// reload / 0.6's evaluate and the app received a teardown (will-quit,
+// exit 0) mid-probe. Waiting for the server's first init result (test
+// 0.2b below) moves the storm BEFORE the fragile probes, and parks the
+// Python process in stdin readline so 0.7's gracefulShutdown "exit"
+// command is answered immediately. The milestone strings are the same
+// app.log contract the release smoke gates on (see funasrManager.ts
+// [20260818_T3_PythonSelfCheckMilestone]).
+const FUNASR_INIT_SETTLE_TIMEOUT_MS = 30_000;
+const FUNASR_INIT_SETTLE_POLL_MS = 500;
+const FUNASR_INIT_MILESTONE = /FunASR服务器(启动成功|初始化失败)/;
+
+// Mirrors LogManager.getLogDirectory(): <userData>/logs/app.log, with
+// userData resolved from the app name ("murmur") per platform. Matches
+// the packaged path observed in release CI (%APPDATA%\murmur\logs).
+function funasrAppLogPath(): string {
+  if (process.platform === "win32") {
+    return path.join(process.env.APPDATA ?? "", "murmur", "logs", "app.log");
+  }
+  if (process.platform === "darwin") {
+    return path.join(
+      os.homedir(),
+      "Library",
+      "Application Support",
+      "murmur",
+      "logs",
+      "app.log",
+    );
+  }
+  return path.join(os.homedir(), ".config", "murmur", "logs", "app.log");
+}
+// [20260912_Test_WinPackagedBootFunasrSettle] END
+
+// [20260912_Test_WinPackagedQuitBudget] Quit budget for test 0.7. The
+// will-quit handler races FunASR gracefulShutdown at 5s
+// (main.ts:397-400); Windows packaged teardown then measured ~3-5s more
+// until Playwright's 'close' fires (run 34581815142: app.exit → process
+// exit 4.7s; total close 6.5s vs the old flat 6s budget). darwin keeps
+// the original 6s (teardown <1s there); win32 gets 15s = 5s race +
+// ~5s teardown + slack.
+const QUIT_BUDGET_MS = process.platform === "win32" ? 15_000 : 6_000;
+// [20260912_Test_WinPackagedQuitBudget] END
+
 test.describe.serial("Suite 0: Boot Health (Phase A-E)", () => {
   // [20260906_Test_PackagedBootHealth] Spec #266 T11: in packaged-app runs
   // (release workflow) first boot pays cold asar/entitlements cost; the
@@ -79,6 +129,13 @@ test.describe.serial("Suite 0: Boot Health (Phase A-E)", () => {
 
   let electronApp;
   let window;
+  // [20260912_Test_WinPackagedBootFunasrSettle] Byte offset into app.log
+  // captured at launch; the 0.2b milestone scan only reads content
+  // appended AFTER it, so a previous instance's log (the release
+  // pipeline's PowerShell smoke boots the same packaged app first)
+  // cannot false-positive the settle wait.
+  let funasrLogOffset = 0;
+  // [20260912_Test_WinPackagedBootFunasrSettle] END
   // [20260725_E2E_BootHealthGate_CodeReviewS2] Renderer console listener
   // is attached in beforeAll IMMEDIATELY after firstWindow() resolves so
   // it catches initial-mount errors, not just post-reload ones. Previously
@@ -90,6 +147,14 @@ test.describe.serial("Suite 0: Boot Health (Phase A-E)", () => {
 
   test.beforeAll(async () => {
     ({ app: electronApp, window } = await launchElectronApp());
+    // [20260912_Test_WinPackagedBootFunasrSettle] Capture the app.log
+    // offset AFTER launch (the boot may have rotated/truncated the file).
+    try {
+      funasrLogOffset = fs.statSync(funasrAppLogPath()).size;
+    } catch {
+      funasrLogOffset = 0; // first boot on this machine — no log yet
+    }
+    // [20260912_Test_WinPackagedBootFunasrSettle] END
     window.on("console", (msg) => {
       if (msg.type() === "error") consoleErrors.push(msg.text());
     });
@@ -145,6 +210,36 @@ test.describe.serial("Suite 0: Boot Health (Phase A-E)", () => {
         `IPC channel "${channel}" did not resolve`,
       ).resolves.toBeDefined();
     }
+  });
+
+  // 0.2b — [20260912_Test_WinPackagedBootFunasrSettle] wait for the
+  // FunASR Python server's first-boot init result before the reload /
+  // evaluate probes below. On Windows release CI the interpreter+funasr
+  // import storm (~5s on the 4-core runner) overlaps tests 0.3-0.6 and
+  // the app received a mid-probe teardown 4/4 sub-runs (run
+  // 34581815142). Web-first poll (R1) on the app.log milestone — no
+  // fixed waitForTimeout (§8). Both terminal outcomes satisfy the wait:
+  // models present ("启动成功") or models absent ("初始化失败" —
+  // models_not_downloaded, the expected CI state).
+  test("0.2b FunASR first-boot init settles before renderer probes", async () => {
+    const logPath = funasrAppLogPath();
+    await expect
+      .poll(
+        () => {
+          try {
+            return FUNASR_INIT_MILESTONE.test(
+              fs.readFileSync(logPath, "utf8").slice(funasrLogOffset),
+            );
+          } catch {
+            return false; // app.log not created yet
+          }
+        },
+        {
+          timeout: FUNASR_INIT_SETTLE_TIMEOUT_MS,
+          intervals: [FUNASR_INIT_SETTLE_POLL_MS],
+        },
+      )
+      .toBe(true);
   });
 
   // 0.3 — Phase C6: preload bridge exposes the contract. The threshold of
@@ -219,13 +314,15 @@ test.describe.serial("Suite 0: Boot Health (Phase A-E)", () => {
   });
 
   // 0.7 — Phase E3: graceful shutdown. will-quit race timeout is 5s
-  // (main.ts will-quit handler); 6s gives 1s of slack. If this fails, a
-  // manager's before-quit hook is hanging — typically FunASR Python spawn
-  // teardown or sqlite open handle. Nulls electronApp so afterAll skips.
-  test("0.7 app quits within 6s (will-quit race timeout is 5s)", async () => {
+  // (main.ts will-quit handler); QUIT_BUDGET_MS adds the platform
+  // teardown headroom measured in release CI (see tag above). If this
+  // fails, a manager's before-quit hook is hanging — typically FunASR
+  // Python spawn teardown or sqlite open handle. Nulls electronApp so
+  // afterAll skips.
+  test("0.7 app quits within budget (will-quit race timeout is 5s)", async () => {
     const start = Date.now();
     await closeElectronApp(electronApp);
-    expect(Date.now() - start).toBeLessThan(6_000);
+    expect(Date.now() - start).toBeLessThan(QUIT_BUDGET_MS);
     electronApp = null; // prevent double-close in afterAll
   });
 });
