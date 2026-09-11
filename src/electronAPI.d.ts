@@ -180,6 +180,9 @@ export interface ElectronAPI {
     extension?: string;
     error?: string;
   }>;
+  // [20260911_Fix_338_DragDropImport] webUtils.getPathForFile bridge for
+  // drag & drop imports (Electron >= 32 removed File.path).
+  getPathForFile: (file: File) => string;
   transcribeFile: (
     audioPath: string,
     options?: Record<string, unknown>,

@@ -57,8 +57,17 @@ export default function FileDropZone({
     setIsDragging(false);
 
     const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      const filePath = (files[0] as File & { path?: string }).path;
+    const droppedFile = files[0];
+    if (droppedFile) {
+      // [20260911_Fix_338_DragDropImport] Issue #338: Electron >= 32 removed
+      // File.path, so the old `file.path` read always yielded undefined and
+      // every drop silently fell through to the file dialog. Resolve via the
+      // preload's webUtils bridge first; keep the legacy read as a fallback
+      // for older runtimes.
+      const filePath =
+        window.electronAPI?.getPathForFile?.(droppedFile) ||
+        (droppedFile as File & { path?: string }).path;
+      // [20260911_Fix_338_DragDropImport] END
       if (filePath && onSelectFileFromPath) {
         onSelectFileFromPath(filePath);
       } else {

@@ -10,7 +10,11 @@
 // tsconfig.json sets `skipLibCheck: true`. The d.ts-internal errors are
 // caught separately by tests/unit/backend-type-safety.test.js (which scans
 // .d.ts for `any`). See ADR-013 for the wider preload ↔ handler ↔ db seam.
-import { contextBridge, ipcRenderer } from "electron";
+// [20260911_Fix_338_DragDropImport] webUtils added for getPathForFile:
+// Electron >= 32 removed File.path, so a renderer drop can only recover the
+// absolute file path through webUtils.getPathForFile in the preload (the
+// documented contextBridge pattern for drag & drop).
+import { contextBridge, ipcRenderer, webUtils } from "electron";
 import * as C from "./src/helpers/ipc-contracts";
 import type { ElectronAPI } from "./src/electronAPI";
 import type {
@@ -208,6 +212,10 @@ export const preloadApi: ElectronAPI = {
   importAudioFile: () => ipcRenderer.invoke(C.TRANSCRIPTION.IMPORT_FILE),
   validateAudioFile: (filePath: string) =>
     ipcRenderer.invoke(C.TRANSCRIPTION.VALIDATE_FILE, filePath),
+  // [20260911_Fix_338_DragDropImport] Resolve the absolute path of a File
+  // obtained from a renderer drag & drop. Returns "" for non-file blobs, so
+  // callers fall back instead of importing a phantom path.
+  getPathForFile: (file: File) => webUtils.getPathForFile(file),
   transcribeFile: (audioPath: string, options: unknown) =>
     ipcRenderer.invoke(C.TRANSCRIPTION.TRANSCRIBE_FILE, audioPath, options),
   cancelFileTranscription: () => ipcRenderer.invoke(C.TRANSCRIPTION.CANCEL),
