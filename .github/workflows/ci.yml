@@ -36,7 +36,7 @@ jobs:
       # [20260817_T4_CiMatrix] Python supply for tests/python (stdlib
       # unittest + numpy). CI runners have no embedded env; the runner
       # script falls back to this system python.
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
 
