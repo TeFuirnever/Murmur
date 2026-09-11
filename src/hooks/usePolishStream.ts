@@ -112,9 +112,9 @@ export function usePolishStream() {
           } else if (chunk.type === "progress") {
             // [20260907_Feat_236_StreamingUi] T9 ③: block progress (bytes)
             // for consumers without per-word rendering (file import).
-            setStreamBytes(
-              (prev) => prev + ((chunk as { bytes?: number }).bytes ?? 0),
-            );
+            // [20260911_Fix_241_Review] The vestigial cast went away with
+            // the typed-optional bytes field.
+            setStreamBytes((prev) => prev + (chunk.bytes ?? 0));
             // [20260911_Feat_241_LongTextChunking] T14: the block triplet is
             // the chunked-polish dimension; byte-only progress chunks leave
             // it untouched.

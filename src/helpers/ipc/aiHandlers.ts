@@ -860,12 +860,12 @@ async function runChunkedPolish(ctx: ChunkedPolishContext): Promise<AIResult> {
     ctx.logger?.warn?.("修正表读取失败,跳过注入:", vocabError);
   }
 
-  const notifyProgress = (chunkIndex: number): void => {
+  const notifyProgress = (chunkIndex: number, count = chunks.length): void => {
     stream?.notify({
       type: "progress",
       requestId: stream.requestId,
       chunkIndex,
-      chunkCount: chunks.length,
+      chunkCount: count,
       elapsedMs: Date.now() - startedAt,
     });
   };
@@ -876,8 +876,23 @@ async function runChunkedPolish(ctx: ChunkedPolishContext): Promise<AIResult> {
       vocabCorrections: filterVocabForInjection(chunk, allVocab),
     });
 
+  /** One merge call over a batch of summaries (shared by all reduce rounds). */
+  const mergeOnce = async (batch: string[]): Promise<string> => {
+    const joined = joinChunkOutputs(batch);
+    const mergeBase = buildChunkPrompt(joined);
+    return await callChunkOnce(
+      ctx,
+      mergeBase.system,
+      `${mergeBase.user}\n【合并约束】以上为多段分块摘要，请合并为一份连贯的最终结果：去除重复、保留全部要点、输出一份而非逐段罗列。`,
+      joined.length,
+    );
+  };
+
   if (chunkStrategyForMode(mode) === "map-reduce") {
-    // 摘要类: per-chunk summaries, then ONE merge call over their join.
+    // 摘要类: per-chunk summaries, then merge. The merge input can itself
+    // exceed the budget on very long inputs (N × per-chunk summary), so the
+    // reduce runs in ROUNDS: group summaries to fit the budget, merge each
+    // group, and repeat until one text remains (multi-level map-reduce).
     const summaries: string[] = [];
     for (let i = 0; i < chunks.length; i++) {
       const aside = polishRunOutcomeIfSettledAside(ctx.runHandle);
@@ -886,21 +901,55 @@ async function runChunkedPolish(ctx: ChunkedPolishContext): Promise<AIResult> {
       summaries.push(await callChunkOnce(ctx, system, user, chunks[i]!.length));
       notifyProgress(i + 1);
     }
-    const mergeAside = polishRunOutcomeIfSettledAside(ctx.runHandle);
-    if (mergeAside) return ctx.settleAside(mergeAside);
-    const mergeBase = buildChunkPrompt(joinChunkOutputs(summaries));
-    const merged = await callChunkOnce(
-      ctx,
-      mergeBase.system,
-      `${mergeBase.user}\n【合并约束】以上为多段分块摘要，请合并为一份连贯的最终结果：去除重复、保留全部要点、输出一份而非逐段罗列。`,
-      summaries.join("").length,
-    );
-    return { success: true, text: clampJoinedOutput(merged), model: ctx.model };
+    // [20260911_Fix_241_Review] Progress counts the merge work too (N+1
+    // ticks): the UI must not sit at "第 N/N 块" while the merge runs.
+    let level = summaries;
+    let tick = chunks.length;
+    while (level.length > 1) {
+      const mergeAside = polishRunOutcomeIfSettledAside(ctx.runHandle);
+      if (mergeAside) return ctx.settleAside(mergeAside);
+      // Group so each group's join fits the chunk budget.
+      const groups: string[][] = [];
+      let bucket: string[] = [];
+      for (const summary of level) {
+        if (
+          bucket.length > 0 &&
+          joinChunkOutputs([...bucket, summary]).length > POLISH_CHUNK_MAX_CHARS
+        ) {
+          groups.push(bucket);
+          bucket = [];
+        }
+        bucket.push(summary);
+      }
+      if (bucket.length > 0) groups.push(bucket);
+      // Termination guard: if EVERY summary alone already exceeds the
+      // budget, grouping cannot shrink the level — merge the whole level in
+      // one best-effort call instead of looping forever.
+      if (groups.length === 1 || groups.length >= level.length) {
+        level = [await mergeOnce(level)];
+        tick += 1;
+        notifyProgress(tick, chunks.length + 1);
+        break;
+      }
+      const mergedGroups: string[] = [];
+      for (const group of groups) {
+        const groupAside = polishRunOutcomeIfSettledAside(ctx.runHandle);
+        if (groupAside) return ctx.settleAside(groupAside);
+        mergedGroups.push(await mergeOnce(group));
+        tick += 1;
+        notifyProgress(tick, chunks.length + groups.length);
+      }
+      level = mergedGroups;
+    }
+    return {
+      success: true,
+      text: clampJoinedOutput(level[0] ?? "", ctx.logger),
+      model: ctx.model,
+    };
   }
 
   // 整理/改写类: append-only accumulation chain.
   let accumulated = "";
-  const outputs: string[] = [];
   for (let i = 0; i < chunks.length; i++) {
     const aside = polishRunOutcomeIfSettledAside(ctx.runHandle);
     if (aside) return ctx.settleAside(aside);
@@ -909,25 +958,39 @@ async function runChunkedPolish(ctx: ChunkedPolishContext): Promise<AIResult> {
     const chainedUser = accumulated
       ? `${user}\n【增量累积约束】前文已整理出以下要点，本次输出必须完整保留这些要点（只增不减），在此基础上继续处理当前内容：\n${accumulated}`
       : user;
-    const output = await callChunkOnce(ctx, system, chainedUser, chunk.length);
-    outputs.push(output);
+    // [20260911_Fix_241_Review] MAJOR #2: the chain output is CUMULATIVE —
+    // from chunk 2 the provider must re-emit the accumulated points plus the
+    // new chunk, so the token budget keys to chunk + accumulated, not the
+    // chunk alone (else truncation silently drops earlier points).
+    const output = await callChunkOnce(
+      ctx,
+      system,
+      chainedUser,
+      chunk.length + accumulated.length,
+    );
     // The append-only output carries every point so far — it IS the next
-    // chunk's context.
+    // chunk's context AND (being the last one) the final result. Joining
+    // all per-chunk outputs would duplicate content N-fold (review MAJOR #1).
     accumulated = output;
     notifyProgress(i + 1);
   }
   return {
     success: true,
-    text: clampJoinedOutput(joinChunkOutputs(outputs)),
+    text: clampJoinedOutput(accumulated, ctx.logger),
     model: ctx.model,
   };
 }
 
 /** Absolute output guard, shared by the chunked path's final text. */
-function clampJoinedOutput(text: string): string {
-  return text.length > POLISH_OUTPUT_MAX_CHARS
-    ? text.slice(0, POLISH_OUTPUT_MAX_CHARS)
-    : text;
+function clampJoinedOutput(text: string, logger: Logger): string {
+  if (text.length <= POLISH_OUTPUT_MAX_CHARS) return text;
+  // [20260911_Fix_241_Review] Truncation is a robustness action worth a log
+  // line, same as the single-shot clamp.
+  logger.info?.("AI输出超出字符上限，已截断:", {
+    originalLength: text.length,
+    cap: POLISH_OUTPUT_MAX_CHARS,
+  });
+  return text.slice(0, POLISH_OUTPUT_MAX_CHARS);
 }
 // [20260911_Feat_241_LongTextChunking] END
 
