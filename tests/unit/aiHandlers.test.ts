@@ -2824,7 +2824,9 @@ describe("[20260911_Feat_241_LongTextChunking] T14 chunked polish", () => {
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
-  it("cancel after the last chunk settles before the merge call fires", async () => {
+  // [20260911_Fix_241_Review2] Retitled: the abort lands DURING the
+  // in-flight merge call (the deterministic timing point), not before it.
+  it("cancel during the in-flight merge call settles the whole chain", async () => {
     setup();
     const { text } = longText();
     let call = 0;
@@ -2915,6 +2917,11 @@ describe("[20260911_Feat_241_LongTextChunking] T14 chunked polish", () => {
         (fetchMock.mock.calls[i]![1] as { body: string }).body,
       );
       expect(body.messages[1].content).toContain("合并约束");
+    }
+    // [20260911_Fix_241_Review2] Progress never shows index > count, across
+    // every map phase tick and every reduce round.
+    for (const p of chunksFor(1).filter((c) => c.type === "progress")) {
+      expect(p.chunkIndex).toBeLessThanOrEqual(p.chunkCount!);
     }
   });
   // [20260911_Fix_241_Review] END

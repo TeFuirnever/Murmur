@@ -928,7 +928,10 @@ async function runChunkedPolish(ctx: ChunkedPolishContext): Promise<AIResult> {
       if (groups.length === 1 || groups.length >= level.length) {
         level = [await mergeOnce(level)];
         tick += 1;
-        notifyProgress(tick, chunks.length + 1);
+        // [20260911_Fix_241_Review2] The final tick IS the total — after a
+        // grouped round the running tick can exceed chunks.length+1, and
+        // the UI must never show 第 10/7 块.
+        notifyProgress(tick, Math.max(tick, chunks.length + 1));
         break;
       }
       const mergedGroups: string[] = [];
@@ -937,7 +940,9 @@ async function runChunkedPolish(ctx: ChunkedPolishContext): Promise<AIResult> {
         if (groupAside) return ctx.settleAside(groupAside);
         mergedGroups.push(await mergeOnce(group));
         tick += 1;
-        notifyProgress(tick, chunks.length + groups.length);
+        // [20260911_Fix_241_Review2] Count never shrinks below the running
+        // index across rounds.
+        notifyProgress(tick, Math.max(tick, chunks.length + groups.length));
       }
       level = mergedGroups;
     }
@@ -961,7 +966,10 @@ async function runChunkedPolish(ctx: ChunkedPolishContext): Promise<AIResult> {
     // [20260911_Fix_241_Review] MAJOR #2: the chain output is CUMULATIVE —
     // from chunk 2 the provider must re-emit the accumulated points plus the
     // new chunk, so the token budget keys to chunk + accumulated, not the
-    // chunk alone (else truncation silently drops earlier points).
+    // chunk alone (else truncation silently drops earlier points). The
+    // budget still saturates at the user's max_tokens ceiling on very long
+    // chains — the same accepted tradeoff as the single-shot path
+    // (review-2 residual observation, not a defect).
     const output = await callChunkOnce(
       ctx,
       system,
