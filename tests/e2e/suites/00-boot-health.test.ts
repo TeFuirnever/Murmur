@@ -127,12 +127,15 @@ function funasrAppLogPath(): string {
 
 // [20260912_Test_WinPackagedQuitBudget] Quit budget for test 0.7. The
 // will-quit handler races FunASR gracefulShutdown at 5s
-// (main.ts:397-400); Windows packaged teardown then measured ~3-5s more
-// until Playwright's 'close' fires (run 34581815142: app.exit → process
-// exit 4.7s; total close 6.5s vs the old flat 6s budget). darwin keeps
-// the original 6s (teardown <1s there); win32 gets 15s = 5s race +
-// ~5s teardown + slack.
-const QUIT_BUDGET_MS = process.platform === "win32" ? 15_000 : 6_000;
+// (main.ts:397-400); packaged teardown then measured ~3-5s more on
+// Windows (run 34581815142: total close 6.5s vs the old flat 6s
+// budget). [20260912_Test_MacPackagedQuitBudget] With the 0.2b settle
+// in place the FunASR server is fully booted at quit time, so darwin
+// now pays the real gracefulShutdown + torch-interpreter teardown too:
+// run 34641412843 measured 10.8s and 11.3s vs the old darwin 6s
+// budget. The assertion exists to catch quit HANGS, not to time the
+// shutdown — 15s both platforms (5s race + ~6s teardown + slack).
+const QUIT_BUDGET_MS = 15_000;
 // [20260912_Test_WinPackagedQuitBudget] END
 
 test.describe.serial("Suite 0: Boot Health (Phase A-E)", () => {
