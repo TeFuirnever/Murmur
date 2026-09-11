@@ -83,12 +83,26 @@ const BOOT_PROBES = {
 // exit 0) mid-probe. Waiting for the server's first init result (test
 // 0.2b below) moves the storm BEFORE the fragile probes, and parks the
 // Python process in stdin readline so 0.7's gracefulShutdown "exit"
-// command is answered immediately. The milestone strings are the same
-// app.log contract the release smoke gates on (see funasrManager.ts
-// [20260818_T3_PythonSelfCheckMilestone]).
+// command is answered immediately.
+//
+// "Settled" = ANY terminal FunASR state, not just a spawned server
+// (PR #347 CI run 34629631370 failed 0.2b on BOTH platforms because
+// the lint-and-test runners have no embedded Python env at all):
+//   1. 启动成功   — server up, models initialized (dev machines);
+//   2. 初始化失败 — server up, models_not_downloaded (release runners);
+//   3. 启动初始化失败 — initializeAtStartup threw (e.g. "嵌入式Python环境
+//      不可用" on PR CI); the server NEVER spawns in this state
+//      (preInitializeModels early-returns on installed:false,
+//      funasrManager.ts:329-333), so there is no storm to wait out and
+//      0.2b resolves immediately.
+// All three are logger.info/warn lines and therefore land in app.log
+// (logManager.ts:72-103 routes every level to the file). The server
+// milestones are the same app.log contract the release smoke gates on
+// (see funasrManager.ts [20260818_T3_PythonSelfCheckMilestone]).
 const FUNASR_INIT_SETTLE_TIMEOUT_MS = 30_000;
 const FUNASR_INIT_SETTLE_POLL_MS = 500;
-const FUNASR_INIT_MILESTONE = /FunASR服务器(启动成功|初始化失败)/;
+const FUNASR_INIT_MILESTONE =
+  /FunASR服务器(启动成功|初始化失败)|FunASR启动初始化失败/;
 
 // Mirrors LogManager.getLogDirectory(): <userData>/logs/app.log, with
 // userData resolved from the app name ("murmur") per platform. Matches
@@ -130,10 +144,12 @@ test.describe.serial("Suite 0: Boot Health (Phase A-E)", () => {
   let electronApp;
   let window;
   // [20260912_Test_WinPackagedBootFunasrSettle] Byte offset into app.log
-  // captured at launch; the 0.2b milestone scan only reads content
-  // appended AFTER it, so a previous instance's log (the release
-  // pipeline's PowerShell smoke boots the same packaged app first)
-  // cannot false-positive the settle wait.
+  // captured BEFORE launch in beforeAll; the 0.2b milestone scan only
+  // reads content appended AFTER it, so a previous instance's log (the
+  // release pipeline's PowerShell smoke boots the same packaged app
+  // first) cannot false-positive the settle wait. It must be captured
+  // pre-launch because the env-unavailable milestone (state 3 above)
+  // fires DURING boot — potentially before launchElectronApp() returns.
   let funasrLogOffset = 0;
   // [20260912_Test_WinPackagedBootFunasrSettle] END
   // [20260725_E2E_BootHealthGate_CodeReviewS2] Renderer console listener
@@ -146,15 +162,16 @@ test.describe.serial("Suite 0: Boot Health (Phase A-E)", () => {
   const consoleErrors = [];
 
   test.beforeAll(async () => {
-    ({ app: electronApp, window } = await launchElectronApp());
     // [20260912_Test_WinPackagedBootFunasrSettle] Capture the app.log
-    // offset AFTER launch (the boot may have rotated/truncated the file).
+    // offset BEFORE launch so boot-time milestones (state 3 fires ~0.5s
+    // in) are guaranteed to land after it.
     try {
       funasrLogOffset = fs.statSync(funasrAppLogPath()).size;
     } catch {
       funasrLogOffset = 0; // first boot on this machine — no log yet
     }
     // [20260912_Test_WinPackagedBootFunasrSettle] END
+    ({ app: electronApp, window } = await launchElectronApp());
     window.on("console", (msg) => {
       if (msg.type() === "error") consoleErrors.push(msg.text());
     });
@@ -212,23 +229,29 @@ test.describe.serial("Suite 0: Boot Health (Phase A-E)", () => {
     }
   });
 
-  // 0.2b — [20260912_Test_WinPackagedBootFunasrSettle] wait for the
-  // FunASR Python server's first-boot init result before the reload /
-  // evaluate probes below. On Windows release CI the interpreter+funasr
-  // import storm (~5s on the 4-core runner) overlaps tests 0.3-0.6 and
-  // the app received a mid-probe teardown 4/4 sub-runs (run
-  // 34581815142). Web-first poll (R1) on the app.log milestone — no
-  // fixed waitForTimeout (§8). Both terminal outcomes satisfy the wait:
-  // models present ("启动成功") or models absent ("初始化失败" —
-  // models_not_downloaded, the expected CI state).
+  // 0.2b — [20260912_Test_WinPackagedBootFunasrSettle] wait for FunASR
+  // to reach ANY terminal first-boot state before the reload / evaluate
+  // probes below. On Windows release CI the interpreter+funasr import
+  // storm (~5s on the 4-core runner) overlaps tests 0.3-0.6 and the app
+  // received a mid-probe teardown 4/4 sub-runs (run 34581815142).
+  // Web-first poll (R1) on the app.log milestone — no fixed
+  // waitForTimeout (§8). Terminal states (see tag above): server init
+  // success, server init failure (models_not_downloaded — the expected
+  // release-CI state), or FunASR unavailable (python env missing — the
+  // PR-CI state; no server ever spawns, so the wait resolves on the
+  // first poll).
   test("0.2b FunASR first-boot init settles before renderer probes", async () => {
     const logPath = funasrAppLogPath();
     await expect
       .poll(
         () => {
           try {
+            const content = fs.readFileSync(logPath, "utf8");
+            // Clamp: if boot rotated/recreated the log (cleanOldLogs
+            // deletes >7d files), the pre-launch offset can exceed the
+            // new file's length — scan the whole fresh file instead.
             return FUNASR_INIT_MILESTONE.test(
-              fs.readFileSync(logPath, "utf8").slice(funasrLogOffset),
+              content.slice(Math.min(funasrLogOffset, content.length)),
             );
           } catch {
             return false; // app.log not created yet
