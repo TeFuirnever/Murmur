@@ -336,6 +336,20 @@ class WindowManager {
     return path.join(process.resourcesPath, "assets", "icon.png");
   }
 
+  // [20260911_Fix_339_DockActivate] Issue #339: the custom close button
+  // hides the main window (close_behavior defaults to "hide" — tray-resident
+  // design), so a macOS Dock click (app "activate") must re-show the EXISTING
+  // hidden window; BrowserWindow.getAllWindows() still contains it, which is
+  // why the old activate handler (recreate only when length === 0) left the
+  // app stuck in the Dock with no way back.
+  showMainWindow(): void {
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.show();
+      this.mainWindow.focus();
+    }
+  }
+  // [20260911_Fix_339_DockActivate] END
+
   closeAllWindows(): void {
     if (this.mainWindow) {
       this.mainWindow.close();
