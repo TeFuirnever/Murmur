@@ -57,6 +57,18 @@ const DOWNLOAD_STALL_TIMEOUT_MS = 10 * 60 * 1000;
 const DOWNLOAD_STALL_TIMEOUT_MESSAGE =
   "模型下载超时（10 分钟无进度）。已下载部分已保留，重试将自动断点续传";
 
+// [20260911_Fix_336_HubLayout] Issue #336: modelscope 1.39's real on-disk
+// layout is <cache>/models/damo--<repo>/snapshots/<rev>/ — NO `hub` layer,
+// repo dirs renamed `damo--<name>`, an extra `snapshots/<revision>` level.
+// Node's check and the Python readiness gate (funasr_server.py
+// _resolve_repo_dir) must resolve to the SAME place, otherwise the UI
+// flaps between 已加载/下载中. These constants drive the shared shape.
+const HUB_REPO_PREFIX = "damo--";
+// Pinned to the server-side model_revision; preferred when a repo dir
+// holds several snapshots.
+const PINNED_MODEL_REVISION = "v2.0.4";
+// [20260911_Fix_336_HubLayout] END
+
 class ModelManager {
   private logger: Logger;
   modelsDownloaded: boolean | null;
@@ -142,6 +154,17 @@ class ModelManager {
       "hub",
       "models",
     );
+    // [20260911_Fix_336_HubLayout] modelscope 1.39 drops the `hub` layer:
+    // fresh downloads land in ~/.cache/modelscope/models/damo--<repo>.
+    // $MODELSCOPE_CACHE can point anywhere, so probe its models roots too —
+    // Python's _default_damo_root()/_hub_models_roots() honor the same env.
+    const modelScopeCacheNoHub = path.join(
+      os.homedir(),
+      ".cache",
+      "modelscope",
+      "models",
+    );
+    const envCache = process.env.MODELSCOPE_CACHE;
 
     const candidates: string[] = [];
     if (process.env.NODE_ENV === "development") {
@@ -157,7 +180,15 @@ class ModelManager {
       // [20260724_TS_BigBang_DirnameFix] END
     }
     candidates.push(userDataModels);
+    // [20260911_Fix_336_HubLayout] Env-configured caches are probed BEFORE
+    // the home defaults: modelscope downloads INTO $MODELSCOPE_CACHE when
+    // set, so that is where the models actually are.
+    if (envCache) {
+      candidates.push(path.join(envCache, "models"));
+      candidates.push(path.join(envCache, "hub", "models"));
+    }
     candidates.push(modelScopeCache);
+    candidates.push(modelScopeCacheNoHub);
 
     for (const candidate of candidates) {
       if (!fs.existsSync(candidate)) continue;
@@ -165,15 +196,19 @@ class ModelManager {
       if (fs.existsSync(damoSub) && fs.readdirSync(damoSub).length > 0)
         return damoSub;
       if (fs.readdirSync(candidate).length > 0) {
-        const hasExpected = fs
-          .readdirSync(candidate)
-          .some(
-            (n) =>
-              n.startsWith("speech_seaco_paraformer") ||
-              n.startsWith("speech_paraformer") ||
-              n.startsWith("speech_fsmn") ||
-              n.startsWith("punc_ct"),
+        const hasExpected = fs.readdirSync(candidate).some((n) => {
+          // [20260911_Fix_336_HubLayout] Hub-layout repos carry a
+          // `damo--` prefix over the plain repo dir name.
+          const repoName = n.startsWith(HUB_REPO_PREFIX)
+            ? n.slice(HUB_REPO_PREFIX.length)
+            : n;
+          return (
+            repoName.startsWith("speech_seaco_paraformer") ||
+            repoName.startsWith("speech_paraformer") ||
+            repoName.startsWith("speech_fsmn") ||
+            repoName.startsWith("punc_ct")
           );
+        });
         if (hasExpected) return candidate;
       }
     }
@@ -193,6 +228,52 @@ class ModelManager {
     fs.mkdirSync(userDataModels, { recursive: true });
     return userDataModels;
   }
+
+  // [20260911_Fix_336_HubLayout] Per-repo resolver mirroring the Python
+  // gate (funasr_server.py _resolve_repo_dir): a repo lives either directly
+  // under the cache root (legacy damo-root shape) or in the modelscope 1.39
+  // hub shape damo--<repo>/snapshots/<rev>/. Returns the first dir that
+  // carries a marker file, or null — Node's check and the server gate then
+  // agree on "downloaded" (the mismatch WAS the #336 flapping UI).
+  _resolveRepoDir(cachePath: string, repoDirName: string): string | null {
+    const direct = path.join(cachePath, repoDirName);
+    if (fs.existsSync(direct)) return direct;
+    const snapshotsDir = path.join(
+      cachePath,
+      `${HUB_REPO_PREFIX}${repoDirName}`,
+      "snapshots",
+    );
+    if (!fs.existsSync(snapshotsDir)) return null;
+    const revisions = fs
+      .readdirSync(snapshotsDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort((a, b) => {
+        // Pinned revision first — it is what the server loads; then the
+        // newest remaining revision.
+        if (a === PINNED_MODEL_REVISION) return -1;
+        if (b === PINNED_MODEL_REVISION) return 1;
+        return b.localeCompare(a);
+      });
+    for (const revision of revisions) {
+      const candidate = path.join(snapshotsDir, revision);
+      // Marker check via _verifyModel's directory branch (expected_size is
+      // ignored there): a mid-download snapshot holding only part-files
+      // must not count as present.
+      if (
+        this._verifyModel(candidate, {
+          name: repoDirName,
+          cache_path: repoDirName,
+          expected_size: 0,
+          required: false,
+        })
+      ) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+  // [20260911_Fix_336_HubLayout] END
 
   async checkModelFiles(): Promise<ModelCheckResult> {
     const now = Date.now();
@@ -230,20 +311,29 @@ class ModelManager {
       // satisfies minimum_ready — the server runs on the old generation
       // instead of refusing to start (review MAJOR fix).
       let isComplete = false;
-      const modelFile = path.join(cachePath, config.cache_path);
-      if (fs.existsSync(modelFile)) {
-        isComplete = this._verifyModel(modelFile, config);
+      // [20260911_Fix_336_HubLayout] Resolve through the hub layout too —
+      // a bare path.join would miss damo--<repo>/snapshots/<rev>/.
+      const resolvedPrimary = this._resolveRepoDir(
+        cachePath,
+        config.cache_path,
+      );
+      if (resolvedPrimary) {
+        isComplete = this._verifyModel(resolvedPrimary, config);
       }
       let ready = isComplete;
       if (!ready && config.fallback_name) {
-        const fallbackFile = path.join(
+        const fallbackDirName = config.fallback_name
+          .split("/")
+          .slice(1)
+          .join("/");
+        const resolvedFallback = this._resolveRepoDir(
           cachePath,
-          config.fallback_name.split("/").slice(1).join("/"),
+          fallbackDirName,
         );
-        if (fs.existsSync(fallbackFile)) {
-          ready = this._verifyModel(fallbackFile, {
+        if (resolvedFallback) {
+          ready = this._verifyModel(resolvedFallback, {
             ...config,
-            cache_path: config.fallback_name.split("/").slice(1).join("/"),
+            cache_path: fallbackDirName,
           });
         }
       }
