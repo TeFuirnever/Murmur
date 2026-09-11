@@ -22,6 +22,13 @@ import {
   isStreamDegradationRemembered,
   rememberStreamDegradation,
 } from "../streamDegradation";
+// [20260911_Feat_241_LongTextChunking] T14: chunker + strategy classifier.
+import {
+  POLISH_CHUNK_MAX_CHARS,
+  chunkStrategyForMode,
+  joinChunkOutputs,
+  splitIntoChunks,
+} from "../polish-chunking";
 
 interface Logger {
   info?(message: string, ...args: unknown[]): void;
@@ -760,6 +767,170 @@ function resolvePolishMaxTokens(
 }
 // [20260906_Feat_OrchestratorGenCancel] END
 
+// [20260911_Feat_241_LongTextChunking] Spec #193 T14 (ticket #241): chunked
+// polish for over-threshold text. Sequential per-chunk provider calls (块间
+// 顺序执行); two strategies — 整理/改写类 walk an append-only accumulation
+// chain (each chunk carries the previous accumulated output with a
+// 只增不减 constraint), summarize maps to per-chunk summaries + one merge
+// call. Progress rides the existing progress chunk as 第几块/共几块/已耗时
+// so the renderer stays strategy-agnostic. Chunks are NON-streaming
+// provider calls: the degradation memory (T10) neither reads nor writes
+// here, and each chunk gets the full per-request timeout (the user watches
+// elapsed time in the UI — the ticket's explicit cost tradeoff, since the
+// accumulation chain's total token spend grows super-linearly).
+interface ChunkedPolishContext {
+  chunks: string[];
+  mode: string;
+  baseUrl: string;
+  apiKey: string | undefined;
+  model: string;
+  temperature: number;
+  maxTokens: number;
+  clampOutputTokens: boolean;
+  templatesDir: string | undefined;
+  databaseManager: DatabaseManager;
+  timeoutMs: number;
+  timeoutMessage: string;
+  runHandle: PolishRunHandle | null;
+  stream: PolishRequest["stream"];
+  logger: Logger;
+  settleAside: (outcome: AIResult) => AIResult;
+}
+
+/** One non-streaming provider call returning the trimmed content text. */
+async function callChunkOnce(
+  ctx: ChunkedPolishContext,
+  system: string,
+  user: string,
+  chunkInputLength: number,
+): Promise<string> {
+  const response = await postChatCompletion(
+    ctx.baseUrl,
+    ctx.apiKey,
+    {
+      model: ctx.model,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+      temperature: ctx.temperature,
+      // Per-chunk budget follows the same clamp semantics as single-shot,
+      // keyed to the CHUNK's input length.
+      max_tokens: resolvePolishMaxTokens(
+        ctx.mode,
+        chunkInputLength,
+        ctx.maxTokens,
+        ctx.clampOutputTokens,
+      ),
+      stream: false,
+    },
+    ctx.timeoutMs,
+    ctx.timeoutMessage,
+    ctx.runHandle?.controller.signal,
+  );
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(
+      extractAIErrorMessage(response, errorText, ctx.logger) ||
+        `AI服务请求失败 (${response.status})`,
+    );
+  }
+  const data = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+  const content = data.choices?.[0]?.message?.content?.trim() || "";
+  if (!content) {
+    throw new Error("AI返回了空内容，请重试或更换模型");
+  }
+  return content;
+}
+
+async function runChunkedPolish(ctx: ChunkedPolishContext): Promise<AIResult> {
+  const { chunks, mode, stream } = ctx;
+  const startedAt = Date.now();
+  const customTemplates = ctx.templatesDir
+    ? getCachedTemplates(ctx.templatesDir)
+    : [];
+  // Corrections read once, re-filtered per chunk (same discipline as the
+  // single-shot path: a table read failure degrades to no injection).
+  let allVocab: Array<{ wrong: string; right: string }> = [];
+  try {
+    allVocab = ctx.databaseManager.listVocabCorrections?.() ?? [];
+  } catch (vocabError) {
+    ctx.logger?.warn?.("修正表读取失败,跳过注入:", vocabError);
+  }
+
+  const notifyProgress = (chunkIndex: number): void => {
+    stream?.notify({
+      type: "progress",
+      requestId: stream.requestId,
+      chunkIndex,
+      chunkCount: chunks.length,
+      elapsedMs: Date.now() - startedAt,
+    });
+  };
+
+  const buildChunkPrompt = (chunk: string): { system: string; user: string } =>
+    buildPrompt(mode, chunk, {
+      customTemplates,
+      vocabCorrections: filterVocabForInjection(chunk, allVocab),
+    });
+
+  if (chunkStrategyForMode(mode) === "map-reduce") {
+    // 摘要类: per-chunk summaries, then ONE merge call over their join.
+    const summaries: string[] = [];
+    for (let i = 0; i < chunks.length; i++) {
+      const aside = polishRunOutcomeIfSettledAside(ctx.runHandle);
+      if (aside) return ctx.settleAside(aside);
+      const { system, user } = buildChunkPrompt(chunks[i]!);
+      summaries.push(await callChunkOnce(ctx, system, user, chunks[i]!.length));
+      notifyProgress(i + 1);
+    }
+    const mergeAside = polishRunOutcomeIfSettledAside(ctx.runHandle);
+    if (mergeAside) return ctx.settleAside(mergeAside);
+    const mergeBase = buildChunkPrompt(joinChunkOutputs(summaries));
+    const merged = await callChunkOnce(
+      ctx,
+      mergeBase.system,
+      `${mergeBase.user}\n【合并约束】以上为多段分块摘要，请合并为一份连贯的最终结果：去除重复、保留全部要点、输出一份而非逐段罗列。`,
+      summaries.join("").length,
+    );
+    return { success: true, text: clampJoinedOutput(merged), model: ctx.model };
+  }
+
+  // 整理/改写类: append-only accumulation chain.
+  let accumulated = "";
+  const outputs: string[] = [];
+  for (let i = 0; i < chunks.length; i++) {
+    const aside = polishRunOutcomeIfSettledAside(ctx.runHandle);
+    if (aside) return ctx.settleAside(aside);
+    const chunk = chunks[i]!;
+    const { system, user } = buildChunkPrompt(chunk);
+    const chainedUser = accumulated
+      ? `${user}\n【增量累积约束】前文已整理出以下要点，本次输出必须完整保留这些要点（只增不减），在此基础上继续处理当前内容：\n${accumulated}`
+      : user;
+    const output = await callChunkOnce(ctx, system, chainedUser, chunk.length);
+    outputs.push(output);
+    // The append-only output carries every point so far — it IS the next
+    // chunk's context.
+    accumulated = output;
+    notifyProgress(i + 1);
+  }
+  return {
+    success: true,
+    text: clampJoinedOutput(joinChunkOutputs(outputs)),
+    model: ctx.model,
+  };
+}
+
+/** Absolute output guard, shared by the chunked path's final text. */
+function clampJoinedOutput(text: string): string {
+  return text.length > POLISH_OUTPUT_MAX_CHARS
+    ? text.slice(0, POLISH_OUTPUT_MAX_CHARS)
+    : text;
+}
+// [20260911_Feat_241_LongTextChunking] END
+
 export async function runPolishOrchestrator(
   deps: PolishDeps,
   request: PolishRequest,
@@ -925,6 +1096,40 @@ export async function runPolishOrchestrator(
     const deadlineMs = Date.now() + timeoutMs;
     const timeoutMessage = `AI请求超时（${Math.round(timeoutMs / 1000)}秒），请尝试缩短文本或检查网络`;
     // [20260910_Feat_237_StreamDegradation] END
+
+    // [20260911_Feat_241_LongTextChunking] T14: over-threshold text takes the
+    // chunked path — sequential per-chunk calls with progress chunks; the
+    // single-shot pipeline below is untouched for normal-length input (单块
+    // 直通 = 现状行为). Explicit whole-prompt overrides (AI_REVIEW) keep the
+    // single-shot path too: their prompt contract is caller-owned.
+    if (
+      text.length > POLISH_CHUNK_MAX_CHARS &&
+      !(request.systemPrompt && request.userPrompt)
+    ) {
+      const chunks = splitIntoChunks(text);
+      if (chunks.length > 1) {
+        return await runChunkedPolish({
+          chunks,
+          mode,
+          baseUrl,
+          apiKey,
+          model,
+          temperature,
+          maxTokens,
+          clampOutputTokens: request.clampOutputTokens === true,
+          templatesDir: request.templatesDir,
+          databaseManager,
+          timeoutMs,
+          timeoutMessage,
+          runHandle,
+          stream: request.stream,
+          logger,
+          settleAside,
+        });
+      }
+    }
+    // [20260911_Feat_241_LongTextChunking] END
+
     let response = await postChatCompletion(
       baseUrl,
       apiKey,
