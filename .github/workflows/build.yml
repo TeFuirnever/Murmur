@@ -131,7 +131,15 @@ jobs:
         run: pnpm run build:renderer
 
       - name: Build macOS DMG
-        run: pnpm electron-builder --mac --publish never
+        # [20260912_Fix_MacPackagingEMFILE] electron-builder unpacks the
+        # embedded-python tree (torch ships tens of thousands of headers)
+        # with one open fd per file; the default 256 soft limit on macOS
+        # runners made the DMG step die with EMFILE 2/2 in run 34631944103.
+        # Raise the soft fd limit for the packaging process only.
+        run: |
+          ulimit -n 65536 || true
+          pnpm electron-builder --mac --publish never
+        # [20260912_Fix_MacPackagingEMFILE] END
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
