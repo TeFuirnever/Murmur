@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-09-11
+
 ### Added
 
 - **测试度量收口**（Spec #259，#273–#276）：六组模块（modelManager、ipc/\*\*、windowManager、updateManager、logManager、pythonEnvironment）纳入覆盖率插桩，per-glob 分支地板按首测值设防并随补齐抬升至 92；全局阈值重定基线 88/83/88/89；Python 套件接入 coverage.py（`test:python:unit` 携带 --fail-under=43 门禁）。
@@ -20,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **macOS 模型已下载却反复提示未下载/状态横跳**（#336，PR #345）：显式 `--damo-root`（空的 userData/models）短路了布局探测，且 modelscope ≥1.19 的实际落盘布局（`~/.cache/modelscope/models/damo--<repo>/snapshots/<rev>`）与所有候选不匹配——Python 门禁与 Node 检查各看各的。现双侧解析一致：显式 root 有内容时优先，为空时回退 modelscope 缓存并支持 hub 新布局（shard 感知，钉住 v2.0.4 修订优先）。
+- **macOS 点关闭按钮后卡死 Dock、无法再次打开**（#339，PR #345）：`app.on("activate")` 只在窗口数为 0 时重建，被隐藏的窗口仍计数 → Dock 点击无响应。现 activate 正确显示隐藏窗口，零窗口时重建并重新同步托盘引用（修复窗口销毁后托盘静默失效的次生 bug）；关闭/激活/退出全链路补日志。
+- **macOS 文件拖放导入无反应**（#338，PR #345）：主窗口无 `dragover preventDefault` 导致 Chromium 丢弃 drop；且 `FileDropZone` 读取的 `File.path` 在 Electron ≥32 已移除。现 preload 暴露 `webUtils.getPathForFile`，窗口级拖放监听复用与按钮导入同一条校验管线。
+- **macOS 首次安装报「已损坏，无法打开」**（#337，PR #345）：CI 关闭证书自动发现且无 `identity` → electron-builder 完全跳过签名，产物密封破损。现以 `identity: "-"` 启用完整 ad-hoc 深度签名（有效密封，仅需 `xattr -cr` 绕行，无需重签）；release CI 新增 `codesign --verify --deep --strict` 产物门禁（release gate #7），破损密封无法再流出；README/troubleshooting 补「已损坏」场景绕行说明。Developer ID 签名 + 公证仍需配置 Apple 证书 CI secrets。
 - **手动润色不再丢失**（Spec #193 T1/T2，#228 #229）：新增全库首个 UPDATE 写回通道（列白名单防注入）与 `manually_edited` 编辑保护列（无损迁移），历史窗新增内联编辑入口；被编辑记录自动跳过后续自动润色。
 
 - **导出全部丢失分段时间轴**：export-all 向格式化器传原始行（segments 为 JSON 字符串）而格式化器读解析后的字段——历史记录"导出全部"的 srt/vtt 从未包含时间轴，已按单条导出口径逐行解析。
