@@ -149,6 +149,7 @@ chore: 升级 Electron 到 v36
 4. **Packaged boot smoke（mac）** — 挂载刚构建的 DMG、真实启动 app，轮询断言启动日志含"主窗口创建成功/应用启动完成/注册成功/Python链路自检通过"（热键注册来自渲染进程 IPC 证明 preload 桥；Python 自检是独立 spawn 嵌入式解释器跑 `import funasr`，证明解释器解析 + 依赖栈整体可用），且无致命模式（`NODE_MODULE_VERSION` / `Uncaught Exception` / `Unhandled Rejection` / preload 失败 / Python自检失败）
 5. **Packaged boot smoke（win）** — 静默安装（`/S`）刚构建的 EXE 后同样断言
 6. **Packaged boot-health probes（mac/win，Spec #266 T11）** — 以已安装产物为启动目标运行 boot-health 探针套件（preload 桥/麦克风按钮/mascot/CSP/6s 退出），打包态 asar 布局对 dev 模式 e2e 不可见
+7. <!-- [20260911_Gate_MacSignature] issue #337：v1.5.0 dmg 无资源密封被 Gatekeeper 判"已损坏" -->**macOS signature gate（mac）** — DMG 构建后对 `dist/**/Murmur.app` 执行 `codesign --verify --deep --strict`，密封损坏即中止发布；有效 ad-hoc 密封可通过（无需证书），根治需维护者在 CI secrets 配置 Developer ID（`CSC_LINK` 等）并开启公证<!-- [20260911_Gate_MacSignature] END -->
 
 经验教训：**构建全绿 ≠ 产物可用**。发布流水线的验收对象是"安装后的 app"，不是"dist/ 里有文件"。
 

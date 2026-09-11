@@ -621,6 +621,36 @@ describe("[20260906_Spec259_T2] windowManager branch close-out", () => {
     expect(main.focus).not.toHaveBeenCalled();
   });
 
+  // [20260911_Fix_339_DockActivate] Issue #339: after the close button hides
+  // the main window (tray-resident design), a macOS Dock click fires
+  // app.on("activate"), which must re-show the existing hidden window.
+  it("showMainWindow shows and focuses the existing hidden main window", async () => {
+    process.env.NODE_ENV = "development";
+    const WindowManager = await loadWindowManager();
+    const wm = new WindowManager();
+    const main = (await wm.createMainWindow())!;
+
+    wm.showMainWindow();
+
+    expect(main.show).toHaveBeenCalledTimes(1);
+    expect(main.focus).toHaveBeenCalledTimes(1);
+  });
+
+  it("showMainWindow is a safe no-op when the main window is missing or destroyed", async () => {
+    process.env.NODE_ENV = "development";
+    const WindowManager = await loadWindowManager();
+    const wm = new WindowManager();
+
+    expect(() => wm.showMainWindow()).not.toThrow();
+
+    const main = (await wm.createMainWindow())!;
+    main.isDestroyed = vi.fn(() => true);
+    wm.showMainWindow();
+    expect(main.show).not.toHaveBeenCalled();
+    expect(main.focus).not.toHaveBeenCalled();
+  });
+  // [20260911_Fix_339_DockActivate] END
+
   it("closeAllWindows closes every open window and is a safe no-op on a fresh manager", async () => {
     process.env.NODE_ENV = "development";
     const WindowManager = await loadWindowManager();

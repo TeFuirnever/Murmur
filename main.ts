@@ -343,18 +343,52 @@ app.whenReady().then(async () => {
 // [20260725_E2E_CiStartupFix] END
 
 app.on("window-all-closed", () => {
+  // [20260911_Fix_339_DockActivate] Lifecycle observability — issue #339 was
+  // undebuggable from app.log because the close/hide/activate path had zero
+  // log lines. macOS intentionally stays alive (tray-resident); other
+  // platforms quit.
+  logger.info("window-all-closed事件", { platform: process.platform });
   if (process.platform !== "darwin") {
     app.quit();
   }
 });
 
+// [20260911_Fix_339_DockActivate] Issue #339: macOS Dock click must recover
+// the tray-resident window. Two cases:
+//   1. No windows at all (window was destroyed, e.g. Cmd+W): recreate AND
+//      re-sync the tray's window reference — trayManager captured the
+//      original window once at startup, so without setWindows() every tray
+//      show/click would no-op against the destroyed reference.
+//   2. A HIDDEN main window still exists (the custom close button's default
+//      close_behavior "hide" path): getAllWindows() is non-empty, so the old
+//      recreate-only handler did nothing and the app looked dead in the
+//      Dock. Now the existing window is shown/focused instead.
 app.on("activate", () => {
+  logger.info("activate事件 (Dock点击)", {
+    windowCount: BrowserWindow.getAllWindows().length,
+  });
   if (BrowserWindow.getAllWindows().length === 0) {
-    windowManager.createMainWindow();
+    windowManager
+      .createMainWindow()
+      .then((win) => {
+        if (win) {
+          trayManager.setWindows(win);
+        }
+      })
+      .catch((err: unknown) => {
+        logger.error("activate重建主窗口失败:", err);
+      });
+  } else {
+    windowManager.showMainWindow();
   }
 });
+// [20260911_Fix_339_DockActivate] END
 
 app.on("will-quit", async (e) => {
+  // [20260911_Fix_339_DockActivate] Log the quit entry so the full
+  // close → quit → cleanup path is traceable in app.log (issue #339).
+  logger.info("will-quit事件，开始清理 (热键/FunASR/数据库)");
+  // [20260911_Fix_339_DockActivate] END
   e.preventDefault();
   globalShortcut.unregisterAll();
 

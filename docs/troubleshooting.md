@@ -4,6 +4,26 @@
 
 ## 中文
 
+<!-- [20260911_Fix_DamagedAppWorkaround] Issue #337：v1.5.0 macOS dmg 只带 Electron
+     链接器 ad-hoc 签名、无资源密封，Apple Silicon 上被 Gatekeeper 判为"已损坏"。
+     与"无法验证开发者"是不同故障，右键打开无法绕过。 -->
+
+### macOS 提示"已损坏，无法打开"
+
+**症状**: 首次安装打开时提示"Murmur.app 已损坏，无法打开。你应该将它移到废纸篓。"
+
+**原因**: v1.5.0 及更早版本的安装包签名密封损坏（ad-hoc 签名缺少资源密封）。注意这与"无法验证开发者"是**不同**的问题——后者右键点击应用 →"打开"即可，本场景右键打开无效。
+
+**解决方案**（终端执行）:
+
+```bash
+xattr -cr /Applications/Murmur.app && codesign --force --deep --sign - /Applications/Murmur.app
+```
+
+第一条清除下载隔离属性，第二条用本地 ad-hoc 签名重建密封。如提示权限不足，在命令前加 `sudo`。修复后即可正常打开。
+
+<!-- [20260911_Fix_DamagedAppWorkaround] END -->
+
 ### FunASR 模型下载失败
 
 **症状**: 首次启动时一直显示"正在下载模型"或下载失败
@@ -93,6 +113,27 @@
 ---
 
 ## English
+
+<!-- [20260911_Fix_DamagedAppWorkaround] Issue #337: the v1.5.0 macOS dmg shipped
+     with only Electron's linker ad-hoc signature and no resource seal, so
+     Gatekeeper on Apple Silicon rejects it as "damaged". This is a different
+     failure from "unidentified developer"; right-click → Open cannot bypass it. -->
+
+### macOS Reports "Murmur.app Is Damaged and Can't Be Opened"
+
+**Symptom**: On first launch after installing, macOS says "Murmur.app is damaged and can't be opened. You should move it to the Trash."
+
+**Cause**: v1.5.0 and earlier shipped with a broken signature seal (ad-hoc signature without a resource seal). This is a **different** issue from "cannot verify the developer" — that one is fixed by right-click → Open, which does NOT work here.
+
+**Solutions** (run in Terminal):
+
+```bash
+xattr -cr /Applications/Murmur.app && codesign --force --deep --sign - /Applications/Murmur.app
+```
+
+The first command clears the quarantine attribute, the second rebuilds the seal with a local ad-hoc signature. Prefix with `sudo` if you get a permission error. The app opens normally afterwards.
+
+<!-- [20260911_Fix_DamagedAppWorkaround] END -->
 
 ### FunASR Model Download Fails
 

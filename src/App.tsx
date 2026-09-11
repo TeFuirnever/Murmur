@@ -138,6 +138,47 @@ export default function App() {
   // can see it (survey gap: the state used to be trapped in the component)
   const fileTranscription = useFileTranscription();
 
+  // [20260911_Fix_338_DragDropImport] Issue #338: dropping an audio file
+  // anywhere on the main window did nothing — outside the FileDropZone (which
+  // only exists in file-import mode) no renderer code preventDefault()ed
+  // dragover, so Chromium discarded the drop before it reached business
+  // logic (and an unprevented drop can navigate the window to file://).
+  // These window-level handlers make the whole window a drop target that
+  // feeds the SAME pipeline as the dialog import (selectFileFromPath ->
+  // validateAudioFile IPC -> audioPathValidator), then switch to file-import
+  // mode so the result is visible. selectFileFromPath is a stable
+  // useCallback, so the listeners are registered once.
+  const selectDroppedFileFromPath = fileTranscription.selectFileFromPath;
+  useEffect(() => {
+    const handleWindowDragOver = (event: DragEvent) => {
+      // Required: Chromium only dispatches `drop` when dragover's default is
+      // prevented.
+      event.preventDefault();
+    };
+    const handleWindowDrop = (event: DragEvent) => {
+      // FileDropZone consumed this drop already (its handler preventDefaults
+      // during the bubble phase) — never import the same file twice.
+      if (event.defaultPrevented) return;
+      // Block Chromium's default file:// navigation for every drop.
+      event.preventDefault();
+      const droppedFile = event.dataTransfer?.files?.[0];
+      if (!droppedFile) return;
+      const droppedPath =
+        window.electronAPI?.getPathForFile?.(droppedFile) ||
+        (droppedFile as File & { path?: string }).path;
+      if (!droppedPath) return;
+      setAppMode("file-import");
+      void selectDroppedFileFromPath(droppedPath);
+    };
+    window.addEventListener("dragover", handleWindowDragOver);
+    window.addEventListener("drop", handleWindowDrop);
+    return () => {
+      window.removeEventListener("dragover", handleWindowDragOver);
+      window.removeEventListener("drop", handleWindowDrop);
+    };
+  }, [selectDroppedFileFromPath]);
+  // [20260911_Fix_338_DragDropImport] END
+
   // 安全粘贴函数
   const safePaste = useCallback(
     async (text: string) => {

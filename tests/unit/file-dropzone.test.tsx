@@ -83,6 +83,37 @@ describe("[20260816_Test_FileDropZone] FileDropZone", () => {
     expect(onSelectFile).toHaveBeenCalledTimes(1);
   });
 
+  // [20260911_Fix_338_DragDropImport] Issue #338 regression: Electron >= 32
+  // removed File.path, so a dropped file must resolve its absolute path via
+  // the preload's webUtils.getPathForFile bridge, not via file.path.
+  it("resolves the dropped file path via electronAPI.getPathForFile", () => {
+    const onSelectFileFromPath = vi.fn();
+    const onSelectFile = vi.fn();
+    const getPathForFile = vi.fn(() => "/resolved/dropped.wav");
+    (
+      window as unknown as { electronAPI: { getPathForFile: unknown } }
+    ).electronAPI = { getPathForFile };
+    try {
+      render(
+        <FileDropZone
+          fileInfo={null}
+          onSelectFile={onSelectFile}
+          onSelectFileFromPath={onSelectFileFromPath}
+        />,
+      );
+      // No .path on the File — matches modern Electron where it is removed.
+      const file = new File(["audio"], "dropped.wav", { type: "audio/wav" });
+      fireDrop(screen.getByTestId("file-drop-zone"), [file]);
+      expect(getPathForFile).toHaveBeenCalledWith(file);
+      expect(onSelectFileFromPath).toHaveBeenCalledWith(
+        "/resolved/dropped.wav",
+      );
+      expect(onSelectFile).not.toHaveBeenCalled();
+    } finally {
+      delete (window as unknown as { electronAPI?: unknown }).electronAPI;
+    }
+  });
+
   it("ignores an empty drop", () => {
     const onSelectFile = vi.fn();
     render(<FileDropZone fileInfo={null} onSelectFile={onSelectFile} />);

@@ -402,6 +402,115 @@ class FunASRServer:
                 return True
         return False
 
+    # [20260911_Fix_336_HubLayout] Issue #336: modelscope 1.39's real
+    # on-disk layout matches NONE of the shapes _default_damo_root() knows:
+    #
+    #     <cache>/models/damo--<repo>/snapshots/<rev>/model.pt
+    #
+    # (NO `hub` layer, repo dirs renamed `damo--<name>`, an extra
+    # `snapshots/<revision>` level). Worse, the app always spawns the server
+    # with an EXPLICIT --damo-root (<userData>/models, which stays empty
+    # because download_models.py calls snapshot_download without cache_dir),
+    # so `_default_damo_root()` never ran and the gate reported
+    # models_not_downloaded forever while the UI flapped. The resolver chain
+    # below probes the explicit root FIRST (it wins when populated — the
+    # user's symlink workaround and upgrading users rely on that), then the
+    # modelscope default caches in both legacy and hub shapes.
+    _MODEL_REVISION = "v2.0.4"
+
+    @staticmethod
+    def _resolve_hub_repo(hub_root, repo_dir_name):
+        """Return the first READY hub-style snapshot dir for a repo, else None.
+
+        Hub layout (modelscope >= 1.39):
+            <hub_root>/damo--<repo>/snapshots/<rev>/<files>
+        The pinned revision is preferred (it is what AutoModel loads via
+        model_revision); any other READY snapshot is accepted so caches
+        populated with a different revision still pass the gate.
+        """
+        snapshots_dir = os.path.join(
+            hub_root, f"damo--{repo_dir_name}", "snapshots"
+        )
+        if not os.path.isdir(snapshots_dir):
+            return None
+        revisions = sorted(os.listdir(snapshots_dir), reverse=True)
+        revisions.sort(key=lambda rev: rev != FunASRServer._MODEL_REVISION)
+        for rev in revisions:
+            candidate = os.path.join(snapshots_dir, rev)
+            if FunASRServer._repo_ready(candidate):
+                return candidate
+        return None
+
+    @staticmethod
+    def _hub_models_roots():
+        """Directories that may hold damo--<repo> hub-style repos.
+
+        Covers $MODELSCOPE_CACHE (with and without the legacy `hub` layer)
+        and the default ~/.cache/modelscope — 1.39 drops the `hub` layer.
+        """
+        roots = []
+        env_root = os.environ.get("MODELSCOPE_CACHE")
+        if env_root:
+            roots.append(os.path.join(env_root, "models"))
+            roots.append(os.path.join(env_root, "hub", "models"))
+        home_dir = os.path.expanduser("~")
+        default_cache = os.path.join(home_dir, ".cache", "modelscope")
+        roots.append(os.path.join(default_cache, "models"))
+        roots.append(os.path.join(default_cache, "hub", "models"))
+        return roots
+
+    def _resolve_repo_dir(self, repo_dir_name):
+        """First READY on-disk directory for a repo across every known layout.
+
+        Order (explicit damo_root WINS when populated):
+          1. <damo_root>/<repo>                    — explicit, legacy shape
+          2. <damo_root>/damo--<repo>/snapshots/*  — explicit, hub shape
+             (covers --damo-root pointing AT the resolved modelscope root)
+          3. <default damo root>/<repo>            — modelscope cache, legacy
+          4. _hub_models_roots() hub shapes        — modelscope cache, 1.39
+        Returns None when the repo is ready nowhere (→ models_not_downloaded).
+        """
+        roots = []
+        if self.damo_root:
+            roots.append(self.damo_root)
+        default_root = self._default_damo_root()
+        if default_root not in roots:
+            roots.append(default_root)
+        for root in roots:
+            direct = os.path.join(root, repo_dir_name)
+            if self._repo_ready(direct):
+                return direct
+            found = self._resolve_hub_repo(root, repo_dir_name)
+            if found:
+                return found
+        for hub_root in self._hub_models_roots():
+            found = self._resolve_hub_repo(hub_root, repo_dir_name)
+            if found:
+                return found
+        return None
+
+    def _find_missing_required_models(self):
+        """必需模型中就绪检查未通过的 repo 列表（run() 的启动门禁用）
+
+        [20260911_Fix_336_HubLayout] Promoted from run() so the startup gate
+        is unit-testable, and switched from a single cache_path join to
+        _resolve_repo_dir so the hub layout and the empty-explicit-root
+        fallback are covered. ASR accepts either generation (SeACo primary,
+        old paraformer rollback — [20260820_T15_SeacoSwap]); punc optional.
+        """
+        vad_repo = "speech_fsmn_vad_zh-cn-16k-common-pytorch"
+        asr_repos = [
+            "speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+            "speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+        ]
+        missing = []
+        if not any(self._resolve_repo_dir(r) for r in asr_repos):
+            missing.append(asr_repos[0])
+        if not self._resolve_repo_dir(vad_repo):
+            missing.append(vad_repo)
+        return missing
+    # [20260911_Fix_336_HubLayout] END
+
     def _load_asr_model(self):
         """加载ASR模型（SeACo 优先，旧模型回退）"""
         from funasr import AutoModel
@@ -415,11 +524,16 @@ class FunASRServer:
         # which bypasses run()'s startup gate — an isdir-only check let a
         # mid-download dir holding only shard part-files through to
         # AutoModel (the confusing failure #255 fixed on the startup path).
-        cache_path = self.damo_root or self._default_damo_root()
+        # [20260911_Fix_336_HubLayout] The single-cache-path join was
+        # replaced by _resolve_repo_dir: the explicit --damo-root is usually
+        # an empty <userData>/models while the models live in modelscope
+        # 1.39's hub layout (issue #336). AutoModel still receives the repo
+        # id and resolves through modelscope's own cache — only the gate
+        # needed the new shapes.
         candidates = [
             m
             for m in (self.ASR_MODEL_SEACO, self.ASR_MODEL_FALLBACK)
-            if self._repo_ready(os.path.join(cache_path, m.split("/", 1)[1]))
+            if self._resolve_repo_dir(m.split("/", 1)[1]) is not None
         ]
         for model_name in candidates:
             try:
@@ -1525,21 +1639,15 @@ class FunASRServer:
         # [20260820_T15_SeacoSwap] Either ASR generation satisfies the
         # required-ASR check (SeACo for fresh installs / upgraded users,
         # old paraformer for mid-upgrade rollback states).
-        vad_repo = "speech_fsmn_vad_zh-cn-16k-common-pytorch"
-        asr_repos = [
-            "speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
-            "speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
-        ]
         # ASR (either generation) + VAD are required; punc is optional.
 
         # [20260905_Fix_255_RepoReadyShardGlob] Readiness gate promoted to
         # FunASRServer._repo_ready (staticmethod, shard-aware, testable).
-        asr_satisfied = any(
-            self._repo_ready(os.path.join(cache_path, r)) for r in asr_repos
-        )
-        missing_required = [] if asr_satisfied else asr_repos[:1]
-        if not self._repo_ready(os.path.join(cache_path, vad_repo)):
-            missing_required.append(vad_repo)
+        # [20260911_Fix_336_HubLayout] The gate itself was promoted to
+        # _find_missing_required_models() so the explicit-empty-damo_root
+        # fallback and the modelscope 1.39 hub layout resolve identically
+        # here, in _load_asr_model, and in the unit tests (issue #336).
+        missing_required = self._find_missing_required_models()
 
         if not missing_required:
             logger.info("模型文件存在，开始初始化")

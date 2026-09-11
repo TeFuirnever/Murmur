@@ -117,6 +117,9 @@
 > **首次安装提示**
 >
 > - **macOS**：如遇"无法验证开发者"，右键点击应用 → 选择"打开"
+> <!-- [20260911_Fix_DamagedAppWorkaround] Issue #337：v1.5.0 dmg 的 ad-hoc 签名密封损坏，Gatekeeper 报"已损坏"——与"无法验证开发者"是不同场景，右键打开无法绕过。 -->
+> - **macOS**：如提示"已损坏，无法打开"（v1.5.0 签名密封损坏），在终端执行：`xattr -cr /Applications/Murmur.app && codesign --force --deep --sign - /Applications/Murmur.app` —— 详见[故障排除](docs/troubleshooting.md)
+> <!-- [20260911_Fix_DamagedAppWorkaround] END -->
 > - **Windows**：如遇 SmartScreen 拦截，点击"更多信息" → "仍要运行"
 
 ## ⚡ 30 秒上手

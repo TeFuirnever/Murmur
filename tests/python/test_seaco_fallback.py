@@ -23,6 +23,29 @@ OLD_DIR = funasr_server.FunASRServer.ASR_MODEL_FALLBACK.split("/", 1)[1]
 
 
 class AsrFallbackTest(unittest.TestCase):
+    def setUp(self):
+        # [20260911_Fix_336_HubLayout] _resolve_repo_dir now falls back to
+        # the modelscope default caches under ~ when the explicit damo_root
+        # lacks a repo (issue #336) — isolate HOME/USERPROFILE (and any
+        # MODELSCOPE_CACHE) so "absent from the explicit root" really means
+        # "absent everywhere", independent of the machine's real cache.
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self._old_env = {
+            key: os.environ.get(key)
+            for key in ("MODELSCOPE_CACHE", "HOME", "USERPROFILE")
+        }
+        os.environ["HOME"] = self._tmp.name
+        os.environ["USERPROFILE"] = self._tmp.name
+        os.environ.pop("MODELSCOPE_CACHE", None)
+
+    def tearDown(self):
+        for key, value in self._old_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
     def _make_repo(self, root, repo_dir):
         os.makedirs(os.path.join(root, repo_dir), exist_ok=True)
         # One config-ish file satisfies _repo_ready's glob patterns.
