@@ -149,7 +149,18 @@ export interface ExportResult {
 export type PolishChunk =
   | { type: "start"; requestId: string }
   | { type: "delta"; requestId: string; text: string }
-  | { type: "progress"; requestId: string; bytes: number }
+  | {
+      type: "progress";
+      requestId: string;
+      // [20260911_Feat_241_LongTextChunking] T14: bytes stays for the
+      // file-import byte counter (T9 ③); the block triplet carries the
+      // chunked-polish "第几块/共几块 + 已耗时" progress. Both optional —
+      // producers send whichever dimension they own.
+      bytes?: number;
+      chunkIndex?: number;
+      chunkCount?: number;
+      elapsedMs?: number;
+    }
   | { type: "degraded"; requestId: string; reason: string }
   | { type: "finish"; requestId: string; text: string; reasoningChars: number }
   | { type: "abort"; requestId: string }

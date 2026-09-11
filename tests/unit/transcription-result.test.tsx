@@ -675,6 +675,11 @@ describe("TranscriptionResult — streaming manual polish (#236 ①)", () => {
     reason?: string;
     error?: string;
     reasoningChars?: number;
+    // [20260911_Feat_241_LongTextChunking] T14 progress-chunk dimensions.
+    bytes?: number;
+    chunkIndex?: number;
+    chunkCount?: number;
+    elapsedMs?: number;
   };
   type TestWindow = Omit<Window, "electronAPI"> & {
     electronAPI?: {
@@ -807,6 +812,45 @@ describe("TranscriptionResult — streaming manual polish (#236 ①)", () => {
     await vi.waitFor(() => expect(unsubSpy).toHaveBeenCalled());
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
+
+  // [20260911_Feat_241_LongTextChunking] T14: block progress (第几块/共几
+  // 块 + 已耗时) renders in the streaming card, driven purely by progress
+  // chunks — the renderer never learns the chunking strategy itself.
+  it("renders block progress and elapsed time from progress chunks", async () => {
+    renderManual();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "应用 AI 处理" }),
+    );
+    await vi.waitFor(() => expect(chunkListener).not.toBeNull());
+    const api = (globalThis.window as unknown as TestWindow).electronAPI!;
+    const requestId = (api.processText as ReturnType<typeof vi.fn>).mock
+      .calls[0]![3] as string;
+
+    chunkListener!({ type: "start", requestId });
+    // A byte-only progress chunk (file-import dimension) must NOT render
+    // block progress.
+    chunkListener!({ type: "progress", requestId, bytes: 2048 });
+    expect(
+      screen.queryByTestId("polish-chunk-progress"),
+    ).not.toBeInTheDocument();
+
+    chunkListener!({
+      type: "progress",
+      requestId,
+      chunkIndex: 2,
+      chunkCount: 3,
+      elapsedMs: 4200,
+    });
+    // i18next is not initialized in this harness, so t() echoes the zh
+    // fallback template raw; the structural pin is the element + template
+    // shape (interpolation is i18next's contract, covered by the locale
+    // files' zh/en parity checks).
+    const progress = await screen.findByTestId("polish-chunk-progress");
+    expect(progress.textContent).toContain("第");
+    expect(progress.textContent).toContain("块");
+    expect(progress.textContent).toContain("已耗时");
+  });
+  // [20260911_Feat_241_LongTextChunking] END
 });
 
 // [20260907_Fix_236_Review] Regression: a mid-stream ERROR must not leave

@@ -367,6 +367,29 @@ export default function TranscriptionResult({
               <p className="text-sm text-[#1d1d1d] dark:text-[#f5f5f7]/80 whitespace-pre-wrap">
                 {displayText}
               </p>
+              {/* [20260911_Feat_241_LongTextChunking] T14: block progress
+                  (第几块/共几块 + 已耗时) while the chunked chain runs —
+                  the ticket's cost-transparency note for the super-linear
+                  token spend. */}
+              {polishStream.chunkProgress && (
+                <p
+                  data-testid="polish-chunk-progress"
+                  className="text-xs text-[#86868b]"
+                >
+                  {t(
+                    "transcription.chunkProgress",
+                    "第 {{current}}/{{total}} 块 · 已耗时 {{seconds}} 秒",
+                    {
+                      current: polishStream.chunkProgress.index,
+                      total: polishStream.chunkProgress.count,
+                      seconds: Math.round(
+                        polishStream.chunkProgress.elapsedMs / 1000,
+                      ),
+                    },
+                  )}
+                </p>
+              )}
+              {/* [20260911_Feat_241_LongTextChunking] END */}
               <button
                 type="button"
                 onClick={handleCancelPolish}

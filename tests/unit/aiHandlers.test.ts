@@ -2477,3 +2477,452 @@ describe("[20260910_Feat_237_StreamDegradation] T10 degradation + memory", () =>
   });
   // [20260910_Feat_237_ReviewFixes] END
 });
+
+// [20260911_Feat_241_LongTextChunking] Spec #193 T14 (ticket #241):
+// long-text chunked polish at the orchestrator level. Text fixtures are
+// sized against the real POLISH_CHUNK_MAX_CHARS so the split counts are
+// deterministic; fetch answers per chunk by inspecting the request body.
+describe("[20260911_Feat_241_LongTextChunking] T14 chunked polish", () => {
+  let registeredHandlers: Record<string, (...args: unknown[]) => unknown>;
+  let sendBySender: Map<number, ReturnType<typeof vi.fn>>;
+
+  beforeEach(() => {
+    sendBySender = new Map([[1, vi.fn()]]);
+  });
+
+  function senderEvent(id: number) {
+    return {
+      sender: {
+        id,
+        isDestroyed: vi.fn(() => false),
+        send: sendBySender.get(id) ?? vi.fn(),
+      },
+    };
+  }
+
+  function chunksFor(id: number): Array<{
+    type: string;
+    chunkIndex?: number;
+    chunkCount?: number;
+    elapsedMs?: number;
+  }> {
+    return sendBySender.get(id)!.mock.calls.map((call) => call[1]);
+  }
+
+  function setup() {
+    registeredHandlers = {};
+    const ipcMain = {
+      handle: vi.fn((channel: string, fn: (...args: unknown[]) => unknown) => {
+        registeredHandlers[channel] = fn;
+      }),
+    };
+    const db = {
+      getSetting: vi.fn(async (key: string) =>
+        key === "ai_base_url"
+          ? "https://api.example.com/v1"
+          : key === "ai_api_key"
+            ? "sk"
+            : key === "ai_model"
+              ? "gpt-x"
+              : null,
+      ),
+      listVocabCorrections: vi.fn(() => []),
+    };
+    aiHandlersNS.register(
+      ipcMain as never,
+      {
+        databaseManager: db,
+        funasrManager: null,
+        processTextWithAI: vi.fn(),
+        windowManager: { mainWindow: null },
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        templatesDir: "/tmp/test-templates",
+      } as never,
+    );
+  }
+
+  // Six ~1500-char paragraphs → 3 equal chunks at the 4000-char budget
+  // (p1+p2 | p3+p4 | p5+p6, split on paragraph boundaries).
+  function longText(): { text: string; markers: string[] } {
+    const markers = ["甲块", "乙块", "丙块", "丁块", "戊块", "己块"];
+    const paragraphs = markers.map(
+      (m, i) => `${m}段落${i}。${"展开细节。".repeat(300)}`,
+    );
+    return { text: paragraphs.join("\n\n"), markers };
+  }
+
+  /** fetch stub: answers each chunk with a marker-derived output. */
+  function chunkWiseFetch(outputFor: (body: string) => string) {
+    return vi.fn(async (_url: unknown, init?: { body?: string }) => {
+      const content = outputFor(init?.body ?? "");
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers({ "content-type": "application/json" }),
+        json: async () => ({ choices: [{ message: { content } }] }),
+        text: async () => "",
+      };
+    }) as unknown as FetchMock;
+  }
+
+  it("accumulate chain: N fetches, 只增不减 constraint present from chunk 2, cumulative golden", async () => {
+    setup();
+    const { text } = longText();
+    let call = 0;
+    // [20260911_Fix_241_Review] The mock mirrors the REAL provider contract
+    // the 只增不减 constraint creates: each chunk's output is CUMULATIVE
+    // (contains every previous point). The final text is the last output —
+    // joining all outputs would duplicate content N-fold.
+    const fetchMock = chunkWiseFetch(() => {
+      call += 1;
+      return "输出一。输出二。输出三。".slice(0, call * 4);
+    });
+    global.fetch = fetchMock as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const result = (await registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      text,
+      "optimize",
+      60_000,
+      "ck-acc",
+    )) as { success: boolean; text?: string };
+
+    expect(result.success).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    // Golden: final = the last (cumulative) output; 首末句都在其中。
+    expect(result.text).toBe("输出一。输出二。输出三。");
+    // From chunk 2 on, the prompt carries the accumulation constraint AND
+    // the previous output as context.
+    const secondBody = JSON.parse(
+      (fetchMock.mock.calls[1]![1] as { body: string }).body,
+    );
+    const secondUser = secondBody.messages[1].content as string;
+    expect(secondUser).toContain("只增不减");
+    expect(secondUser).toContain("输出一。");
+    // First chunk carries no chain constraint.
+    const firstBody = JSON.parse(
+      (fetchMock.mock.calls[0]![1] as { body: string }).body,
+    );
+    expect(firstBody.messages[1].content).not.toContain("只增不减");
+    // Progress chunks: 第 i/3 块 + elapsed time, monotonic.
+    const progress = chunksFor(1).filter((c) => c.type === "progress");
+    expect(progress.map((p) => [p.chunkIndex, p.chunkCount])).toEqual([
+      [1, 3],
+      [2, 3],
+      [3, 3],
+    ]);
+    for (const p of progress) expect(p.elapsedMs).toBeGreaterThanOrEqual(0);
+  });
+
+  // [20260911_Fix_241_Review] MAJOR #2: with the token clamp active
+  // (minimal-edit modes via the PROCESS entry), the per-chunk budget must
+  // grow with the CUMULATIVE input (chunk + accumulated context) — else the
+  // provider truncates the accumulated points mid-chain.
+  it("accumulate chain grows the token budget along the chain (clamp on)", async () => {
+    setup();
+    const { text } = longText();
+    let call = 0;
+    const fetchMock = chunkWiseFetch(() => {
+      call += 1;
+      return "输出一。输出二。输出三。".slice(0, call * 4);
+    });
+    global.fetch = fetchMock as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const result = (await registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      text,
+      "optimize", // minimal-edit mode → clampOutputTokens active at this entry
+      60_000,
+      "ck-clamp",
+    )) as { success: boolean };
+
+    expect(result.success).toBe(true);
+    const budgets = fetchMock.mock.calls.map(
+      (c) => JSON.parse((c[1] as { body: string }).body).max_tokens as number,
+    );
+    expect(budgets).toHaveLength(3);
+    expect(budgets[1]!).toBeGreaterThan(budgets[0]!);
+    expect(budgets[2]!).toBeGreaterThan(budgets[1]!);
+  });
+
+  it("map-reduce: summarize chunks then merge once", async () => {
+    setup();
+    const { text } = longText();
+    let call = 0;
+    const fetchMock = chunkWiseFetch(() =>
+      call++ < 3 ? `分块摘要${call}` : "合并终稿",
+    );
+    global.fetch = fetchMock as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const result = (await registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      text,
+      "summarize",
+      60_000,
+      "ck-mr",
+    )) as { success: boolean; text?: string };
+
+    expect(result.success).toBe(true);
+    expect(result.text).toBe("合并终稿");
+    // 3 chunk summaries + 1 merge call.
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    const mergeBody = JSON.parse(
+      (fetchMock.mock.calls[3]![1] as { body: string }).body,
+    );
+    const mergeUser = mergeBody.messages[1].content as string;
+    expect(mergeUser).toContain("合并");
+    expect(mergeUser).toContain("分块摘要1");
+    expect(mergeUser).toContain("分块摘要3");
+    // Chunk prompts carry NO accumulation constraint.
+    const chunkBody = JSON.parse(
+      (fetchMock.mock.calls[1]![1] as { body: string }).body,
+    );
+    expect(chunkBody.messages[1].content).not.toContain("只增不减");
+  });
+
+  it("short text takes the single-shot path untouched (直通不回归)", async () => {
+    setup();
+    const fetchMock = chunkWiseFetch(() => "单次输出");
+    global.fetch = fetchMock as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const result = (await registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      "短文本",
+      "optimize",
+      60_000,
+      "ck-short",
+    )) as { success: boolean; text?: string };
+
+    expect(result).toMatchObject({ success: true, text: "单次输出" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(chunksFor(1).filter((c) => c.chunkIndex !== undefined)).toHaveLength(
+      0,
+    );
+  });
+
+  it("cancel between chunks settles the run and never sends later chunks", async () => {
+    setup();
+    const { text } = longText();
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(async () => ({
+        ok: true,
+        status: 200,
+        headers: new Headers({ "content-type": "application/json" }),
+        json: async () => ({ choices: [{ message: { content: "输出一。" } }] }),
+        text: async () => "",
+      }))
+      .mockImplementationOnce(
+        (_url: unknown, init?: { signal?: AbortSignal }) =>
+          new Promise((_resolve, reject) => {
+            const onAbort = () =>
+              reject(new DOMException("aborted", "AbortError"));
+            if (init?.signal?.aborted) onAbort();
+            else
+              init?.signal?.addEventListener("abort", onAbort, { once: true });
+          }),
+      ) as unknown as FetchMock;
+    global.fetch = fetchMock as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const processPromise = registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      text,
+      "optimize",
+      60_000,
+      "ck-cancel",
+    ) as Promise<unknown>;
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await registeredHandlers[C.AI.POLISH_ABORT]!(senderEvent(1), "ck-cancel");
+
+    const result = (await processPromise) as {
+      success: boolean;
+      code?: string;
+    };
+    expect(result.success).toBe(false);
+    expect(result.code).toBe("CANCELLED");
+    // Chunk 3 was never sent.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(chunksFor(1).filter((c) => c.type === "abort")).toHaveLength(1);
+  });
+
+  it("a chunk failure aborts the chain and surfaces the error", async () => {
+    setup();
+    const { text } = longText();
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(async () => ({
+        ok: true,
+        status: 200,
+        headers: new Headers({ "content-type": "application/json" }),
+        json: async () => ({ choices: [{ message: { content: "输出一。" } }] }),
+        text: async () => "",
+      }))
+      .mockImplementationOnce(async () => ({
+        ok: false,
+        status: 500,
+        statusText: "HTTP 500",
+        text: async () => "boom",
+      })) as unknown as FetchMock;
+    global.fetch = fetchMock as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const result = (await registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      text,
+      "optimize",
+      60_000,
+      "ck-fail",
+    )) as { success: boolean };
+
+    expect(result.success).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  // [20260911_Fix_241_Review] MINOR #5 failure halves for map-reduce.
+  it("merge-call failure surfaces the error after all chunks succeed", async () => {
+    setup();
+    const { text } = longText();
+    let call = 0;
+    const fetchMock = vi.fn(async () => {
+      call += 1;
+      if (call <= 3) {
+        return {
+          ok: true,
+          status: 200,
+          headers: new Headers({ "content-type": "application/json" }),
+          json: async () => ({
+            choices: [{ message: { content: `分块摘要${call}` } }],
+          }),
+          text: async (): Promise<string> => "",
+        };
+      }
+      return {
+        ok: false,
+        status: 500,
+        statusText: "HTTP 500",
+        text: async (): Promise<string> => "merge boom",
+      };
+    }) as unknown as FetchMock;
+    global.fetch = fetchMock as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const result = (await registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      text,
+      "summarize",
+      60_000,
+      "ck-merge-fail",
+    )) as { success: boolean };
+
+    expect(result.success).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  // [20260911_Fix_241_Review2] Retitled: the abort lands DURING the
+  // in-flight merge call (the deterministic timing point), not before it.
+  it("cancel during the in-flight merge call settles the whole chain", async () => {
+    setup();
+    const { text } = longText();
+    let call = 0;
+    const fetchMock = vi.fn(
+      async (_url: unknown, init?: { signal?: AbortSignal }) => {
+        call += 1;
+        if (call <= 3) {
+          return {
+            ok: true,
+            status: 200,
+            headers: new Headers({ "content-type": "application/json" }),
+            json: async () => ({
+              choices: [{ message: { content: `分块摘要${call}` } }],
+            }),
+            text: async () => "",
+          };
+        }
+        // The merge call pends until aborted — it must never resolve.
+        return new Promise((_resolve, reject) => {
+          const onAbort = () =>
+            reject(new DOMException("aborted", "AbortError"));
+          if (init?.signal?.aborted) onAbort();
+          else init?.signal?.addEventListener("abort", onAbort, { once: true });
+        });
+      },
+    ) as unknown as FetchMock;
+    global.fetch = fetchMock as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const processPromise = registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      text,
+      "summarize",
+      60_000,
+      "ck-merge-cancel",
+    ) as Promise<unknown>;
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    await registeredHandlers[C.AI.POLISH_ABORT]!(
+      senderEvent(1),
+      "ck-merge-cancel",
+    );
+
+    const result = (await processPromise) as {
+      success: boolean;
+      code?: string;
+    };
+    expect(result.success).toBe(false);
+    expect(result.code).toBe("CANCELLED");
+    // Exactly 4 calls: 3 chunks + the in-flight merge; nothing further.
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  it("oversized merge input reduces in ROUNDS before the final merge", async () => {
+    setup();
+    // 12 paragraphs → 6 chunks; each summary is 1500 chars so the first
+    // merge join (~9010) exceeds the budget and must split into groups.
+    const markers = Array.from({ length: 12 }, (_, i) => `段${i}`);
+    const paragraphs = markers.map(
+      (m) => `${m}内容。${"展开细节。".repeat(300)}`,
+    );
+    const text = paragraphs.join("\n\n");
+    let call = 0;
+    const fetchMock = chunkWiseFetch(() => {
+      call += 1;
+      if (call <= 6) return `摘要${call}。${"填".repeat(1490)}`;
+      if (call <= 9) return `合并轮次二${call}。`; // grouped merges
+      return "终稿";
+    });
+    global.fetch = fetchMock as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const result = (await registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      text,
+      "summarize",
+      60_000,
+      "ck-rounds",
+    )) as { success: boolean; text?: string };
+
+    expect(result.success).toBe(true);
+    expect(result.text).toBe("终稿");
+    // 6 chunk summaries + 3 grouped merges + 1 final merge.
+    expect(fetchMock).toHaveBeenCalledTimes(10);
+    // Every merge call carries the merge constraint.
+    for (let i = 6; i < 10; i++) {
+      const body = JSON.parse(
+        (fetchMock.mock.calls[i]![1] as { body: string }).body,
+      );
+      expect(body.messages[1].content).toContain("合并约束");
+    }
+    // [20260911_Fix_241_Review2] Progress never shows index > count, across
+    // every map phase tick and every reduce round.
+    for (const p of chunksFor(1).filter((c) => c.type === "progress")) {
+      expect(p.chunkIndex).toBeLessThanOrEqual(p.chunkCount!);
+    }
+  });
+  // [20260911_Fix_241_Review] END
+});

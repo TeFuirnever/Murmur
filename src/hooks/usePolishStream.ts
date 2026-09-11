@@ -28,6 +28,13 @@ type StreamingApi = {
 export function usePolishStream() {
   const [streamText, setStreamText] = React.useState<string | null>(null);
   const [streamBytes, setStreamBytes] = React.useState(0);
+  // [20260911_Feat_241_LongTextChunking] T14: block progress for chunked
+  // polish (第几块/共几块 + 已耗时), driven by the progress chunk triplet.
+  const [chunkProgress, setChunkProgress] = React.useState<{
+    index: number;
+    count: number;
+    elapsedMs: number;
+  } | null>(null);
   const [isStreaming, setIsStreaming] = React.useState(false);
   const requestIdRef = React.useRef<string | null>(null);
   const abortRef = React.useRef<StreamingApi["abortPolish"] | null>(null);
@@ -70,6 +77,7 @@ export function usePolishStream() {
       setIsStreaming(true);
       setStreamText("");
       setStreamBytes(0);
+      setChunkProgress(null);
 
       return await new Promise<PolishResult>((resolve) => {
         let settled = false;
@@ -86,6 +94,9 @@ export function usePolishStream() {
           // partial rendered as the user's transcription. Success hands
           // over to optimizedText; cancel/error restore the original.
           setStreamText(null);
+          // [20260911_Feat_241_LongTextChunking] Clear block progress on
+          // EVERY terminal outcome alongside the stream text.
+          setChunkProgress(null);
           resolve(result);
         };
         const unsubscribe = api.onPolishChunk((chunk) => {
@@ -101,9 +112,19 @@ export function usePolishStream() {
           } else if (chunk.type === "progress") {
             // [20260907_Feat_236_StreamingUi] T9 ③: block progress (bytes)
             // for consumers without per-word rendering (file import).
-            setStreamBytes(
-              (prev) => prev + ((chunk as { bytes?: number }).bytes ?? 0),
-            );
+            // [20260911_Fix_241_Review] The vestigial cast went away with
+            // the typed-optional bytes field.
+            setStreamBytes((prev) => prev + (chunk.bytes ?? 0));
+            // [20260911_Feat_241_LongTextChunking] T14: the block triplet is
+            // the chunked-polish dimension; byte-only progress chunks leave
+            // it untouched.
+            if (chunk.chunkIndex !== undefined) {
+              setChunkProgress({
+                index: chunk.chunkIndex,
+                count: chunk.chunkCount ?? 0,
+                elapsedMs: chunk.elapsedMs ?? 0,
+              });
+            }
           } else if (chunk.type === "finish") {
             settle({ success: true, text: chunk.text });
           } else if (chunk.type === "error") {
@@ -144,5 +165,5 @@ export function usePolishStream() {
     };
   }, []);
 
-  return { streamText, streamBytes, isStreaming, start, cancel };
+  return { streamText, streamBytes, chunkProgress, isStreaming, start, cancel };
 }

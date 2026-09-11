@@ -381,6 +381,7 @@
   "transcription": {
     "polishSaveFailed": "润色结果保存失败，重启后将显示原文本",
     "cancelPolish": "取消",
+    "chunkProgress": "第 {{current}}/{{total}} 块 · 已耗时 {{seconds}} 秒",
     "polishInvokeFailed": "AI处理失败，请重试",
     "polishFailed": "AI处理失败，请重试",
     "vocabSaveFailed": "修正词对保存失败"
