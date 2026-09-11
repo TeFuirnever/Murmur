@@ -99,7 +99,8 @@ const BOOT_PROBES = {
 // (logManager.ts:72-103 routes every level to the file). The server
 // milestones are the same app.log contract the release smoke gates on
 // (see funasrManager.ts [20260818_T3_PythonSelfCheckMilestone]).
-const FUNASR_INIT_SETTLE_TIMEOUT_MS = 30_000;
+// Budget note: the settle timeout value is platform-scaled — see
+// [20260912_Test_MacPackagedBootSettleBudget] below.
 const FUNASR_INIT_SETTLE_POLL_MS = 500;
 const FUNASR_INIT_MILESTONE =
   /FunASR服务器(启动成功|初始化失败)|FunASR启动初始化失败/;
@@ -138,11 +139,38 @@ function funasrAppLogPath(): string {
 const QUIT_BUDGET_MS = 15_000;
 // [20260912_Test_WinPackagedQuitBudget] END
 
+// [20260912_Test_MacPackagedBootSettleBudget] Release run 34644372201
+// (build-mac) failed 0.2b: on the 3-core mac release runner the FunASR
+// python cold boot measured 56.4s from spawn to init milestone
+// (20:39:04.48 → 20:40:00.90) — 7x the warm run's 8.0s (run
+// 34641412843) and consistent with the smoke step's documented >180s
+// fully-cold torch import ([20260905_Fix_150SmokeColdCache], the reason
+// the mac smoke budgets 360s for the same milestone family). The flat
+// 30s settle budget was structurally unfit for that runner. darwin gets
+// 300s — a ceiling, not an expectation: warm boots settle in ~8s, PR CI
+// (env-unavailable milestone) on the first poll, and a genuinely
+// wedged python still fails the suite, just later. win32 keeps 30s
+// (python boot measured 5-6s in both v1.5.1 release attempts).
+const FUNASR_INIT_SETTLE_TIMEOUT_MS =
+  process.platform === "darwin" ? 300_000 : 30_000;
+
+// Suite per-test ceiling, same root cause: 0.2's check-funasr-status
+// probe pays a cold `import funasr` per STATUS call on the mac runner
+// (78s measured in attempt 1 of run 34644372201 against the old 90s
+// ceiling). darwin 360s aligns with the mac smoke budget; win32 keeps
+// 90s. A real hang still fails the test — the budget shapes WHEN, not
+// WHETHER.
+const BOOT_TEST_TIMEOUT_MS = process.platform === "darwin" ? 360_000 : 90_000;
+// [20260912_Test_MacPackagedBootSettleBudget] END
+
 test.describe.serial("Suite 0: Boot Health (Phase A-E)", () => {
   // [20260906_Test_PackagedBootHealth] Spec #266 T11: in packaged-app runs
   // (release workflow) first boot pays cold asar/entitlements cost; the
   // config default 45s would mask the real launch timeout of 60s.
-  test.setTimeout(90_000);
+  // [20260912_Test_MacPackagedBootSettleBudget] Value platform-scaled —
+  // see tag above (darwin 360s for the mac runner's cold torch import,
+  // win32 stays 90s).
+  test.setTimeout(BOOT_TEST_TIMEOUT_MS);
 
   let electronApp;
   let window;
@@ -155,6 +183,15 @@ test.describe.serial("Suite 0: Boot Health (Phase A-E)", () => {
   // fires DURING boot — potentially before launchElectronApp() returns.
   let funasrLogOffset = 0;
   // [20260912_Test_WinPackagedBootFunasrSettle] END
+  // [20260912_Test_MacPackagedBootSettleBudget] Set when the packaged
+  // app process terminates (Playwright 'close' event). 0.2b polls
+  // app.log for up to 300s on darwin; if the app dies mid-wait (the
+  // clean will-quit/exit 0 teardown seen in runs 34581815142 and
+  // 34644372201) the poll must fail fast with a precise cause instead
+  // of timing out opaquely. Test 0.7's intentional close also sets it,
+  // but no poll is active by then.
+  let appTerminated = false;
+  // [20260912_Test_MacPackagedBootSettleBudget] END
   // [20260725_E2E_BootHealthGate_CodeReviewS2] Renderer console listener
   // is attached in beforeAll IMMEDIATELY after firstWindow() resolves so
   // it catches initial-mount errors, not just post-reload ones. Previously
@@ -175,6 +212,12 @@ test.describe.serial("Suite 0: Boot Health (Phase A-E)", () => {
     }
     // [20260912_Test_WinPackagedBootFunasrSettle] END
     ({ app: electronApp, window } = await launchElectronApp());
+    // [20260912_Test_MacPackagedBootSettleBudget] Track process
+    // termination so 0.2b's poll can fail fast (see declaration above).
+    electronApp.on("close", () => {
+      appTerminated = true;
+    });
+    // [20260912_Test_MacPackagedBootSettleBudget] END
     window.on("console", (msg) => {
       if (msg.type() === "error") consoleErrors.push(msg.text());
     });
@@ -242,12 +285,24 @@ test.describe.serial("Suite 0: Boot Health (Phase A-E)", () => {
   // success, server init failure (models_not_downloaded — the expected
   // release-CI state), or FunASR unavailable (python env missing — the
   // PR-CI state; no server ever spawns, so the wait resolves on the
-  // first poll).
+  // first poll). [20260912_Test_MacPackagedBootSettleBudget] The poll
+  // budget is 300s on darwin (cold torch import measured 56s, worst
+  // documented >180s) and the predicate fails fast if the app process
+  // terminates mid-wait — a dead app means the teardown recurred, not a
+  // slow boot.
   test("0.2b FunASR first-boot init settles before renderer probes", async () => {
     const logPath = funasrAppLogPath();
     await expect
       .poll(
         () => {
+          if (appTerminated) {
+            throw new Error(
+              "packaged app terminated while waiting for the FunASR init " +
+                "milestone — clean will-quit/exit 0 teardown (Playwright-side " +
+                "graceful close under runner load), not a slow python boot; " +
+                "see [20260912_Test_MacPackagedBootSettleBudget]",
+            );
+          }
           try {
             const content = fs.readFileSync(logPath, "utf8");
             // Clamp: if boot rotated/recreated the log (cleanOldLogs
