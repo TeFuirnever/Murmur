@@ -134,10 +134,17 @@ jobs:
         # [20260912_Fix_MacPackagingEMFILE] electron-builder unpacks the
         # embedded-python tree (torch ships tens of thousands of headers)
         # with one open fd per file; the default 256 soft limit on macOS
-        # runners made the DMG step die with EMFILE 2/2 in run 34631944103.
-        # Raise the soft fd limit for the packaging process only.
+        # runners made the DMG step die with EMFILE 2/2 in run 34631944103
+        # and again in 34636557974 where `ulimit -n 65536 || true` silently
+        # failed (soft > hard is rejected; || true swallowed it). Set soft
+        # to the runner's hard limit (capped at 65536), fall back to 10240,
+        # and LOG the effective value so the next failure is diagnosable.
         run: |
-          ulimit -n 65536 || true
+          HARD=$(ulimit -Hn)
+          echo "fd hard limit: $HARD, soft before: $(ulimit -Sn)"
+          if [ "$HARD" = "unlimited" ]; then TARGET=65536; elif [ "$HARD" -gt 65536 ]; then TARGET=65536; else TARGET=$HARD; fi
+          ulimit -n "$TARGET" || ulimit -n 10240 || true
+          echo "fd soft limit effective: $(ulimit -Sn)"
           pnpm electron-builder --mac --publish never
         # [20260912_Fix_MacPackagingEMFILE] END
         env:
