@@ -136,6 +136,38 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: false
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # [20260911_Gate_MacSignature] Issue #337: with CSC_IDENTITY_AUTO_DISCOVERY=false
+      # and no Developer ID in the keychain, electron-builder skipped signing
+      # entirely, so the shipped .app kept Electron's linker ad-hoc signature
+      # with NO resource seal ("code has no resources but signature indicates
+      # they must be present"). On Apple Silicon a quarantined app in that
+      # state is rejected by Gatekeeper as "已损坏 / damaged" — right-click →
+      # Open cannot bypass it. Two-part fix:
+      #   1) package.json build.mac.identity="-" forces electron-builder's
+      #      ad-hoc signing pass (full @electron/osx-sign deep sign with a
+      #      real resource seal). The hardenedRuntime warning this triggers is
+      #      covered: entitlements.mac.plist already carries
+      #      com.apple.security.cs.disable-library-validation. Once a
+      #      Developer ID cert (CSC_LINK) is configured in secrets, replace
+      #      "-" with the cert name and add notarization.
+      #   2) This gate: codesign --verify --deep --strict fails the build on a
+      #      broken/missing seal but PASSES a valid ad-hoc seal (ad-hoc needs
+      #      no certificate), so releases stay green until a Developer ID is
+      #      configured, while the #337 broken-seal state can never ship again.
+      - name: Verify packaged app signature (packaging gate)
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP=$(find dist -maxdepth 2 -name "*.app" -print -quit)
+          test -n "$APP" || { echo "::error::no .app found under dist/"; exit 1; }
+          echo "verifying signature of: $APP"
+          codesign --verify --deep --strict --verbose=2 "$APP" || {
+            echo "::error::packaged app signature invalid (broken seal). See issue #337 — the dmg would install as 'damaged' on Apple Silicon."
+            exit 1
+          }
+          codesign -dv "$APP" 2>&1 | grep -E "Signature|Sealed" || true
+          echo "macOS signature gate passed"
+      # [20260911_Gate_MacSignature] END
       # [20260816_Gate_PackagedBootSmoke] Install the DMG we just built and
       # boot the real app. Asserts on the boot log: window created, startup
       # complete, and the renderer→preload→IPC bridge alive (hotkey

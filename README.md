@@ -122,6 +122,9 @@ Download the latest build from [Releases](https://github.com/TeFuirnever/Murmur/
 > **First install notes**
 >
 > - **macOS**: if macOS reports "cannot verify the developer", right-click the app → **Open**
+> <!-- [20260911_Fix_DamagedAppWorkaround] Issue #337: the v1.5.0 dmg shipped with a broken ad-hoc seal, which Gatekeeper reports as "damaged" — a DIFFERENT scenario from "unverified developer"; right-click → Open does not bypass it. -->
+> - **macOS**: if macOS says the app "is damaged and can't be opened" (v1.5.0 ships with a broken signature seal), run in Terminal: `xattr -cr /Applications/Murmur.app && codesign --force --deep --sign - /Applications/Murmur.app` — details in [Troubleshooting](docs/troubleshooting.md)
+> <!-- [20260911_Fix_DamagedAppWorkaround] END -->
 > - **Windows**: if SmartScreen blocks the installer, click **More info** → **Run anyway**
 
 ## ⚡ Quick Start
