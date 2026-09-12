@@ -107,12 +107,19 @@ async function runClientChild(serializedTask) {
     // P1: enumerate the pipe namespace with only the prefix.
     const allPipes = readdirSync("\\\\.\\pipe\\");
     const matches = allPipes.filter((name) => name.startsWith(PIPE_NAMESPACE));
+    // [20260912_Poc_263_NamedPipeAcl] readdirSync yields BARE pipe names
+    // (no \\.\pipe\ device prefix) while task.pipeName is the full device
+    // path — normalize before the exact-name check (first CI run's
+    // foundTarget=false was this comparison bug, not a miss).
+    const bareTargetName = task.pipeName.split("\\").pop();
     verdict.probes.enumeration = {
       totalPipeCount: allPipes.length,
       prefixMatches: matches.length,
-      foundTarget: matches.includes(task.pipeName),
+      enumeratedTargetName: matches.includes(bareTargetName)
+        ? bareTargetName
+        : null,
     };
-    if (!verdict.probes.enumeration.foundTarget) {
+    if (!verdict.probes.enumeration.enumeratedTargetName) {
       process.stdout.write(`${JSON.stringify(verdict)}\n`);
       return;
     }
