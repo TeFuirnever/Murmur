@@ -17,6 +17,7 @@
 //   murmur polish <text> [--mode <mode>]          (ticket #268)
 //   murmur history delete <id> [--yes]            (ticket #268)
 //   murmur mcp                                    (ticket #269)
+//   murmur mcp install [--client ...] [--command ...]  (ticket #271; local)
 import {
   resolveConfigPath,
   resolveDatabasePath,
@@ -31,7 +32,17 @@ import {
   connectChannelBridge,
   validateAudioExtension,
 } from "./channelBridge.mjs";
+// [20260912_Feat_271_McpInstall] Project-scope MCP client registration
+// (ticket #271): client target table, merge logic and the typed error live
+// in mcpInstall.mjs; this module owns flags/output/exit-code wiring.
+import {
+  DEFAULT_MCP_COMMAND,
+  MCP_CLIENT_TARGETS,
+  McpInstallError,
+  installMcpEntry,
+} from "./mcpInstall.mjs";
 import os from "node:os";
+import path from "node:path";
 import readline from "node:readline/promises";
 
 // [20260912_Fix_264_ReviewFollowups] Mirrors validateSetting's
@@ -80,6 +91,27 @@ Usage:
                                        protocol frames; diagnostics go to
                                        stderr. The process exits when the MCP
                                        client disconnects (stdin closes).
+  murmur mcp install [--client <name>] [--command <path>] [--json]
+                                       Register the Murmur MCP server with
+                                       local MCP clients (ticket #271).
+                                       Clients: claude, cursor, vscode, all
+                                       (default: all). Writes PROJECT-scope
+                                       config in the CURRENT directory:
+                                       .mcp.json (Claude Code),
+                                       .cursor/mcp.json (Cursor) under
+                                       "mcpServers", and .vscode/mcp.json
+                                       (VS Code) under "servers". Existing
+                                       files are merged — only the "murmur"
+                                       entry is added/replaced; every other
+                                       entry is preserved. A second identical
+                                       run makes no change. --user is not
+                                       supported yet. --command overrides the
+                                       executable written into the configs
+                                       (default "murmur"; the packaged CLI
+                                       runs via ELECTRON_RUN_AS_NODE=1
+                                       <electron-binary> cli/murmur.mjs, so
+                                       point --command at that entry when
+                                       "murmur" is not on PATH).
 
 Global options:
   --json                               Structured JSON output on stdout
@@ -711,6 +743,131 @@ async function runMcp(argv, ctx) {
 }
 // [20260912_Feat_269_McpServer] END
 
+// [20260912_Feat_271_McpInstall] --- murmur mcp install (ticket #271) ---
+// Local (no app, no channel): writes/merges the per-client MCP config files
+// in the CURRENT directory via mcpInstall.mjs. Exit 0 on full or partial
+// success, 1 when EVERY requested client failed (e.g. the only requested
+// client's config file is not valid JSON), 2 on usage errors. `--user` is
+// rejected honestly: user-scope paths/semantics differ per client and are
+// deliberately deferred to their own ticket.
+
+// Accepted `--client` values ("all" = every target in MCP_CLIENT_TARGETS).
+const MCP_INSTALL_CLIENT_CHOICES = new Set([
+  "claude",
+  "cursor",
+  "vscode",
+  "all",
+]);
+
+/** Per-client stdout line in text mode (status verb + absolute path). */
+function mcpInstallStatusLine(result) {
+  if (result.status === "created") {
+    return `${result.label}: 已写入 ${result.path}\n`;
+  }
+  if (result.status === "updated") {
+    return `${result.label}: 已更新（合并） ${result.path}\n`;
+  }
+  return `${result.label}: 无变化 ${result.path}\n`;
+}
+
+function runMcpInstall(argv, ctx) {
+  // knownFlags must list every accepted flag; the booleanFlags subset marks
+  // the valueless ones (--project/--user are the scope pair).
+  const parsed = parseArgs(
+    argv,
+    new Set(["--client", "--command", "--project", "--user"]),
+    new Set(["--project", "--user"]),
+  );
+  if (parsed.unknown)
+    return usageError(`mcp install: unknown flag ${parsed.unknown}`);
+  if (parsed.missing)
+    return usageError(`mcp install: ${parsed.missing} requires a value`);
+  if (parsed.positionals.length > 0)
+    return usageError("mcp install: unexpected extra arguments");
+
+  // Scope: --project is the default and the only implemented scope. --user
+  // is a usage error (尚未支持) — honest refusal instead of guessing at
+  // per-client user-level semantics.
+  if (parsed.flags["--user"]) {
+    return usageError(
+      "mcp install: --user 尚未支持（用户级配置各客户端语义不同，将在后续 ticket 支持；当前仅支持项目级 --project，即默认行为）",
+    );
+  }
+
+  let clientChoice = "all";
+  if (parsed.flags["--client"] !== undefined) {
+    clientChoice = parsed.flags["--client"];
+    if (!MCP_INSTALL_CLIENT_CHOICES.has(clientChoice)) {
+      return usageError(
+        `mcp install: 未知的客户端: ${clientChoice}（可用: claude, cursor, vscode, all）`,
+      );
+    }
+  }
+
+  let command = DEFAULT_MCP_COMMAND;
+  if (parsed.flags["--command"] !== undefined) {
+    command = parsed.flags["--command"];
+    // parseArgs never yields "" for --command (a bare empty token becomes a
+    // positional, rejected above); whitespace still can, so guard it.
+    if (command.trim().length === 0) {
+      return usageError("mcp install: --command 不能为空");
+    }
+  }
+
+  const targets =
+    clientChoice === "all"
+      ? MCP_CLIENT_TARGETS
+      : MCP_CLIENT_TARGETS.filter((target) => target.id === clientChoice);
+
+  // Per-client isolation: one client's failure (invalid JSON, unwritable
+  // path) never aborts the others. Every failure is recorded; exit 1 only
+  // when all requested clients failed.
+  const results = targets.map((target) => {
+    try {
+      return installMcpEntry(target, { cwd: ctx.cwd, command });
+    } catch (error) {
+      const message =
+        error instanceof McpInstallError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : String(error);
+      return {
+        client: target.id,
+        label: target.label,
+        path: path.join(ctx.cwd, target.relativePath),
+        status: "failed",
+        success: false,
+        error: message,
+      };
+    }
+  });
+  const allFailed = results.every((result) => !result.success);
+
+  // Locked --json schema: { clients: [McpInstallClientResult, ...] } — the
+  // same per-client records in both output modes, failures included.
+  if (ctx.json) {
+    return {
+      code: allFailed ? EXIT_RUNTIME_ERROR : EXIT_OK,
+      stdout: `${JSON.stringify({ clients: results })}\n`,
+      stderr: "",
+    };
+  }
+  // Results on stdout, error text on stderr (locked CLI convention).
+  const okLines = results
+    .filter((result) => result.success)
+    .map(mcpInstallStatusLine);
+  const errorLines = results
+    .filter((result) => !result.success)
+    .map((result) => `murmur mcp install: ${result.error}\n`);
+  return {
+    code: allFailed ? EXIT_RUNTIME_ERROR : EXIT_OK,
+    stdout: okLines.join(""),
+    stderr: errorLines.join(""),
+  };
+}
+// [20260912_Feat_271_McpInstall] END
+
 /**
  * Run one CLI invocation. argv excludes the node/electron and script paths.
  *
@@ -732,6 +889,10 @@ async function runMcp(argv, ctx) {
  * @param {() => string} [options.homedir] Home dir resolver (defaults to os.homedir).
  * @param {string} [options.configPath] Explicit murmur.json path (skips env derivation).
  * @param {string} [options.dbPath] Explicit SQLite path (skips env derivation).
+ * @param {string} [options.cwd] Working directory for project-scope file
+ *   writes (`mcp install`, ticket #271; defaults to process.cwd()). Injected
+ *   by tests so project config files land in a temp directory instead of the
+ *   real working tree.
  * @param {(chunk: string) => void} [options.stderrWrite] Streaming sink for
  *   progress lines (wired to process.stderr by the entry point; tests omit it
  *   and read the accumulated stderr instead).
@@ -759,6 +920,9 @@ export function runCli(argv, options = {}) {
     // [20260912_Feat_267_BridgeTranscribe] Bridge subcommands resolve the
     // channel endpoint/token from the same userData derivation.
     userDataPath: resolveDataDirectory(pathContext),
+    // [20260912_Feat_271_McpInstall] Project-scope root for `mcp install`
+    // (mirrors the userDataPath/platform injection pattern above).
+    cwd: options.cwd ?? process.cwd(),
     env: pathContext.env,
     platform: pathContext.platform,
     homedir: pathContext.homedir,
@@ -809,6 +973,16 @@ export function runCli(argv, options = {}) {
     );
   }
   // [20260912_Feat_268_BridgePolishHistory] END
+  // [20260912_Feat_271_McpInstall] `mcp install` (ticket #271) is a LOCAL
+  // sync command, but it MUST be routed BEFORE the bare `mcp` terminal match
+  // below: bare `mcp` (ticket #269) dispatches the stdio server and rejects
+  // every positional, so without this earlier check `murmur mcp install`
+  // would die as "mcp: unexpected extra arguments". Only the exact
+  // "mcp install" prefix is stolen — `murmur mcp <anything-else>` still
+  // reaches runMcp unchanged.
+  if (command === "mcp" && subcommand === "install") {
+    return runMcpInstall(rest, ctx);
+  }
   // [20260912_Feat_269_McpServer] `murmur mcp` (ticket #269) is an async
   // long-running command: it returns a Promise resolving when the MCP
   // client disconnects (stdin EOF), with the same { code, stdout, stderr }
