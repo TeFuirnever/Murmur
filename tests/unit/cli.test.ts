@@ -168,7 +168,10 @@ describe("cli path resolution (mirrors environment.ts + main.ts + database.ts)",
     });
     expect(dir).toBe("/custom/user/data");
   });
-
+  // [20260912_Fix_264_WindowsHostTests] Production joins with the HOST's
+  // path module, so expectations must be built through path.join too — a
+  // Windows CI host produces backslash joins even for a faked darwin
+  // platform (the separator is a host property, not a platform argument).
   it("derives the platform data directory like environment.ts", () => {
     expect(
       resolveDataDirectory({
@@ -176,7 +179,9 @@ describe("cli path resolution (mirrors environment.ts + main.ts + database.ts)",
         platform: "darwin",
         homedir: fakeHomedir,
       }),
-    ).toBe("/home/tester/Library/Application Support/Murmur");
+    ).toBe(
+      path.join("/home/tester", "Library", "Application Support", "Murmur"),
+    );
     expect(
       resolveDataDirectory({
         env: {},
@@ -190,7 +195,7 @@ describe("cli path resolution (mirrors environment.ts + main.ts + database.ts)",
         platform: "linux",
         homedir: fakeHomedir,
       }),
-    ).toBe("/home/tester/.config/Murmur");
+    ).toBe(path.join("/home/tester", ".config", "Murmur"));
   });
 
   it("resolves murmur.json next to the data directory (main.ts behaviour)", () => {

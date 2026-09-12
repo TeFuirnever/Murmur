@@ -161,7 +161,9 @@ describe("cli history list", () => {
     expect(preview).not.toContain("\nsecond line");
   });
 
-  it("defaults to the app's limit of 50 records", () => {
+  // [20260912_Fix_264_WindowsHostTests] 55 inserts + first SQLite open on a
+  // cold Windows CI runner can exceed the 5s default (precedent: #341).
+  it("defaults to the app's limit of 50 records", { timeout: 15000 }, () => {
     const rows: SeedRow[] = Array.from({ length: 55 }, (_, i) => ({
       text: `note ${i}`,
       created_at: `2026-09-12 10:00:${String(i).padStart(2, "0")}`,
