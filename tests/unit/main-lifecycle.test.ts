@@ -36,6 +36,12 @@ const h = vi.hoisted(() => {
     hiddenWindow,
     allWindows: [] as unknown[],
     loggerInfo: vi.fn(),
+    // [20260912_Feat_260_SingleInstance] Ticket #260 (Spec #258): lock
+    // acquisition knob + handles for the init calls a second instance must
+    // NEVER reach (SQLite open, IPC handler registration).
+    hasSingleInstanceLock: true,
+    dbInitialize: vi.fn(),
+    registerIPCHandlers: vi.fn(),
     windowManager: {
       mainWindow: null as unknown,
       _setupCSP: vi.fn(),
@@ -61,6 +67,9 @@ vi.mock("electron", () => ({
     on: vi.fn((event: string, handler: (...args: unknown[]) => unknown) => {
       h.appOnHandlers[event] = handler;
     }),
+    // [20260912_Feat_260_SingleInstance] Lock acquisition is knob-driven so
+    // tests can play both the first and the second instance.
+    requestSingleInstanceLock: vi.fn(() => h.hasSingleInstanceLock),
     quit: vi.fn(),
     exit: vi.fn(),
     disableHardwareAcceleration: vi.fn(),
@@ -120,7 +129,7 @@ vi.mock("../../src/helpers/windowManager", () => ({
 
 vi.mock("../../src/helpers/database", () => ({
   default: class {
-    initialize = vi.fn();
+    initialize = h.dbInitialize;
     setFileConfigPath = vi.fn();
     getSetting = vi.fn(() => undefined);
     setSafeStorage = vi.fn();
@@ -151,7 +160,7 @@ vi.mock("../../src/helpers/hotkeyManager", () => ({
 }));
 
 vi.mock("../../src/helpers/ipc", () => ({
-  registerAll: vi.fn(),
+  registerAll: h.registerIPCHandlers,
 }));
 
 async function importMain(): Promise<void> {
@@ -220,5 +229,96 @@ describe("[20260911_Fix_339_DockActivate] main.ts lifecycle handlers", () => {
     } else {
       expect(electron.app.quit).toHaveBeenCalled();
     }
+  });
+});
+
+// ── [20260912_Feat_260_SingleInstance] Ticket #260 (Spec #258 Phase 0) ────
+// Contracts:
+//   1. A second instance (requestSingleInstanceLock === false) hard-exits
+//      with a NON-ZERO code BEFORE any manager/database/IPC init — the
+//      whole defect is double-open contention on the FunASR subprocess and
+//      SQLite, so module top-level init must never run in that process.
+//   2. The first instance registers a second-instance handler whose ONLY
+//      job is window awakening: existing window → showMainWindow(); zero
+//      windows → createMainWindow() + tray re-sync (same contract as the
+//      Dock activate path).
+//   3. Normal single-instance startup is untouched (the preceding suite
+//      stays green with the lock acquired).
+describe("[20260912_Feat_260_SingleInstance] main.ts single-instance lock", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    for (const key of Object.keys(h.appOnHandlers)) {
+      delete h.appOnHandlers[key];
+    }
+    h.allWindows = [];
+    h.windowManager.mainWindow = null;
+    h.hasSingleInstanceLock = true;
+  });
+
+  it("requests the single-instance lock exactly once at the application entry", async () => {
+    const electron = await import("electron");
+    await importMain();
+
+    expect(electron.app.requestSingleInstanceLock).toHaveBeenCalledTimes(1);
+  });
+
+  it("second instance hard-exits non-zero BEFORE opening the database or registering IPC", async () => {
+    h.hasSingleInstanceLock = false;
+    // process.exit must actually stop the module: simulate it with a throw
+    // so the top-level init below the lock check is proven unreachable.
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(((
+      code?: number,
+    ) => {
+      throw new Error(`PROCESS_EXIT:${code}`);
+    }) as never);
+    // Restore even on assertion failure — a leaked throwing process.exit
+    // would cascade confusingly into the following tests.
+    try {
+      await expect(importMain()).rejects.toThrow("PROCESS_EXIT:1");
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      // The contention this ticket removes: a second instance must not open
+      // SQLite, register IPC handlers, or start the FunASR subprocess chain.
+      expect(h.dbInitialize).not.toHaveBeenCalled();
+      expect(h.registerIPCHandlers).not.toHaveBeenCalled();
+    } finally {
+      exitSpy.mockRestore();
+    }
+  });
+
+  // [20260912_Feat_260_SingleInstance] The one-directional contract made
+  // explicit: Electron delivers (event, argv, workingDirectory) on
+  // second-instance; the handler must IGNORE them (no CLI routing, no quit)
+  // and only awaken the window.
+  it("second-instance event with an existing window shows it instead of recreating", async () => {
+    h.allWindows = [h.hiddenWindow];
+    h.windowManager.mainWindow = h.hiddenWindow;
+    const electron = await import("electron");
+
+    await importMain();
+    const handler = h.appOnHandlers["second-instance"];
+    expect(typeof handler).toBe("function");
+    handler!(
+      {} as unknown,
+      ["/fake/argv/second-launch"] as unknown as string[],
+    );
+
+    expect(h.windowManager.showMainWindow).toHaveBeenCalledTimes(1);
+    expect(h.windowManager.createMainWindow).not.toHaveBeenCalled();
+    expect(electron.app.quit).not.toHaveBeenCalled();
+  });
+
+  it("second-instance event with zero windows recreates the window and re-syncs the tray", async () => {
+    h.allWindows = [];
+    h.windowManager.createMainWindow.mockResolvedValue(h.hiddenWindow);
+
+    await importMain();
+    h.appOnHandlers["second-instance"]!();
+    await vi.waitFor(() =>
+      expect(h.trayManager.setWindows).toHaveBeenCalledWith(h.hiddenWindow),
+    );
+
+    expect(h.windowManager.createMainWindow).toHaveBeenCalledTimes(1);
+    expect(h.windowManager.showMainWindow).not.toHaveBeenCalled();
   });
 });

@@ -26,6 +26,22 @@ import LogManager from "./src/helpers/logManager";
 // Initialize log manager
 const logger = new LogManager();
 
+// [20260912_Feat_260_SingleInstance] Ticket #260 (Spec #258 Phase 0): a
+// second app instance must hard-exit here, BEFORE any manager/database/IPC
+// initialization — the defect under fix is double-open contention on the
+// FunASR subprocess and SQLite, so app.quit() alone is not enough (the
+// module top-level init below would still run while quit is in flight).
+// process.exit(1) is safe at this point: nothing has been initialized, so
+// there is nothing for the will-quit cleanup to release.
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  logger.warn("已检测到正在运行的 Murmur 实例，第二实例立即退出", {
+    platform: process.platform,
+  });
+  process.exit(1);
+}
+// [20260912_Feat_260_SingleInstance] END
+
 // Add global error handling
 process.on("uncaughtException", (error: Error & { code?: string }) => {
   logger.error("Uncaught Exception:", error);
@@ -353,18 +369,13 @@ app.on("window-all-closed", () => {
   }
 });
 
-// [20260911_Fix_339_DockActivate] Issue #339: macOS Dock click must recover
-// the tray-resident window. Two cases:
-//   1. No windows at all (window was destroyed, e.g. Cmd+W): recreate AND
-//      re-sync the tray's window reference — trayManager captured the
-//      original window once at startup, so without setWindows() every tray
-//      show/click would no-op against the destroyed reference.
-//   2. A HIDDEN main window still exists (the custom close button's default
-//      close_behavior "hide" path): getAllWindows() is non-empty, so the old
-//      recreate-only handler did nothing and the app looked dead in the
-//      Dock. Now the existing window is shown/focused instead.
-app.on("activate", () => {
-  logger.info("activate事件 (Dock点击)", {
+// [20260912_Feat_260_SingleInstance] Shared awaken path for Dock clicks
+// (activate, macOS) and second-instance launches (ticket #260, Spec #258):
+// bring the tray-resident window back, recreating it when destroyed. The
+// second-instance event carries NO payload usable for CLI communication
+// (single direction, no result channel) — window awakening is its only job.
+function showOrCreateMainWindow(): void {
+  logger.info("唤起主窗口", {
     windowCount: BrowserWindow.getAllWindows().length,
   });
   if (BrowserWindow.getAllWindows().length === 0) {
@@ -376,11 +387,32 @@ app.on("activate", () => {
         }
       })
       .catch((err: unknown) => {
-        logger.error("activate重建主窗口失败:", err);
+        logger.error("唤起重建主窗口失败:", err);
       });
   } else {
     windowManager.showMainWindow();
   }
+}
+
+app.on("second-instance", () => {
+  logger.info("second-instance事件 (二次启动唤起已有实例)");
+  showOrCreateMainWindow();
+});
+// [20260912_Feat_260_SingleInstance] END
+
+// [20260911_Fix_339_DockActivate] Issue #339: macOS Dock click must recover
+// the tray-resident window. Two cases:
+//   1. No windows at all (window was destroyed, e.g. Cmd+W): recreate AND
+//      re-sync the tray's window reference — trayManager captured the
+//      original window once at startup, so without setWindows() every tray
+//      show/click would no-op against the destroyed reference.
+//   2. A HIDDEN main window still exists (the custom close button's default
+//      close_behavior "hide" path): getAllWindows() is non-empty, so the old
+//      recreate-only handler did nothing and the app looked dead in the
+//      Dock. Now the existing window is shown/focused instead.
+app.on("activate", () => {
+  logger.info("activate事件 (Dock点击)");
+  showOrCreateMainWindow();
 });
 // [20260911_Fix_339_DockActivate] END
 
