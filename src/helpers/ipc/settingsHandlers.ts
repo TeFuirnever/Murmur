@@ -37,7 +37,12 @@ interface Managers {
   trayManager?: TrayManager;
 }
 
-const ALLOWED_SETTING_KEYS = new Set<string>([
+// [20260912_Feat_CliSkeleton] Exported for the murmur CLI (ticket #264): the
+// CLI's config get/set whitelist must reuse the same key list semantics as
+// the IPC settings boundary. The CLI keeps a plain-JS mirror (cli/lib cannot
+// import TS at runtime); tests/unit/cli-config.test.ts locks the two lists
+// to set equality so drift fails CI.
+export const ALLOWED_SETTING_KEYS = new Set<string>([
   "ai_api_key",
   "ai_base_url",
   "ai_model",
