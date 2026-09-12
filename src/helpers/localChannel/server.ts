@@ -21,10 +21,18 @@ import {
   transcribeFileService,
   type Logger,
 } from "../services/transcriptionService";
+// [20260912_Feat_268_BridgePolishHistory] History deletion goes through the
+// same single-writer service the GUI's DELETE handler uses (ticket #268).
+import {
+  deleteTranscriptionService,
+  TRANSCRIPTION_NOT_FOUND_MESSAGE,
+} from "../services/historyService";
 import {
   FILE_MODE_OWNER_ONLY,
   HANDSHAKE_TIMEOUT_MS,
   MAX_CONNECTIONS,
+  METHOD_HISTORY_DELETE,
+  METHOD_POLISH,
   METHOD_STATUS,
   METHOD_TRANSCRIBE_FILE,
   SESSION_IDLE_TTL_MS,
@@ -57,6 +65,16 @@ export interface ChannelServices {
     onProgress?: (progress: unknown) => void,
   ): Promise<unknown>;
   checkEngineStatus(): Promise<unknown>;
+  // [20260912_Feat_268_BridgePolishHistory] Ticket #268 endpoints. Optional
+  // so pre-#268 service bags (tests, partial wiring) keep compiling; a
+  // request for a missing implementation answers a method-unavailable error
+  // frame instead of crashing the session.
+  polish?(
+    text: string,
+    mode: string | undefined,
+    onProgress?: (progress: unknown) => void,
+  ): Promise<unknown>;
+  deleteTranscription?(id: number): Promise<unknown>;
 }
 
 export interface ChannelServerOptions {
@@ -430,10 +448,79 @@ class LocalChannelServerImpl implements LocalChannelServer {
         );
         return;
       }
+      // [20260912_Feat_268_BridgePolishHistory] Ticket #268 methods.
+      case METHOD_POLISH: {
+        const params = isRecord(request.params) ? request.params : {};
+        await this.dispatchPolish(socket, id, params);
+        return;
+      }
+      case METHOD_HISTORY_DELETE: {
+        const params = isRecord(request.params) ? request.params : {};
+        await this.dispatchHistoryDelete(socket, id, params);
+        return;
+      }
       default:
         this.writeFrame(socket, { id, error: "unknown-method" });
     }
   }
+
+  // [20260912_Feat_268_BridgePolishHistory] Ticket #268 method dispatch.
+  // Both methods follow the existing envelope style: shape errors answer an
+  // error frame in the audioPath-required mold; the task itself runs inside
+  // runRequest so unexpected failures map to a RequestErrorFrame. Channel
+  // polish crosses ONLY the task (text + mode) — the AI key stays in-process.
+  private dispatchPolish(
+    socket: net.Socket,
+    id: string,
+    params: Record<string, unknown>,
+  ): Promise<void> {
+    const text = params.text;
+    if (typeof text !== "string" || text.length === 0) {
+      this.writeFrame(socket, { id, error: "text-required" });
+      return Promise.resolve();
+    }
+    // Type-shape enforcement only: mode VALUE validation is the caller's
+    // local gate (the app's mode list includes custom templates that cannot
+    // be enumerated statically here); the orchestrator resolves unknown
+    // modes through its own prompt fallback.
+    if (params.mode !== undefined && typeof params.mode !== "string") {
+      this.writeFrame(socket, { id, error: "invalid-frame" });
+      return Promise.resolve();
+    }
+    const polish = this.services.polish;
+    if (!polish) {
+      this.writeFrame(socket, { id, error: "method-unavailable" });
+      return Promise.resolve();
+    }
+    // Progress chunks stream before the result frame (same ProgressFrame
+    // shape as transcribe). Abort is intentionally NOT exposed on the
+    // channel for polish (short text — ticket #268).
+    const mode = typeof params.mode === "string" ? params.mode : undefined;
+    return this.runRequest(socket, id, () =>
+      polish(text, mode, (progress) => {
+        this.writeFrame(socket, { id, progress } satisfies ProgressFrame);
+      }),
+    );
+  }
+
+  private dispatchHistoryDelete(
+    socket: net.Socket,
+    id: string,
+    params: Record<string, unknown>,
+  ): Promise<void> {
+    const rowId = params.id;
+    if (typeof rowId !== "number" || !Number.isInteger(rowId)) {
+      this.writeFrame(socket, { id, error: "id-required" });
+      return Promise.resolve();
+    }
+    const deleteTranscription = this.services.deleteTranscription;
+    if (!deleteTranscription) {
+      this.writeFrame(socket, { id, error: "method-unavailable" });
+      return Promise.resolve();
+    }
+    return this.runRequest(socket, id, () => deleteTranscription(rowId));
+  }
+  // [20260912_Feat_268_BridgePolishHistory] END
 
   private async runRequest(
     socket: net.Socket,
@@ -492,8 +579,25 @@ export interface LocalChannelServiceDeps {
     };
     // Synchronous settings read (hotword injection).
     getSetting(key: string, defaultValue?: unknown): unknown;
+    // [20260912_Feat_268_BridgePolishHistory] Optional so pre-#268 wiring
+    // keeps compiling; when present, history_delete goes through the same
+    // single-writer manager instance (the GUI observes the deletion on its
+    // next read — one DB, one writer).
+    deleteTranscription?(id: number): unknown;
   };
   logger: Logger;
+  // [20260912_Feat_268_BridgePolishHistory] AI polish collaborator (ticket
+  // #268), built in main.ts via aiHandlers.createChannelPolishService: the
+  // GUI-identical processPolishText/orchestrator wiring with the AI key
+  // decryption staying inside THIS process. Optional so pre-#268 wiring
+  // keeps compiling; a polish request without it answers method-unavailable.
+  aiPolish?: {
+    polish(
+      text: string,
+      mode: string | undefined,
+      onProgress?: (progress: unknown) => void,
+    ): Promise<unknown>;
+  };
 }
 
 export interface StartLocalChannelInput {
@@ -537,16 +641,54 @@ export async function startLocalChannel(
   const statusDeps = serviceDeps as unknown as Parameters<
     typeof checkEngineStatusService
   >[0];
+  // [20260912_Feat_268_BridgePolishHistory] Ticket #268 service bindings.
+  // Bind the optional manager method ONCE (preserves `this`) and narrow it
+  // for the service's required-method deps shape; both #268 endpoints stay
+  // absent from the bag when their deps are missing (requests then answer
+  // method-unavailable).
+  const { aiPolish } = serviceDeps;
+  const deleteTranscriptionBound =
+    serviceDeps.databaseManager.deleteTranscription?.bind(
+      serviceDeps.databaseManager,
+    );
+  // CLI-facing message for deleting a row id that matches nothing — the
+  // service envelope alone ({success, changes:0}) has no user-facing
+  // meaning over the channel, so the wrapper surfaces it as an error frame.
+  // [20260912_Fix_268_Review] Wording lives in historyService (single
+  // source) so CLI and GUI errors stay identical for the same condition.
+  const channelServices: ChannelServices = {
+    transcribeFile: (audioPath, options, onProgress) =>
+      transcribeFileService(transcribeDeps, audioPath, options, onProgress),
+    checkEngineStatus: () => checkEngineStatusService(statusDeps),
+  };
+  if (aiPolish) {
+    channelServices.polish = (text, mode, onProgress) =>
+      aiPolish.polish(text, mode, onProgress);
+  }
+  if (deleteTranscriptionBound) {
+    channelServices.deleteTranscription = async (rowId: number) => {
+      const result = deleteTranscriptionService(
+        {
+          databaseManager: { deleteTranscription: deleteTranscriptionBound },
+          logger,
+        },
+        rowId,
+      );
+      if (!result.success) {
+        throw new Error(result.error ?? "删除转录记录失败");
+      }
+      if ((result.changes ?? 0) === 0) {
+        throw new Error(TRANSCRIPTION_NOT_FOUND_MESSAGE);
+      }
+      return result;
+    };
+  }
   const server = createChannelServer({
     endpointPath,
     token,
     logger,
     platform,
-    services: {
-      transcribeFile: (audioPath, options, onProgress) =>
-        transcribeFileService(transcribeDeps, audioPath, options, onProgress),
-      checkEngineStatus: () => checkEngineStatusService(statusDeps),
-    },
+    services: channelServices,
   });
   // [20260912_Fix_265_ReviewHardening] Bind FIRST, then publish secrets:
   // if listen() fails (endpoint in use), no token file is written, so a

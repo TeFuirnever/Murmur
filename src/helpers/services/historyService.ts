@@ -104,6 +104,11 @@ export function getTranscriptionsService(
 // handler body ([20260905_Fix_249_ReviewNit]): wrap the raw node:sqlite
 // RunResult into the OperationResult contract — missing `changes`
 // normalizes to 0.
+// [20260912_Fix_268_Review] Single source for the not-found wording — the
+// channel delete path (localChannel) reuses it so CLI and GUI errors stay
+// identical for the same condition.
+export const TRANSCRIPTION_NOT_FOUND_MESSAGE = "转录记录不存在";
+
 export function deleteTranscriptionService(
   deps: {
     databaseManager: { deleteTranscription(id: number): unknown };
