@@ -62,6 +62,13 @@ export const ERR_NOT_CONNECTED = "local-channel-not-connected";
 /** The two endpoints the channel exposes. */
 export const METHOD_TRANSCRIBE_FILE = "transcribe_file";
 export const METHOD_STATUS = "status";
+// [20260912_Feat_268_BridgePolishHistory] Two more channel methods (ticket
+// #268): `polish` runs the GUI-identical polish orchestrator in-process
+// (only the task crosses the channel — the AI key never does), and
+// `history_delete` deletes one transcription row through the same
+// single-writer service the GUI uses.
+export const METHOD_POLISH = "polish";
+export const METHOD_HISTORY_DELETE = "history_delete";
 
 /** Mandatory first frame from the client. */
 export interface TokenFrame {

@@ -19,6 +19,12 @@ import {
   type ChannelServices,
   type LocalChannelServer,
 } from "../../src/helpers/localChannel";
+// [20260912_Feat_268_BridgePolishHistory] Ticket #268 channel methods.
+import {
+  METHOD_HISTORY_DELETE,
+  METHOD_POLISH,
+} from "../../src/helpers/localChannel/protocol";
+import { createChannelPolishService } from "../../src/helpers/ipc/aiHandlers";
 import type { Logger } from "../../src/helpers/services/transcriptionService";
 
 // [20260912_Feat_265_LocalChannel] Opaque test token — the server treats
@@ -600,6 +606,212 @@ describe("localChannel (ticket #265)", () => {
         server = null;
       },
     );
+  });
+
+  // [20260912_Feat_268_BridgePolishHistory] Ticket #268 channel methods:
+  // method-name routing and param shape errors over REAL loopback sockets
+  // with FAKE services (the real processPolishText is heavy — its wiring is
+  // exercised in the startLocalChannel test below via the key-missing fast
+  // path, which settles before any provider call).
+  describe("channel polish + history_delete (ticket #268)", () => {
+    it("polish: forwards text/mode to the service, streams progress chunks, returns the result", async () => {
+      const polish = vi.fn(
+        async (
+          _text: string,
+          _mode: string | undefined,
+          onProgress?: (progress: unknown) => void,
+        ) => {
+          onProgress?.({
+            type: "progress",
+            requestId: "cli-1",
+            chunkIndex: 1,
+            chunkCount: 2,
+          });
+          onProgress?.({
+            type: "progress",
+            requestId: "cli-1",
+            chunkIndex: 2,
+            chunkCount: 2,
+          });
+          return { success: true, text: "润色完成" };
+        },
+      );
+      await startTestServer(buildServices({ polish }));
+      const client = createChannelClient({ endpointPath, token: TOKEN });
+      await client.connect();
+      const progressPayloads: unknown[] = [];
+      const result = (await client.request(
+        METHOD_POLISH,
+        { text: "原始文本", mode: "summarize" },
+        (progress) => {
+          progressPayloads.push(progress);
+        },
+      )) as Record<string, unknown>;
+      expect(result).toEqual({ success: true, text: "润色完成" });
+      expect(polish).toHaveBeenCalledTimes(1);
+      const call = polish.mock.calls[0]!;
+      expect(call[0]).toBe("原始文本");
+      expect(call[1]).toBe("summarize");
+      expect(progressPayloads).toEqual([
+        { type: "progress", requestId: "cli-1", chunkIndex: 1, chunkCount: 2 },
+        { type: "progress", requestId: "cli-1", chunkIndex: 2, chunkCount: 2 },
+      ]);
+      // No --mode from the caller → the service receives undefined and the
+      // app applies its entry-level "optimize" default (locked in
+      // aiService.test.ts).
+      await client.request(METHOD_POLISH, { text: "原始文本" });
+      expect(polish.mock.calls[1]![1]).toBeUndefined();
+      client.close();
+    });
+
+    it("polish: missing or empty text answers text-required without calling the service", async () => {
+      const polish = vi.fn(async () => ({ success: true, text: "x" }));
+      await startTestServer(buildServices({ polish }));
+      const client = createChannelClient({ endpointPath, token: TOKEN });
+      await client.connect();
+      await expect(client.request(METHOD_POLISH, {})).rejects.toThrow(
+        "text-required",
+      );
+      await expect(client.request(METHOD_POLISH, { text: "" })).rejects.toThrow(
+        "text-required",
+      );
+      expect(polish).not.toHaveBeenCalled();
+      client.close();
+    });
+
+    it("polish: a non-string mode answers invalid-frame without calling the service", async () => {
+      const polish = vi.fn(async () => ({ success: true, text: "x" }));
+      await startTestServer(buildServices({ polish }));
+      const client = createChannelClient({ endpointPath, token: TOKEN });
+      await client.connect();
+      await expect(
+        client.request(METHOD_POLISH, { text: "原始文本", mode: 42 }),
+      ).rejects.toThrow("invalid-frame");
+      expect(polish).not.toHaveBeenCalled();
+      client.close();
+    });
+
+    it("polish: answers method-unavailable when the service bag has no polish", async () => {
+      await startTestServer(buildServices());
+      const client = createChannelClient({ endpointPath, token: TOKEN });
+      await client.connect();
+      await expect(
+        client.request(METHOD_POLISH, { text: "原始文本" }),
+      ).rejects.toThrow("method-unavailable");
+      client.close();
+    });
+
+    it("history_delete: forwards the row id to the service and returns its result", async () => {
+      const deleteTranscription = vi.fn(async (id: number) => {
+        expect(typeof id).toBe("number");
+        return { success: true, changes: 1 };
+      });
+      await startTestServer(buildServices({ deleteTranscription }));
+      const client = createChannelClient({ endpointPath, token: TOKEN });
+      await client.connect();
+      const result = (await client.request(METHOD_HISTORY_DELETE, {
+        id: 7,
+      })) as Record<string, unknown>;
+      expect(result).toEqual({ success: true, changes: 1 });
+      expect(deleteTranscription).toHaveBeenCalledTimes(1);
+      expect(deleteTranscription.mock.calls[0]![0]).toBe(7);
+      client.close();
+    });
+
+    it("history_delete: a missing or non-integer id answers id-required without calling the service", async () => {
+      const deleteTranscription = vi.fn(async () => ({ success: true }));
+      await startTestServer(buildServices({ deleteTranscription }));
+      const client = createChannelClient({ endpointPath, token: TOKEN });
+      await client.connect();
+      await expect(client.request(METHOD_HISTORY_DELETE, {})).rejects.toThrow(
+        "id-required",
+      );
+      await expect(
+        client.request(METHOD_HISTORY_DELETE, { id: "7" }),
+      ).rejects.toThrow("id-required");
+      await expect(
+        client.request(METHOD_HISTORY_DELETE, { id: 1.5 }),
+      ).rejects.toThrow("id-required");
+      expect(deleteTranscription).not.toHaveBeenCalled();
+      client.close();
+    });
+
+    it("history_delete: answers method-unavailable when the service bag has no deleteTranscription", async () => {
+      await startTestServer(buildServices());
+      const client = createChannelClient({ endpointPath, token: TOKEN });
+      await client.connect();
+      await expect(
+        client.request(METHOD_HISTORY_DELETE, { id: 7 }),
+      ).rejects.toThrow("method-unavailable");
+      client.close();
+    });
+
+    it("startLocalChannel wires polish through the REAL GUI-identical factory and history_delete through the single-writer service", async () => {
+      // The AI key read stays INSIDE the app process: with no key configured
+      // the real orchestrator settles with the config-reminder envelope
+      // BEFORE any provider call — proving the task crossed the channel
+      // while the key never left the process (zero network in this test).
+      const deleteTranscription = vi
+        .fn()
+        .mockReturnValueOnce({ changes: 0 })
+        .mockReturnValueOnce({ changes: 1 });
+      const databaseManager = {
+        saveTranscription: vi.fn(),
+        getSetting: vi.fn(async () => null),
+        deleteTranscription,
+      };
+      const serviceDeps = {
+        funasrManager: {
+          transcribeFile: vi.fn(async () => ({ success: true })),
+          checkModelFiles: vi.fn(async () => ({ models_downloaded: true })),
+        },
+        databaseManager,
+        logger: asLogger(spyLogger),
+        // The SAME databaseManager instance feeds the polish factory — one
+        // manager, one writer, one key-decryption site (in-process).
+        aiPolish: createChannelPolishService({
+          databaseManager,
+          logger: asLogger(spyLogger),
+          templatesDir: "/non/existent/templates",
+        }),
+      };
+      const handle = await startLocalChannel({
+        userDataPath: tmpDir,
+        serviceDeps,
+        logger: asLogger(spyLogger),
+      });
+      server = {
+        endpointPath: handle.endpointPath,
+        listen: async () => undefined,
+        stop: () => handle.stop(),
+      };
+      const client = createChannelClient({
+        endpointPath: handle.endpointPath,
+        token: fs.readFileSync(handle.tokenPath, "utf8"),
+      });
+      await client.connect();
+
+      // polish: real processPolishText path — missing-key fast fail, and
+      // the key was read via the injected manager (in-process), never sent.
+      const polishResult = (await client.request(METHOD_POLISH, {
+        text: "测试文本",
+      })) as Record<string, unknown>;
+      expect(polishResult.success).toBe(false);
+      expect(polishResult.error).toBe("请先在设置页面配置AI API密钥");
+
+      // history_delete: the SAME databaseManager instance (single writer —
+      // the GUI observes deletions on its next read); changes:0 surfaces as
+      // the 转录记录不存在 error frame, changes:1 as the result envelope.
+      await expect(
+        client.request(METHOD_HISTORY_DELETE, { id: 5 }),
+      ).rejects.toThrow("转录记录不存在");
+      const deleteResult = (await client.request(METHOD_HISTORY_DELETE, {
+        id: 5,
+      })) as Record<string, unknown>;
+      expect(deleteResult).toEqual({ success: true, changes: 1 });
+      expect(deleteTranscription).toHaveBeenCalledTimes(2);
+      client.close();
+    });
   });
 
   describe("framing helpers", () => {

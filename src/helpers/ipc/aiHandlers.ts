@@ -1669,3 +1669,57 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
   });
 }
 // [20260724_TS_BigBang_AIHandlers] END
+
+// [20260912_Feat_268_BridgePolishHistory] Minimal headless factory for the
+// local channel's `polish` method (ticket #268). The channel crosses only
+// the TASK (text + mode) — the AI key is decrypted inside THIS process by
+// runPolishOrchestrator via databaseManager.getSetting, exactly as for the
+// GUI, and never appears in any frame. The wiring is GUI-identical: the
+// same processPolishText entry (stream registration, "optimize" mode
+// default, minimal-edit clamp gating, own-entry release) with the same
+// orchestrator the C.AI.PROCESS handler injects above. Each run gets a
+// synthetic per-request id (`cli-<n>`) so concurrent channel runs occupy
+// distinct generation scopes, and the module's SENDER_ID_NONE sentinel as
+// the owner (no window exists to own a channel run). ABORT IS OUT OF SCOPE
+// for CLI polish (short text, ticket #268): no abort surface is exposed —
+// the registry entry is still released in processPolishText's finally.
+export interface ChannelPolishService {
+  polish(
+    text: string,
+    mode: string | undefined,
+    onProgress?: (progress: unknown) => void,
+  ): Promise<unknown>;
+}
+
+const CHANNEL_REQUEST_ID_PREFIX = "cli-";
+
+export function createChannelPolishService(deps: {
+  databaseManager: DatabaseManager;
+  logger: Logger;
+  templatesDir: string;
+}): ChannelPolishService {
+  const streamAbortRegistry = createStreamAbortRegistry();
+  let nextChannelRequestId = 0;
+  return {
+    polish(text, mode, onProgress) {
+      nextChannelRequestId += 1;
+      return processPolishText(
+        {
+          databaseManager: deps.databaseManager,
+          logger: deps.logger,
+          templatesDir: deps.templatesDir,
+          runPolish: runPolishOrchestrator,
+        },
+        streamAbortRegistry,
+        {
+          text,
+          mode,
+          requestId: `${CHANNEL_REQUEST_ID_PREFIX}${nextChannelRequestId}`,
+          senderId: SENDER_ID_NONE,
+          notify: (chunk: PolishChunk) => onProgress?.(chunk),
+        },
+      );
+    },
+  };
+}
+// [20260912_Feat_268_BridgePolishHistory] END
