@@ -24,6 +24,22 @@ import {
   withHotwordFallback,
   type Logger,
 } from "../services/transcriptionService";
+// [20260912_Refactor_262_AiHistoryService] Ticket #262 (spec #258 Phase 0):
+// the history write/query/delete domain — SAVE, GET_ALL, DELETE, CLEAR,
+// EXPORT_ALL handler bodies — moved to
+// src/helpers/services/historyService.ts so it can run without a
+// renderer/window/sender (single-writer principle intact: every function
+// writes through the same injected databaseManager). This handler file
+// keeps only channel registration and the native save-dialog wiring,
+// passed to EXPORT_ALL as the injected showSaveDialog callback.
+import {
+  clearTranscriptionsService,
+  deleteTranscriptionService,
+  exportAllTranscriptionsService,
+  getTranscriptionsService,
+  saveTranscriptionService,
+} from "../services/historyService";
+// [20260912_Refactor_262_AiHistoryService] END
 
 interface TranscriptionRow {
   text?: string;
@@ -118,6 +134,13 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
   // src/helpers/services/transcriptionService.ts, now taking this bag as
   // their first argument.
   const transcriptionDeps = { funasrManager, databaseManager, logger };
+
+  // [20260912_Refactor_262_AiHistoryService] Deps bag forwarded to the
+  // extracted history service functions (save/get/delete/clear/export_all).
+  // Narrow slice per the #261 deps-slices review: the history domain needs
+  // only the databaseManager + logger — no funasrManager surface.
+  const historyDeps = { databaseManager, logger };
+  // [20260912_Refactor_262_AiHistoryService] END
 
   ipcMain.handle(
     C.TRANSCRIPTION.AUDIO,
@@ -358,19 +381,13 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
 
   ipcMain.handle(
     C.TRANSCRIPTION.SAVE,
-    (_event, data: Record<string, unknown>) => {
-      try {
-        const result = databaseManager.saveTranscription(data);
-        return {
-          success: true,
-          lastInsertRowid: result.lastInsertRowid,
-          changes: result.changes,
-        };
-      } catch (error) {
-        logger.error?.("保存转录失败:", error);
-        return { success: false, error: (error as Error).message };
-      }
-    },
+    // [20260912_Refactor_262_AiHistoryService] Thin shell: the write and its
+    // {success, lastInsertRowid, changes} / {success:false, error} envelope
+    // moved into saveTranscriptionService unchanged (rowid normalized via
+    // Number() per the #262 service contract; plain-number rowids are
+    // unaffected).
+    (_event, data: Record<string, unknown>) =>
+      saveTranscriptionService(historyDeps, data),
   );
 
   // [20260906_Feat_TranscriptionUpdate] Spec #193 T1 (ticket #228): manual
@@ -434,9 +451,11 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
 
   ipcMain.handle(
     C.TRANSCRIPTION.GET_ALL,
-    (_event, limit: number, offset: number) => {
-      return databaseManager.getTranscriptions(limit, offset);
-    },
+    // [20260912_Refactor_262_AiHistoryService] Thin shell: raw paginated row
+    // passthrough moved into getTranscriptionsService (no envelope, as
+    // before).
+    (_event, limit: number, offset: number) =>
+      getTranscriptionsService(historyDeps, limit, offset),
   );
 
   // [20260816_Refactor_DeadChannels] The GET (single-record) and STATS
@@ -446,102 +465,38 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
   // [20260905_Fix_249_ReviewNit] Wrap the raw RunResult into OperationResult
   // like CLEAR does — DELETE is the last transcription handler still leaking
   // node:sqlite's {changes, lastInsertRowid} past the declared contract.
-  ipcMain.handle(C.TRANSCRIPTION.DELETE, (_event, id: number) => {
-    try {
-      const result = databaseManager.deleteTranscription(id) as {
-        changes?: number;
-      };
-      return { success: true, changes: result.changes ?? 0 };
-    } catch (error) {
-      logger.error?.("删除转录记录失败:", error);
-      return { success: false, error: (error as Error).message };
-    }
-  });
+  ipcMain.handle(
+    C.TRANSCRIPTION.DELETE,
+    // [20260912_Refactor_262_AiHistoryService] Thin shell: the RunResult →
+    // OperationResult wrapping (missing changes → 0) and the error envelope
+    // moved into deleteTranscriptionService unchanged.
+    (_event, id: number) => deleteTranscriptionService(historyDeps, id),
+  );
 
   // [20260905_Fix_248_ReviewClearContract] Wrap the raw node:sqlite RunResult
   // ({changes, lastInsertRowid}) into the declared OperationResult contract —
   // the renderer checks `success`, and the unwrapped shape made every
   // successful clear report failure (review BLOCKER, issue #248).
-  ipcMain.handle(C.TRANSCRIPTION.CLEAR, () => {
-    try {
-      const result = databaseManager.clearAllTranscriptions() as {
-        changes?: number;
-      };
-      return { success: true, changes: result.changes ?? 0 };
-    } catch (error) {
-      logger.error?.("清空转录记录失败:", error);
-      return { success: false, error: (error as Error).message };
-    }
-  });
+  ipcMain.handle(
+    C.TRANSCRIPTION.CLEAR,
+    // [20260912_Refactor_262_AiHistoryService] Thin shell: the RunResult →
+    // OperationResult wrapping moved into clearTranscriptionsService
+    // unchanged.
+    () => clearTranscriptionsService(historyDeps),
+  );
 
-  ipcMain.handle(C.TRANSCRIPTION.EXPORT_ALL, async (_event, format: string) => {
-    try {
-      const transcriptions = databaseManager.getTranscriptions(10000, 0);
-      if (!transcriptions || transcriptions.length === 0) {
-        return { success: false, error: "没有转录记录可导出" };
-      }
-
-      const formatInfo = exportFormatters.getFormatInfo(format || "txt");
-      if (!formatInfo) {
-        return { success: false, error: `不支持的格式: ${format}` };
-      }
-      const filters = [
-        { name: formatInfo.label || format, extensions: [formatInfo.ext] },
-      ];
-
-      const result = await dialog.showSaveDialog({
-        title: "导出转录记录",
-        defaultPath: `transcriptions.${formatInfo.ext}`,
-        filters,
-      });
-
-      if (result.canceled || !result.filePath) {
-        return { success: false, canceled: true };
-      }
-
-      // [20260906_Fix_ExportAllSegments] Found by the T16 content-readback
-      // e2e: rows carry the raw segments JSON string, but formatters read
-      // parsedSegments — export-all therefore silently dropped segment
-      // timelines. Parse per record (parity with the single-record export).
-      const withParsedSegments = (
-        transcriptions as unknown as Array<Record<string, unknown>>
-      ).map((row) => {
-        let parsedSegments: unknown[] = [];
-        if (typeof row.segments === "string" && row.segments) {
-          try {
-            parsedSegments = JSON.parse(row.segments) as unknown[];
-          } catch {
-            parsedSegments = [];
-          }
-        }
-        return { ...row, parsedSegments };
-      });
-
-      let content: Buffer | string;
-      if (format === "docx") {
-        // [20260724_TS_BigBang_TranscriptionHandlers] Pre-existing behavior:
-        // the .js passed the whole transcriptions array to formatDOCX
-        // (which expects a single record). Preserve runtime behavior via
-        // a cast; the doc comes out with empty text/segments as before.
-        content = await exportFormatters.formatDOCX(
-          withParsedSegments as unknown as TranscriptionForExport,
-        );
-        fs.writeFileSync(result.filePath, content as Buffer);
-      } else {
-        // [20260815_Refactor_FormatterLookup] getFormatInfo above already
-        // resolved the right formatter; the nested ternary re-derived it.
-        const formatter = formatInfo.formatter;
-        content = (withParsedSegments as unknown[])
-          .map((t) => formatter(t as unknown as TranscriptionForExport))
-          .join("\n\n");
-        fs.writeFileSync(result.filePath, content as string, "utf-8");
-      }
-
-      return { success: true, path: result.filePath };
-    } catch (error) {
-      logger.error?.("导出转录失败:", error);
-      return { success: false, error: (error as Error).message };
-    }
-  });
+  ipcMain.handle(
+    C.TRANSCRIPTION.EXPORT_ALL,
+    // [20260912_Refactor_262_AiHistoryService] Thin shell: the row fetch,
+    // empty/format guards, per-row segments parsing, docx branch, and file
+    // write moved into exportAllTranscriptionsService unchanged. The only
+    // renderer/Electron coupling left here is the native save dialog —
+    // injected as the showSaveDialog callback (a headless caller injects a
+    // stub or a direct path; the returned envelope is unaffected).
+    async (_event, format: string) =>
+      await exportAllTranscriptionsService(historyDeps, format, (options) =>
+        dialog.showSaveDialog(options),
+      ),
+  );
 }
 // [20260724_TS_BigBang_TranscriptionHandlers] END

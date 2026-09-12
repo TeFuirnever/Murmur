@@ -29,6 +29,27 @@ import {
   joinChunkOutputs,
   splitIntoChunks,
 } from "../polish-chunking";
+// [20260912_Refactor_262_AiHistoryService] Ticket #262 (spec #258 Phase 0):
+// the AI-domain service seam lives in src/helpers/services/aiService.ts —
+// the requestId→AbortController registry (POLISH_ABORT semantics), the
+// PROCESS entry wiring (processPolishText, with THIS module's
+// runPolishOrchestrator injected as `runPolish`), the provider model
+// listing, and the shared SSRF gate (moved verbatim). The handlers below
+// stay thin shells; the HIGH-RISK streaming/deadline-matrix pipeline is
+// untouched. Dependency direction is one-way: this module imports the
+// service (type-only imports in the reverse direction are erased).
+import {
+  createStreamAbortRegistry,
+  isLocalBaseUrl,
+  listProviderModels,
+  processPolishText,
+  validateAIBaseUrl,
+} from "../services/aiService";
+// [20260912_Refactor_262_AiHistoryService] Public contract preserved:
+// validateAIBaseUrl now lives in aiService (verbatim move) and is
+// re-exported because existing modules/tests import it from here.
+export { validateAIBaseUrl };
+// [20260912_Refactor_262_AiHistoryService] END
 
 interface Logger {
   info?(message: string, ...args: unknown[]): void;
@@ -157,73 +178,10 @@ export function getAIModes(templatesDir: string): AIMode[] {
   ];
 }
 
-function isLocalhost(host: string | null | undefined): boolean {
-  if (!host) return false;
-  host = host.toLowerCase();
-  if (host === "localhost" || host.endsWith(".localhost")) return true;
-  if (host === "0.0.0.0" || host === "::1" || host === "[::1]") return true;
-  if (/^127\./.test(host)) return true;
-  return false;
-}
-
-// [20260907_Fix_233_SsrfHardening] Security-review MEDIUM: the IPv4-text
-// checks missed IPv4-mapped IPv6 (::ffff:a00:1), IPv6 ULA fc00::/7,
-// link-local fe80::/10, loopback ::/128, and CGNAT 100.64.0.0/10 — all
-// resolve to private/internal addresses while canonicalizing to hostnames
-// that matched no regex. Bracket stripping + mapped-address reduction close
-// the gap for every AI channel that shares this gate.
-function isPrivateNetwork(host: string): boolean {
-  if (!host) return false;
-  const bare = host.replace(/^\[|\]$/g, "").toLowerCase();
-  if (bare === "::1" || bare === "::") return true;
-  const mapped = bare.match(/^::ffff:(.+)$/);
-  if (mapped) {
-    // WHATWG canonicalizes mapped addresses to hex form ([::ffff:a00:1]);
-    // convert the trailing 32 bits back to dotted-decimal for the IPv4
-    // checks below.
-    const hex = mapped[1]!.match(/^([0-9a-f]+):([0-9a-f]+)$/);
-    if (hex) {
-      const hi = parseInt(hex[1]!, 16);
-      const lo = parseInt(hex[2]!, 16);
-      return isPrivateNetwork(
-        `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`,
-      );
-    }
-    return isPrivateNetwork(mapped[1]!);
-  }
-  if (/^f[cd][0-9a-f]{2}:/.test(bare)) return true; // IPv6 ULA fc00::/7
-  if (/^fe[89ab][0-9a-f]:/.test(bare)) return true; // IPv6 link-local
-  if (/^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(bare)) return true; // CGNAT
-  if (/^198\.(1[89]|0)\./.test(bare)) return true; // benchmark 198.18.0.0/15
-  if (/^10\./.test(bare)) return true;
-  if (/^192\.168\./.test(bare)) return true;
-  if (/^172\.(1[6-9]|2\d|3[01])\./.test(bare)) return true;
-  if (/^169\.254\./.test(bare)) return true;
-  if (/^127\./.test(bare)) return true;
-  return false;
-}
-
-export function validateAIBaseUrl(
-  baseUrl: string,
-  { allowLocalhost = false }: { allowLocalhost?: boolean } = {},
-): boolean {
-  try {
-    const url = new URL(baseUrl);
-    const host = url.hostname.toLowerCase();
-    if (!host) return false;
-
-    if (allowLocalhost && isLocalhost(host)) {
-      return url.protocol === "http:" || url.protocol === "https:";
-    }
-
-    if (url.protocol !== "https:") return false;
-    if (isLocalhost(host)) return false;
-    if (isPrivateNetwork(host)) return false;
-    return true;
-  } catch {
-    return false;
-  }
-}
+// [20260912_Refactor_262_AiHistoryService] isLocalhost / isPrivateNetwork /
+// validateAIBaseUrl / isLocalBaseUrl moved verbatim to
+// src/helpers/services/aiService.ts (the SSRF gate shared by every AI
+// channel); validateAIBaseUrl is re-exported above. END
 
 // [20260815_Refactor_AiFetchDedup] processTextWithAI and checkAIStatus used
 // to hand-roll the same sequence: auth headers, AbortController + timeout,
@@ -233,41 +191,12 @@ export function validateAIBaseUrl(
 // user-facing error text).
 // [20260815_Refactor_AiFetchDedup] END
 
-// [20260907_Feat_233_ListModels] Ticket #233: derive the /models endpoint
-// from the base URL with the URL constructor only — never whole-URL string
-// concatenation. Bases that already end in a version segment get exactly
-// one candidate ({base}/models); other bases try {base}/models first and
-// {base}/v1/models second (the common "no /v1 in base_url" gateway shape).
-function modelEndpointCandidates(baseUrl: string): string[] {
-  const url = new URL(baseUrl);
-  const basePath = url.pathname.replace(/\/+$/, "");
-  const withPath = (suffix: string) => {
-    const derived = new URL(baseUrl);
-    derived.pathname = basePath + suffix;
-    return derived.toString();
-  };
-  if (/\/v\d+$/.test(basePath)) {
-    return [withPath("/models")];
-  }
-  return [withPath("/models"), withPath("/v1/models")];
-}
-
-// [20260907_Feat_233_ListModels] Response contract for the provider /models
-// listing. Anything outside the shape silently degrades the renderer to the
-// manual-input path (ticket #233: 非法即静默回退手输).
-const MODELS_MAX_ITEMS = 500;
-const MODELS_MAX_ID_BYTES = 200;
-const MODELS_MAX_BODY_BYTES = 512 * 1024;
-// [20260908_Fix_BatchReview_M8] Named per the no-magic-numbers rule.
-const LIST_MODELS_TIMEOUT_MS = 10_000;
-
-function isLocalBaseUrl(baseUrl: string): boolean {
-  try {
-    return isLocalhost(new URL(baseUrl).hostname);
-  } catch {
-    return false;
-  }
-}
+// [20260912_Refactor_262_AiHistoryService] modelEndpointCandidates, the
+// MODELS_MAX_* / LIST_MODELS_TIMEOUT_MS guards, and isLocalBaseUrl moved
+// verbatim to src/helpers/services/aiService.ts with the LIST_MODELS body
+// (listProviderModels). isLocalBaseUrl stays imported above — the
+// orchestrator and checkAIStatus still use it for the local-gateway
+// exception. END
 
 interface ChatCompletionMessage {
   role: string;
@@ -1612,15 +1541,22 @@ interface Managers {
   templatesDir?: string;
 }
 
+// [20260912_Refactor_262_AiHistoryService] Behavior-parity sentinel: the
+// pre-refactor PROCESS handler only touched event.sender INSIDE the
+// requestId branch, so sender-less invocations (internal callers, tests)
+// never read it. The service ignores senderId when no requestId is given,
+// so this sentinel never reaches the registry's ownership check.
+const SENDER_ID_NONE = -1;
+
 export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
   const { databaseManager, logger } = managers;
-  // [20260907_Feat_235_StreamPipeline] T8: requestId → abort controller for
-  // the initiating sender. POLISH_ABORT resolves through this map with a
-  // sender-ownership check.
-  const streamAbortTargets = new Map<
-    string,
-    { controller: AbortController; senderId: number }
-  >();
+  // [20260912_Refactor_262_AiHistoryService] T8: requestId → abort
+  // controller for the initiating sender. POLISH_ABORT resolves through
+  // this registry with a sender-ownership check. The registry (and its
+  // abort semantics) moved to aiService so headless callers can drive
+  // abort/supersession without a window; this is the same per-registration
+  // instance the old `streamAbortTargets` map provided.
+  const streamAbortRegistry = createStreamAbortRegistry();
   const templatesDir =
     managers.templatesDir ||
     (() => {
@@ -1637,159 +1573,72 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
     async (
       event,
       text: string,
-      mode = "optimize",
+      mode?: string,
       timeout?: number,
       requestId?: string,
     ) => {
-      // [20260906_Refactor_PolishOrchestrator] Spec #193 T3 (ticket #230):
-      // route the PROCESS entry straight through the shared orchestrator
-      // (entry resolves its own default mode; the orchestrator owns prompt
-      // building, the provider call and response/error mapping).
-      //
-      // [20260907_Fix_312_WireClampEntry] Activate the minimal-edit output
-      // budget clamp for this entry (issue #312, first T7 wiring step): the
-      // orchestrator only clamps when the caller opts in, and without this
-      // the 2026-08-15 empty-content fix never bound on a live path. Rewrite
-      // modes and custom templates stay unclamped by design.
-      //
-      // [20260907_Feat_235_StreamPipeline] T8: a requestId opts the call
-      // into streaming — chunk events are sent to THIS window only, and the
-      // requestId becomes the abort/generation scope key.
-      let stream: PolishRequest["stream"];
-      let ownedController: AbortController | undefined;
-      if (requestId) {
-        const senderId = event.sender.id;
-        const controller = new AbortController();
-        ownedController = controller;
-        streamAbortTargets.set(requestId, { controller, senderId });
-        stream = {
+      // [20260912_Refactor_262_AiHistoryService] Thin shell: the entry
+      // wiring (stream registration, "optimize" mode default, minimal-edit
+      // clamp gating, generation-scope/signal hookup, own-entry release)
+      // moved into aiService.processPolishText unchanged. The only renderer
+      // coupling left here is the chunk transport — the event.sender.send
+      // closure is handed to the service as its notify callback (a headless
+      // caller would inject a no-op or a chunk collector; the returned
+      // result is unaffected).
+      return await processPolishText(
+        {
+          databaseManager,
+          logger,
+          templatesDir,
+          runPolish: runPolishOrchestrator,
+        },
+        streamAbortRegistry,
+        {
+          text,
+          mode,
+          timeout,
           requestId,
+          // Read event.sender ONLY when a requestId is present — the
+          // pre-refactor handler never touched the sender otherwise
+          // (behavior parity with the locked tests).
+          senderId: requestId ? event.sender.id : SENDER_ID_NONE,
           notify: (chunk: PolishChunk) => {
             if (!event.sender.isDestroyed()) {
               event.sender.send(C.EVENTS.AI_POLISH_CHUNK, chunk);
             }
           },
-        };
-      }
-      try {
-        return await runPolishOrchestrator(
-          { databaseManager, logger },
-          {
-            text,
-            mode,
-            templatesDir,
-            timeout,
-            clampOutputTokens: MINIMAL_MODES_FOR_CLAMP.has(mode),
-            generationScope: requestId,
-            signal: streamAbortTargets.get(requestId ?? "")?.controller.signal,
-            stream,
-          },
-        );
-      } finally {
-        // [20260907_Fix_235_ReviewMinor1] Delete ONLY our own entry: a
-        // superseding run reusing the requestId owns the map slot now.
-        const entry = requestId ? streamAbortTargets.get(requestId) : undefined;
-        if (entry && entry.controller === ownedController) {
-          streamAbortTargets.delete(requestId as string);
-        }
-      }
+        },
+      );
     },
   );
 
   // [20260907_Feat_235_StreamPipeline] T8 abort channel — rate-limit exempt
   // (an abort must never be throttled) and sender-checked so one window
   // cannot cancel another window's run.
+  // [20260912_Refactor_262_AiHistoryService] Thin shell: the registry
+  // lookup, ownership check, warn log, and abort moved verbatim into
+  // StreamAbortRegistry.abort (aiService) — lookup miss stays no-throw.
   ipcMain.handle(C.AI.POLISH_ABORT, (event, requestId: string) => {
-    const target = streamAbortTargets.get(requestId);
-    if (!target) {
-      return { success: false, reason: "unknown_request" };
-    }
-    if (target.senderId !== event.sender.id) {
-      logger.warn?.("POLISH_ABORT 拒绝：请求 id 不属于该发送者");
-      return { success: false, reason: "forbidden" };
-    }
-    target.controller.abort();
-    return { success: true };
+    return streamAbortRegistry.abort(requestId, event.sender.id, logger);
   });
 
   // [20260907_Feat_233_ListModels] Ticket #233: provider model-list
   // derivation. Same SSRF gate as the chat request (private https rejected,
   // local-gateway exception allowed), URL-constructor endpoint derivation,
   // strict response shape with silent fallback to the manual-input path.
+  // [20260912_Refactor_262_AiHistoryService] Thin shell: the whole body
+  // (SSRF gate, masked-key resolution against the stored credential,
+  // candidate fetching, response validation) moved verbatim into
+  // aiService.listProviderModels — the key still decrypts in the main
+  // process via the same databaseManager; no key-reading surface changed.
   ipcMain.handle(
     C.AI.LIST_MODELS,
     async (_event, baseUrl: string, apiKey = "") => {
-      const isLocal = isLocalBaseUrl(baseUrl);
-      if (!validateAIBaseUrl(baseUrl, { allowLocalhost: isLocal })) {
-        return { success: false, reason: "invalid_url", models: [] };
-      }
-      let key = typeof apiKey === "string" ? apiKey : "";
-      // Masked renderer keys resolve against the stored credential, mirroring
-      // the save/test paths (the mask is not a usable secret).
-      if (!key || key.startsWith("****")) {
-        key =
-          ((await databaseManager.getSetting("ai_api_key")) as string) || "";
-      }
-      const headers: Record<string, string> = key
-        ? { Authorization: `Bearer ${key}` }
-        : {};
-      const candidates = modelEndpointCandidates(baseUrl);
-      for (let i = 0; i < candidates.length; i++) {
-        const candidateUrl = candidates[i]!;
-        try {
-          const response = await fetch(candidateUrl, {
-            headers,
-            signal: AbortSignal.timeout(LIST_MODELS_TIMEOUT_MS),
-          });
-          if (response.status === 404 && i < candidates.length - 1) {
-            continue;
-          }
-          if (!response.ok) {
-            return {
-              success: false,
-              reason: `http_${response.status}`,
-              models: [],
-            };
-          }
-          const raw = await response.text();
-          if (Buffer.byteLength(raw) > MODELS_MAX_BODY_BYTES) {
-            return { success: false, reason: "body_too_large", models: [] };
-          }
-          const parsed = JSON.parse(raw) as {
-            data?: Array<{ id?: unknown }>;
-          };
-          const rows = parsed?.data;
-          if (
-            !Array.isArray(rows) ||
-            rows.length === 0 ||
-            rows.length > MODELS_MAX_ITEMS
-          ) {
-            return { success: false, reason: "invalid_shape", models: [] };
-          }
-          const models: string[] = [];
-          for (const row of rows) {
-            const id = row?.id;
-            if (
-              typeof id !== "string" ||
-              !id.trim() ||
-              Buffer.byteLength(id) > MODELS_MAX_ID_BYTES
-            ) {
-              return { success: false, reason: "invalid_shape", models: [] };
-            }
-            models.push(id);
-          }
-          return { success: true, models };
-        } catch (error) {
-          // A failed candidate on the two-candidate path falls through to
-          // the /v1 retry; on the last candidate it degrades to the manual
-          // input path (silent, per ticket #233).
-          if (i >= candidates.length - 1) {
-            logger.warn?.("模型列表获取失败:", error);
-            return { success: false, reason: "fetch_failed", models: [] };
-          }
-        }
-      }
-      return { success: false, reason: "unreachable", models: [] };
+      return await listProviderModels(
+        { databaseManager, logger },
+        baseUrl,
+        apiKey,
+      );
     },
   );
 
