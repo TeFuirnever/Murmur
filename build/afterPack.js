@@ -15,19 +15,33 @@ const path = require("node:path");
 const POSIX_EXECUTABLE_MODE = 0o755;
 
 module.exports = async function afterPack(context) {
-  // getResourcesDirectory is Contents/Resources on macOS and <root>\resources
-  // on Windows/Linux — exactly where extraFiles places the cli tree.
+  // getResourcesDir is Contents/Resources on macOS and <root>\resources on
+  // Windows/Linux — exactly where extraResources places the cli tree.
   const shimsDir = path.join(
-    context.packager.getResourcesDirectory(context.appOutDir),
+    context.packager.getResourcesDir(context.appOutDir),
     "cli",
     "shims",
   );
   if (!fs.existsSync(shimsDir)) {
-    return;
+    // Loud, not silent: a missing shims dir means the DMG would ship a
+    // non-executable murmur.sh and the CLI would be dead on arrival.
+    throw new Error(
+      `afterPack: cli shims dir missing from the package: ${shimsDir}`,
+    );
   }
   for (const entry of fs.readdirSync(shimsDir)) {
     if (entry.endsWith(".sh")) {
       fs.chmodSync(path.join(shimsDir, entry), POSIX_EXECUTABLE_MODE);
     }
   }
+  // Version overlay for resolveCliVersion (walks up from cli/): copy the
+  // root package.json into the packaged cli dir. Done HERE, not via
+  // extraResources — an extraResources entry sourced from the root
+  // package.json makes the files matcher drop package.json from app.asar
+  // and electron-builder validation fails ("package.json was not found").
+  const cliDir = path.dirname(shimsDir);
+  fs.copyFileSync(
+    path.join(context.packager.projectDir, "package.json"),
+    path.join(cliDir, "package.json"),
+  );
 };

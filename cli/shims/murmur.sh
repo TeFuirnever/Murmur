@@ -34,7 +34,7 @@ if [ ! -x "$RUNTIME" ]; then
 fi
 if [ ! -x "$RUNTIME" ]; then
   echo "murmur: Electron runtime not found inside the Murmur app bundle" >&2
-  echo "murmur: expected $SCRIPT_DIR/../../../MacOS/{Murmur,Electron}" >&2
+  echo "murmur: expected $SCRIPT_DIR/../../../MacOS/Murmur (or Electron)" >&2
   exit 1
 fi
 

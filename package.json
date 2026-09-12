@@ -169,14 +169,10 @@
       "python/**/*"
     ],
     "afterPack": "build/afterPack.js",
-    "extraFiles": [
+    "extraResources": [
       {
         "from": "cli",
         "to": "cli"
-      },
-      {
-        "from": "package.json",
-        "to": "cli/package.json"
       }
     ],
     "mac": {

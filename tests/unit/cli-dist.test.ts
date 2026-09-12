@@ -5,8 +5,8 @@
 //     Electron binary + CLI entry RELATIVE to their own location, and the
 //     POSIX shim stays LF-only (a CRLF byte breaks exec on macOS)
 //   - package.json build config wires the shims into the bundles
-//     (extraFiles), restores the executable bit (afterPack) and hooks the
-//     NSIS user-PATH include
+//     (extraResources), restores the executable bit (afterPack) and hooks
+//     the NSIS user-PATH include
 //   - installer.nsh adds/removes resources\cli on the USER path via
 //     [Environment]::SetEnvironmentVariable (broadcasts WM_SETTINGCHANGE),
 //     never via raw registry writes
@@ -75,27 +75,39 @@ describe("packaging wiring for the CLI distribution (ticket #272)", () => {
   const pkg = JSON.parse(readRepoFile("package.json")) as {
     build: {
       afterPack?: string;
-      extraFiles?: Array<{ from: string; to: string }>;
+      // [20260912_Fix_272_ReviewCritical] extraResources (NOT extraFiles):
+      // the resources base is Contents/Resources (mac) / resources (win),
+      // which is what the shims, cask stanza and NSIS PATH all assume.
+      extraResources?: Array<{ from: string; to: string }>;
       nsis?: { include?: string };
     };
   };
 
-  it("extraFiles copies the whole cli tree (shims included) into the resource dir", () => {
-    const mapping = pkg.build.extraFiles?.find(
+  // [20260912_Fix_272_ReviewCritical] extraRESOURCES, not extraFiles:
+  // extraFiles copies to Contents (mac) / install root (win) — every path
+  // in the shims, the cask binary stanza and the NSIS PATH entry assumes
+  // Contents/Resources/cli (mac) / resources\cli (win), which is the
+  // extraResources base. Verified by a real `electron-builder --dir` run.
+  it("extraResources copies the whole cli tree (shims included) into the resource dir", () => {
+    const mapping = pkg.build.extraResources?.find(
       (entry) => entry.from === "cli" && entry.to === "cli",
     );
     expect(mapping).toBeDefined();
   });
 
-  it("extraFiles places a package.json beside the copied cli so --version resolves", () => {
-    // cli/lib/version.mjs walks up from the CLI script dir to the nearest
-    // package.json; the extraFiles copy lives outside the asar, so the
-    // overlay is what makes `murmur --version` print the real version.
-    const overlay = pkg.build.extraFiles?.find(
-      (entry) =>
-        entry.from === "package.json" && entry.to === "cli/package.json",
-    );
-    expect(overlay).toBeDefined();
+  // [20260912_Fix_272_ReviewCritical] cli/lib/version.mjs walks up from the
+  // CLI script dir to the nearest package.json; the packaged copy lives
+  // outside the asar, so the version overlay is what makes `murmur
+  // --version` print the real version. The overlay copy happens in the
+  // afterPack hook — an extraResources entry sourced from the ROOT
+  // package.json makes the files matcher drop package.json from app.asar
+  // (electron-builder validation: "package.json was not found").
+  it("afterPack places a package.json beside the copied cli so --version resolves", () => {
+    expect(pkg.build.afterPack).toBe("build/afterPack.js");
+    const hook = readRepoFile("build", "afterPack.js");
+    expect(hook).toContain("copyFileSync");
+    expect(hook).toContain('"package.json"');
+    expect(hook).toContain('"cli"');
   });
 
   it("afterPack hook restores the shim executable bit", () => {
