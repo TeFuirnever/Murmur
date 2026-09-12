@@ -46,6 +46,9 @@ vi.mock("electron", () => ({
     getVersion: vi.fn(() => "0.0.0-test"),
     whenReady: vi.fn(() => h.whenReadyPromise),
     on: vi.fn(),
+    // [20260912_Feat_260_SingleInstance] main.ts now requests the lock at
+    // the entry; the boot-order harness plays the FIRST instance.
+    requestSingleInstanceLock: vi.fn(() => true),
     quit: vi.fn(),
     exit: vi.fn(),
     disableHardwareAcceleration: vi.fn(),
