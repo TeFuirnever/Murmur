@@ -234,3 +234,97 @@ describe("transcriptionService (headless seam, ticket #261)", () => {
   });
 });
 // [20260912_Refactor_261_TranscriptionService] END
+
+// [20260912_Refactor_262_AiHistoryService] Ticket #262: edge tests the
+// #261 review deferred to this ticket, now pinned at the SERVICE level.
+// Appended as a standalone describe — the #261 cases above are untouched.
+describe("transcribeFileService — deferred edge cases (#261 review → #262)", () => {
+  // Local deps builder mirroring the #261 harness above (loosely-typed
+  // vi.fn() mocks, `unknown` bridge, no `any`).
+  type MockFn = ReturnType<typeof vi.fn>;
+  let mockDeps: {
+    funasrManager: { transcribeFile: MockFn };
+    databaseManager: {
+      saveTranscription: MockFn;
+      getSetting: MockFn;
+      getTranscriptionById: MockFn;
+    };
+    logger: Record<string, MockFn>;
+  };
+
+  beforeEach(() => {
+    mockDeps = {
+      funasrManager: {
+        transcribeFile: vi.fn(async () => ({
+          success: true,
+          text: "文件转录",
+          raw_text: "raw",
+          segments: [],
+        })),
+      },
+      databaseManager: {
+        saveTranscription: vi.fn(() => ({ lastInsertRowid: 42n, changes: 1 })),
+        getSetting: vi.fn(() => null),
+        getTranscriptionById: vi.fn(() => null),
+      },
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+    };
+  });
+
+  const serviceDeps = () => mockDeps as unknown as TranscriptionServiceDeps;
+
+  it("orchestrator timeout resolving {success:false} (not throwing) still fires the raw hotword-free fallback", async () => {
+    // A downstream engine/orchestrator timeout surfaces as a RESOLVED
+    // failure envelope, not a rejection. The hotword fallback contract
+    // must treat it as a failure exactly like a throw: retry once with
+    // the raw (hotword-free) options and flag hotword_degraded on success.
+    mockDeps.databaseManager.getSetting.mockReturnValue("张三");
+    mockDeps.funasrManager.transcribeFile
+      .mockResolvedValueOnce({ success: false, error: "AI 请求超时" })
+      .mockResolvedValueOnce({
+        success: true,
+        text: "重试成功",
+        raw_text: "r",
+        segments: [],
+      });
+    const result = (await transcribeFileService(
+      serviceDeps(),
+      "/fake/audio.wav",
+    )) as { success: boolean; text?: string; hotword_degraded?: boolean };
+    expect(mockDeps.funasrManager.transcribeFile).toHaveBeenCalledTimes(2);
+    const firstOpts = mockDeps.funasrManager.transcribeFile.mock
+      .calls[0]![1] as Record<string, unknown>;
+    const secondOpts = mockDeps.funasrManager.transcribeFile.mock
+      .calls[1]![1] as Record<string, unknown>;
+    expect(firstOpts.hotword).toBe("张三");
+    expect(secondOpts).not.toHaveProperty("hotword");
+    expect(result.success).toBe(true);
+    expect(result.text).toBe("重试成功");
+    expect(result.hotword_degraded).toBe(true);
+    // The retry success IS persisted like any successful transcription.
+    expect(mockDeps.databaseManager.saveTranscription).toHaveBeenCalledWith(
+      expect.objectContaining({ text: "重试成功" }),
+    );
+  });
+
+  it("saveTranscription throwing inside the persist returns the transcription result without id", async () => {
+    // The DB write must never fail the transcription the user already
+    // has in hand: the error is logged, the result keeps success+text,
+    // and no id is attached.
+    mockDeps.databaseManager.saveTranscription.mockImplementationOnce(() => {
+      throw new Error("DB locked");
+    });
+    const result = (await transcribeFileService(
+      serviceDeps(),
+      "/fake/audio.wav",
+    )) as { success: boolean; text?: string; id?: number };
+    expect(result.success).toBe(true);
+    expect(result.text).toBe("文件转录");
+    expect(result).not.toHaveProperty("id");
+    expect(mockDeps.logger.error).toHaveBeenCalledWith(
+      "保存转录结果到数据库失败:",
+      expect.any(Error),
+    );
+  });
+});
+// [20260912_Refactor_262_AiHistoryService] END
