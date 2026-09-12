@@ -115,7 +115,9 @@ async function runClientChild(serializedTask) {
     verdict.probes.enumeration = {
       totalPipeCount: allPipes.length,
       prefixMatches: matches.length,
-      enumeratedTargetName: matches.includes(bareTargetName) ? bareTargetName : null,
+      enumeratedTargetName: matches.includes(bareTargetName)
+        ? bareTargetName
+        : null,
     };
     if (!verdict.probes.enumeration.enumeratedTargetName) {
       process.stdout.write(`${JSON.stringify(verdict)}\n`);
