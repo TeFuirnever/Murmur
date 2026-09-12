@@ -168,6 +168,13 @@
       "download_models.py",
       "python/**/*"
     ],
+    "afterPack": "build/afterPack.js",
+    "extraResources": [
+      {
+        "from": "cli",
+        "to": "cli"
+      }
+    ],
     "mac": {
       "category": "public.app-category.productivity",
       "icon": "assets/icon.icns",
@@ -179,6 +186,9 @@
     },
     "win": {
       "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "include": "build/installer.nsh"
     },
     "linux": {
       "icon": "assets/icon.png",

@@ -1,2 +1,5 @@
 * text=auto eol=lf
 *.py text eol=lf
+# [20260912_Feat_272DistCli] Batch files must be CRLF for the Windows
+# batch parser; the repo default (eol=lf) ships LF-only .cmd shims.
+*.cmd text eol=crlf

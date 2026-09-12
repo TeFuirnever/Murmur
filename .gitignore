@@ -10,7 +10,13 @@ yarn.lock
 
 # Production builds
 dist/
-build/
+# [20260912_Feat_272DistCli] build/ stays ignored except the electron-builder
+# packaging assets that package.json references by path (build.afterPack,
+# build.nsis.include) — without the whitelist they would be silently dropped
+# from checkouts and packaging would break.
+build/*
+!build/afterPack.js
+!build/installer.nsh
 out/
 dist-preload/
 # [20260912_Feat_267_BridgeTranscribe] Explicit: the CLI's bundled TS client
