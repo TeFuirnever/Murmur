@@ -24,6 +24,9 @@ import type {
   HotkeyRegistrationResult,
   FileTranscriptionProgressData,
   OperationResult,
+  TemplateListResult,
+  TemplateReadResult,
+  TemplateSaveResult,
 } from "./types/ipc";
 
 export interface ElectronAPI {
@@ -103,6 +106,20 @@ export interface ElectronAPI {
   getAIModes: () => Promise<AIMode[]>;
   getAIProviderPresets: () => Promise<AIProviderPreset[]>;
   detectLocalModels: () => Promise<LocalModelDetection[]>;
+
+  // [20260912_Feat_242_TemplateSystem] Ticket #242 (spec #193 T15): custom
+  // template editor. Requests carry NAME+CONTENT only — never a path; the
+  // main process sanitizes the name into the on-disk filename.
+  // [20260912_Fix_242_ReviewRound2] READ/SAVE/DELETE take the on-disk
+  // fileName from LIST (a bare filename; sanitized again main-side).
+  listTemplates: () => Promise<TemplateListResult>;
+  readTemplate: (fileName: string) => Promise<TemplateReadResult>;
+  saveTemplate: (
+    fileName: string,
+    content: string,
+  ) => Promise<TemplateSaveResult>;
+  deleteTemplate: (fileName: string) => Promise<OperationResult>;
+  // [20260912_Feat_242_TemplateSystem] END
 
   // Clipboard
   // [20260820_E2E_PasteContractFix] PASTE resolves the same envelope COPY
