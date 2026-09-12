@@ -11,9 +11,11 @@
 //   - no prompts, no spinners: every code path either prints and exits
 // Local subcommands (the app does NOT need to be running):
 //   murmur config get <key> | config set <key> <value> | history list
-// Bridge subcommands (ticket #267 — require the running app's local channel;
-// these return a PROMISE of the result, see the runCli JSDoc):
+// Bridge subcommands (ticket #267/#268 — require the running app's local
+// channel; these return a PROMISE of the result, see the runCli JSDoc):
 //   murmur status | transcribe <file> [--diarize] [--save]
+//   murmur polish <text> [--mode <mode>]          (ticket #268)
+//   murmur history delete <id> [--yes]            (ticket #268)
 import {
   resolveConfigPath,
   resolveDatabasePath,
@@ -24,10 +26,12 @@ import { readConfig, writeConfig } from "./configStore.mjs";
 import { DEFAULT_HISTORY_LIMIT, listTranscriptions } from "./historyReader.mjs";
 import {
   BridgeUnavailableError,
+  CLI_POLISH_MODES,
   connectChannelBridge,
   validateAudioExtension,
 } from "./channelBridge.mjs";
 import os from "node:os";
+import readline from "node:readline/promises";
 
 // [20260912_Fix_264_ReviewFollowups] Mirrors validateSetting's
 // MAX_VALUE_LENGTH in src/helpers/ipc/settingsHandlers.ts (boundary parity).
@@ -59,6 +63,17 @@ Usage:
                                        transcriptions are ALWAYS saved to history
                                        (same as the GUI), so this is the default
                                        --diarize  not supported yet on the channel
+  murmur polish <text> [--mode <mode>] [--json]
+                                       Polish text via the running app (ticket #268).
+                                       The AI key stays inside the app process —
+                                       only the text crosses the local channel.
+                                       Modes: ${CLI_POLISH_MODES.join(", ")}
+                                       (default: optimize)
+  murmur history delete <id> [--yes] [--json]
+                                       Delete one transcription via the running
+                                       app (ticket #268; the GUI reflects the
+                                       deletion on its next read). Non-interactive
+                                       shells must pass --yes.
 
 Global options:
   --json                               Structured JSON output on stdout
@@ -67,8 +82,8 @@ Global options:
 
 Notes:
   - Whitelisted keys are the same list the app enforces for settings.
-  - status/transcribe talk to the running Murmur app over its local channel;
-    when the app is unreachable they exit with code 4.
+  - status/transcribe/polish/history delete talk to the running Murmur app
+    over its local channel; when the app is unreachable they exit with code 4.
   - exit codes: 0 success, 1 runtime error, 2 usage error, 4 app unreachable.
   - Logs, progress and errors go to stderr; results go to stdout.`;
 
@@ -121,6 +136,31 @@ function formatProgressLine(progress) {
   }
   return null;
 }
+
+// [20260912_Feat_268_BridgePolishHistory] Polish progress frames carry the
+// PolishChunk shape ({ type, requestId, ... }). Only the chunked-polish
+// block triplet (第几块/共几块) renders — it is the one progress dimension
+// with user-meaningful timing; delta chunks are never re-emitted here (the
+// result frame carries the full polished text, so echoing deltas would
+// duplicate the content on stderr).
+const POLISH_PROGRESS_LINE_PREFIX = "润色中";
+
+function formatPolishProgressLine(progress) {
+  const record =
+    typeof progress === "object" && progress !== null ? progress : {};
+  if (record.type !== "progress") return null;
+  const { chunkIndex, chunkCount } = record;
+  if (
+    typeof chunkIndex === "number" &&
+    typeof chunkCount === "number" &&
+    Number.isFinite(chunkIndex) &&
+    Number.isFinite(chunkCount)
+  ) {
+    return `${POLISH_PROGRESS_LINE_PREFIX}: 第 ${chunkIndex}/${chunkCount} 块\n`;
+  }
+  return null;
+}
+// [20260912_Feat_268_BridgePolishHistory] END
 
 /** Parse a CLI value the same way the app's JSON settings store would round-trip it. */
 function parseSettingValue(rawValue) {
@@ -433,6 +473,177 @@ async function runTranscribe(argv, ctx) {
   return ok(`${text}\n`, progressText);
 }
 
+// [20260912_Feat_268_BridgePolishHistory] --- ticket #268 bridge commands ---
+
+/**
+ * `murmur polish <text> [--mode <mode>]`: local validation (non-empty text,
+ * mode against the mirrored built-in list) BEFORE any connection, then one
+ * channel `polish` request. The AI key never crosses the channel — only the
+ * task does; the polished text (or --json envelope) lands on stdout.
+ */
+async function runPolish(argv, ctx) {
+  const parsed = parseArgs(argv, new Set(["--mode"]));
+  if (parsed.unknown)
+    return usageError(`polish: unknown flag ${parsed.unknown}`);
+  if (parsed.missing)
+    return usageError(`polish: ${parsed.missing} requires a value`);
+  if (parsed.positionals.length === 0)
+    return usageError("polish: missing <text>");
+  if (parsed.positionals.length > 1)
+    return usageError("polish: unexpected extra arguments");
+  const text = parsed.positionals[0];
+  if (text.trim().length === 0) return usageError("polish: 文本不能为空");
+
+  // No --mode → the app applies its entry-level default ("optimize"), the
+  // same default the GUI PROCESS entry uses.
+  let mode;
+  if (parsed.flags["--mode"] !== undefined) {
+    mode = parsed.flags["--mode"];
+    if (!CLI_POLISH_MODES.includes(mode)) {
+      return usageError(
+        `polish: 未知的润色模式: ${mode}（可用模式: ${CLI_POLISH_MODES.join(", ")}）`,
+      );
+    }
+  }
+
+  let bridge;
+  try {
+    bridge = await connectChannelBridge({
+      env: ctx.env,
+      platform: ctx.platform,
+      homedir: ctx.homedir,
+    });
+  } catch (error) {
+    return bridgeError("polish", error);
+  }
+
+  let result;
+  try {
+    result = await bridge.requestPolish(text, mode, (progress) => {
+      // Stream-or-buffer EXCLUSIVITY, same as transcribe: the real entry
+      // streams live (ctx.stderrWrite), function-level callers buffer.
+      const line = formatPolishProgressLine(progress);
+      if (line === null) return;
+      if (ctx.stderrWrite) {
+        ctx.stderrWrite(line);
+      } else {
+        ctx.stderrChunks.push(line);
+      }
+    });
+  } catch (error) {
+    bridge.close();
+    return bridgeError("polish", error);
+  }
+  bridge.close();
+
+  const record = typeof result === "object" && result !== null ? result : {};
+  if (record.success === false) {
+    const message =
+      typeof record.error === "string" ? record.error : "未知错误";
+    const partial = ctx.stderrChunks.join("");
+    const failure = runtimeError("polish", `润色失败: ${message}`);
+    return { ...failure, stderr: partial + failure.stderr };
+  }
+
+  const progressText = ctx.stderrChunks.join("");
+  if (ctx.json) {
+    // Locked schema: the channel result verbatim (success/text/usage/model…).
+    return ok(`${JSON.stringify(result)}\n`, progressText);
+  }
+  const polished = typeof record.text === "string" ? record.text : "";
+  return ok(`${polished}\n`, progressText);
+}
+
+// Confirmation semantics for `murmur history delete`: interactive TTY gets a
+// single-line y/N confirm; non-interactive shells MUST pass --yes (a piped
+// script can never answer a prompt, so defaulting to "no" there is the safe
+// failure mode).
+const HISTORY_DELETE_CONFIRM_PROMPT = "确认删除? y/N";
+const CONFIRM_YES_PATTERN = /^(?:y|yes)$/i;
+
+/** Default interactive confirm: prompt on stderr, read ONE line from stdin. */
+function defaultConfirmRead(ctx) {
+  return async () => {
+    const prompt = `${HISTORY_DELETE_CONFIRM_PROMPT} `;
+    if (ctx.stderrWrite) {
+      ctx.stderrWrite(prompt);
+    } else {
+      process.stderr.write(prompt);
+    }
+    const rl = readline.createInterface({ input: process.stdin });
+    try {
+      return await rl.question("");
+    } finally {
+      rl.close();
+    }
+  };
+}
+
+/**
+ * `murmur history delete <id> [--yes]`: delete one transcription through the
+ * running app's single-writer service (the GUI reflects it on its next
+ * read). An unknown id surfaces as the server's 转录记录不存在 error frame
+ * → exit 1 with that message.
+ */
+async function runHistoryDelete(argv, ctx) {
+  const parsed = parseArgs(argv, new Set(["--yes"]), new Set(["--yes"]));
+  if (parsed.unknown)
+    return usageError(`history delete: unknown flag ${parsed.unknown}`);
+  if (parsed.missing)
+    return usageError(`history delete: ${parsed.missing} requires a value`);
+  if (parsed.positionals.length === 0)
+    return usageError("history delete: missing <id>");
+  if (parsed.positionals.length > 1)
+    return usageError("history delete: unexpected extra arguments");
+  const rawId = parsed.positionals[0];
+  if (!/^\d+$/.test(rawId)) {
+    return usageError(
+      `history delete: <id> must be a positive integer, got ${rawId}`,
+    );
+  }
+  const id = Number(rawId);
+
+  if (!parsed.flags["--yes"]) {
+    if (!ctx.isTTY) {
+      // Piped/non-interactive: no one can answer a prompt — require --yes.
+      return usageError("history delete: 非交互环境需要 --yes 确认删除");
+    }
+    const readLine = ctx.confirmRead ?? defaultConfirmRead(ctx);
+    const answer = await readLine();
+    if (!CONFIRM_YES_PATTERN.test(String(answer).trim())) {
+      // A declined confirm is a normal exit, not an error.
+      return ok("", "已取消删除\n");
+    }
+  }
+
+  let bridge;
+  try {
+    bridge = await connectChannelBridge({
+      env: ctx.env,
+      platform: ctx.platform,
+      homedir: ctx.homedir,
+    });
+  } catch (error) {
+    return bridgeError("history delete", error);
+  }
+
+  let result;
+  try {
+    result = await bridge.requestHistoryDelete(id);
+  } catch (error) {
+    bridge.close();
+    return bridgeError("history delete", error);
+  }
+  bridge.close();
+
+  if (ctx.json) {
+    // Locked schema: the channel result verbatim ({ success, changes }).
+    return ok(`${JSON.stringify(result)}\n`);
+  }
+  return ok(`已删除记录 #${id}\n`);
+}
+// [20260912_Feat_268_BridgePolishHistory] END
+
 /**
  * Run one CLI invocation. argv excludes the node/electron and script paths.
  *
@@ -443,6 +654,9 @@ async function runTranscribe(argv, ctx) {
  * Callers MUST `await` the result (awaiting a plain result is a no-op).
  * The @returns type documents the sync shape so existing sync callers keep
  * typechecking unchanged; bridge results carry the identical shape.
+ * [20260912_Feat_268_BridgePolishHistory] polish and history delete join
+ * the async bridge family (and `history delete`'s interactive confirm adds
+ * the isTTY/confirmRead options below).
  *
  * @param {string[]} argv
  * @param {object} [options]
@@ -454,6 +668,10 @@ async function runTranscribe(argv, ctx) {
  * @param {(chunk: string) => void} [options.stderrWrite] Streaming sink for
  *   progress lines (wired to process.stderr by the entry point; tests omit it
  *   and read the accumulated stderr instead).
+ * @param {boolean} [options.isTTY] Overrides TTY detection for `history
+ *   delete`'s interactive confirm (defaults to process.stdin.isTTY).
+ * @param {() => Promise<string>} [options.confirmRead] Replaces the default
+ *   confirm prompt+stdin reader (tests inject a canned answer).
  * @param {string} [options.version] Version string for --version.
  * @returns {{ code: number, stdout: string, stderr: string }}
  */
@@ -481,6 +699,12 @@ export function runCli(argv, options = {}) {
     version: options.version ?? "",
     stderrWrite: options.stderrWrite ?? null,
     stderrChunks: [],
+    // [20260912_Feat_268_BridgePolishHistory] Interactive-confirm plumbing
+    // for `history delete`: isTTY is injectable for tests; confirmRead
+    // replaces the default prompt+stdin-line reader (tests inject it).
+    isTTY: options.isTTY ?? process.stdin.isTTY === true,
+    confirmRead: options.confirmRead ?? null,
+    // [20260912_Feat_268_BridgePolishHistory] END
   };
 
   if (dispatch.includes("--version")) {
@@ -509,6 +733,15 @@ export function runCli(argv, options = {}) {
       runTranscribe(dispatch.slice(1), ctx)
     );
   }
+  // [20260912_Feat_268_BridgePolishHistory] Ticket #268 bridge commands:
+  // polish is a single-word command (dispatch.slice(1) is its FULL tail);
+  // history delete rides the `history` subcommand handling further below.
+  if (command === "polish") {
+    return /** @type {{ code: number, stdout: string, stderr: string }} */ (
+      runPolish(dispatch.slice(1), ctx)
+    );
+  }
+  // [20260912_Feat_268_BridgePolishHistory] END
   if (command !== "config" && command !== "history") {
     return usageError(`unknown command: ${command}`);
   }
@@ -519,7 +752,15 @@ export function runCli(argv, options = {}) {
     return usageError(`unknown config subcommand: ${String(subcommand)}`);
   }
 
-  // command === "history": the only subcommand in this batch is `list`.
+  // command === "history": `list` reads the local DB; `delete` (#268) is a
+  // bridge subcommand that goes through the running app's single writer.
   if (subcommand === "list") return runHistoryList(rest, ctx);
+  // [20260912_Feat_268_BridgePolishHistory] Ticket #268 bridge subcommand.
+  if (subcommand === "delete") {
+    return /** @type {{ code: number, stdout: string, stderr: string }} */ (
+      runHistoryDelete(rest, ctx)
+    );
+  }
+  // [20260912_Feat_268_BridgePolishHistory] END
   return usageError(`unknown history subcommand: ${String(subcommand)}`);
 }

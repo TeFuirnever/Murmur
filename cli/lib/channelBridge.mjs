@@ -26,6 +26,29 @@ export const SOCKET_FILE_NAME = "murmur-channel.sock";
 // METHOD_TRANSCRIBE_FILE); parity locked by the same test.
 export const METHOD_STATUS = "status";
 export const METHOD_TRANSCRIBE_FILE = "transcribe_file";
+// [20260912_Feat_268_BridgePolishHistory] Ticket #268 method mirrors.
+export const METHOD_POLISH = "polish";
+export const METHOD_HISTORY_DELETE = "history_delete";
+
+// [20260912_Feat_268_BridgePolishHistory] Built-in polish mode names,
+// mirrored from aiHandlers.ts BUILT_IN_MODES (parity locked by the same
+// test against getAIModes). Custom app templates add modes the CLI cannot
+// see; --mode validates against the built-in list only — the same tradeoff
+// as the audio-extension mirror (fast local gate, authoritative handling
+// server-side).
+export const CLI_POLISH_MODES = [
+  "optimize",
+  "optimize_long",
+  "format",
+  "correct",
+  "summarize",
+  "enhance",
+  "xiaohongshu",
+  "zhihu",
+  "douyin",
+  "de-ai",
+];
+// [20260912_Feat_268_BridgePolishHistory] END
 
 // esbuild bundle of src/helpers/localChannel/client.ts (see build:cli).
 const CHANNEL_CLIENT_BUNDLE_URL = new URL(
@@ -237,6 +260,18 @@ export async function connectChannelBridge(options = {}) {
         onProgress,
       );
     },
+    // [20260912_Feat_268_BridgePolishHistory] Ticket #268 methods. The
+    // polish request params carry ONLY the task (text + optional mode):
+    // the AI key is decrypted inside the app process, never across the
+    // channel (locked by a wire-capture test in cli-bridge.test.ts).
+    requestPolish(text, mode, onProgress) {
+      const params = mode === undefined ? { text } : { text, mode };
+      return client.request(METHOD_POLISH, params, onProgress);
+    },
+    requestHistoryDelete(id) {
+      return client.request(METHOD_HISTORY_DELETE, { id });
+    },
+    // [20260912_Feat_268_BridgePolishHistory] END
     close() {
       client.close();
     },

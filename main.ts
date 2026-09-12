@@ -72,6 +72,12 @@ import {
   type LocalChannelHandle,
 } from "./src/helpers/localChannel";
 // [20260912_Feat_265_LocalChannel] END
+// [20260912_Feat_268_BridgePolishHistory] Channel polish factory (ticket
+// #268): builds the GUI-identical processPolishText wiring so `murmur
+// polish` runs the same orchestrator as the GUI with the AI key decrypted
+// only inside this process.
+import { createChannelPolishService } from "./src/helpers/ipc/aiHandlers";
+// [20260912_Feat_268_BridgePolishHistory] END
 
 // Set production environment PATH
 function setupProductionPath(): void {
@@ -302,7 +308,30 @@ async function startApp(): Promise<void> {
   try {
     localChannelHandle = await startLocalChannel({
       userDataPath: app.getPath("userData"),
-      serviceDeps: { funasrManager, databaseManager, logger },
+      serviceDeps: {
+        funasrManager,
+        databaseManager,
+        logger,
+        // [20260912_Feat_268_BridgePolishHistory] Channel polish (ticket
+        // #268): the GUI-identical orchestrator wiring; the same userData
+        // templates dir the AI handler resolves lazily. The AI key is
+        // decrypted only inside this process — never across the channel.
+        // [20260912_Fix_268_Review] REAL structural adaptation (review
+        // initially judged it a no-op; tsc proves otherwise): aiHandlers'
+        // local DatabaseManager interface declares ASYNC getSetting (so
+        // legacy test doubles stubbing only getSetting keep compiling),
+        // while the real class is synchronous — the orchestrator awaits the
+        // value either way. Same adaptation registerAll makes for the GUI
+        // handlers; same instance, zero runtime difference.
+        aiPolish: createChannelPolishService({
+          databaseManager: databaseManager as unknown as Parameters<
+            typeof createChannelPolishService
+          >[0]["databaseManager"],
+          logger,
+          templatesDir: path.join(app.getPath("userData"), "templates"),
+        }),
+        // [20260912_Feat_268_BridgePolishHistory] END
+      },
       logger,
     });
   } catch (err) {
