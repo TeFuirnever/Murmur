@@ -64,6 +64,14 @@ import FunASRManager from "./src/helpers/funasrManager";
 import TrayManager from "./src/helpers/tray";
 import HotkeyManager from "./src/helpers/hotkeyManager";
 import { registerAll as registerIPCHandlers } from "./src/helpers/ipc";
+// [20260912_Feat_265_LocalChannel] Local IPC channel (ticket #265, spec
+// #258): an authenticated unix-socket/named-pipe bridge for CLI/MCP
+// clients. main.ts only starts/stops it — all logic lives in the module.
+import {
+  startLocalChannel,
+  type LocalChannelHandle,
+} from "./src/helpers/localChannel";
+// [20260912_Feat_265_LocalChannel] END
 
 // Set production environment PATH
 function setupProductionPath(): void {
@@ -160,6 +168,12 @@ const clipboardManager = new ClipboardManager(logger); // Pass logger instance
 const funasrManager = new FunASRManager(logger); // Pass logger instance
 const trayManager = new TrayManager(logger);
 const hotkeyManager = new HotkeyManager();
+
+// [20260912_Feat_265_LocalChannel] Handle for the local channel started in
+// startApp; nulled in will-quit after stop(). Null when the channel failed
+// to start (guarded — a channel failure must not block app boot).
+let localChannelHandle: LocalChannelHandle | null = null;
+// [20260912_Feat_265_LocalChannel] END
 
 // Initialize database
 const dataDirectory = environmentManager.ensureDataDirectory();
@@ -279,6 +293,22 @@ async function startApp(): Promise<void> {
   trayManager.setWindows(windowManager.mainWindow);
   await trayManager.createTray();
   logger.info("系统托盘设置完成");
+
+  // [20260912_Feat_265_LocalChannel] Start the local IPC channel after all
+  // managers are initialized (ticket #265, spec #258). Guarded: a channel
+  // failure (e.g. endpoint owned by a live instance) must never block app
+  // boot. The module writes the 0600 token file, heals stale unix sockets
+  // and binds the transport — main.ts stays a thin call.
+  try {
+    localChannelHandle = await startLocalChannel({
+      userDataPath: app.getPath("userData"),
+      serviceDeps: { funasrManager, databaseManager, logger },
+      logger,
+    });
+  } catch (err) {
+    logger.warn("本地通道启动失败（非致命，不影响应用启动）:", err);
+  }
+  // [20260912_Feat_265_LocalChannel] END
 
   logger.info("应用启动完成");
 }
@@ -423,6 +453,19 @@ app.on("will-quit", async (e) => {
   // [20260911_Fix_339_DockActivate] END
   e.preventDefault();
   globalShortcut.unregisterAll();
+
+  // [20260912_Feat_265_LocalChannel] Release the local channel first:
+  // destroy client sessions and remove the unix socket file so no client
+  // connects to a dying app (ticket #265 will-quit cleanup).
+  try {
+    if (localChannelHandle) {
+      await localChannelHandle.stop();
+      localChannelHandle = null;
+    }
+  } catch (err) {
+    logger.error("Error stopping local channel:", err);
+  }
+  // [20260912_Feat_265_LocalChannel] END
 
   try {
     const shutdownPromise = funasrManager.gracefulShutdown();
