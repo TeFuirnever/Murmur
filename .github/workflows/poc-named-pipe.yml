@@ -1,0 +1,34 @@
+# [20260912_Poc_263_NamedPipeAcl] Ticket #263 (Spec #258): one-off
+# workflow_dispatch runner for the Windows named pipe ACL PoC. Collects the
+# first-hand probe data on a real windows-latest host and uploads the JSON
+# verdict as an artifact. Not part of the release gates — manual dispatch
+# only (the probe spawns throwaway pipe servers and client processes).
+name: poc-named-pipe
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  named-pipe-poc:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run named pipe ACL probe
+        shell: pwsh
+        run: |
+          node scripts/poc/windows-named-pipe-acl.mjs 2>&1 | Tee-Object -FilePath poc-output.txt
+          Write-Host "---- machine-readable verdict (stdout JSON) ----"
+          Get-Content poc-output.txt
+
+      - name: Upload probe verdict
+        uses: actions/upload-artifact@v4
+        with:
+          name: named-pipe-poc-verdict
+          path: poc-output.txt
+          retention-days: 30
+# [20260912_Poc_263_NamedPipeAcl] END
