@@ -207,7 +207,10 @@ export const useRecording = ({
           const raw_text = transcriptionResult.text || "";
 
           // 准备转录数据
-          const transcriptionData: Record<string, unknown> = {
+          // [20260912_Refactor_322_InsertUpdateFlow] Typed by inference (not
+          // Record<string, unknown>) so the payload satisfies the declared
+          // saveTranscription contract without a cast.
+          const transcriptionData = {
             // [20260819_T10_CleanerWiring] DB raw_text keeps the PRE-CLEAN
             // ASR text when the main-process cleaner changed anything
             // (recoverable original); AI polish below still uses the
@@ -220,6 +223,36 @@ export const useRecording = ({
             file_size: uint8Array.length,
           };
 
+          // [20260912_Refactor_322_InsertUpdateFlow] Ticket #322: persist the
+          // raw record IMMEDIATELY at transcription completion (crash-safe:
+          // the raw text survives even if the polish step dies or the app
+          // closes mid-polish). The polished columns are written back later
+          // through the T1 updateTranscription channel — the renderer never
+          // INSERTs a second time.
+          const savedResult =
+            await window.electronAPI.saveTranscription(transcriptionData);
+          // [20260912_Fix_322_AutoUpdateGuard] The SAVE handler never
+          // rejects — failures arrive as {success:false}. Surface them so an
+          // unsavable transcription is not silently shown as persisted,
+          // while keeping the transcription itself usable.
+          if (savedResult?.success) {
+            if (window.electronAPI && window.electronAPI.log) {
+              window.electronAPI.log("info", "转录数据保存成功:", savedResult);
+            }
+          } else {
+            if (window.electronAPI && window.electronAPI.log) {
+              window.electronAPI.log("error", "转录数据保存失败:", savedResult);
+            }
+            setError("转录保存失败: " + (savedResult?.error || "未知错误"));
+          }
+          let savedId: number | null = null;
+          if (savedResult?.lastInsertRowid) {
+            savedId = savedResult.lastInsertRowid;
+            if (onSaveCompleteRef.current) {
+              onSaveCompleteRef.current({ id: savedId });
+            }
+          }
+
           // 立即显示初步结果
           if (onTranscriptionCompleteRef.current) {
             onTranscriptionCompleteRef.current({
@@ -228,7 +261,10 @@ export const useRecording = ({
             });
           }
 
-          // 异步处理AI优化和保存（只保存一次）
+          // [20260912_Refactor_322_InsertUpdateFlow] The deferred chain is
+          // now strictly polish-side: read settings → polish → UPDATE the
+          // row INSERTed above via the T1 channel → notify. Persistence of
+          // the raw text no longer waits on this chain.
           setIsOptimizing(true);
           optimizationTimeoutRef.current = setTimeout(async () => {
             if (cancelledRef.current) return;
@@ -248,10 +284,9 @@ export const useRecording = ({
                 defaultMode = useAI ? "auto" : "off";
               }
 
-              const finalData: Record<string, unknown> = {
-                ...transcriptionData,
-              };
-
+              // Polish: produce the result only — persistence goes through
+              // the UPDATE below.
+              let processedText: string | undefined;
               if (defaultMode !== "off") {
                 try {
                   if (window.electronAPI && window.electronAPI.log) {
@@ -266,31 +301,22 @@ export const useRecording = ({
                     defaultMode === "auto" || !defaultMode
                       ? determineProcessingMode(raw_text)
                       : defaultMode;
-                  // [20260908_Fix_BatchReview_M2] T9④ completion: the 60s
-                  // renderer race is removed — the orchestrator's deadline
-                  // matrix (first-delta/idle/total) owns timeout semantics.
-                  // (This removal was lost when the earlier INSERT→UPDATE
-                  // restructure was reverted wholesale.)
+                  // [20260908_Fix_BatchReview_M2] T9④ completion: the
+                  // orchestrator's deadline matrix (first-delta/idle/total)
+                  // owns timeout semantics; the renderer has no race of its
+                  // own.
                   const result = (await window.electronAPI.processText(
                     raw_text,
                     mode,
                   )) as import("../types/ipc").AIProcessResult;
 
                   if (result && result.success) {
-                    const processed_text = result.text;
-                    finalData.processed_text = processed_text;
-                    // 如果AI优化后的文本与原始文本不同，则将优化后的文本作为主文本
-                    if (
-                      processed_text &&
-                      processed_text.trim() !== raw_text.trim()
-                    ) {
-                      finalData.text = processed_text;
-                    }
+                    processedText = result.text;
                     if (window.electronAPI && window.electronAPI.log) {
                       window.electronAPI.log(
                         "info",
                         "AI文本优化成功",
-                        (processed_text ?? "").substring(0, 50) + "...",
+                        (processedText ?? "").substring(0, 50) + "...",
                       );
                     }
                   } else {
@@ -313,57 +339,87 @@ export const useRecording = ({
                 }
               }
 
-              // 保存转录数据（只保存一次）
-              if (window.electronAPI) {
-                if (window.electronAPI && window.electronAPI.log) {
-                  window.electronAPI.log(
-                    "info",
-                    "准备保存转录数据:",
-                    finalData,
-                  );
+              // [20260912_Fix_322_AutoUpdateGuard] updateRecord: write the
+              // polished columns back to the row INSERTed at transcription
+              // completion, guarded by the T2 manual-edit seam — a record
+              // the user edited during the polish window is never
+              // overwritten (the handler reports a skipped success no-op).
+              // The write-back outcome gates the enhanced notify so the
+              // panel text always mirrors the DB row.
+              let writeBackApplied = false;
+              if (savedId !== null && processedText) {
+                const patch: {
+                  processed_text?: string;
+                  text?: string;
+                } = { processed_text: processedText };
+                if (processedText.trim() !== raw_text.trim()) {
+                  patch.text = processedText;
                 }
-                const savedResult = await window.electronAPI.saveTranscription(
-                  finalData as any,
-                );
-                if (savedResult?.lastInsertRowid && onSaveCompleteRef.current) {
-                  onSaveCompleteRef.current({
-                    id: savedResult.lastInsertRowid,
+                const updateResult =
+                  await window.electronAPI.updateTranscription(savedId, patch, {
+                    skipWhenManuallyEdited: true,
                   });
-                }
-                if (window.electronAPI && window.electronAPI.log) {
-                  window.electronAPI.log(
-                    "info",
-                    "转录数据保存成功:",
-                    savedResult,
-                  );
-                }
-
-                // 通知UI更新并触发复制操作
-                if (
-                  defaultMode !== "off" &&
-                  finalData.processed_text &&
-                  finalData.processed_text !== raw_text
-                ) {
-                  // 有AI优化结果时
-                  const enhancedResult = {
-                    ...transcriptionResult,
-                    text: finalData.processed_text,
-                    processed_text: finalData.processed_text,
-                    enhanced_by_ai: true,
-                  };
-                  if (onAIOptimizationCompleteRef.current) {
-                    onAIOptimizationCompleteRef.current(enhancedResult);
+                if (updateResult?.skipped) {
+                  if (window.electronAPI && window.electronAPI.log) {
+                    window.electronAPI.log(
+                      "info",
+                      "润色写回已跳过（记录已被手动编辑）:",
+                      updateResult,
+                    );
+                  }
+                } else if (updateResult?.success) {
+                  writeBackApplied = true;
+                  if (window.electronAPI && window.electronAPI.log) {
+                    window.electronAPI.log("info", "润色结果已写回:", patch);
                   }
                 } else {
-                  // 没有AI优化或AI优化失败时，使用原始文本
-                  const finalResult = {
-                    ...transcriptionResult,
-                    text: raw_text,
-                    enhanced_by_ai: false,
-                  };
-                  if (onAIOptimizationCompleteRef.current) {
-                    onAIOptimizationCompleteRef.current(finalResult);
+                  if (window.electronAPI && window.electronAPI.log) {
+                    window.electronAPI.log(
+                      "error",
+                      "润色结果写回失败:",
+                      updateResult,
+                    );
                   }
+                }
+              } else if (savedId === null && processedText) {
+                // No row id from the INSERT: nothing to write back to —
+                // log so the lost polish is diagnosable.
+                if (window.electronAPI && window.electronAPI.log) {
+                  window.electronAPI.log(
+                    "error",
+                    "润色结果未持久化（无记录 id）:",
+                    processedText.substring(0, 50) + "...",
+                  );
+                }
+              }
+
+              // 通知UI更新并触发复制操作 — the enhanced branch requires an
+              // applied write-back so the panel text mirrors the DB row.
+              if (
+                defaultMode !== "off" &&
+                processedText &&
+                processedText !== raw_text &&
+                writeBackApplied
+              ) {
+                // 有AI优化结果时
+                const enhancedResult = {
+                  ...transcriptionResult,
+                  text: processedText,
+                  processed_text: processedText,
+                  enhanced_by_ai: true,
+                };
+                if (onAIOptimizationCompleteRef.current) {
+                  onAIOptimizationCompleteRef.current(enhancedResult);
+                }
+              } else {
+                // 没有AI优化或AI优化失败时，使用原始文本
+                const finalResult = {
+                  ...transcriptionResult,
+                  text: raw_text,
+                  enhanced_by_ai: false,
+                };
+                if (onAIOptimizationCompleteRef.current) {
+                  onAIOptimizationCompleteRef.current(finalResult);
                 }
               }
             } catch (err) {

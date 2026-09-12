@@ -18,6 +18,9 @@
 // asserts typeof api[name] === "function" for every critical name. No `any`.
 // [20260726_TypeGate_PreloadBridgeContract] END
 import { describe, it, expect, vi, beforeEach } from "vitest";
+// [20260912_TypeContract_SaveTranscriptionPayload] Bridge type contract for
+// the saveTranscription payload (see the test at the bottom of this file).
+import type { ElectronAPI } from "../../src/electronAPI";
 
 // vi.mock factories are hoisted above all other code, so any variable they
 // close over must also be hoisted. vi.hoisted runs its callback before any
@@ -160,5 +163,27 @@ describe("preload bridge contract", () => {
       undefined,
       "req-42",
     );
+  });
+
+  // [20260912_TypeContract_SaveTranscriptionPayload] Ticket #322: the
+  // recording auto-path INSERT payload (useRecording.ts) must satisfy the
+  // DECLARED bridge type without casts — `language` and `file_size` travel
+  // the SAVE channel in production and belong in the contract. Enforcement
+  // is compile-time via the typecheck:tests gate (excess property checks
+  // reject object literals carrying keys missing from the declaration);
+  // the runtime assertion below merely anchors the test.
+  it("saveTranscription declares the full auto-path INSERT payload shape", () => {
+    type SaveTranscriptionPayload = Parameters<
+      ElectronAPI["saveTranscription"]
+    >[0];
+    const autoPathPayload: SaveTranscriptionPayload = {
+      text: "cleaned text",
+      raw_text: "original text",
+      confidence: 0.9,
+      language: "zh-CN",
+      duration: 1.5,
+      file_size: 1024,
+    };
+    expect(autoPathPayload.text).toBe("cleaned text");
   });
 });

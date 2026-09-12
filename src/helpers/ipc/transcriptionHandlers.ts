@@ -105,11 +105,16 @@ interface DatabaseManager {
   clearAllTranscriptions(): unknown;
   // [20260906_Feat_TranscriptionUpdate] Manual polish write-back
   // (spec #193 T1, ticket #228). Column whitelisting lives in the DB layer.
+  // [20260912_Fix_322_AutoUpdateGuard] Ticket #322: the T2 manual-edit
+  // guard option passes through, and a guarded skip comes back as a
+  // success no-op carrying `skipped`.
   updateTranscription(
     id: number,
     patch: Record<string, unknown>,
+    options?: { skipWhenManuallyEdited?: boolean },
   ): {
     changes?: number;
+    skipped?: boolean;
   };
 }
 
@@ -540,13 +545,33 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
   // caller can observe the persisted mark.
   ipcMain.handle(
     C.TRANSCRIPTION.UPDATE,
-    (_event, id: number, patch: Record<string, unknown>) => {
+    (
+      _event,
+      id: number,
+      patch: Record<string, unknown>,
+      options?: { skipWhenManuallyEdited?: boolean },
+    ) => {
       try {
         const row = databaseManager.getTranscriptionById(id);
         if (!row) {
           return { success: false, error: "转录记录不存在" };
         }
-        const result = databaseManager.updateTranscription(id, patch);
+        // [20260912_Fix_322_AutoUpdateGuard] Ticket #322: the end-of-recording
+        // auto-polish write-back now rides this channel, so caller options
+        // (the T2 skipWhenManuallyEdited seam) must reach the DB-layer guard.
+        const result = databaseManager.updateTranscription(id, patch, options);
+        // [20260912_Fix_322_AutoUpdateGuard] A skipped guard outcome is a
+        // success no-op (the user's manual edit won), NOT a missing row —
+        // report skipped + the refreshed flag so the renderer can fall back
+        // to the raw text instead of treating it as an error.
+        if (result?.skipped) {
+          const current = databaseManager.getTranscriptionById(id);
+          return {
+            success: true,
+            skipped: true,
+            manually_edited: current?.manually_edited,
+          };
+        }
         // [20260906_Feat_TranscriptionUpdate_Review] A row deleted between
         // update and re-read must not report success with undefined fields.
         if (!result || result.changes === 0) {

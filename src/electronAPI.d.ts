@@ -118,6 +118,13 @@ export interface ElectronAPI {
     confidence?: number;
     duration?: number;
     audio_format?: string;
+    // [20260912_TypeContract_SaveTranscriptionPayload] Ticket #322: language
+    // and file_size ride the SAVE channel from the recording auto-path
+    // INSERT (useRecording.ts) and the main-process handler persists them —
+    // declared here so the payload passes typecheck without casts (contract
+    // test: preload-bridge-contract.test.ts).
+    language?: string;
+    file_size?: number;
   }) => Promise<TranscriptionSaveResult>;
   getTranscriptions: (
     limit: number,
@@ -137,6 +144,10 @@ export interface ElectronAPI {
       text?: string;
       manually_edited?: boolean;
     },
+    // [20260912_Fix_322_AutoUpdateGuard] Ticket #322: the auto-polish
+    // write-back passes the T2 manual-edit guard; omitted (undefined) by
+    // the user-triggered polish/edit path, which stays unrestricted.
+    options?: { skipWhenManuallyEdited?: boolean },
   ) => Promise<TranscriptionUpdateResult>;
   diarizeAudio: (id: number) => Promise<{
     success: boolean;
