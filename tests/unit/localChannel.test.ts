@@ -884,3 +884,112 @@ async function waitFor(
     await sleep(5);
   }
 }
+
+// [20260912_Feat_269_McpServer] Ticket #269: transcribe_file's optional
+// top-level `persist` flag. Appended as a standalone top-level describe —
+// every case above is untouched. The flag must reach the service as its
+// 4th argument (undefined/true persist, false skip the DB write), garbage
+// values must answer an invalid-frame error, and omitting the field keeps
+// pre-#269 wire frames byte-identical.
+describe("transcribe_file persist passthrough (ticket #269)", () => {
+  let tmpDir: string;
+  let endpointPath: string;
+  let server: LocalChannelServer | null;
+  let endpointCounter = 0;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "murmur-269-"));
+    server = null;
+    endpointCounter += 1;
+    endpointPath =
+      process.platform === "win32"
+        ? `\\\\.\\pipe\\murmur-test-269-persist-${process.pid}-${endpointCounter}`
+        : path.join(tmpDir, `chan-persist-${endpointCounter}.sock`);
+  });
+
+  afterEach(async () => {
+    if (server) {
+      await server.stop();
+      server = null;
+    }
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  /** Spy service recording the persist flag it receives. The impl carries
+   * the full 4-arg signature so calls[0]?.[3] is a typed tuple index. */
+  function makeSpyService() {
+    return vi.fn(
+      async (
+        _audioPath: string,
+        _options: Record<string, unknown>,
+        _onProgress?: (progress: unknown) => void,
+        _persist?: boolean,
+      ) => ({ success: true, text: "ok" }),
+    );
+  }
+
+  async function startWith(
+    transcribeFile: ReturnType<typeof makeSpyService>,
+  ): Promise<void> {
+    const instance = createChannelServer({
+      endpointPath,
+      token: TOKEN,
+      services: {
+        transcribeFile: (
+          audioPath: string,
+          options: Record<string, unknown>,
+          onProgress?: (progress: unknown) => void,
+          persist?: boolean,
+        ) => transcribeFile(audioPath, options, onProgress, persist),
+        checkEngineStatus: async () => ({ models_downloaded: true }),
+      },
+      logger: asLogger(makeSpyLogger()),
+    });
+    server = instance;
+    await instance.listen();
+  }
+
+  it.each([
+    [
+      "omitted → undefined",
+      undefined as unknown,
+      undefined as boolean | undefined,
+    ],
+    ["false → false", false as unknown, false],
+    ["true → true", true as unknown, true],
+  ])(
+    "persist %s reaches the service as its 4th argument",
+    async (_label, wireValue, expected) => {
+      const transcribeFile = makeSpyService();
+      await startWith(transcribeFile);
+      const client = createChannelClient({ endpointPath, token: TOKEN });
+      await client.connect();
+      const params: Record<string, unknown> = {
+        audioPath: path.join(os.tmpdir(), "murmur-269-nonexistent.wav"),
+      };
+      if (wireValue !== undefined) {
+        params.persist = wireValue;
+      }
+      await client.request("transcribe_file", params);
+      expect(transcribeFile).toHaveBeenCalledTimes(1);
+      expect(transcribeFile.mock.calls[0]?.[3]).toBe(expected);
+      client.close();
+    },
+  );
+
+  it("a non-boolean persist answers invalid-frame without calling the service", async () => {
+    const transcribeFile = makeSpyService();
+    await startWith(transcribeFile);
+    const client = createChannelClient({ endpointPath, token: TOKEN });
+    await client.connect();
+    await expect(
+      client.request("transcribe_file", {
+        audioPath: path.join(os.tmpdir(), "murmur-269-nonexistent.wav"),
+        persist: "yes",
+      }),
+    ).rejects.toThrow("invalid-frame");
+    expect(transcribeFile).not.toHaveBeenCalled();
+    client.close();
+  });
+});
+// [20260912_Feat_269_McpServer] END

@@ -328,3 +328,94 @@ describe("transcribeFileService — deferred edge cases (#261 review → #262)",
   });
 });
 // [20260912_Refactor_262_AiHistoryService] END
+
+// [20260912_Feat_269_McpServer] Ticket #269: the persist opt-out for the
+// MCP `transcribe_file` tool. Appended as a standalone describe — every
+// case above is untouched (default behavior stays always-persist).
+describe("transcribeFileService persist opt-out (ticket #269)", () => {
+  // Local deps builder mirroring the harnesses above (loosely-typed
+  // vi.fn() mocks, `unknown` bridge, no `any`).
+  type MockFn = ReturnType<typeof vi.fn>;
+  let mockDeps: {
+    funasrManager: { transcribeFile: MockFn };
+    databaseManager: {
+      saveTranscription: MockFn;
+      getSetting: MockFn;
+      getTranscriptionById: MockFn;
+    };
+    logger: Record<string, MockFn>;
+  };
+
+  beforeEach(() => {
+    mockDeps = {
+      funasrManager: {
+        transcribeFile: vi.fn(async () => ({
+          success: true,
+          text: "文件转录",
+          raw_text: "raw",
+          segments: [],
+          duration: 1.5,
+        })),
+      },
+      databaseManager: {
+        saveTranscription: vi.fn(() => ({ lastInsertRowid: 42n, changes: 1 })),
+        getSetting: vi.fn(() => null),
+        getTranscriptionById: vi.fn(() => null),
+      },
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+    };
+  });
+
+  const serviceDeps = () => mockDeps as unknown as TranscriptionServiceDeps;
+
+  it("persist=false: still transcribes, but saveTranscription is NEVER called and no id is attached", async () => {
+    const result = (await transcribeFileService(
+      serviceDeps(),
+      "/fake/audio.wav",
+      {},
+      undefined,
+      false,
+    )) as { success: boolean; text?: string; id?: number };
+    expect(mockDeps.funasrManager.transcribeFile).toHaveBeenCalledTimes(1);
+    expect(mockDeps.databaseManager.saveTranscription).not.toHaveBeenCalled();
+    expect(result.success).toBe(true);
+    expect(result.text).toBe("文件转录");
+    // No DB row → no id on the result (the MCP tool surfaces this absence
+    // by omitting `id` from its structuredContent).
+    expect(result).not.toHaveProperty("id");
+  });
+
+  it("persist=true: persists exactly like the default", async () => {
+    const result = (await transcribeFileService(
+      serviceDeps(),
+      "/fake/audio.wav",
+      {},
+      undefined,
+      true,
+    )) as { success: boolean; id?: number };
+    expect(mockDeps.databaseManager.saveTranscription).toHaveBeenCalledTimes(1);
+    expect(result.id).toBe(42);
+  });
+
+  it("persist omitted (undefined): default-true — existing callers keep the always-persist behavior", async () => {
+    await transcribeFileService(serviceDeps(), "/fake/audio.wav");
+    expect(mockDeps.databaseManager.saveTranscription).toHaveBeenCalledTimes(1);
+  });
+
+  it("persist=false with a failing transcription: unchanged failure envelope, still no save", async () => {
+    mockDeps.funasrManager.transcribeFile.mockResolvedValueOnce({
+      success: false,
+      error: "引擎未就绪",
+    });
+    const result = (await transcribeFileService(
+      serviceDeps(),
+      "/fake/audio.wav",
+      {},
+      undefined,
+      false,
+    )) as Record<string, unknown>;
+    expect(result).toEqual({ success: false, error: "引擎未就绪" });
+    expect(mockDeps.databaseManager.saveTranscription).not.toHaveBeenCalled();
+  });
+});
+// [20260912_Feat_269_McpServer] END

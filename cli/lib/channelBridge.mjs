@@ -253,12 +253,17 @@ export async function connectChannelBridge(options = {}) {
     requestStatus() {
       return client.request(METHOD_STATUS, {});
     },
-    requestTranscribe(audioPath, params = {}, onProgress) {
-      return client.request(
-        METHOD_TRANSCRIBE_FILE,
-        { audioPath, options: params },
-        onProgress,
-      );
+    // [20260912_Feat_269_McpServer] Optional `persist` flag (ticket #269):
+    // a top-level transcribe_file param that tells the app NOT to save the
+    // transcription to history (persist=false — the MCP tool's save=false
+    // default). Undefined omits the field entirely, so every pre-#269 wire
+    // frame stays byte-identical.
+    requestTranscribe(audioPath, params = {}, onProgress, persist) {
+      const frameParams =
+        persist === undefined
+          ? { audioPath, options: params }
+          : { audioPath, options: params, persist };
+      return client.request(METHOD_TRANSCRIBE_FILE, frameParams, onProgress);
     },
     // [20260912_Feat_268_BridgePolishHistory] Ticket #268 methods. The
     // polish request params carry ONLY the task (text + optional mode):
