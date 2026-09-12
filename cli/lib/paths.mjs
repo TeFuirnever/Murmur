@@ -7,6 +7,7 @@
 //   - database location + MURMUR_DB_PATH override: src/helpers/database.ts
 //     initialize() (MURMUR_DB_PATH || dataDirectory/transcriptions.db)
 // tests/unit/cli.test.ts locks the derivation shape per platform.
+import os from "node:os";
 import path from "node:path";
 
 const APP_DATA_DIR_NAME = "Murmur";
@@ -32,13 +33,24 @@ export const ENV_DB_PATH = "MURMUR_DB_PATH";
  * environment.ts exactly (win32: AppData/Roaming, darwin: Application Support,
  * linux: .config, other: ~/.murmur).
  *
+ * [20260912_Fix_264_ReviewFollowups] Known dev-mode caveat (pre-existing app
+ * quirk, zero impact on packaged builds): in dev, ELECTRON_USER_DATA points
+ * at app.getPath("userData") (lowercase "murmur" from package.json name)
+ * while the app's data actually lives under the capital-M "Murmur" dir that
+ * environment.ensureDataDirectory() creates. A CLI spawned by a dev-run app
+ * should therefore prefer MURMUR_DB_PATH / an explicit config path override
+ * until the app unifies the two derivations (tracked for #265).
+ *
  * @param {PathContext} [context]
  * @returns {string}
  */
 export function resolveDataDirectory(context = {}) {
   const env = context.env ?? process.env;
   const platform = context.platform ?? process.platform;
-  const homedir = context.homedir ?? (() => "");
+  // [20260912_Fix_264_ReviewFollowups] Default to the real homedir (the
+  // JSDoc contract); the previous empty-string default would yield
+  // root-relative paths if a caller omitted the context.
+  const homedir = context.homedir ?? os.homedir;
   const override = env[ENV_USER_DATA];
   if (override) return override;
 

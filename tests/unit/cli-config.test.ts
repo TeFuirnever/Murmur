@@ -1,6 +1,6 @@
 // [20260912_Feat_CliSkeleton] `murmur config get/set` tests (ticket #264).
 // Covers: whitelist enforcement (out-of-whitelist key -> usage error, exit 2,
-// same key list semantics as settingsHandlers' ALLOWED_SETTING_KEYS),
+// whitelist parity against fileConfig's FILE_CONFIGURABLE_KEYS),
 // murmur.json read/write semantics mirrored from src/helpers/fileConfig.ts,
 // typed value round-trips, and the TS<->mjs whitelist parity lock. All
 // function-level via runCli; no process spawn.
@@ -216,5 +216,27 @@ describe("cli config set", () => {
     expect(result.code).toBe(1);
     expect(result.stdout).toBe("");
     expect(result.stderr).toContain("config set theme");
+  });
+});
+
+// [20260912_Fix_264_ReviewFollowups] Boundary parity with the IPC settings
+// path: the CLI must reject what the app's own write boundary rejects.
+describe("cli config set value-length cap (IPC boundary parity)", () => {
+  it("rejects string values over the 10000-char cap as a usage error (exit 2)", () => {
+    const result = runCli(["config", "set", "theme", "x".repeat(10001)], {
+      configPath: "/tmp/unused-murmur.json",
+    });
+    expect(result.code).toBe(2);
+    expect(result.stderr).toContain("10000");
+  });
+
+  it("accepts a value at the cap boundary", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "murmur-cli-cap-"));
+    const configPath = path.join(dir, "murmur.json");
+    const result = runCli(["config", "set", "theme", "x".repeat(10000)], {
+      configPath,
+    });
+    expect(result.code).toBe(0);
+    expect(readConfig(configPath).theme).toBe("x".repeat(10000));
   });
 });

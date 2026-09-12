@@ -7,7 +7,7 @@
 // cli/lib/cliRunner.mjs — this file only wires argv in and streams/exit out.
 //
 // Production invocation shape (packaged app):
-//   ELECTRON_RUN_AS_NODE=1 <electron> <app>/cli/murmur.mur.mjs ... (bin shim)
+//   ELECTRON_RUN_AS_NODE=1 <electron> <app>/cli/murmur.mjs ...
 // i.e. process.versions.electron is set. Running the script with a bare
 // electron binary WITHOUT ELECTRON_RUN_AS_NODE would boot the GUI app
 // instead of the CLI — that mis-invocation is rejected below with a clear

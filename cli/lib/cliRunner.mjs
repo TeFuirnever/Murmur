@@ -16,6 +16,10 @@ import { readConfig, writeConfig } from "./configStore.mjs";
 import { DEFAULT_HISTORY_LIMIT, listTranscriptions } from "./historyReader.mjs";
 import os from "node:os";
 
+// [20260912_Fix_264_ReviewFollowups] Mirrors validateSetting's
+// MAX_VALUE_LENGTH in src/helpers/ipc/settingsHandlers.ts (boundary parity).
+const MAX_VALUE_LENGTH = 10000;
+
 export const EXIT_OK = 0;
 export const EXIT_RUNTIME_ERROR = 1;
 export const EXIT_USAGE_ERROR = 2; // 4 is reserved for future use, unused here.
@@ -157,6 +161,15 @@ function runConfigSet(argv, ctx) {
 
   const [key, rawValue] = parsed.positionals;
   if (!isConfigKey(key)) return usageError(`config: key not allowed: ${key}`);
+  // [20260912_Fix_264_ReviewFollowups] Boundary parity with the IPC
+  // settings path: values longer than MAX_VALUE_LENGTH are rejected there
+  // (settingsHandlers validateSetting); the CLI must not accept what the
+  // app's own write boundary would refuse.
+  if (typeof rawValue === "string" && rawValue.length > MAX_VALUE_LENGTH) {
+    return usageError(
+      `config set: value exceeds ${MAX_VALUE_LENGTH} characters`,
+    );
+  }
   const value = parseSettingValue(rawValue);
 
   try {
