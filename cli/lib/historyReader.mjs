@@ -22,6 +22,42 @@ function escapeLikePattern(text) {
   return text.replace(/[\\%_]/g, (char) => `\\${char}`);
 }
 
+// [20260912_Feat_270_McpFullTools] Ticket #270: single-row read + the
+// not-found wording mirror. The MCP server (src/helpers/mcp/mcpServer.ts,
+// bundled by build:mcp) imports BOTH from here so the CLI's read model stays
+// the single source for local history reads:
+//   - getTranscriptionById mirrors the app's DatabaseManager
+//     .getTranscriptionById (database.ts: SELECT * WHERE id = ?) with the
+//     same readonly open discipline as listTranscriptions above.
+//   - TRANSCRIPTION_NOT_FOUND_MESSAGE mirrors historyService's TS constant
+//     of the same name (importing the TS file here is impossible — cli/ is
+//     plain ESM with zero deps — so the value is mirrored and the parity is
+//     locked by a test in tests/unit/mcpServer.test.ts).
+export const TRANSCRIPTION_NOT_FOUND_MESSAGE = "转录记录不存在";
+
+/**
+ * Read ONE transcription record by id (mirrors the app's
+ * getTranscriptionById columns via SELECT *), newest-independent.
+ * Returns the row object, or undefined when the id matches nothing.
+ *
+ * Throws when the database cannot be opened — same contract as
+ * listTranscriptions (the caller decides how to surface it).
+ *
+ * @param {string} dbPath Path to the app's transcriptions.db.
+ * @param {number} id Transcription record id.
+ * @returns {object | undefined} The full row, or undefined when absent.
+ */
+export function getTranscriptionById(dbPath, id) {
+  const db = new DatabaseSync(dbPath, { readOnly: true });
+  try {
+    const stmt = db.prepare("SELECT * FROM transcriptions WHERE id = ?");
+    return stmt.get(id);
+  } finally {
+    db.close();
+  }
+}
+// [20260912_Feat_270_McpFullTools] END
+
 /**
  * List transcription records, newest first (same ORDER BY as
  * getTranscriptions). `query` does a literal substring match over text and
@@ -29,6 +65,14 @@ function escapeLikePattern(text) {
  *
  * Throws when the database cannot be opened or queried — the CLI maps that
  * to exit code 1 (runtime error).
+ *
+ * @param {string} dbPath Path to the app's transcriptions.db.
+ * @param {object} [options]
+ * @param {string | null} [options.query] Literal substring filter over text
+ *   and processed_text (null disables the filter).
+ * @param {number} [options.limit] Positive integer page size
+ *   (default DEFAULT_HISTORY_LIMIT).
+ * @returns {Array<object>} Rows newest-first.
  */
 export function listTranscriptions(
   dbPath,
