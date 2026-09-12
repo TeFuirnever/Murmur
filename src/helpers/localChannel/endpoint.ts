@@ -86,9 +86,10 @@ export function writeChannelEndpointFile(
 
 export function removeChannelEndpointFile(
   userDataPath: string,
-  platform: string = process.platform,
+  _platform: string = process.platform,
 ): void {
-  if (platform === "win32") return;
+  // A plain data file (unlike the socket itself) — removable on every
+  // platform; no win32 gate.
   try {
     fs.rmSync(path.join(userDataPath, ENDPOINT_FILE_NAME), { force: true });
   } catch {
