@@ -1,0 +1,236 @@
+// [20260912_Refactor_261_TranscriptionService] Seam tests for the
+// transcription-domain services extracted in ticket #261 (spec #258
+// Phase 0). Deps are plain vi.fn() bags — no Electron import anywhere:
+// the point of the seam is that transcribeFileService /
+// diarizeTranscriptionService / checkEngineStatusService run headless.
+// Behavior parity with the IPC handlers is locked by the unmodified
+// tests/unit/transcriptionHandlers.test.ts.
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// [20260912_Refactor_261_TranscriptionService] The pure helpers are mocked
+// for determinism (same pattern as transcriptionHandlers.test.ts): path
+// validation is controlled per-test, the cleaner is identity. The hotword
+// sanitizer is used FOR REAL — its trim/control-char rules are part of the
+// injection contract under test.
+vi.mock("../../src/helpers/audioPathValidator", () => ({
+  validateAudioPath: vi.fn(() => ({
+    valid: true,
+    ext: ".wav",
+    resolved: "/fake/path.wav",
+  })),
+}));
+
+vi.mock("../../src/helpers/transcriptCleaner", () => ({
+  cleanTranscriptionText: (text: string) => text,
+}));
+
+import { validateAudioPath } from "../../src/helpers/audioPathValidator";
+import {
+  checkEngineStatusService,
+  diarizeTranscriptionService,
+  transcribeFileService,
+  type TranscriptionServiceDeps,
+} from "../../src/helpers/services/transcriptionService";
+
+// [20260912_Refactor_261_TranscriptionService] Loosely-typed mocks
+// (ReturnType<typeof vi.fn>, the established pattern in
+// transcriptionHandlers.test.ts) so per-test overrides like
+// mockResolvedValueOnce / mockRejectedValueOnce typecheck without `any`.
+type MockFn = ReturnType<typeof vi.fn>;
+
+interface MockDeps {
+  funasrManager: {
+    transcribeFile: MockFn;
+    diarizeAudio: MockFn;
+    checkModelFiles: MockFn;
+  };
+  databaseManager: {
+    saveTranscription: MockFn;
+    getSetting: MockFn;
+    getTranscriptionById: MockFn;
+  };
+  logger: Record<string, MockFn>;
+}
+
+describe("transcriptionService (headless seam, ticket #261)", () => {
+  let deps: TranscriptionServiceDeps;
+  let mockDeps: MockDeps;
+
+  beforeEach(() => {
+    mockDeps = {
+      funasrManager: {
+        transcribeFile: vi.fn(async () => ({
+          success: true,
+          text: "文件转录",
+          raw_text: "raw",
+          segments: [],
+        })),
+        diarizeAudio: vi.fn(async () => ({ success: true })),
+        checkModelFiles: vi.fn(async () => ({ models_downloaded: true })),
+      },
+      databaseManager: {
+        saveTranscription: vi.fn(() => ({ lastInsertRowid: 42n, changes: 1 })),
+        getSetting: vi.fn(() => null),
+        getTranscriptionById: vi.fn(() => null),
+      },
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+    };
+    // [20260912_Refactor_261_TranscriptionService] `unknown` bridge (no
+    // `any`), the established pattern from modelHandlers.test.ts: the
+    // loosely-typed vi.fn mocks are structurally stubbed, not the full
+    // production types.
+    deps = mockDeps as unknown as TranscriptionServiceDeps;
+  });
+
+  describe("transcribeFileService", () => {
+    it("rejects an invalid audio path without touching funasrManager", async () => {
+      vi.mocked(validateAudioPath).mockReturnValueOnce({
+        valid: false,
+        error: "非法路径",
+      });
+      const result = (await transcribeFileService(
+        deps,
+        "/bad/path.xyz",
+      )) as Record<string, unknown>;
+      expect(result).toEqual({ success: false, error: "非法路径" });
+      expect(mockDeps.funasrManager.transcribeFile).not.toHaveBeenCalled();
+      expect(mockDeps.databaseManager.saveTranscription).not.toHaveBeenCalled();
+    });
+
+    it("sanitizes and injects the stored hotword into transcribeFile options", async () => {
+      mockDeps.databaseManager.getSetting.mockReturnValue("  张三  ");
+      await transcribeFileService(deps, "/fake/audio.wav");
+      const opts = mockDeps.funasrManager.transcribeFile.mock
+        .calls[0]![1] as Record<string, unknown>;
+      expect(opts.hotword).toBe("张三");
+      expect(mockDeps.databaseManager.getSetting).toHaveBeenCalledWith(
+        "hotwords",
+      );
+    });
+
+    it("retries once without the hotword on failure and flags hotword_degraded", async () => {
+      mockDeps.databaseManager.getSetting.mockReturnValue("张三");
+      mockDeps.funasrManager.transcribeFile
+        .mockRejectedValueOnce(new Error("hotword boom"))
+        .mockResolvedValueOnce({
+          success: true,
+          text: "重试成功",
+          raw_text: "r",
+          segments: [],
+        });
+      const result = (await transcribeFileService(deps, "/fake/audio.wav")) as {
+        success: boolean;
+        text?: string;
+        hotword_degraded?: boolean;
+      };
+      expect(mockDeps.funasrManager.transcribeFile).toHaveBeenCalledTimes(2);
+      const firstOpts = mockDeps.funasrManager.transcribeFile.mock
+        .calls[0]![1] as Record<string, unknown>;
+      const secondOpts = mockDeps.funasrManager.transcribeFile.mock
+        .calls[1]![1] as Record<string, unknown>;
+      expect(firstOpts.hotword).toBe("张三");
+      expect(secondOpts).not.toHaveProperty("hotword");
+      expect(result.success).toBe(true);
+      expect(result.text).toBe("重试成功");
+      expect(result.hotword_degraded).toBe(true);
+    });
+
+    it("wires a provided onProgress callback into transcribeFile options", async () => {
+      const onProgress = vi.fn();
+      await transcribeFileService(deps, "/fake/audio.wav", {}, onProgress);
+      const opts = mockDeps.funasrManager.transcribeFile.mock.calls[0]![1] as {
+        onProgress?: unknown;
+      };
+      expect(opts.onProgress).toBe(onProgress);
+    });
+
+    it("completes without onProgress and persists the result with the DB rowid", async () => {
+      const segments = [{ start_ms: 0, end_ms: 1, text: "段落" }];
+      mockDeps.funasrManager.transcribeFile.mockResolvedValueOnce({
+        success: true,
+        text: "正文",
+        raw_text: "原始",
+        segments,
+        duration: 3.2,
+      });
+      const result = (await transcribeFileService(deps, "/fake/audio.wav")) as {
+        success: boolean;
+        id?: number;
+        text?: string;
+        original_text?: string;
+      };
+      const opts = mockDeps.funasrManager.transcribeFile.mock
+        .calls[0]![1] as Record<string, unknown>;
+      // Sender-less scenario: no progress callback reaches the engine.
+      expect(opts).not.toHaveProperty("onProgress");
+      expect(mockDeps.databaseManager.saveTranscription).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: "正文",
+          raw_text: "正文",
+          processed_text: "原始",
+          source_type: "file",
+          source_file_path: "/fake/audio.wav",
+          segments: JSON.stringify(segments),
+          duration: 3.2,
+        }),
+      );
+      expect(result.success).toBe(true);
+      expect(result.id).toBe(42); // Number(lastInsertRowid: 42n)
+      expect(result.original_text).toBe("正文");
+    });
+  });
+
+  describe("diarizeTranscriptionService", () => {
+    it("returns an error when the transcription record does not exist", async () => {
+      const result = (await diarizeTranscriptionService(deps, 999)) as Record<
+        string,
+        unknown
+      >;
+      expect(result).toEqual({ success: false, error: "转录记录不存在" });
+      expect(mockDeps.funasrManager.diarizeAudio).not.toHaveBeenCalled();
+    });
+
+    it("returns an error when the record has no usable segments", async () => {
+      mockDeps.databaseManager.getTranscriptionById.mockReturnValueOnce({
+        id: 7,
+        text: "x",
+        segments: "[]",
+      });
+      const result = (await diarizeTranscriptionService(deps, 7)) as Record<
+        string,
+        unknown
+      >;
+      expect(result).toEqual({ success: false, error: "无分段数据" });
+      expect(mockDeps.funasrManager.diarizeAudio).not.toHaveBeenCalled();
+    });
+
+    it("diarizes with the stored audio path and parsed segments", async () => {
+      const segments = [{ start_ms: 0, end_ms: 1, text: "x" }];
+      mockDeps.databaseManager.getTranscriptionById.mockReturnValueOnce({
+        id: 7,
+        segments: JSON.stringify(segments),
+        source_file_path: "/a.wav",
+      });
+      const result = await diarizeTranscriptionService(deps, 7);
+      expect(mockDeps.funasrManager.diarizeAudio).toHaveBeenCalledWith(
+        "/a.wav",
+        segments,
+      );
+      expect(result).toEqual({ success: true });
+    });
+  });
+
+  describe("checkEngineStatusService", () => {
+    it("passes the engine status through from funasrManager.checkModelFiles", async () => {
+      const status = {
+        models_downloaded: true,
+        models: [{ name: "paraformer" }],
+      };
+      mockDeps.funasrManager.checkModelFiles.mockResolvedValueOnce(status);
+      const result = await checkEngineStatusService(deps);
+      expect(result).toEqual(status);
+      expect(mockDeps.funasrManager.checkModelFiles).toHaveBeenCalledTimes(1);
+    });
+  });
+});
+// [20260912_Refactor_261_TranscriptionService] END
