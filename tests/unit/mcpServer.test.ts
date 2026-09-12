@@ -5,7 +5,7 @@
 // PRODUCTION bridge connector (cli/lib/channelBridge.mjs over the bundled
 // cli/dist/channelClient.mjs — built in-process via esbuild, same pattern
 // as cli-bridge.test.ts) against a REAL in-process channel server. Locked
-// here: the exact two-tool surface with honest annotations (transcribe_file
+// here: the exact six-tool surface with honest annotations (transcribe_file
 // must NOT claim readOnly), the save→persist threading, the diarize honest
 // refusal, status semantics (unreachable = successful {reachable:false},
 // NOT an error), and the stderr-only logging rule (stdout is the protocol
@@ -38,6 +38,19 @@ import {
   writeChannelEndpointFile,
   writeChannelTokenFile,
 } from "../../src/helpers/localChannel/endpoint";
+// [20260912_Feat_270_McpFullTools] Ticket #270 additions: the new tool-name
+// constants, the JS-mirrored not-found constant plus the TS source of truth
+// for the parity lock, and node:sqlite for the temp history DB behind the
+// local-read tools.
+import { DatabaseSync } from "node:sqlite";
+import {
+  MCP_TOOL_DELETE_TRANSCRIPTION,
+  MCP_TOOL_GET_TRANSCRIPTION,
+  MCP_TOOL_LIST_TRANSCRIPTIONS,
+  MCP_TOOL_POLISH_TEXT,
+} from "../../src/helpers/mcp/mcpServer";
+import { TRANSCRIPTION_NOT_FOUND_MESSAGE } from "../../src/helpers/services/historyService";
+import { TRANSCRIPTION_NOT_FOUND_MESSAGE as TRANSCRIPTION_NOT_FOUND_MESSAGE_MIRRORED } from "../../cli/lib/historyReader.mjs";
 
 const REPO_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -198,13 +211,23 @@ describe("murmur mcp server (ticket #269)", () => {
   }
 
   describe("tools/list surface", () => {
-    it("enumerates exactly the two tools with honest annotations", async () => {
+    // [20260912_Feat_270_McpFullTools] Ticket #270 grows the locked surface
+    // from two to SIX tools; the annotation locks below are the drift guard
+    // for all of them.
+    it("enumerates exactly the six tools with honest annotations", async () => {
       freshTmp();
       const { client } = await makeSession(makeConnectDeps());
       const { tools } = await client.listTools();
-      expect(tools).toHaveLength(2);
+      expect(tools).toHaveLength(6);
       const names = tools.map((tool) => tool.name).sort();
-      expect(names).toEqual([MCP_TOOL_GET_STATUS, MCP_TOOL_TRANSCRIBE_FILE]);
+      expect(names).toEqual([
+        MCP_TOOL_DELETE_TRANSCRIPTION,
+        MCP_TOOL_GET_STATUS,
+        MCP_TOOL_GET_TRANSCRIPTION,
+        MCP_TOOL_LIST_TRANSCRIPTIONS,
+        MCP_TOOL_POLISH_TEXT,
+        MCP_TOOL_TRANSCRIBE_FILE,
+      ]);
 
       // Honesty lock (ticket #269): save:true CAN write history, so
       // transcribe_file must NOT claim readOnly. It never deletes
@@ -229,6 +252,47 @@ describe("murmur mcp server (ticket #269)", () => {
         openWorldHint: false,
       });
       expect(tools[0]?.inputSchema).toMatchObject({ type: "object" });
+
+      // Ticket #270 honesty locks. polish_text CALLS the AI provider — it
+      // must never claim read-only, produces text only (destructive:false),
+      // and costs quota per repeat (idempotent:false).
+      const polish = tools.find((tool) => tool.name === MCP_TOOL_POLISH_TEXT);
+      expect(polish?.annotations).toMatchObject({
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      });
+      // Both local reads are pure reads (readonly SQLite, no writes).
+      const list = tools.find(
+        (tool) => tool.name === MCP_TOOL_LIST_TRANSCRIPTIONS,
+      );
+      expect(list?.annotations).toMatchObject({
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      });
+      const getOne = tools.find(
+        (tool) => tool.name === MCP_TOOL_GET_TRANSCRIPTION,
+      );
+      expect(getOne?.annotations).toMatchObject({
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      });
+      // delete_transcription removes a row: destructive, and NOT idempotent
+      // (repeating a successful delete errors on the now-missing row).
+      const del = tools.find(
+        (tool) => tool.name === MCP_TOOL_DELETE_TRANSCRIPTION,
+      );
+      expect(del?.annotations).toMatchObject({
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: false,
+      });
     });
 
     it("reports the injected version and server name in initialize", async () => {
@@ -508,6 +572,479 @@ describe("murmur mcp server (ticket #269)", () => {
       expect(stdoutWrites).toEqual([]);
       // The connect failure WAS diagnosed on the stderr sink.
       expect(logged.join("")).toContain("transcribe_file connect failed");
+    });
+  });
+
+  // [20260912_Feat_270_McpFullTools] --- ticket #270 tool surface ---
+  // polish_text / delete_transcription are CHANNEL-backed (single-writer:
+  // the running app owns every DB write); list_transcriptions /
+  // get_transcription are LOCAL readonly reads via cli/lib/historyReader.mjs
+  // against a real temp SQLite DB mirroring the app schema (same pattern as
+  // cli-history.test.ts).
+
+  /** One seed row for the temp history DB; unspecified columns default. */
+  interface SeedRow270 {
+    text: string;
+    processed_text?: string | null;
+    created_at: string;
+  }
+
+  /**
+   * Create a transcriptions DB with the app's post-migration schema
+   * (database.ts createTables + ALTERs) and insert the rows in order.
+   */
+  function createAppDb270(dbPath: string, rows: SeedRow270[]): void {
+    const db = new DatabaseSync(dbPath);
+    try {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS transcriptions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          text TEXT NOT NULL,
+          raw_text TEXT,
+          processed_text TEXT,
+          confidence REAL,
+          language TEXT DEFAULT 'zh-CN',
+          duration REAL,
+          file_size INTEGER,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          source_type TEXT DEFAULT 'recording',
+          source_file_path TEXT,
+          segments TEXT,
+          manually_edited INTEGER DEFAULT 0
+        )
+      `);
+      const insert = db.prepare(`
+        INSERT INTO transcriptions
+          (text, processed_text, created_at)
+        VALUES (?, ?, ?)
+      `);
+      for (const row of rows) {
+        insert.run(row.text, row.processed_text ?? null, row.created_at);
+      }
+    } finally {
+      db.close();
+    }
+  }
+
+  describe("polish_text (ticket #270)", () => {
+    /** A channel server with a spy polish service. */
+    async function startPolishServer(
+      impl?: (
+        text: string,
+        mode: string | undefined,
+        onProgress?: (progress: unknown) => void,
+      ) => Promise<unknown>,
+    ) {
+      const polish = vi.fn(
+        (
+          text: string,
+          mode: string | undefined,
+          onProgress?: (progress: unknown) => void,
+        ) =>
+          impl
+            ? impl(text, mode, onProgress)
+            : Promise.resolve({ success: true, text: "润色结果" }),
+      );
+      await startServer({
+        transcribeFile: async () => ({ success: true }),
+        checkEngineStatus: async () => ({ models_downloaded: true }),
+        polish,
+      });
+      publishChannelFiles(tmpDir, TOKEN);
+      return polish;
+    }
+
+    it("happy path: structuredContent is {text} plus extra channel fields verbatim minus the envelope; mode omitted → undefined reaches the service", async () => {
+      freshTmp();
+      const polish = await startPolishServer(() =>
+        Promise.resolve({ success: true, text: "润色结果", model: "glm-4" }),
+      );
+      const { client } = await makeSession(makeConnectDeps());
+      const result = await callTool(client, MCP_TOOL_POLISH_TEXT, {
+        text: "你好世界",
+      });
+      expect(result.isError).toBeUndefined();
+      // Envelope (success) stripped; model passes through verbatim.
+      expect(result.structuredContent).toEqual({
+        text: "润色结果",
+        model: "glm-4",
+      });
+      expect(result.content).toEqual([{ type: "text", text: "润色结果" }]);
+      expect(polish).toHaveBeenCalledTimes(1);
+      expect(polish.mock.calls[0]?.[0]).toBe("你好世界");
+      // No mode → undefined reaches the service (the app applies its
+      // entry-level "optimize" default, same as the GUI/CLI).
+      expect(polish.mock.calls[0]?.[1]).toBeUndefined();
+    });
+
+    it("mode passes through to the channel service", async () => {
+      freshTmp();
+      const polish = await startPolishServer();
+      const { client } = await makeSession(makeConnectDeps());
+      const result = await callTool(client, MCP_TOOL_POLISH_TEXT, {
+        text: "你好世界",
+        mode: "summarize",
+      });
+      expect(result.isError).toBeUndefined();
+      expect(polish.mock.calls[0]?.[1]).toBe("summarize");
+    });
+
+    it("unknown mode is refused BEFORE any channel traffic (local gate, mirrors the CLI)", async () => {
+      freshTmp();
+      const polish = await startPolishServer();
+      const { client } = await makeSession(makeConnectDeps());
+      const result = await callTool(client, MCP_TOOL_POLISH_TEXT, {
+        text: "你好世界",
+        mode: "no-such-mode",
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content).toEqual([
+        { type: "text", text: expect.stringContaining("未知的润色模式") },
+      ]);
+      expect(polish).not.toHaveBeenCalled();
+    });
+
+    it("service failure envelope → isError with the message", async () => {
+      freshTmp();
+      await startPolishServer(() =>
+        Promise.resolve({ success: false, error: "AI 调用失败" }),
+      );
+      const { client } = await makeSession(makeConnectDeps());
+      const result = await callTool(client, MCP_TOOL_POLISH_TEXT, {
+        text: "你好世界",
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content).toEqual([{ type: "text", text: "AI 调用失败" }]);
+    });
+
+    it("channel progress chunks become stderr log lines (never stdout/protocol)", async () => {
+      freshTmp();
+      await startPolishServer((_text, _mode, onProgress) => {
+        onProgress?.({ type: "progress", chunkIndex: 1, chunkCount: 2 });
+        return Promise.resolve({ success: true, text: "分块结果" });
+      });
+      const logged: string[] = [];
+      const stdoutWrites: string[] = [];
+      const stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation(((
+        chunk: unknown,
+      ) => {
+        stdoutWrites.push(String(chunk));
+        return true;
+      }) as typeof process.stdout.write);
+      try {
+        const { client } = await makeSession(
+          makeConnectDeps({ log: (chunk) => logged.push(chunk) }),
+        );
+        const result = await callTool(client, MCP_TOOL_POLISH_TEXT, {
+          text: "长文本",
+        });
+        expect(result.isError).toBeUndefined();
+        expect(result.structuredContent).toEqual({ text: "分块结果" });
+      } finally {
+        stdoutSpy.mockRestore();
+      }
+      expect(stdoutWrites).toEqual([]);
+      expect(logged.join("")).toContain("polish_text progress");
+      expect(logged.join("")).toContain("1/2");
+    });
+
+    it("app not running: isError with the actionable bridge message", async () => {
+      freshTmp();
+      // No discovery files at all — the production connector classifies this
+      // as unreachable (the same failure the CLI maps to exit 4).
+      const { client } = await makeSession(makeConnectDeps());
+      const result = await callTool(client, MCP_TOOL_POLISH_TEXT, {
+        text: "你好世界",
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content).toEqual([
+        { type: "text", text: expect.stringContaining("应用可能未运行") },
+      ]);
+    });
+  });
+
+  describe("list_transcriptions (ticket #270)", () => {
+    it("empty DB → successful {records: []}", async () => {
+      freshTmp();
+      const dbPath = path.join(tmpDir, "transcriptions.db");
+      createAppDb270(dbPath, []);
+      const { client } = await makeSession(
+        makeConnectDeps({ resolveHistoryDbPath: () => dbPath }),
+      );
+      const result = await callTool(client, MCP_TOOL_LIST_TRANSCRIPTIONS, {});
+      expect(result.isError).toBeUndefined();
+      expect(result.structuredContent).toEqual({ records: [] });
+    });
+
+    it("seeded DB: newest-first records with full text; query filters; limit truncates", async () => {
+      freshTmp();
+      const dbPath = path.join(tmpDir, "transcriptions.db");
+      createAppDb270(dbPath, [
+        {
+          text: "meeting minutes topic",
+          created_at: "2026-09-12 10:00:01",
+        },
+        {
+          text: "raw chatter",
+          processed_text: "polished budget talk",
+          created_at: "2026-09-12 10:00:02",
+        },
+        { text: "unrelated", created_at: "2026-09-12 10:00:03" },
+      ]);
+      const { client } = await makeSession(
+        makeConnectDeps({ resolveHistoryDbPath: () => dbPath }),
+      );
+
+      // Newest first, full text (no preview cap — documented decision).
+      const all = await callTool(client, MCP_TOOL_LIST_TRANSCRIPTIONS, {});
+      expect(all.isError).toBeUndefined();
+      expect(all.structuredContent).toEqual({
+        records: [
+          { id: 3, text: "unrelated", created_at: "2026-09-12 10:00:03" },
+          {
+            id: 2,
+            text: "raw chatter",
+            created_at: "2026-09-12 10:00:02",
+          },
+          {
+            id: 1,
+            text: "meeting minutes topic",
+            created_at: "2026-09-12 10:00:01",
+          },
+        ],
+      });
+
+      // query: literal substring over text AND processed_text.
+      const textHit = await callTool(client, MCP_TOOL_LIST_TRANSCRIPTIONS, {
+        query: "meeting",
+      });
+      expect(textHit.structuredContent).toEqual({
+        records: [
+          {
+            id: 1,
+            text: "meeting minutes topic",
+            created_at: "2026-09-12 10:00:01",
+          },
+        ],
+      });
+      const processedHit = await callTool(
+        client,
+        MCP_TOOL_LIST_TRANSCRIPTIONS,
+        { query: "budget" },
+      );
+      expect(processedHit.structuredContent).toEqual({
+        records: [
+          {
+            id: 2,
+            text: "raw chatter",
+            created_at: "2026-09-12 10:00:02",
+          },
+        ],
+      });
+
+      // limit truncates newest-first.
+      const limited = await callTool(client, MCP_TOOL_LIST_TRANSCRIPTIONS, {
+        limit: 2,
+      });
+      expect(
+        (
+          limited.structuredContent as {
+            records: Array<{ id: number }>;
+          }
+        ).records.map((record) => record.id),
+      ).toEqual([3, 2]);
+    });
+
+    it("missing DB file → successful {records: []}; the file is never created (readonly open guarantee)", async () => {
+      freshTmp();
+      const dbPath = path.join(tmpDir, "does-not-exist.db");
+      const { client } = await makeSession(
+        makeConnectDeps({ resolveHistoryDbPath: () => dbPath }),
+      );
+      const result = await callTool(client, MCP_TOOL_LIST_TRANSCRIPTIONS, {});
+      // Never-transcribed == empty history (documented #270 decision) — a
+      // normal fresh install is NOT an error.
+      expect(result.isError).toBeUndefined();
+      expect(result.structuredContent).toEqual({ records: [] });
+      expect(fs.existsSync(dbPath)).toBe(false);
+    });
+  });
+
+  // [20260912_Fix_270_Review] Non-integer ids are rejected by the zod
+  // input schemas as PROTOCOL errors (SDK converts to InvalidParams —
+  // client.callTool rejects rather than returning isError). Locked here so
+  // the usage-error surface of both id-taking tools is explicit.
+  describe("id schema protocol errors (ticket #270 review)", () => {
+    // SDK 1.30 surfaces zod input-schema failures as an isError RESULT
+    // carrying the -32602 InvalidParams text (NOT a callTool rejection) —
+    // locked so this usage-error surface is explicit and distinct from the
+    // tools' own isError convention.
+    it("get_transcription rejects a fractional id as an InvalidParams error result", async () => {
+      freshTmp();
+      const { client } = await makeSession(
+        makeConnectDeps({
+          resolveHistoryDbPath: () => path.join(tmpDir, "x.db"),
+        }),
+      );
+      const result = (await client.callTool({
+        name: MCP_TOOL_GET_TRANSCRIPTION,
+        arguments: { id: 1.5 },
+      })) as CallToolResult;
+      expect(result.isError).toBe(true);
+      expect(JSON.stringify(result.content)).toContain("-32602");
+      expect(JSON.stringify(result.content)).toContain("Invalid");
+    });
+
+    it("delete_transcription rejects a fractional id as an InvalidParams error result", async () => {
+      freshTmp();
+      const { client } = await makeSession(makeConnectDeps());
+      const result = (await client.callTool({
+        name: MCP_TOOL_DELETE_TRANSCRIPTION,
+        arguments: { id: 1.5 },
+      })) as CallToolResult;
+      expect(result.isError).toBe(true);
+      expect(JSON.stringify(result.content)).toContain("-32602");
+    });
+  });
+
+  describe("get_transcription (ticket #270)", () => {
+    it("existing id → the full row as structuredContent", async () => {
+      freshTmp();
+      const dbPath = path.join(tmpDir, "transcriptions.db");
+      createAppDb270(dbPath, [
+        {
+          text: "完整记录",
+          processed_text: "润色后",
+          created_at: "2026-09-12 10:00:01",
+        },
+        { text: "second", created_at: "2026-09-12 10:00:02" },
+      ]);
+      const { client } = await makeSession(
+        makeConnectDeps({ resolveHistoryDbPath: () => dbPath }),
+      );
+      const result = await callTool(client, MCP_TOOL_GET_TRANSCRIPTION, {
+        id: 1,
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.structuredContent).toEqual({
+        id: 1,
+        text: "完整记录",
+        raw_text: null,
+        processed_text: "润色后",
+        confidence: null,
+        language: "zh-CN",
+        duration: null,
+        file_size: null,
+        created_at: "2026-09-12 10:00:01",
+        // updated_at is the INSERT time (CURRENT_TIMESTAMP), not the seeded
+        // created_at — only its shape is locked here.
+        updated_at: expect.any(String),
+        source_type: "recording",
+        source_file_path: null,
+        segments: null,
+        manually_edited: 0,
+      });
+      expect(result.content).toEqual([{ type: "text", text: "完整记录" }]);
+    });
+
+    it("missing id → isError 转录记录不存在", async () => {
+      freshTmp();
+      const dbPath = path.join(tmpDir, "transcriptions.db");
+      createAppDb270(dbPath, [
+        { text: "only one", created_at: "2026-09-12 10:00:01" },
+      ]);
+      const { client } = await makeSession(
+        makeConnectDeps({ resolveHistoryDbPath: () => dbPath }),
+      );
+      const result = await callTool(client, MCP_TOOL_GET_TRANSCRIPTION, {
+        id: 999,
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content).toEqual([
+        { type: "text", text: "转录记录不存在" },
+      ]);
+    });
+
+    it("missing DB file → isError 转录记录不存在 (no row can exist without a DB)", async () => {
+      freshTmp();
+      const dbPath = path.join(tmpDir, "does-not-exist.db");
+      const { client } = await makeSession(
+        makeConnectDeps({ resolveHistoryDbPath: () => dbPath }),
+      );
+      const result = await callTool(client, MCP_TOOL_GET_TRANSCRIPTION, {
+        id: 1,
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content).toEqual([
+        { type: "text", text: "转录记录不存在" },
+      ]);
+    });
+
+    it("not-found wording parity lock: the JS mirror in historyReader.mjs equals the historyService TS constant", () => {
+      expect(TRANSCRIPTION_NOT_FOUND_MESSAGE_MIRRORED).toBe(
+        TRANSCRIPTION_NOT_FOUND_MESSAGE,
+      );
+      expect(TRANSCRIPTION_NOT_FOUND_MESSAGE).toBe("转录记录不存在");
+    });
+  });
+
+  describe("delete_transcription (ticket #270)", () => {
+    it("channel-backed success → structuredContent {deleted:true, id}; the service receives the numeric id", async () => {
+      freshTmp();
+      const deleteTranscription = vi.fn(async (_id: number) => ({
+        success: true,
+        changes: 1,
+      }));
+      await startServer({
+        transcribeFile: async () => ({ success: true }),
+        checkEngineStatus: async () => ({ models_downloaded: true }),
+        deleteTranscription,
+      });
+      publishChannelFiles(tmpDir, TOKEN);
+      const { client } = await makeSession(makeConnectDeps());
+      const result = await callTool(client, MCP_TOOL_DELETE_TRANSCRIPTION, {
+        id: 42,
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.structuredContent).toEqual({ deleted: true, id: 42 });
+      expect(deleteTranscription).toHaveBeenCalledTimes(1);
+      expect(deleteTranscription.mock.calls[0]?.[0]).toBe(42);
+    });
+
+    it("missing id → isError 转录记录不存在 (the channel service's not-found error frame)", async () => {
+      freshTmp();
+      const deleteTranscription = vi.fn(async (_id: number) => {
+        throw new Error(TRANSCRIPTION_NOT_FOUND_MESSAGE);
+      });
+      await startServer({
+        transcribeFile: async () => ({ success: true }),
+        checkEngineStatus: async () => ({ models_downloaded: true }),
+        deleteTranscription,
+      });
+      publishChannelFiles(tmpDir, TOKEN);
+      const { client } = await makeSession(makeConnectDeps());
+      const result = await callTool(client, MCP_TOOL_DELETE_TRANSCRIPTION, {
+        id: 7,
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content).toEqual([
+        { type: "text", text: "转录记录不存在" },
+      ]);
+    });
+
+    it("app not running: isError with the actionable bridge message (writes REQUIRE the running app)", async () => {
+      freshTmp();
+      // No discovery files — the single-writer principle means the tool
+      // cannot fulfil a delete without the app.
+      const { client } = await makeSession(makeConnectDeps());
+      const result = await callTool(client, MCP_TOOL_DELETE_TRANSCRIPTION, {
+        id: 42,
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content).toEqual([
+        { type: "text", text: expect.stringContaining("应用可能未运行") },
+      ]);
     });
   });
 });
