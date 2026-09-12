@@ -83,14 +83,16 @@
       "permissions": "Permissions",
       "language": "Language",
       "about": "About Murmur",
-      "bot": "Bot"
+      "bot": "Bot",
+      "templates": "Templates"
     },
     "sidebar": {
       "general": "General",
       "permissions": "Permissions",
       "ai": "AI Config",
       "about": "About",
-      "bot": "Bot"
+      "bot": "Bot",
+      "templates": "Templates"
     },
     "general": {
       "alwaysOnTopDesc": "Keep the app window on top",
@@ -298,6 +300,32 @@
         "shy": "Shy",
         "jaded": "Jaded",
         "drowsy": "Drowsy"
+      }
+    },
+    "templates": {
+      "nameLabel": "Template name",
+      "namePlaceholder": "Enter a template name",
+      "contentLabel": "Template content",
+      "placeholderHint": "Available placeholders: {text} (transcript), {output_lang} (output language), {speakers} (one line per speaker). {speakers} renders empty when the request has no speaker data.",
+      "shadowWarning": "This name matches a built-in mode: saving will override the built-in prompt. Delete the template or restore the default to revert.",
+      "restoreDefault": "Restore default",
+      "delete": "Delete template",
+      "deleteFailed": "Failed to delete template",
+      "saveFailed": "Failed to save template",
+      "saveThrottled": "Saving too frequently. One retry will run automatically in a moment.",
+      "frontmatterWarning": "Saved, but the content has no frontmatter (---\\nname: template-name\\n---). Without frontmatter the template will not appear in the mode list.",
+      "loadFailed": "Failed to load templates",
+      "builtinLabels": {
+        "optimize": "Smart Polish",
+        "optimize_long": "Long-form Cleanup",
+        "format": "Format",
+        "correct": "Proofread",
+        "summarize": "Summarize",
+        "enhance": "Enhance",
+        "xiaohongshu": "Xiaohongshu Style",
+        "zhihu": "Zhihu Style",
+        "douyin": "Douyin Style",
+        "de-ai": "De-AI"
       }
     }
   },

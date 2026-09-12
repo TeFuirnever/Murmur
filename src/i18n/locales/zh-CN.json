@@ -83,14 +83,16 @@
       "permissions": "权限管理",
       "language": "语言",
       "about": "关于 Murmur",
-      "bot": "Bot 吉祥物"
+      "bot": "Bot 吉祥物",
+      "templates": "模板"
     },
     "sidebar": {
       "general": "通用",
       "permissions": "权限",
       "ai": "AI 配置",
       "about": "关于",
-      "bot": "Bot 吉祥物"
+      "bot": "Bot 吉祥物",
+      "templates": "模板"
     },
     "general": {
       "alwaysOnTopDesc": "将应用窗口保持在最前面",
@@ -298,6 +300,32 @@
         "shy": "害羞",
         "jaded": "厌倦",
         "drowsy": "瞌睡"
+      }
+    },
+    "templates": {
+      "nameLabel": "模板名称",
+      "namePlaceholder": "输入模板名称",
+      "contentLabel": "模板内容",
+      "placeholderHint": "可用占位符：{text}（转写原文）、{output_lang}（输出语言）、{speakers}（说话人分行）；当请求没有说话人数据时 {speakers} 渲染为空。",
+      "shadowWarning": "该名称与内置模式相同：保存后会覆盖内置提示词，删除或恢复默认即可还原。",
+      "restoreDefault": "恢复默认",
+      "delete": "删除模板",
+      "deleteFailed": "模板删除失败",
+      "saveFailed": "模板保存失败",
+      "saveThrottled": "保存过于频繁，稍后将自动重试一次。",
+      "frontmatterWarning": "已保存，但内容缺少 frontmatter（---\\nname: 模板名\\n---）。缺少 frontmatter 的模板不会出现在模式列表中。",
+      "loadFailed": "模板列表加载失败",
+      "builtinLabels": {
+        "optimize": "智能润色",
+        "optimize_long": "长文本整理",
+        "format": "格式化",
+        "correct": "校对纠错",
+        "summarize": "摘要总结",
+        "enhance": "内容优化",
+        "xiaohongshu": "小红书风格",
+        "zhihu": "知乎风格",
+        "douyin": "抖音风格",
+        "de-ai": "去AI化"
       }
     }
   },

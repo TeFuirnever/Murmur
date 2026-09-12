@@ -1,13 +1,15 @@
 import type React from "react";
-import { Settings, Shield, Bot, Info, Sparkles } from "lucide-react";
+import { Settings, Shield, Bot, Info, Sparkles, FileText } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 // [20260905_Feat_BloubSettings] "bot" section added (spec #224 ticket 5)
+// [20260912_Feat_242_TemplateSystem] "templates" section added (spec #193 T15)
 export type SettingsSection =
   | "general"
   | "bot"
   | "permissions"
   | "ai"
+  | "templates"
   | "about";
 
 interface SettingsSidebarProps {
@@ -25,6 +27,8 @@ const SECTIONS: {
   { id: "bot", icon: Sparkles, labelKey: "settings.sidebar.bot" },
   { id: "permissions", icon: Shield, labelKey: "settings.sidebar.permissions" },
   { id: "ai", icon: Bot, labelKey: "settings.sidebar.ai" },
+  // [20260912_Feat_242_TemplateSystem] template editor section
+  { id: "templates", icon: FileText, labelKey: "settings.sidebar.templates" },
   { id: "about", icon: Info, labelKey: "settings.sidebar.about" },
 ];
 
@@ -36,6 +40,7 @@ const sectionLabelFallbacks: Record<SettingsSection, string> = {
   bot: "Bot", // [20260905_Feat_BloubSettings]
   permissions: "Permissions",
   ai: "AI Config",
+  templates: "Templates", // [20260912_Feat_242_TemplateSystem]
   about: "About",
 };
 
