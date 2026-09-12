@@ -58,6 +58,10 @@ export default tseslint.config(
       "preload.ts",
       "tests/**/*.{js,ts}",
       "scripts/**/*.js",
+      // [20260912_Feat_CliSkeleton] the murmur CLI is plain ESM .mjs
+      // (zero deps, runs under ELECTRON_RUN_AS_NODE) — same node-globals
+      // treatment as scripts/*.js.
+      "cli/**/*.mjs",
       "src/helpers/**/*.{js,ts}",
       "src/utils/**/*.{js,ts}",
     ],

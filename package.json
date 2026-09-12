@@ -3,6 +3,9 @@
   "version": "1.5.1",
   "description": "Murmur - 基于FunASR和可配置AI模型的中文优化语音转文字应用",
   "main": "dist-main/main.js",
+  "bin": {
+    "murmur": "cli/murmur.mjs"
+  },
   "private": true,
   "scripts": {
     "start": "electron .",
@@ -41,8 +44,8 @@
     "typecheck": "tsc --noEmit",
     "typecheck:tests": "tsc --noEmit -p tsconfig.test.json",
     "typecheck:e2e": "tsc --noEmit -p tsconfig.e2e.json",
-    "format": "prettier --write \"*.{js,json,md,yml}\" \"src/**/*.{js,jsx,ts,tsx,css}\" \"tests/**/*.{js,ts}\" \"scripts/**/*.js\"",
-    "format:check": "prettier --check \"*.{js,json,md,yml}\" \"src/**/*.{js,jsx,ts,tsx,css}\" \"tests/**/*.{js,ts}\" \"scripts/**/*.js\"",
+    "format": "prettier --write \"*.{js,json,md,yml}\" \"src/**/*.{js,jsx,ts,tsx,css}\" \"tests/**/*.{js,ts}\" \"scripts/**/*.js\" \"cli/**/*.mjs\"",
+    "format:check": "prettier --check \"*.{js,json,md,yml}\" \"src/**/*.{js,jsx,ts,tsx,css}\" \"tests/**/*.{js,ts}\" \"scripts/**/*.js\" \"cli/**/*.mjs\"",
     "license:check": "license-checker --failOn \"GPL-*;AGPL-*\" --excludePrivatePackages",
     "ci:check": "node scripts/ci-check.js",
     "ci:fix": "node scripts/ci-check.js --fix",
@@ -135,6 +138,7 @@
     "files": [
       "dist-main/main.js",
       "dist-preload/preload.js",
+      "cli/**/*.mjs",
       "funasr_server.py",
       "audio_preprocessing.py",
       "download_models.py",
