@@ -13,6 +13,11 @@ dist/
 build/
 out/
 dist-preload/
+# [20260912_Feat_267_BridgeTranscribe] Explicit: the CLI's bundled TS client
+# kernel (build:cli output). Redundant with the unanchored `dist/` pattern
+# above today; kept self-documenting so anchoring that pattern never leaks
+# the bundle into git.
+cli/dist/
 
 # Environment variables
 .env

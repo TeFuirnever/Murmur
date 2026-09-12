@@ -280,6 +280,10 @@ async function main() {
   // [20260724_TS_BigBang_BuildPipeline] END
   const stage2a = run("pnpm run build:preload", "build:preload");
   printResult(stage2a);
+  // [20260912_Feat_267_BridgeTranscribe] Validate the CLI bridge-client
+  // bundle locally, matching CI workflows (packaging reads cli/dist).
+  const stage2cli = run("pnpm run build:cli", "build:cli");
+  printResult(stage2cli);
   // [20260905_Fix_CoverageForwarding] pnpm 11 forwards `--` LITERALLY to the
   // script (verified: `pnpm test -- --coverage` runs `vitest run -- --coverage`,
   // which vitest treats as file filters — coverage silently never ran and the

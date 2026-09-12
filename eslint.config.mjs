@@ -10,6 +10,10 @@ export default tseslint.config(
       "dist/",
       "dist-main/",
       "dist-preload/",
+      // [20260912_Feat_267_BridgeTranscribe] Generated bundle (build:cli
+      // output of src/helpers/localChannel/client.ts) — same treatment as
+      // the other build outputs above; generated code is never linted.
+      "cli/dist/",
       "node_modules/",
       "src/dist/",
       "src/node_modules/",

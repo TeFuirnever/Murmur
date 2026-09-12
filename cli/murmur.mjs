@@ -24,7 +24,12 @@ function isElectronRuntime() {
   return process.versions.electron !== undefined;
 }
 
-function main() {
+// [20260912_Feat_267_BridgeTranscribe] main is async now: the bridge
+// subcommands (status/transcribe) resolve over the running app's local
+// channel, so runCli returns a Promise for them. Progress lines are
+// forwarded to stderr as they arrive via the stderrWrite sink; the final
+// result is still written once, exactly as before.
+async function main() {
   if (isElectronRuntime() && !process.env.ELECTRON_RUN_AS_NODE) {
     process.stderr.write(
       "murmur: refusing to run inside the Electron GUI runtime. " +
@@ -36,11 +41,14 @@ function main() {
   // fileURLToPath (not URL.pathname): pathname yields "/C:/..." on Windows.
   const cliDir = path.dirname(fileURLToPath(import.meta.url));
   const version = resolveCliVersion(cliDir);
-  const result = runCli(process.argv.slice(2), { version });
+  const result = await runCli(process.argv.slice(2), {
+    version,
+    stderrWrite: (chunk) => process.stderr.write(chunk),
+  });
 
   if (result.stdout) process.stdout.write(result.stdout);
   if (result.stderr) process.stderr.write(result.stderr);
   process.exit(result.code);
 }
 
-main();
+void main();
