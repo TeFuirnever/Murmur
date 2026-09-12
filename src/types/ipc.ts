@@ -104,6 +104,10 @@ export interface TranscriptionUpdateResult {
   // refreshed record's manual-edit flag (SQLite INTEGER 0/1) echoed back so
   // the edit-save caller can observe the persisted mark.
   manually_edited?: number;
+  // [20260912_Fix_322_AutoUpdateGuard] Ticket #322: true when the T2
+  // skipWhenManuallyEdited guard skipped the write (a success no-op — the
+  // user's manual edit won); the auto path falls back to the raw text.
+  skipped?: boolean;
   error?: string;
 }
 

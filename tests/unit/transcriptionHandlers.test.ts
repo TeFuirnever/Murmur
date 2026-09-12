@@ -276,7 +276,13 @@ describe("transcriptionHandlers", () => {
 
       const patch = { processed_text: "润色后", text: "润色后" };
       const result = (await handler({}, 42, patch)) as HandlerResult;
-      expect(mockDb.updateTranscription).toHaveBeenCalledWith(42, patch);
+      // [20260912_Fix_322_AutoUpdateGuard] The handler forwards the (absent)
+      // options slot too — the auto path relies on this pass-through.
+      expect(mockDb.updateTranscription).toHaveBeenCalledWith(
+        42,
+        patch,
+        undefined,
+      );
       expect(result.success).toBe(true);
     });
 
@@ -323,6 +329,59 @@ describe("transcriptionHandlers", () => {
       expect(result.success).toBe(true);
       expect(result.manually_edited).toBe(1);
       expect(result.text).toBe("编辑后的文本");
+    });
+
+    // [20260912_Fix_322_AutoUpdateGuard] Ticket #322: the auto-polish
+    // write-back rides this channel, so caller options (the T2
+    // skipWhenManuallyEdited seam) MUST reach the DB-layer guard.
+    it("forwards the skipWhenManuallyEdited option to the DB layer", async () => {
+      const C = await setup();
+      const handler = registeredHandlers.get(C.TRANSCRIPTION.UPDATE)!;
+
+      const patch = { processed_text: "润色后", text: "润色后" };
+      await handler({}, 42, patch, { skipWhenManuallyEdited: true });
+      expect(mockDb.updateTranscription).toHaveBeenCalledWith(42, patch, {
+        skipWhenManuallyEdited: true,
+      });
+    });
+
+    // [20260912_Fix_322_AutoUpdateGuard] A skipped guard outcome is a
+    // success no-op (the user's manual edit won), NOT a missing row — the
+    // handler must report skipped + the refreshed flag instead of the
+    // 转录记录不存在 error the changes===0 path produces.
+    it("reports skipped (not missing-row) when the DB guard skips a manually-edited row", async () => {
+      mockDb.updateTranscription!.mockReturnValueOnce({
+        changes: 0,
+        lastInsertRowid: 0,
+        skipped: true,
+      });
+      mockDb.getTranscriptionById!.mockReturnValue({
+        id: 42,
+        text: "用户编辑的文本",
+        processed_text: "用户编辑的文本",
+        raw_text: "原始识别",
+        manually_edited: 1,
+      });
+      const C = await setup();
+      const handler = registeredHandlers.get(C.TRANSCRIPTION.UPDATE)!;
+
+      const result = (await handler(
+        {},
+        42,
+        { processed_text: "润色后" },
+        {
+          skipWhenManuallyEdited: true,
+        },
+      )) as {
+        success: boolean;
+        skipped?: boolean;
+        manually_edited?: number;
+        error?: string;
+      };
+      expect(result.success).toBe(true);
+      expect(result.skipped).toBe(true);
+      expect(result.manually_edited).toBe(1);
+      expect(result.error).toBeUndefined();
     });
   });
 

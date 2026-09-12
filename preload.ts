@@ -121,8 +121,14 @@ export const preloadApi: ElectronAPI = {
     ipcRenderer.invoke(C.TRANSCRIPTION.DELETE, id),
   // [20260906_Feat_TranscriptionUpdate] Manual polish write-back (spec #193
   // T1, ticket #228): persist polished text into the saved record.
-  updateTranscription: (id: number, patch: Record<string, unknown>) =>
-    ipcRenderer.invoke(C.TRANSCRIPTION.UPDATE, id, patch),
+  // [20260912_Fix_322_AutoUpdateGuard] Ticket #322: options (the T2
+  // skipWhenManuallyEdited seam) ride the UPDATE channel so the auto-polish
+  // write-back can never clobber a manually edited record.
+  updateTranscription: (
+    id: number,
+    patch: Record<string, unknown>,
+    options?: { skipWhenManuallyEdited?: boolean },
+  ) => ipcRenderer.invoke(C.TRANSCRIPTION.UPDATE, id, patch, options),
   clearAllTranscriptions: () => ipcRenderer.invoke(C.TRANSCRIPTION.CLEAR),
   diarizeAudio: (id: number) => ipcRenderer.invoke(C.TRANSCRIPTION.DIARIZE, id),
 
