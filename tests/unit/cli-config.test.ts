@@ -11,25 +11,36 @@ import path from "node:path";
 import { runCli } from "../../cli/lib/cliRunner.mjs";
 import { CONFIG_KEYS, isConfigKey } from "../../cli/lib/configKeys.mjs";
 import { readConfig } from "../../cli/lib/configStore.mjs";
-// [20260912_Feat_CliSkeleton] ALLOWED_SETTING_KEYS is exported for the CLI
-// boundary (the single permitted src/ change for this ticket).
-import {
-  validateSetting,
-  ALLOWED_SETTING_KEYS,
-} from "../../src/helpers/ipc/settingsHandlers";
+// [20260912_Fix_264_ConfigWhitelistScope] Parity target is fileConfig's
+// FILE_CONFIGURABLE_KEYS (what murmur.json actually honors), not the IPC
+// settings allowlist — see cli/lib/configKeys.mjs for the rationale.
+import { validateSetting } from "../../src/helpers/ipc/settingsHandlers";
+import { FILE_CONFIGURABLE_KEYS } from "../../src/helpers/fileConfig";
 
 describe("cli config whitelist parity", () => {
-  it("CONFIG_KEYS mirrors ALLOWED_SETTING_KEYS exactly (both directions)", () => {
-    expect(new Set(CONFIG_KEYS)).toEqual(ALLOWED_SETTING_KEYS);
+  // [20260912_Fix_264_ConfigWhitelistScope] The CLI list must equal the
+  // file-config whitelist in BOTH directions: writing a key outside it
+  // would be silently ignored by the app, and missing a key inside it
+  // would strand a configurable in GUI-only land.
+  it("CONFIG_KEYS mirrors FILE_CONFIGURABLE_KEYS exactly (both directions)", () => {
+    expect(new Set(CONFIG_KEYS)).toEqual(new Set(FILE_CONFIGURABLE_KEYS));
     // Duplicate-free mirror: same cardinality as the set.
-    expect(CONFIG_KEYS.length).toBe(ALLOWED_SETTING_KEYS.size);
+    expect(CONFIG_KEYS.length).toBe(FILE_CONFIGURABLE_KEYS.length);
+  });
+
+  // [20260912_Fix_264_ConfigWhitelistScope] Secret hygiene lock: the
+  // decrypted AI key must NEVER be CLI-configurable into the plaintext
+  // murmur.json (fileConfig excludes it by design).
+  it("never exposes the ai_api_key secret through the config subcommand", () => {
+    expect(isConfigKey("ai_api_key")).toBe(false);
   });
 
   it("isConfigKey agrees with validateSetting's key check for every CLI key", () => {
     for (const key of CONFIG_KEYS) {
       expect(isConfigKey(key)).toBe(true);
-      // Same key accepted by the IPC settings boundary (any string value
-      // passes its length check).
+      // Every file-configurable key is also legal at the IPC settings
+      // boundary (superset property; any string value passes its length
+      // check).
       expect(validateSetting(key, "x")).toBe(true);
     }
   });
