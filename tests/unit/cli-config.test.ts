@@ -237,6 +237,6 @@ describe("cli config set value-length cap (IPC boundary parity)", () => {
       configPath,
     });
     expect(result.code).toBe(0);
-    expect(readConfig(configPath).theme).toBe("x".repeat(10000));
+    expect(readConfig(configPath)).toEqual({ theme: "x".repeat(10000) });
   });
 });
