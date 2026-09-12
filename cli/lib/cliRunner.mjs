@@ -16,6 +16,7 @@
 //   murmur status | transcribe <file> [--diarize] [--save]
 //   murmur polish <text> [--mode <mode>]          (ticket #268)
 //   murmur history delete <id> [--yes]            (ticket #268)
+//   murmur mcp                                    (ticket #269)
 import {
   resolveConfigPath,
   resolveDatabasePath,
@@ -74,6 +75,11 @@ Usage:
                                        app (ticket #268; the GUI reflects the
                                        deletion on its next read). Non-interactive
                                        shells must pass --yes.
+  murmur mcp                           Start the MCP server over stdio
+                                       (ticket #269). stdout carries ONLY MCP
+                                       protocol frames; diagnostics go to
+                                       stderr. The process exits when the MCP
+                                       client disconnects (stdin closes).
 
 Global options:
   --json                               Structured JSON output on stdout
@@ -644,6 +650,67 @@ async function runHistoryDelete(argv, ctx) {
 }
 // [20260912_Feat_268_BridgePolishHistory] END
 
+// [20260912_Feat_269_McpServer] --- murmur mcp (ticket #269) ---
+// Starts the MCP stdio server. Like channelBridge.mjs loads the bundled TS
+// client kernel, this loads the bundled MCP server module
+// (cli/dist/mcpServer.mjs, built from src/helpers/mcp/mcpServer.ts by
+// `pnpm run build:mcp`) and hands it a `connect` factory built on
+// connectChannelBridge — so endpoint/token discovery and the exit-4-style
+// classification stay in ONE place (channelBridge.mjs) and the MCP module
+// stays pure tool/transport logic. A missing bundle is a build problem
+// (exit 1), mirroring the channelClient.mjs handling.
+
+// esbuild bundle of src/helpers/mcp/mcpServer.ts (see build:mcp).
+const MCP_SERVER_BUNDLE_URL = new URL("../dist/mcpServer.mjs", import.meta.url);
+
+async function loadMcpServerModule() {
+  try {
+    // .href is already a valid file:// URL (built from import.meta.url).
+    return await import(MCP_SERVER_BUNDLE_URL.href);
+  } catch {
+    throw new Error(
+      "MCP 服务器模块缺失：未找到 cli/dist/mcpServer.mjs，" +
+        "请运行 pnpm run build:mcp 重新构建后再试",
+    );
+  }
+}
+
+async function runMcp(argv, ctx) {
+  const parsed = parseArgs(argv, new Set());
+  if (parsed.unknown) return usageError(`mcp: unknown flag ${parsed.unknown}`);
+  if (parsed.positionals.length > 0)
+    return usageError("mcp: unexpected extra arguments");
+
+  let mcpModule;
+  try {
+    mcpModule = await loadMcpServerModule();
+  } catch (error) {
+    return runtimeError("mcp", error.message);
+  }
+
+  // Resolves when the MCP client disconnects (stdin EOF). runMcpStdio never
+  // writes to stdout itself — stdout carries protocol frames only; startup
+  // diagnostics flow through the stderr sink below.
+  const exitCode = await mcpModule.runMcpStdio({
+    connect: () =>
+      connectChannelBridge({
+        env: ctx.env,
+        platform: ctx.platform,
+        homedir: ctx.homedir,
+      }),
+    version: ctx.version || undefined,
+    log: (chunk) => {
+      if (ctx.stderrWrite) {
+        ctx.stderrWrite(chunk);
+      } else {
+        ctx.stderrChunks.push(chunk);
+      }
+    },
+  });
+  return { code: exitCode, stdout: "", stderr: ctx.stderrChunks.join("") };
+}
+// [20260912_Feat_269_McpServer] END
+
 /**
  * Run one CLI invocation. argv excludes the node/electron and script paths.
  *
@@ -742,6 +809,15 @@ export function runCli(argv, options = {}) {
     );
   }
   // [20260912_Feat_268_BridgePolishHistory] END
+  // [20260912_Feat_269_McpServer] `murmur mcp` (ticket #269) is an async
+  // long-running command: it returns a Promise resolving when the MCP
+  // client disconnects (stdin EOF), with the same { code, stdout, stderr }
+  // result shape as the other bridge commands.
+  if (command === "mcp") {
+    return /** @type {{ code: number, stdout: string, stderr: string }} */ (
+      runMcp(dispatch.slice(1), ctx)
+    );
+  }
   if (command !== "config" && command !== "history") {
     return usageError(`unknown command: ${command}`);
   }

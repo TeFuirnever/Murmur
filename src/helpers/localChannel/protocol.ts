@@ -61,6 +61,14 @@ export const ERR_NOT_CONNECTED = "local-channel-not-connected";
 
 /** The two endpoints the channel exposes. */
 export const METHOD_TRANSCRIBE_FILE = "transcribe_file";
+// [20260912_Feat_269_McpServer] transcribe_file params shape (ticket #269):
+//   { audioPath: string, options?: Record<string, unknown>,
+//     persist?: boolean }
+// `persist` is the opt-out switch for the server-side DB write: when
+// explicitly false, the transcription runs but is NOT saved to history
+// (the MCP tool's save=false default); absent or true persists exactly as
+// before (GUI/CLI behavior unchanged). Omitting the field keeps the wire
+// frames of pre-#269 clients byte-identical.
 export const METHOD_STATUS = "status";
 // [20260912_Feat_268_BridgePolishHistory] Two more channel methods (ticket
 // #268): `polish` runs the GUI-identical polish orchestrator in-process

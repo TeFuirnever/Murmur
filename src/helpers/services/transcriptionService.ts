@@ -264,6 +264,13 @@ export async function transcribeFileService(
   audioPath: string,
   options: Record<string, unknown> = {},
   onProgress?: (progress: unknown) => void,
+  // [20260912_Feat_269_McpServer] Opt-out persistence switch (ticket #269):
+  // the MCP `transcribe_file` tool must NOT write history unless the caller
+  // explicitly asks for it (save=true), so the tool can honestly advertise
+  // itself as non-persisting by default. Default is UNDEFINED → persist,
+  // which keeps every existing caller (IPC handlers, CLI channel traffic)
+  // byte-identical to the previous always-persist behavior.
+  persist?: boolean,
 ): Promise<unknown> {
   const { funasrManager, databaseManager, logger } = deps;
   const validation = validateAudioPath(audioPath);
@@ -295,7 +302,12 @@ export async function transcribeFileService(
   // raw_text / segments), keep the pre-clean original for the DB.
   applyTranscriptionCleaning(result, logger);
 
-  if (result.success && result.text) {
+  // [20260912_Feat_269_McpServer] The persist block is now conditional
+  // (ticket #269): `persist !== false` keeps the default-true behavior for
+  // every pre-existing caller; only an explicit persist=false (the MCP
+  // tool's save=false default) skips the DB write entirely — the
+  // transcription result itself is unaffected either way.
+  if (result.success && result.text && persist !== false) {
     try {
       // [20260819_T10_CleanerWiring] original_text is added by
       // applyTranscriptionCleaning; read it through the typed view.

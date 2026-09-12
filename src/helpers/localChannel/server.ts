@@ -59,10 +59,15 @@ import {
 
 /** Endpoint implementations the channel exposes (injected for tests). */
 export interface ChannelServices {
+  // [20260912_Feat_269_McpServer] 4th param `persist` (ticket #269): the
+  // transcribe_file request's opt-out switch for the server-side DB write
+  // (undefined/true = persist as before, false = transcribe without
+  // saving). Optional so pre-#269 service bags keep compiling.
   transcribeFile(
     audioPath: string,
     options: Record<string, unknown>,
     onProgress?: (progress: unknown) => void,
+    persist?: boolean,
   ): Promise<unknown>;
   checkEngineStatus(): Promise<unknown>;
   // [20260912_Feat_268_BridgePolishHistory] Ticket #268 endpoints. Optional
@@ -440,11 +445,29 @@ class LocalChannelServerImpl implements LocalChannelServer {
           return;
         }
         const options = isRecord(params.options) ? params.options : {};
+        // [20260912_Feat_269_McpServer] Persist passthrough (ticket #269):
+        // shape-enforce the optional flag (only boolean is meaningful — a
+        // garbage value is a protocol error, same mold as invalid-frame),
+        // then hand it to the service. undefined keeps the default-true
+        // persist behavior of every pre-#269 client.
+        let persist: boolean | undefined;
+        if (params.persist !== undefined) {
+          if (typeof params.persist !== "boolean") {
+            this.writeFrame(socket, { id, error: "invalid-frame" });
+            return;
+          }
+          persist = params.persist;
+        }
         await this.runRequest(socket, id, () =>
-          this.services.transcribeFile(audioPath, options, (progress) => {
-            // Long tasks stream progress frames before the result frame.
-            this.writeFrame(socket, { id, progress } satisfies ProgressFrame);
-          }),
+          this.services.transcribeFile(
+            audioPath,
+            options,
+            (progress) => {
+              // Long tasks stream progress frames before the result frame.
+              this.writeFrame(socket, { id, progress } satisfies ProgressFrame);
+            },
+            persist,
+          ),
         );
         return;
       }
@@ -657,8 +680,18 @@ export async function startLocalChannel(
   // [20260912_Fix_268_Review] Wording lives in historyService (single
   // source) so CLI and GUI errors stay identical for the same condition.
   const channelServices: ChannelServices = {
-    transcribeFile: (audioPath, options, onProgress) =>
-      transcribeFileService(transcribeDeps, audioPath, options, onProgress),
+    // [20260912_Feat_269_McpServer] Thread the request's persist flag
+    // through to the service (ticket #269): undefined keeps the default
+    // persist behavior for CLI/GUI traffic; false transcribes without
+    // saving (the MCP tool's save=false default).
+    transcribeFile: (audioPath, options, onProgress, persist) =>
+      transcribeFileService(
+        transcribeDeps,
+        audioPath,
+        options,
+        onProgress,
+        persist,
+      ),
     checkEngineStatus: () => checkEngineStatusService(statusDeps),
   };
   if (aiPolish) {
