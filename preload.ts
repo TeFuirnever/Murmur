@@ -108,6 +108,19 @@ export const preloadApi: ElectronAPI = {
   getAIProviderPresets: () => ipcRenderer.invoke(C.AI.GET_PROVIDER_PRESETS),
   detectLocalModels: () => ipcRenderer.invoke(C.AI.DETECT_LOCAL_MODELS),
 
+  // [20260912_Feat_242_TemplateSystem] Ticket #242 (spec #193 T15): custom
+  // template editor — name+content only, never a client-supplied path.
+  // [20260912_Fix_242_ReviewRound2] READ/SAVE/DELETE take the on-disk
+  // fileName returned by LIST (a bare filename, still sanitized main-side).
+  listTemplates: () => ipcRenderer.invoke(C.TEMPLATES.LIST),
+  readTemplate: (fileName: string) =>
+    ipcRenderer.invoke(C.TEMPLATES.READ, fileName),
+  saveTemplate: (fileName: string, content: string) =>
+    ipcRenderer.invoke(C.TEMPLATES.SAVE, fileName, content),
+  deleteTemplate: (fileName: string) =>
+    ipcRenderer.invoke(C.TEMPLATES.DELETE, fileName),
+  // [20260912_Feat_242_TemplateSystem] END
+
   // Clipboard operations
   pasteText: (text: string) => ipcRenderer.invoke(C.CLIPBOARD.PASTE, text),
   copyText: (text: string) => ipcRenderer.invoke(C.CLIPBOARD.COPY, text),

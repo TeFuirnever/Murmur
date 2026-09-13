@@ -68,6 +68,41 @@ export interface LocalModelDetection {
   models: string[];
 }
 
+// [20260912_Feat_242_TemplateSystem] Ticket #242 (spec #193 T15): custom
+// template editor results. Only NAME+CONTENT cross the IPC boundary — the
+// main process derives the on-disk filename through the templatesService
+// sanitizer, so no result carries (and no request may carry) a path.
+// [20260912_Fix_242_ReviewRound2] A file's frontmatter name can diverge
+// from its stem, so LIST carries the ON-DISK fileName and READ/SAVE/
+// DELETE key off that fileName (still a bare filename — never a path).
+export interface TemplateMeta {
+  name: string;
+  label: string;
+  fileName: string;
+}
+
+export interface TemplateListResult {
+  success: boolean;
+  templates: TemplateMeta[];
+  error?: string;
+}
+
+export interface TemplateReadResult {
+  success: boolean;
+  content?: string;
+  error?: string;
+}
+
+export interface TemplateSaveResult {
+  success: boolean;
+  fileName?: string;
+  // [20260912_Fix_242_ReviewRound2] "missing_frontmatter": the file was
+  // written but will never appear as a mode until frontmatter is added.
+  warning?: string;
+  error?: string;
+}
+// [20260912_Feat_242_TemplateSystem] END
+
 // ─── Transcription ───
 
 export interface TranscriptionRecord {

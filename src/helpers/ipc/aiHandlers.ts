@@ -161,6 +161,18 @@ function getCachedTemplates(templatesDir: string): PromptTemplate[] {
   return templates;
 }
 
+// [20260912_Feat_242_TemplateSystem] Ticket #242 (spec #193 T15): the
+// 30s TTL cache above is module-level ON PURPOSE — it is shared across
+// the three windows. A template save/delete (templateHandlers) must be
+// visible immediately in GET_MODES and in the next polish run, so the
+// write path calls this invalidator AFTER a successful filesystem
+// mutation. Resetting to the initial (dir=null, time=0) state forces the
+// next getCachedTemplates call to reload from disk.
+export function invalidateTemplateCache(): void {
+  templateCache = { dir: null, time: 0, templates: [] };
+}
+// [20260912_Feat_242_TemplateSystem] END
+
 export function getAIModes(templatesDir: string): AIMode[] {
   const custom = getCachedTemplates(templatesDir);
   const customNames = new Set(custom.map((t) => t.name));

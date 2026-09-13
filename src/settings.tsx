@@ -21,6 +21,8 @@ import { GeneralSection } from "./settings/sections/GeneralSection";
 import { BotSection } from "./settings/sections/BotSection";
 import { PermissionsSection } from "./settings/sections/PermissionsSection";
 import { AIConfigSection } from "./settings/sections/AIConfigSection";
+// [20260912_Feat_242_TemplateSystem] Ticket #242 (spec #193 T15)
+import { TemplatesSection } from "./settings/sections/TemplatesSection";
 import { AboutSection } from "./settings/sections/AboutSection";
 
 const sectionTitles: Record<SettingsSection, string> = {
@@ -28,6 +30,7 @@ const sectionTitles: Record<SettingsSection, string> = {
   bot: "settings.sections.bot", // [20260905_Feat_BloubSettings]
   permissions: "settings.sections.permissions",
   ai: "settings.sections.ai",
+  templates: "settings.sections.templates", // [20260912_Feat_242_TemplateSystem]
   about: "settings.sections.about",
 };
 
@@ -38,6 +41,7 @@ const sectionTitleDefaults: Record<SettingsSection, string> = {
   bot: "Bot", // [20260905_Feat_BloubSettings]
   permissions: "Permissions",
   ai: "AI Configuration",
+  templates: "Templates", // [20260912_Feat_242_TemplateSystem]
   about: "About Murmur",
 };
 
@@ -179,6 +183,10 @@ const SettingsPage = () => {
                   saving={saving}
                   showQuickStart={showQuickStart}
                 />
+              )}
+              {activeSection === "templates" && (
+                // [20260912_Feat_242_TemplateSystem] custom-template editor
+                <TemplatesSection />
               )}
               {activeSection === "about" && (
                 <AboutSection

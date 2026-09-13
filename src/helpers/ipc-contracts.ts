@@ -89,6 +89,18 @@ export const SETTINGS = {
   GET_ALL: "get-all-settings",
 } as const;
 
+// [20260912_Feat_242_TemplateSystem] Ticket #242 (spec #193 T15): custom
+// template CRUD for the settings-page editor. Only NAME+CONTENT cross the
+// boundary — never a client-supplied path; the main process derives the
+// on-disk filename through templatesService's sanitizer.
+export const TEMPLATES = {
+  LIST: "templates-list",
+  READ: "templates-read",
+  SAVE: "templates-save",
+  DELETE: "templates-delete",
+} as const;
+// [20260912_Feat_242_TemplateSystem] END
+
 export const WINDOW = {
   HIDE: "hide-window",
   MINIMIZE: "minimize-window",
