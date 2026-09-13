@@ -306,3 +306,33 @@ describe("[20260912_Feat_242_TemplateSystem] templateHandlers", () => {
     expect(optimize!.label).toBe("智能润色");
   });
 });
+
+// [20260912_Fix_242_CoverageFloor] Covers the lazy-require fallback branch
+// (register without templatesDir in the bag → <mock userData>/templates).
+// The per-glob branch floor for src/helpers/ipc/** (92%) is otherwise
+// violated by this small file's uncovered fallback arc.
+describe("templatesDir fallback resolution", () => {
+  afterEach(() => {
+    delete process.env.ELECTRON_USER_DATA;
+  });
+
+  it("registers handlers with the env-resolved userData templates dir", async () => {
+    const userData = fs.mkdtempSync(path.join(os.tmpdir(), "murmur-242-env-"));
+    process.env.ELECTRON_USER_DATA = userData;
+    const { handlers } = captureHandlers(
+      templateHandlers.register as unknown as (
+        ipcMain: never,
+        managers: never,
+      ) => void,
+      { logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } },
+    );
+    // LIST on a nonexistent dir returns an honest empty list (readonly open
+    // never creates anything).
+    const result = (await handlers[C.TEMPLATES.LIST]!()) as {
+      success: boolean;
+      templates: unknown[];
+    };
+    expect(result.success).toBe(true);
+    expect(result.templates).toEqual([]);
+  });
+});

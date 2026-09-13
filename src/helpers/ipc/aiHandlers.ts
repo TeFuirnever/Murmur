@@ -2,7 +2,6 @@
 // `module.exports = { register, processTextWithAI, ... }` (named) became
 // named exports. Lazy require("electron") for templatesDir kept as require
 // (import is hoisted; the lazy require defers electron load to call time).
-import path from "path";
 import * as C from "../ipc-contracts";
 import { buildPrompt, loadCustomTemplates } from "../aiPrompts";
 import type { PromptTemplate } from "../aiPrompts";
@@ -40,6 +39,7 @@ import {
 // service (type-only imports in the reverse direction are erased).
 import {
   createStreamAbortRegistry,
+  fetchWithGuardedRedirects,
   isLocalBaseUrl,
   listProviderModels,
   processPolishText,
@@ -223,6 +223,16 @@ interface ChatCompletionRequest {
   stream?: boolean;
 }
 
+// [20260912_Sec_319_SsrfHardening] Ticket #319 item 4 — named constants for
+// the bare timeout literals in the AI fetch paths. Verified against the
+// ticket's premise: there is NO bare 10s literal in aiHandlers — the 10s
+// already lives named as LIST_MODELS_TIMEOUT_MS in aiService.ts. The literals
+// that DID remain bare in the PROCESS/status fetch paths are named here.
+const AI_REQUEST_TIMEOUT_LOCAL_MS = 180_000;
+const AI_REQUEST_TIMEOUT_REMOTE_MS = 150_000;
+const AI_STATUS_CHECK_TIMEOUT_MS = 15_000;
+// [20260912_Sec_319_SsrfHardening] END
+
 async function postChatCompletion(
   baseUrl: string,
   apiKey: string | undefined,
@@ -249,14 +259,34 @@ async function postChatCompletion(
     ? AbortSignal.any([controller.signal, externalSignal])
     : controller.signal;
 
+  // [20260912_Sec_319_SsrfHardening] The local-gateway exception is pinned
+  // to THIS request's base URL once — never recomputed per hop, so a public
+  // https endpoint cannot hop the request into a localhost/intranet service.
+  const allowLocalGateway = isLocalBaseUrl(baseUrl);
+
   let response: Response;
   try {
-    response = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-      signal,
-    });
+    // [20260912_Sec_319_SsrfHardening] Ticket #319: the PROCESS fetch follows
+    // redirects through the shared per-hop gate (fetchWithGuardedRedirects).
+    // Every 3xx hop is re-validated before following and cross-origin hops
+    // drop the Authorization header; the helper consumes all hops BEFORE
+    // returning, so the streaming consumption below only ever sees the
+    // terminal (non-redirect) response. Blocked hops throw
+    // AiRedirectBlockedError, which is not an AbortError — it falls through
+    // to the orchestrator's generic error mapping untouched.
+    response = await fetchWithGuardedRedirects(
+      `${baseUrl}/chat/completions`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+        signal,
+      },
+      {
+        validate: (hopUrl) =>
+          validateAIBaseUrl(hopUrl, { allowLocalhost: allowLocalGateway }),
+      },
+    );
   } catch (fetchError) {
     clearTimeout(timeoutId);
     if (externalSignal?.aborted) {
@@ -1100,7 +1130,11 @@ export async function runPolishOrchestrator(
       return settleAside(pendingOutcome);
     }
 
-    const timeoutMs = request.timeout || (isLocal ? 180_000 : 150_000);
+    // [20260912_Sec_319_SsrfHardening] Bare 180s/150s literals named (#319
+    // item 4).
+    const timeoutMs =
+      request.timeout ||
+      (isLocal ? AI_REQUEST_TIMEOUT_LOCAL_MS : AI_REQUEST_TIMEOUT_REMOTE_MS);
     // [20260910_Feat_237_StreamDegradation] T10: one deadline shared by the
     // streaming attempt AND its degradation retry — a slow-then-4xx gateway
     // must not double the user's wait. (Also serves the tagged retry below:
@@ -1481,7 +1515,8 @@ export async function checkAIStatus(
       baseUrl,
       apiKey,
       requestData,
-      15_000,
+      // [20260912_Sec_319_SsrfHardening] Bare 15s literal named (#319 item 4).
+      AI_STATUS_CHECK_TIMEOUT_MS,
       "请求超时，请检查网络连接",
     );
 
@@ -1569,16 +1604,13 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
   // abort/supersession without a window; this is the same per-registration
   // instance the old `streamAbortTargets` map provided.
   const streamAbortRegistry = createStreamAbortRegistry();
-  const templatesDir =
-    managers.templatesDir ||
-    (() => {
-      // [20260724_TS_BigBang_LazyRequire] Lazy require("electron") — import is
-      // hoisted and would load electron at module init, but this is only needed
-      // when register() is called in the Electron main process.
-      const { app } = require("electron");
-      return path.join(app.getPath("userData"), "templates");
-    })();
-  // [20260724_TS_BigBang_LazyRequire] END
+  // [20260912_Sec_319_SsrfHardening] Resolution order aligned with
+  // [20260912_Fix_272_ReviewCritical] templatesDir comes from the managers
+  // bag — main.ts (the only production caller) passes it explicitly, so no
+  // lazy require("electron") fallback exists (structurally untestable in
+  // unit coverage; its absence makes the per-glob branch floor
+  // deterministic across platforms). See templateHandlers' twin comment.
+  const templatesDir = managers.templatesDir;
 
   ipcMain.handle(
     C.AI.PROCESS,
@@ -1601,7 +1633,10 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
         {
           databaseManager,
           logger,
-          templatesDir,
+          // [20260912_Fix_272_ReviewCritical] No dir configured (headless
+          // embedder) → no custom templates exist; "" yields the same empty
+          // custom list the UI already sees.
+          templatesDir: templatesDir ?? "",
           runPolish: runPolishOrchestrator,
         },
         streamAbortRegistry,
@@ -1669,7 +1704,9 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
   );
 
   ipcMain.handle(C.AI.GET_MODES, async () => {
-    return getAIModes(templatesDir);
+    // [20260912_Fix_272_ReviewCritical] "" → built-ins only (no custom
+    // templates can exist without a configured dir).
+    return getAIModes(templatesDir ?? "");
   });
 
   ipcMain.handle(C.AI.GET_PROVIDER_PRESETS, async () => {
