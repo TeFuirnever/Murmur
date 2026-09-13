@@ -110,6 +110,18 @@ function isPrivateNetwork(host: string): boolean {
   return false;
 }
 
+// [20260912_Sec_319_SsrfHardening] DNS rebinding TOCTOU — explicitly NOT
+// closed by this gate. Hostname TEXT validation (this function) and fetch's
+// actual DNS resolution are two separate operations separated in time: a
+// hostile resolver can answer the check with a public IP and the connect
+// with an intranet IP (DNS rebinding TOCTOU), and every hop re-validation
+// below inherits the same gap. Full closure requires pinning the resolved
+// IP at connect time — an undici custom dispatcher/Agent configured with
+// `connect: { lookup }` that re-checks the address the resolver returns
+// before the socket opens. That work is deliberately deferred (ticket #319
+// closes the redirect/follow + response-cap primitives only). This gate is
+// therefore a hostname-text filter, not a rebinding fix; do not treat it
+// as one.
 export function validateAIBaseUrl(
   baseUrl: string,
   { allowLocalhost = false }: { allowLocalhost?: boolean } = {},
@@ -143,6 +155,115 @@ export function isLocalBaseUrl(baseUrl: string): boolean {
   }
 }
 // [20260912_Refactor_262_AiHistoryService] END
+
+// [20260912_Sec_319_SsrfHardening] Ticket #319: guarded redirect following
+// for every AI-channel fetch. PRODUCT DECISION (maintainer delegate, verbatim):
+// redirect policy = MANUAL FOLLOW WITH PER-HOP RE-VALIDATION. A blanket
+// redirect-reject was rejected because legitimate providers/gateways
+// sometimes 302 API endpoints (would break real users); manual per-hop
+// re-validation preserves them while closing the intranet-probe hole.
+// Cross-origin hops drop the Authorization header before following.
+//
+// Mechanism: fetch runs with `redirect: "manual"` — in Node/Electron-main
+// (undici) this returns each 3xx response UNFILTERED (real status + Location
+// header, verified empirically), so this loop consumes and re-dispatches
+// every hop BEFORE returning the final Response. Callers' streaming logic
+// is unchanged: they only ever see the terminal (non-redirect) response.
+
+/** A redirect hop was blocked by the SSRF policy or the hop budget. */
+export class AiRedirectBlockedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AiRedirectBlockedError";
+  }
+}
+
+/** A provider response exceeded the size cap enforced before parsing. */
+export class AiResponseTooLargeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AiResponseTooLargeError";
+  }
+}
+
+/** Maximum redirects followed per request; further hops are blocked. */
+export const MAX_REDIRECT_HOPS = 3;
+
+// Redirect statuses we follow. 301/302/308 preserve method+body; 303 is
+// followed as-is too (both AI call sites keep their original method — the
+// body re-send to a validated target is the accepted policy).
+const REDIRECT_STATUSES: ReadonlySet<number> = new Set([
+  301, 302, 303, 307, 308,
+]);
+
+// User-facing block reasons. The blocked-target detail is the HOST only —
+// never the full URL with its query string (it may carry provider params).
+const REDIRECT_BLOCKED_MESSAGE = "重定向目标被安全策略拒绝";
+const REDIRECT_HOPS_EXCEEDED_MESSAGE = "重定向次数超限";
+
+/** Clone the request init minus the Authorization header (cross-origin hop). */
+function dropAuthorizationHeader(init: RequestInit): RequestInit {
+  const headers = new Headers(init.headers);
+  headers.delete("authorization");
+  return { ...init, headers };
+}
+
+export interface GuardedRedirectOptions {
+  /**
+   * SSRF predicate re-run on every resolved hop URL. Callers pin the
+   * local-gateway exception to the ORIGINAL request's locality — never
+   * recompute it from the hop target, or a public https endpoint could
+   * redirect the request into a localhost service.
+   */
+  validate: (url: string) => boolean;
+  maxRedirects?: number;
+}
+
+/**
+ * fetch() that follows 301/302/303/307/308 manually, re-validating every
+ * hop through `validate` and dropping Authorization across origins. The
+ * returned Response is the terminal (non-redirect) response.
+ */
+export async function fetchWithGuardedRedirects(
+  url: string,
+  init: RequestInit,
+  options: GuardedRedirectOptions,
+): Promise<Response> {
+  const maxRedirects = options.maxRedirects ?? MAX_REDIRECT_HOPS;
+  let currentUrl = url;
+  let currentInit = init;
+  let followed = 0;
+  for (;;) {
+    const response = await fetch(currentUrl, {
+      ...currentInit,
+      redirect: "manual",
+    });
+    if (!REDIRECT_STATUSES.has(response.status)) {
+      return response;
+    }
+    if (followed >= maxRedirects) {
+      throw new AiRedirectBlockedError(REDIRECT_HOPS_EXCEEDED_MESSAGE);
+    }
+    const location = response.headers?.get?.("location");
+    if (!location) {
+      // A 3xx without Location cannot be followed; hand it back unchanged
+      // (callers map it through their normal non-OK handling).
+      return response;
+    }
+    const resolved = new URL(location, currentUrl);
+    if (!options.validate(resolved.toString())) {
+      throw new AiRedirectBlockedError(
+        `${REDIRECT_BLOCKED_MESSAGE}：${resolved.hostname}`,
+      );
+    }
+    if (new URL(currentUrl).origin !== resolved.origin) {
+      currentInit = dropAuthorizationHeader(currentInit);
+    }
+    followed += 1;
+    currentUrl = resolved.toString();
+  }
+}
+// [20260912_Sec_319_SsrfHardening] END
 
 // [20260912_Refactor_262_AiHistoryService] requestId → AbortController
 // registry, moved from the `streamAbortTargets` map inside
@@ -329,9 +450,65 @@ function modelEndpointCandidates(baseUrl: string): string[] {
 // manual-input path (ticket #233: 非法即静默回退手输).
 const MODELS_MAX_ITEMS = 500;
 const MODELS_MAX_ID_BYTES = 200;
-const MODELS_MAX_BODY_BYTES = 512 * 1024;
 // [20260908_Fix_BatchReview_M8] Named per the no-magic-numbers rule.
 const LIST_MODELS_TIMEOUT_MS = 10_000;
+
+// [20260912_Sec_319_SsrfHardening] Ticket #319: the LIST_MODELS response cap
+// moves from a post-read Buffer.byteLength check to a STREAMING accumulate-
+// with-cap read. A hostile gateway can stream an unbounded body — buffering
+// all of it just to measure it afterwards is the memory amplification this
+// closes. Three arms, in order:
+//   1. content-length declared above the cap → rejected BEFORE any body read;
+//   2. a body stream is available → accumulate with the cap, abort the
+//      reader on overflow (never drain the remainder just to discard it);
+//   3. no body stream (legacy test-double Responses without .body) → full
+//      text read, cap checked after (byte-identical to the pre-#319 arm).
+// Overflow throws AiResponseTooLargeError; listProviderModels maps it to the
+// silent body_too_large degradation (the ticket #233 renderer contract) —
+// the throw stays the single enforcement point (exported for direct tests:
+// listProviderModels cannot observe the throw, it only sees the mapped
+// result).
+export const LIST_MODELS_MAX_RESPONSE_BYTES = 512 * 1024;
+const MODELS_BODY_TOO_LARGE_MESSAGE = "模型列表响应超过大小上限";
+
+export async function readBodyWithByteCap(
+  response: Response,
+  maxBytes: number,
+): Promise<string> {
+  // Arm 1 — declared size known up front: reject without reading.
+  const declaredLength = Number(
+    response.headers?.get?.("content-length") ?? "",
+  );
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+    throw new AiResponseTooLargeError(MODELS_BODY_TOO_LARGE_MESSAGE);
+  }
+  // Arm 2 — stream the body with a running byte cap.
+  const reader = response.body?.getReader?.();
+  if (reader) {
+    const decoder = new TextDecoder();
+    let receivedBytes = 0;
+    let text = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      receivedBytes += value.byteLength;
+      if (receivedBytes > maxBytes) {
+        // Abort the upstream read — never drain an oversized remainder.
+        await reader.cancel();
+        throw new AiResponseTooLargeError(MODELS_BODY_TOO_LARGE_MESSAGE);
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+    return text + decoder.decode();
+  }
+  // Arm 3 — degraded shape without a readable stream.
+  const raw = await response.text();
+  if (Buffer.byteLength(raw) > maxBytes) {
+    throw new AiResponseTooLargeError(MODELS_BODY_TOO_LARGE_MESSAGE);
+  }
+  return raw;
+}
+// [20260912_Sec_319_SsrfHardening] END
 
 export interface ListProviderModelsDeps {
   databaseManager: {
@@ -371,10 +548,23 @@ export async function listProviderModels(
   for (let i = 0; i < candidates.length; i++) {
     const candidateUrl = candidates[i]!;
     try {
-      const response = await fetch(candidateUrl, {
-        headers,
-        signal: AbortSignal.timeout(LIST_MODELS_TIMEOUT_MS),
-      });
+      // [20260912_Sec_319_SsrfHardening] Ticket #319: redirects are followed
+      // manually through the shared per-hop gate. The local-gateway exception
+      // is pinned to THIS request's base URL (never recomputed from the hop
+      // target), so a public https endpoint cannot hop into a localhost or
+      // intranet service. Blocked hops throw AiRedirectBlockedError, which
+      // propagates (a security block is not a fetch failure to retry).
+      const response = await fetchWithGuardedRedirects(
+        candidateUrl,
+        {
+          headers,
+          signal: AbortSignal.timeout(LIST_MODELS_TIMEOUT_MS),
+        },
+        {
+          validate: (hopUrl) =>
+            validateAIBaseUrl(hopUrl, { allowLocalhost: isLocal }),
+        },
+      );
       if (response.status === 404 && i < candidates.length - 1) {
         continue;
       }
@@ -385,10 +575,13 @@ export async function listProviderModels(
           models: [],
         };
       }
-      const raw = await response.text();
-      if (Buffer.byteLength(raw) > MODELS_MAX_BODY_BYTES) {
-        return { success: false, reason: "body_too_large", models: [] };
-      }
+      // [20260912_Sec_319_SsrfHardening] Streaming accumulate-with-cap read;
+      // overflow throws AiResponseTooLargeError (mapped to the silent
+      // body_too_large degradation in the catch below).
+      const raw = await readBodyWithByteCap(
+        response,
+        LIST_MODELS_MAX_RESPONSE_BYTES,
+      );
       const parsed = JSON.parse(raw) as {
         data?: Array<{ id?: unknown }>;
       };
@@ -414,6 +607,16 @@ export async function listProviderModels(
       }
       return { success: true, models };
     } catch (error) {
+      // [20260912_Sec_319_SsrfHardening] Named #319 errors are NOT network
+      // failures and must not degrade to fetch_failed: a redirect block is a
+      // security event that propagates to the caller; the size cap degrades
+      // silently (reason: body_too_large) per the ticket #233 contract.
+      if (error instanceof AiRedirectBlockedError) {
+        throw error;
+      }
+      if (error instanceof AiResponseTooLargeError) {
+        return { success: false, reason: "body_too_large", models: [] };
+      }
       // A failed candidate on the two-candidate path falls through to
       // the /v1 retry; on the last candidate it degrades to the manual
       // input path (silent, per ticket #233).

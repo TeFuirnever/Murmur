@@ -8,10 +8,17 @@
 // tests/unit/list-models.test.ts.
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { MINIMAL_EDIT_MODES } from "../../src/helpers/polish-diff";
+// [20260912_Sec_319_SsrfHardening] Ticket #319: guarded redirect following +
+// streaming LIST_MODELS response cap under test.
 import {
+  AiRedirectBlockedError,
+  AiResponseTooLargeError,
+  LIST_MODELS_MAX_RESPONSE_BYTES,
+  MAX_REDIRECT_HOPS,
   createStreamAbortRegistry,
   listProviderModels,
   processPolishText,
+  readBodyWithByteCap,
   validateAIBaseUrl,
   type PolishRunResult,
   type ProcessPolishTextDeps,
@@ -317,5 +324,239 @@ describe("aiService — listProviderModels (LIST_MODELS seam)", () => {
     expect(
       validateAIBaseUrl("http://127.0.0.1:11434/v1", { allowLocalhost: true }),
     ).toBe(true);
+  });
+});
+
+// [20260912_Sec_319_SsrfHardening] Ticket #319: guarded redirect following
+// (manual follow with per-hop re-validation) and the streaming LIST_MODELS
+// response cap. Redirects are scripted with REAL Response objects (Node's
+// Response constructor accepts 3xx statuses and a Location header); the cap
+// arms use a stub for the content-length pre-read rejection and real
+// ReadableStream bodies for the streaming arms.
+
+function redirectResponse(location: string, status = 302): Response {
+  return new Response(null, { status, headers: { Location: location } });
+}
+
+function modelsJsonResponse(ids: string[]): Response {
+  return new Response(JSON.stringify({ data: ids.map((id) => ({ id })) }), {
+    status: 200,
+  });
+}
+
+describe("aiService — #319 fetchWithGuardedRedirects via listProviderModels", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("blocks a redirect to a private URL and never issues the follow-up request", async () => {
+    const fetchMock = vi.fn(async () =>
+      redirectResponse("https://10.0.0.1/v1/models?key=secret"),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { deps } = makeDeps();
+    const error = await listProviderModels(
+      deps,
+      "https://api.example.com/v1",
+    ).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(AiRedirectBlockedError);
+    expect((error as Error).message).toContain("重定向目标被安全策略拒绝");
+    // The blocked HOST is surfaced, never the full URL (query may carry
+    // provider parameters).
+    expect((error as Error).message).toContain("10.0.0.1");
+    expect((error as Error).message).not.toContain("https://");
+    expect((error as Error).message).not.toContain("key=secret");
+    // The provider/gatekeeper saw exactly one request — the follow-up was
+    // never dispatched.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("follows a 2-hop public chain and preserves Authorization on same-origin hops", async () => {
+    const fetchMock = vi.fn(async (url: string, _init?: RequestInit) => {
+      if (url === "https://api.example.com/v1/models") {
+        return redirectResponse("https://api.example.com/v1/models-hop1");
+      }
+      if (url === "https://api.example.com/v1/models-hop1") {
+        return redirectResponse("https://api.example.com/v1/models-final");
+      }
+      return modelsJsonResponse(["m-1"]);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { deps } = makeDeps();
+    const result = await listProviderModels(
+      deps,
+      "https://api.example.com/v1",
+      "k",
+    );
+    expect(result).toEqual({ success: true, models: ["m-1"] });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    // Same-origin hop: the Authorization header survives.
+    const hopInit = fetchMock.mock.calls[1]![1] as { headers: Headers };
+    expect(new Headers(hopInit.headers).get("authorization")).toBe("Bearer k");
+    const finalInit = fetchMock.mock.calls[2]![1] as { headers: Headers };
+    expect(new Headers(finalInit.headers).get("authorization")).toBe(
+      "Bearer k",
+    );
+  });
+
+  it("drops Authorization on a cross-origin hop but keeps it on same-origin hops", async () => {
+    const fetchMock = vi.fn(async (url: string, _init?: RequestInit) => {
+      if (url === "https://api.example.com/v1/models") {
+        return redirectResponse("https://api.example.com/v1/models-step");
+      }
+      if (url === "https://api.example.com/v1/models-step") {
+        return redirectResponse("https://mirror.example.com/v1/models-final");
+      }
+      return modelsJsonResponse(["m-2"]);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { deps } = makeDeps();
+    const result = await listProviderModels(
+      deps,
+      "https://api.example.com/v1",
+      "k",
+    );
+    expect(result).toEqual({ success: true, models: ["m-2"] });
+    // Hop 2 was same-origin: Authorization still present.
+    const sameOriginInit = fetchMock.mock.calls[1]![1] as { headers: Headers };
+    expect(new Headers(sameOriginInit.headers).get("authorization")).toBe(
+      "Bearer k",
+    );
+    // Hop 3 crossed origins: Authorization dropped before following.
+    const crossOriginInit = fetchMock.mock.calls[2]![1] as { headers: Headers };
+    expect(
+      new Headers(crossOriginInit.headers).get("authorization"),
+    ).toBeNull();
+  });
+
+  it("blocks the 4th redirect hop with 重定向次数超限", async () => {
+    const fetchMock = vi.fn(async (url: string, _init?: RequestInit) => {
+      const hop = Number(new URL(url).searchParams.get("hop") ?? "0");
+      return redirectResponse(
+        `https://api.example.com/v1/models?hop=${hop + 1}`,
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { deps } = makeDeps();
+    const error = await listProviderModels(
+      deps,
+      "https://api.example.com/v1",
+    ).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(AiRedirectBlockedError);
+    expect((error as Error).message).toContain("重定向次数超限");
+    // Initial request + exactly MAX_REDIRECT_HOPS followed hops.
+    expect(fetchMock).toHaveBeenCalledTimes(1 + MAX_REDIRECT_HOPS);
+  });
+
+  it("hands back a 3xx without Location unchanged (mapped to http_302)", async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 302 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { deps } = makeDeps();
+    const result = await listProviderModels(deps, "https://api.example.com/v1");
+    expect(result).toEqual({
+      success: false,
+      reason: "http_302",
+      models: [],
+    });
+  });
+
+  it("exports the #319 constants with the ticket-mandated values", () => {
+    expect(MAX_REDIRECT_HOPS).toBe(3);
+    expect(LIST_MODELS_MAX_RESPONSE_BYTES).toBe(512 * 1024);
+    expect(new AiRedirectBlockedError("x").name).toBe("AiRedirectBlockedError");
+    expect(new AiResponseTooLargeError("x").name).toBe(
+      "AiResponseTooLargeError",
+    );
+  });
+});
+
+describe("aiService — #319 LIST_MODELS response-body cap", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("rejects on a content-length above the cap BEFORE any body read", async () => {
+    // The stub Response is cast: only the fields readBodyWithByteCap reads
+    // are present, and `text` is a spy proving no body byte was pulled.
+    const textSpy = vi.fn(async () => "");
+    const oversized = {
+      ok: true,
+      status: 200,
+      headers: new Headers({
+        "content-length": String(LIST_MODELS_MAX_RESPONSE_BYTES + 1),
+      }),
+      body: null,
+      text: textSpy,
+    };
+    const error = await readBodyWithByteCap(
+      oversized as unknown as Response,
+      LIST_MODELS_MAX_RESPONSE_BYTES,
+    ).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(AiResponseTooLargeError);
+    expect((error as Error).message).toContain("模型列表响应超过大小上限");
+    // No body byte was ever pulled.
+    expect(textSpy).not.toHaveBeenCalled();
+  });
+
+  it("aborts the reader and throws when the streaming body exceeds the cap", async () => {
+    let cancelled = false;
+    const oversizedChunk = new Uint8Array(LIST_MODELS_MAX_RESPONSE_BYTES + 1);
+    oversizedChunk.fill(0x78); // "x"
+    const stream = new ReadableStream<Uint8Array>({
+      // Deliberately left OPEN (a hostile unbounded gateway never closes
+      // the stream) — reader.cancel() only reaches the underlying source's
+      // cancel algorithm for an open stream.
+      start(controller) {
+        controller.enqueue(oversizedChunk);
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    const error = await readBodyWithByteCap(
+      new Response(stream, { status: 200 }),
+      LIST_MODELS_MAX_RESPONSE_BYTES,
+    ).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(AiResponseTooLargeError);
+    expect((error as Error).message).toContain("模型列表响应超过大小上限");
+    // The upstream read was aborted, not drained.
+    expect(cancelled).toBe(true);
+  });
+
+  it("reads a streaming body under the cap to completion", async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          new TextEncoder().encode(JSON.stringify({ data: [{ id: "m-1" }] })),
+        );
+        controller.close();
+      },
+    });
+    const raw = await readBodyWithByteCap(
+      new Response(stream, { status: 200 }),
+      LIST_MODELS_MAX_RESPONSE_BYTES,
+    );
+    expect(JSON.parse(raw)).toEqual({ data: [{ id: "m-1" }] });
+  });
+
+  it("still degrades silently (body_too_large) when the cap is exceeded", async () => {
+    // Legacy stub shape without a body stream: the cap maps to the
+    // ticket #233 silent-degradation result instead of a thrown error.
+    const oversized = {
+      ok: true,
+      status: 200,
+      text: async () => "x".repeat(LIST_MODELS_MAX_RESPONSE_BYTES + 1),
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => oversized),
+    );
+    const { deps } = makeDeps();
+    const result = await listProviderModels(deps, "https://api.example.com/v1");
+    expect(result).toEqual({
+      success: false,
+      reason: "body_too_large",
+      models: [],
+    });
   });
 });

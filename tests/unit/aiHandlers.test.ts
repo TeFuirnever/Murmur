@@ -2926,3 +2926,140 @@ describe("[20260911_Feat_241_LongTextChunking] T14 chunked polish", () => {
   });
   // [20260911_Fix_241_Review] END
 });
+
+// [20260912_Sec_319_SsrfHardening] Ticket #319: the PROCESS fetch follows
+// redirects ONLY through the shared per-hop gate (fetchWithGuardedRedirects).
+// Redirects are scripted with REAL Response objects — Node's Response
+// constructor accepts 3xx statuses and a Location header, and the gate reads
+// `status` + `headers.get("location")`, exactly what undici returns for
+// `redirect: "manual"` (verified: no opaqueredirect filtering).
+describe("[20260912_Sec_319_SsrfHardening] PROCESS-path redirect gating", () => {
+  const processTextWithAI = aiHandlersNS.processTextWithAI;
+  const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+
+  function mockScriptedFetch(
+    script: (url: string) => FetchResponseStub,
+  ): FetchMock {
+    const fn = vi.fn(async (input: unknown) =>
+      script(String(input)),
+    ) as unknown as FetchMock;
+    global.fetch = fn as unknown as typeof global.fetch;
+    return fn;
+  }
+
+  const BASE_URL = "https://api.openai.com/v1/chat/completions";
+
+  it("blocks a redirect to an intranet target and never re-dispatches", async () => {
+    const fetchMock = mockScriptedFetch(
+      () =>
+        new Response(null, {
+          status: 302,
+          headers: { Location: "https://10.0.0.1/v1/chat/completions" },
+        }),
+    );
+    const result = await processTextWithAI(
+      "原始文本",
+      "optimize",
+      setupDb(),
+      logger,
+    );
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("重定向目标被安全策略拒绝");
+    // The blocked HOST is surfaced, not the full target URL.
+    expect(result.error).toContain("10.0.0.1");
+    expect(result.error).not.toContain("https://");
+    // The follow-up request to the blocked target never happened.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("follows a same-origin redirect chain and keeps Authorization", async () => {
+    const fetchMock = mockScriptedFetch((url) => {
+      if (url === BASE_URL) {
+        return new Response(null, {
+          status: 302,
+          headers: { Location: `${BASE_URL}?hop=1` },
+        });
+      }
+      if (url === `${BASE_URL}?hop=1`) {
+        return new Response(null, {
+          status: 302,
+          headers: { Location: `${BASE_URL}?hop=2` },
+        });
+      }
+      return new Response(
+        JSON.stringify({ choices: [{ message: { content: "优化后文本" } }] }),
+        { status: 200 },
+      );
+    });
+    const result = await processTextWithAI(
+      "原始文本",
+      "optimize",
+      setupDb(),
+      logger,
+    );
+    expect(result.success).toBe(true);
+    expect(result.text).toBe("优化后文本");
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    // Both hops stayed on the request's origin: Authorization preserved.
+    for (const callIndex of [1, 2]) {
+      const init = fetchMock.mock.calls[callIndex]![1] as {
+        headers: HeadersInit;
+      };
+      expect(new Headers(init.headers).get("authorization")).toBe(
+        "Bearer test-key",
+      );
+    }
+  });
+
+  it("drops Authorization on a cross-origin redirect hop", async () => {
+    const fetchMock = mockScriptedFetch((url) => {
+      if (url === BASE_URL) {
+        return new Response(null, {
+          status: 302,
+          headers: {
+            Location: "https://mirror.example.com/v1/chat/completions",
+          },
+        });
+      }
+      return new Response(
+        JSON.stringify({ choices: [{ message: { content: "镜像文本" } }] }),
+        { status: 200 },
+      );
+    });
+    const result = await processTextWithAI(
+      "原始文本",
+      "optimize",
+      setupDb(),
+      logger,
+    );
+    expect(result.success).toBe(true);
+    expect(result.text).toBe("镜像文本");
+    // Hop 1 carries the credential; hop 2 crossed origins — it must not.
+    const firstInit = fetchMock.mock.calls[0]![1] as { headers: HeadersInit };
+    expect(new Headers(firstInit.headers).get("authorization")).toBe(
+      "Bearer test-key",
+    );
+    const secondInit = fetchMock.mock.calls[1]![1] as { headers: HeadersInit };
+    expect(new Headers(secondInit.headers).get("authorization")).toBeNull();
+  });
+
+  it("blocks the 4th redirect hop with 重定向次数超限", async () => {
+    const fetchMock = mockScriptedFetch((url) => {
+      const hop = Number(new URL(url).searchParams.get("hop") ?? "0");
+      return new Response(null, {
+        status: 302,
+        headers: { Location: `${BASE_URL}?hop=${hop + 1}` },
+      });
+    });
+    const result = await processTextWithAI(
+      "原始文本",
+      "optimize",
+      setupDb(),
+      logger,
+    );
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("重定向次数超限");
+    // Initial request + exactly 3 followed hops; the 4th redirect is blocked.
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+});
