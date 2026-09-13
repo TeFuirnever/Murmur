@@ -165,3 +165,89 @@ describe("settingsHandlers", () => {
     expect(result.ai_api_key).toBe(12345);
   });
 });
+
+// [20260912_Fix_270_CoverageFloor] Covers the stream-degradation memory
+// handlers (uncovered functions in src/helpers/ipc/** — the per-glob
+// functions floor needs their arms exercised). The streamDegradation
+// module is mocked so the arms are driven deterministically.
+const streamDegradationMocks = vi.hoisted(() => ({
+  list: vi.fn(),
+  reset: vi.fn(),
+}));
+vi.mock("../../src/helpers/streamDegradation", () => ({
+  listStreamDegradations: streamDegradationMocks.list,
+  resetStreamDegradations: streamDegradationMocks.reset,
+}));
+
+describe("stream-degradation memory handlers", () => {
+  // Self-contained harness: the outer describe's ipcMain/managers live in
+  // a sibling scope. Registration mirrors the outer describe's pattern.
+  let ipcMain: MockIpcMain;
+  let managers: MockManagers;
+
+  beforeEach(() => {
+    ipcMain = createMockIpcMain();
+    managers = {
+      databaseManager: {
+        getSetting: vi.fn(() => null),
+        setSetting: vi.fn(() => true),
+        getAllSettings: vi.fn(() => ({})),
+        syncToFileConfig: vi.fn(),
+      },
+      logger: { error: vi.fn() },
+    };
+    streamDegradationMocks.list.mockReset();
+    streamDegradationMocks.reset.mockReset();
+    register(
+      ipcMain as unknown as Parameters<typeof register>[0],
+      managers as unknown as Parameters<typeof register>[1],
+    );
+  });
+
+  function getDegHandler(channel: string): MockHandler | undefined {
+    return ipcMain._handlers[channel];
+  }
+
+  it("LIST answers success with the entries from the memory reader", async () => {
+    streamDegradationMocks.list.mockResolvedValue([
+      { base_url_hash: "h1", base_url: "https://x", failed_at: "t" },
+    ]);
+    const result = (await getDegHandler("stream-degradation-list")?.()) as {
+      success: boolean;
+      entries: unknown[];
+    };
+    expect(result.success).toBe(true);
+    expect(result.entries).toHaveLength(1);
+  });
+
+  it("LIST answers a failure envelope when the memory reader throws", async () => {
+    streamDegradationMocks.list.mockRejectedValue(new Error("db down"));
+    const result = (await getDegHandler("stream-degradation-list")?.()) as {
+      success: boolean;
+      entries: unknown[];
+      error?: string;
+    };
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("db down");
+  });
+
+  it("RESET answers success with the removed count", async () => {
+    streamDegradationMocks.reset.mockResolvedValue(3);
+    const result = (await getDegHandler("stream-degradation-reset")?.()) as {
+      success: boolean;
+      removed: number;
+    };
+    expect(result.success).toBe(true);
+    expect(result.removed).toBe(3);
+  });
+
+  it("RESET answers a failure envelope when the reset throws", async () => {
+    streamDegradationMocks.reset.mockRejectedValue(new Error("reset exploded"));
+    const result = (await getDegHandler("stream-degradation-reset")?.()) as {
+      success: boolean;
+      error?: string;
+    };
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("reset exploded");
+  });
+});

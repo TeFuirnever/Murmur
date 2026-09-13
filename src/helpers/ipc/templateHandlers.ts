@@ -32,17 +32,13 @@ interface Managers {
 
 export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
   const { logger } = managers;
-  // Same templatesDir resolution as aiHandlers.register: the managers bag
-  // wins; the fallback lazily resolves <userData>/templates so main.ts
-  // needs no new wiring.
-  const templatesDir =
-    managers.templatesDir ||
-    (() => {
-      // Lazy require("electron") — an import would be hoisted and load
-      // electron at module init (same pattern as aiHandlers).
-      const { app } = require("electron");
-      return `${app.getPath("userData")}/templates`;
-    })();
+  // [20260912_Fix_272_ReviewCritical] templatesDir comes from the managers
+  // bag — main.ts (the only production caller) passes it explicitly, so no
+  // lazy require("electron") fallback exists (that arc was structurally
+  // untestable in unit coverage and its absence makes the per-glob branch
+  // floor deterministic across platforms). Headless embedders that omit it
+  // get an honest empty template list from the service.
+  const templatesDir = managers.templatesDir;
 
   const deps = { templatesDir, logger };
 

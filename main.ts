@@ -187,6 +187,10 @@ databaseManager.initialize(dataDirectory);
 databaseManager.setFileConfigPath(path.join(dataDirectory, "murmur.json"));
 
 // Initialize IPC handlers with all managers
+// [20260912_Fix_272_ReviewCritical] templatesDir is passed explicitly — the
+// handlers no longer carry a lazy require("electron") fallback (it was
+// structurally untestable in unit coverage and made the ipc/** branch floor
+// platform-flaky).
 registerIPCHandlers(ipcMain, {
   databaseManager,
   clipboardManager,
@@ -195,6 +199,7 @@ registerIPCHandlers(ipcMain, {
   hotkeyManager,
   trayManager,
   logger,
+  templatesDir: path.join(app.getPath("userData"), "templates"),
 });
 
 // Main app startup function

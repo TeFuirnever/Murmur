@@ -32,7 +32,10 @@ export interface TemplatesServiceLogger {
 
 /** Deps bag every service function receives. */
 export interface TemplatesServiceDeps {
-  templatesDir: string;
+  // [20260912_Fix_272_ReviewCritical] Optional: headless embedders may omit
+  // the dir entirely (honest empty list / not-configured errors); main.ts,
+  // the only production caller, always provides it.
+  templatesDir?: string;
   logger?: TemplatesServiceLogger;
 }
 
@@ -160,6 +163,7 @@ export function sanitizeTemplateFileName(
  * list; over-cap and unparsable files are skipped with a warning log.
  */
 export function listTemplates(deps: TemplatesServiceDeps): TemplateMeta[] {
+  if (!deps.templatesDir) return [];
   if (!fs.existsSync(deps.templatesDir)) return [];
   const listed: TemplateMeta[] = [];
   for (const file of fs.readdirSync(deps.templatesDir)) {
@@ -201,6 +205,8 @@ export function readTemplate(
 ): ReadTemplateResult {
   const sanitized = sanitizeTemplateFileName(fileName);
   if (!sanitized.valid) return { success: false, error: sanitized.error };
+  // [20260912_Fix_272_ReviewCritical] Headless embedders may omit the dir.
+  if (!deps.templatesDir) return { success: false, error: "not_found" };
   const filePath = path.join(deps.templatesDir, sanitized.fileName);
   if (!fs.existsSync(filePath)) return { success: false, error: "not_found" };
   try {
@@ -241,6 +247,11 @@ export function saveTemplate(
   if (Buffer.byteLength(content, "utf-8") > TEMPLATE_MAX_CONTENT_BYTES) {
     return { success: false, error: "content_too_large" };
   }
+  // [20260912_Fix_272_ReviewCritical] No dir configured → refuse the write
+  // (never scatter files at an undefined location).
+  if (!deps.templatesDir) {
+    return { success: false, error: "templates_dir_not_configured" };
+  }
   try {
     fs.mkdirSync(deps.templatesDir, { recursive: true });
     const filePath = path.join(deps.templatesDir, sanitized.fileName);
@@ -275,6 +286,9 @@ export function deleteTemplate(
 ): DeleteTemplateResult {
   const sanitized = sanitizeTemplateFileName(fileName);
   if (!sanitized.valid) return { success: false, error: sanitized.error };
+  // [20260912_Fix_272_ReviewCritical] No dir configured → nothing was ever
+  // written there; report success (the requested end state already holds).
+  if (!deps.templatesDir) return { success: true };
   try {
     const filePath = path.join(deps.templatesDir, sanitized.fileName);
     if (fs.existsSync(filePath)) fs.rmSync(filePath);
