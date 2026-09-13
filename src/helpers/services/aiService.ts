@@ -250,7 +250,18 @@ export async function fetchWithGuardedRedirects(
       // (callers map it through their normal non-OK handling).
       return response;
     }
-    const resolved = new URL(location, currentUrl);
+    // [20260912_Sec_319_SsrfHardening_Review] Resolve defensively: a
+    // malformed Location is a redirect-path failure and shares the blocked
+    // error umbrella instead of leaking a raw TypeError into generic
+    // network-failure mapping.
+    let resolved: URL;
+    try {
+      resolved = new URL(location, currentUrl);
+    } catch {
+      throw new AiRedirectBlockedError(
+        `${REDIRECT_BLOCKED_MESSAGE}：Location 无法解析`,
+      );
+    }
     if (!options.validate(resolved.toString())) {
       throw new AiRedirectBlockedError(
         `${REDIRECT_BLOCKED_MESSAGE}：${resolved.hostname}`,
@@ -259,6 +270,9 @@ export async function fetchWithGuardedRedirects(
     if (new URL(currentUrl).origin !== resolved.origin) {
       currentInit = dropAuthorizationHeader(currentInit);
     }
+    // Stream hygiene: release the intermediate 3xx body before
+    // re-dispatching (typically empty, but the contract is explicit).
+    await response.body?.cancel().catch(() => {});
     followed += 1;
     currentUrl = resolved.toString();
   }
@@ -494,7 +508,9 @@ export async function readBodyWithByteCap(
       receivedBytes += value.byteLength;
       if (receivedBytes > maxBytes) {
         // Abort the upstream read — never drain an oversized remainder.
-        await reader.cancel();
+        // [20260912_Sec_319_SsrfHardening_Review] A cancel() rejection must
+        // not mask the cap error (it would drift the locked reason code).
+        await reader.cancel().catch(() => {});
         throw new AiResponseTooLargeError(MODELS_BODY_TOO_LARGE_MESSAGE);
       }
       text += decoder.decode(value, { stream: true });
