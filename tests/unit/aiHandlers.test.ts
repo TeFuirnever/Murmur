@@ -11,7 +11,6 @@ import { describe, it, expect, vi } from "vitest";
 import type { Mock } from "vitest";
 import fs from "fs";
 import path from "path";
-import os from "os"; // [20260912_Sec_319_SsrfHardening] tmp dir for the env-arc test below
 
 vi.mock("electron", () => ({
   app: {
@@ -3069,33 +3068,23 @@ describe("[20260912_Sec_319_SsrfHardening] PROCESS-path redirect gating", () => 
 // templatesDir resolution (bag → env → lazy require). Keep the AI handler
 // registration working when the managers bag carries no templatesDir and
 // the env var supplies the user-data root instead.
-describe("templatesDir env-arc resolution", () => {
-  it("resolves templatesDir from ELECTRON_USER_DATA when the bag omits it", async () => {
-    // os is not imported at this file's top level; derive a unique dir
-    // from the repo's existing fs import instead.
-    const userData = fs.mkdtempSync(path.join(os.tmpdir(), "aihandlers-env-"));
-    const previous = process.env.ELECTRON_USER_DATA;
-    process.env.ELECTRON_USER_DATA = userData;
-    try {
-      const ipcMain = { handle: vi.fn() };
-      const register = aiHandlersNS.register;
-      register(
-        ipcMain as never,
-        {
-          databaseManager: { getSetting: vi.fn(async () => null) },
-          logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-        } as never,
-      );
-      expect(ipcMain.handle).toHaveBeenCalledWith(
-        "process-text",
-        expect.any(Function),
-      );
-    } finally {
-      if (previous === undefined) {
-        delete process.env.ELECTRON_USER_DATA;
-      } else {
-        process.env.ELECTRON_USER_DATA = previous;
-      }
-    }
+describe("templatesDir bag-only resolution", () => {
+  // [20260912_Fix_272_ReviewCritical] Registration works with no
+  // templatesDir in the bag (headless embedder): GET_MODES answers with
+  // built-ins only because no custom templates dir is configured.
+  it("registers the AI handlers when the bag omits templatesDir", async () => {
+    const ipcMain = { handle: vi.fn() };
+    const register = aiHandlersNS.register;
+    register(
+      ipcMain as never,
+      {
+        databaseManager: { getSetting: vi.fn(async () => null) },
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      } as never,
+    );
+    expect(ipcMain.handle).toHaveBeenCalledWith(
+      "process-text",
+      expect.any(Function),
+    );
   });
 });

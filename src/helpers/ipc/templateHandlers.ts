@@ -32,18 +32,13 @@ interface Managers {
 
 export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
   const { logger } = managers;
-  // [20260912_Fix_242_CoverageFloor] Resolution order: managers bag →
-  // ELECTRON_USER_DATA env (main.ts sets it at boot; cli/lib/paths.mjs
-  // reads the same var — one convention) → lazy require("electron").
-  const templatesDir =
-    managers.templatesDir ||
-    process.env.ELECTRON_USER_DATA ||
-    (() => {
-      // Lazy require("electron") — an import would be hoisted and load
-      // electron at module init (same pattern as aiHandlers).
-      const { app } = require("electron");
-      return `${app.getPath("userData")}/templates`;
-    })();
+  // [20260912_Fix_272_ReviewCritical] templatesDir comes from the managers
+  // bag — main.ts (the only production caller) passes it explicitly, so no
+  // lazy require("electron") fallback exists (that arc was structurally
+  // untestable in unit coverage and its absence makes the per-glob branch
+  // floor deterministic across platforms). Headless embedders that omit it
+  // get an honest empty template list from the service.
+  const templatesDir = managers.templatesDir;
 
   const deps = { templatesDir, logger };
 

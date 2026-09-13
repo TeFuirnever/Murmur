@@ -2,7 +2,6 @@
 // `module.exports = { register, processTextWithAI, ... }` (named) became
 // named exports. Lazy require("electron") for templatesDir kept as require
 // (import is hoisted; the lazy require defers electron load to call time).
-import path from "path";
 import * as C from "../ipc-contracts";
 import { buildPrompt, loadCustomTemplates } from "../aiPrompts";
 import type { PromptTemplate } from "../aiPrompts";
@@ -1606,19 +1605,12 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
   // instance the old `streamAbortTargets` map provided.
   const streamAbortRegistry = createStreamAbortRegistry();
   // [20260912_Sec_319_SsrfHardening] Resolution order aligned with
-  // templateHandlers: managers bag → ELECTRON_USER_DATA env (main.ts sets
-  // it at boot; cli/lib/paths.mjs reads the same var) → lazy
-  // require("electron") as the final fallback.
-  const templatesDir =
-    managers.templatesDir ||
-    process.env.ELECTRON_USER_DATA ||
-    (() => {
-      // [20260724_TS_BigBang_LazyRequire] Lazy require("electron") — import is
-      // hoisted and would load electron at module init, but this is only needed
-      // when register() is called in the Electron main process.
-      const { app } = require("electron");
-      return path.join(app.getPath("userData"), "templates");
-    })();
+  // [20260912_Fix_272_ReviewCritical] templatesDir comes from the managers
+  // bag — main.ts (the only production caller) passes it explicitly, so no
+  // lazy require("electron") fallback exists (structurally untestable in
+  // unit coverage; its absence makes the per-glob branch floor
+  // deterministic across platforms). See templateHandlers' twin comment.
+  const templatesDir = managers.templatesDir;
 
   ipcMain.handle(
     C.AI.PROCESS,
@@ -1641,7 +1633,10 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
         {
           databaseManager,
           logger,
-          templatesDir,
+          // [20260912_Fix_272_ReviewCritical] No dir configured (headless
+          // embedder) → no custom templates exist; "" yields the same empty
+          // custom list the UI already sees.
+          templatesDir: templatesDir ?? "",
           runPolish: runPolishOrchestrator,
         },
         streamAbortRegistry,
@@ -1709,7 +1704,9 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
   );
 
   ipcMain.handle(C.AI.GET_MODES, async () => {
-    return getAIModes(templatesDir);
+    // [20260912_Fix_272_ReviewCritical] "" → built-ins only (no custom
+    // templates can exist without a configured dir).
+    return getAIModes(templatesDir ?? "");
   });
 
   ipcMain.handle(C.AI.GET_PROVIDER_PRESETS, async () => {
