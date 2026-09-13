@@ -32,11 +32,12 @@ interface Managers {
 
 export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
   const { logger } = managers;
-  // Same templatesDir resolution as aiHandlers.register: the managers bag
-  // wins; the fallback lazily resolves <userData>/templates so main.ts
-  // needs no new wiring.
+  // [20260912_Fix_242_CoverageFloor] Resolution order: managers bag →
+  // ELECTRON_USER_DATA env (main.ts sets it at boot; cli/lib/paths.mjs
+  // reads the same var — one convention) → lazy require("electron").
   const templatesDir =
     managers.templatesDir ||
+    process.env.ELECTRON_USER_DATA ||
     (() => {
       // Lazy require("electron") — an import would be hoisted and load
       // electron at module init (same pattern as aiHandlers).
