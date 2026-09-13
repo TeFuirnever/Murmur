@@ -3088,3 +3088,53 @@ describe("templatesDir bag-only resolution", () => {
     );
   });
 });
+
+// [20260912_Fix_319_CoverageLift] Covers the vocab-read catch arc inside the
+// polish path (listVocabCorrections throwing → warn + polish proceeds with
+// empty corrections). Self-contained: builds its own managers bag and fetch
+// mock shaped like the locked PROCESS happy-path tests above.
+describe("polish vocab-read failure arm (coverage lift #319)", () => {
+  it("logs the vocab failure and still completes the polish", async () => {
+    const ipcMain = { handle: vi.fn() };
+    const register = aiHandlersNS.register;
+    register(
+      ipcMain as never,
+      {
+        databaseManager: {
+          getSetting: vi.fn(async (key: string) =>
+            key === "ai_base_url"
+              ? "https://api.example.com/v1"
+              : key === "ai_api_key"
+                ? "sk"
+                : key === "ai_model"
+                  ? "gpt-x"
+                  : null,
+          ),
+          listVocabCorrections: vi.fn(() => {
+            throw new Error("vocab table locked");
+          }),
+        },
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      } as never,
+    );
+
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({ choices: [{ message: { content: "ok" } }] }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const processHandler = ipcMain.handle.mock.calls.find(
+      (call: unknown[]) => call[0] === "process-text",
+    )?.[1] as (event: unknown, text: string, mode: string) => Promise<unknown>;
+    expect(processHandler).toBeTypeOf("function");
+    const result = (await processHandler(
+      { sender: { id: 1 } },
+      "词汇注入失败也润色",
+      "optimize",
+    )) as Record<string, unknown>;
+    expect(result).toMatchObject({ success: true });
+  });
+});

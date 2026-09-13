@@ -12,6 +12,7 @@ import { MINIMAL_EDIT_MODES } from "../../src/helpers/polish-diff";
 // streaming LIST_MODELS response cap under test.
 import {
   AiRedirectBlockedError,
+  fetchWithGuardedRedirects,
   AiResponseTooLargeError,
   LIST_MODELS_MAX_RESPONSE_BYTES,
   MAX_REDIRECT_HOPS,
@@ -558,5 +559,48 @@ describe("aiService — #319 LIST_MODELS response-body cap", () => {
       reason: "body_too_large",
       models: [],
     });
+  });
+});
+
+// [20260912_Sec_319_SsrfHardening_Review] Review NITs promoted to locks:
+// (a) a malformed Location header shares the blocked-error umbrella instead
+// of leaking a raw TypeError; (b) the credential, once dropped on a
+// cross-origin hop, STAYS dropped on subsequent same-origin hops back to
+// the original origin (A→B→A).
+describe("guarded redirect — review invariants", () => {
+  it("keeps the credential dropped across a cross-origin then same-origin hop pair", async () => {
+    const seenAuths: Array<string | undefined> = [];
+    const fetchSpy = vi.fn(async (_input: unknown, init?: RequestInit) => {
+      seenAuths.push((init?.headers as Record<string, string>)?.Authorization);
+      const hop = seenAuths.length;
+      if (hop === 1) {
+        return new Response(null, {
+          status: 302,
+          headers: { location: "https://other.example.net/v1" },
+        });
+      }
+      if (hop === 2) {
+        return new Response(null, {
+          status: 302,
+          headers: { location: "https://api.example.com/v1/final" },
+        });
+      }
+      return new Response(JSON.stringify({ models: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as unknown as typeof global.fetch;
+    global.fetch = fetchSpy;
+
+    const result = await fetchWithGuardedRedirects(
+      "https://api.example.com/v1",
+      { headers: { Authorization: "Bearer sk-secret" } },
+      { validate: () => true, maxRedirects: 5 },
+    );
+    expect(result.status).toBe(200);
+    // Hop 1 legitimately carries the credential (it targets the original
+    // origin); every LATER hop must NOT re-introduce it after the
+    // cross-origin drop.
+    expect(seenAuths).toEqual(["Bearer sk-secret", undefined, undefined]);
   });
 });
