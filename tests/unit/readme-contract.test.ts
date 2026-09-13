@@ -42,60 +42,72 @@ function readRenderedRootFile(relativePath: string): string {
 
 describe("README contract", () => {
   describe("version pins (T1, Spec #299)", () => {
-    it("every Electron major mentioned in README matches package.json", () => {
-      const pkg = readPackageJson();
-      const electronRange =
-        pkg.devDependencies?.electron ?? pkg.dependencies?.electron;
-      expect(
-        electronRange,
-        "electron must be declared in package.json",
-      ).toBeDefined();
-      const expected = `Electron ${majorOf(electronRange ?? "")}`;
+    // [20260912_Docs_299_ReadmeP0] Since the bilingual split (T3) each
+    // language front door states the version facts independently, so a stale
+    // claim in either file must turn CI red — the pins now run per file
+    // instead of against README.md alone (ticket #299 batch 1).
+    const pinnedVersionFiles = ["README.md", "README.zh-CN.md"];
 
-      const readme = readRenderedRootFile("README.md");
-      const mentions = readme.match(/Electron\s+\d+(?:\.\d+)*/g) ?? [];
-      expect(
-        mentions.length,
-        "README tech-stack table must mention Electron",
-      ).toBeGreaterThan(0);
-      for (const mention of mentions) {
+    for (const file of pinnedVersionFiles) {
+      it(`${file}: every Electron major mentioned matches package.json`, () => {
+        const pkg = readPackageJson();
+        const electronRange =
+          pkg.devDependencies?.electron ?? pkg.dependencies?.electron;
         expect(
-          mention,
-          `stale Electron version in README (package.json says ${electronRange})`,
-        ).toBe(expected);
-      }
-    });
+          electronRange,
+          "electron must be declared in package.json",
+        ).toBeDefined();
+        const expected = `Electron ${majorOf(electronRange ?? "")}`;
 
-    it("Node.js floor stated in README matches package.json engines", () => {
-      const pkg = readPackageJson();
-      const enginesNode = pkg.engines?.node;
-      expect(
-        enginesNode,
-        "engines.node must be declared in package.json",
-      ).toBeDefined();
-      // engines ">=22.5" -> README states the same floor as "**Node.js** 22.5+"
-      const floor = enginesNode?.replace(/^>=?/, "") ?? "";
-
-      // All-mentions check (same design as the Electron pin): a stale floor
-      // anywhere in the document must fail, not just a missing correct one.
-      const readme = readRenderedRootFile("README.md");
-      const mentions = readme.match(/\*\*Node\.js\*\* \d+(?:\.\d+)*\+/g) ?? [];
-      expect(
-        mentions.length,
-        "README must state its Node.js floor at least once",
-      ).toBeGreaterThan(0);
-      for (const mention of mentions) {
+        const readme = readRenderedRootFile(file);
+        const mentions = readme.match(/Electron\s+\d+(?:\.\d+)*/g) ?? [];
         expect(
-          mention,
-          `stale Node.js floor in README (engines.node = ${enginesNode})`,
-        ).toBe(`**Node.js** ${floor}+`);
-      }
-    });
+          mentions.length,
+          "README tech-stack table must mention Electron",
+        ).toBeGreaterThan(0);
+        for (const mention of mentions) {
+          expect(
+            mention,
+            `stale Electron version in ${file} (package.json says ${electronRange})`,
+          ).toBe(expected);
+        }
+      });
+
+      it(`${file}: Node.js floor stated matches package.json engines`, () => {
+        const pkg = readPackageJson();
+        const enginesNode = pkg.engines?.node;
+        expect(
+          enginesNode,
+          "engines.node must be declared in package.json",
+        ).toBeDefined();
+        // engines ">=22.5" -> README states the same floor as "**Node.js** 22.5+"
+        const floor = enginesNode?.replace(/^>=?/, "") ?? "";
+
+        // All-mentions check (same design as the Electron pin): a stale floor
+        // anywhere in the document must fail, not just a missing correct one.
+        const readme = readRenderedRootFile(file);
+        const mentions =
+          readme.match(/\*\*Node\.js\*\* \d+(?:\.\d+)*\+/g) ?? [];
+        expect(
+          mentions.length,
+          "README must state its Node.js floor at least once",
+        ).toBeGreaterThan(0);
+        for (const mention of mentions) {
+          expect(
+            mention,
+            `stale Node.js floor in ${file} (engines.node = ${enginesNode})`,
+          ).toBe(`**Node.js** ${floor}+`);
+        }
+      });
+    }
   });
 
   describe("link integrity (T2, Spec #299)", () => {
     // T3 extended this list with README.zh-CN.md after the bilingual split.
-    const readmeFiles = ["README.md", "README.zh-CN.md"];
+    // [20260912_Docs_299_ReadmeP0] CONTRIBUTING.md added per ticket #299
+    // batch 1: its relative links (e.g. CODE_OF_CONDUCT.md) belong to the
+    // same in-repo link contract as the READMEs.
+    const readmeFiles = ["README.md", "README.zh-CN.md", "CONTRIBUTING.md"];
 
     function internalLinkTargets(markdown: string): string[] {
       const rendered = stripHtmlComments(markdown);

@@ -102,7 +102,7 @@ chore: 升级 Electron 到 v36
 
 - 测试框架：Vitest
 - 位置：`tests/unit/`
-- 覆盖率阈值：statements 97%、branches 90%、functions 100%、lines 98%
+- 覆盖率阈值：statements 88%、branches 83%、functions 88%、lines 89%（与 `vitest.config.ts` 一致，由契约测试看护漂移）
 - 修改代码后运行 `pnpm test` 确保不引入回归
 - 提交前运行 `pnpm ci:check` 确保所有门禁通过
 
@@ -163,7 +163,7 @@ pnpm ci:check --e2e    # 含 e2e（慢）
 pnpm lint && pnpm test # 快速迭代
 ```
 
-**覆盖率现状**：全 src/ 覆盖率 96.6% statements / 92.8% branches / 94.5% functions / 97.1% lines（2026-08-16，PR #166 达成）。此前的追赶路线图（55% → 70% → 80%）已完成并关闭。
+**覆盖率现状**：全 src/ 覆盖率约 95% statements（2026-09-13，含 MCP/CLI 套件后总用例 2700+）。实时数值以 `pnpm exec vitest run --coverage` 输出为准；阈值见上方与 `vitest.config.ts`。
 
 ## 架构概览
 
