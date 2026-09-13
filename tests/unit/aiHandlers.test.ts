@@ -11,6 +11,7 @@ import { describe, it, expect, vi } from "vitest";
 import type { Mock } from "vitest";
 import fs from "fs";
 import path from "path";
+import os from "os"; // [20260912_Sec_319_SsrfHardening] tmp dir for the env-arc test below
 
 vi.mock("electron", () => ({
   app: {
@@ -3061,5 +3062,40 @@ describe("[20260912_Sec_319_SsrfHardening] PROCESS-path redirect gating", () => 
     expect(result.error).toContain("重定向次数超限");
     // Initial request + exactly 3 followed hops; the 4th redirect is blocked.
     expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+});
+
+// [20260912_Sec_319_SsrfHardening] Covers the ELECTRON_USER_DATA arc of the
+// templatesDir resolution (bag → env → lazy require). Keep the AI handler
+// registration working when the managers bag carries no templatesDir and
+// the env var supplies the user-data root instead.
+describe("templatesDir env-arc resolution", () => {
+  it("resolves templatesDir from ELECTRON_USER_DATA when the bag omits it", async () => {
+    // os is not imported at this file's top level; derive a unique dir
+    // from the repo's existing fs import instead.
+    const userData = fs.mkdtempSync(path.join(os.tmpdir(), "aihandlers-env-"));
+    const previous = process.env.ELECTRON_USER_DATA;
+    process.env.ELECTRON_USER_DATA = userData;
+    try {
+      const ipcMain = { handle: vi.fn() };
+      const register = aiHandlersNS.register;
+      register(
+        ipcMain as never,
+        {
+          databaseManager: { getSetting: vi.fn(async () => null) },
+          logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        } as never,
+      );
+      expect(ipcMain.handle).toHaveBeenCalledWith(
+        "process-text",
+        expect.any(Function),
+      );
+    } finally {
+      if (previous === undefined) {
+        delete process.env.ELECTRON_USER_DATA;
+      } else {
+        process.env.ELECTRON_USER_DATA = previous;
+      }
+    }
   });
 });

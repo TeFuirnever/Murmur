@@ -1605,8 +1605,13 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
   // abort/supersession without a window; this is the same per-registration
   // instance the old `streamAbortTargets` map provided.
   const streamAbortRegistry = createStreamAbortRegistry();
+  // [20260912_Sec_319_SsrfHardening] Resolution order aligned with
+  // templateHandlers: managers bag → ELECTRON_USER_DATA env (main.ts sets
+  // it at boot; cli/lib/paths.mjs reads the same var) → lazy
+  // require("electron") as the final fallback.
   const templatesDir =
     managers.templatesDir ||
+    process.env.ELECTRON_USER_DATA ||
     (() => {
       // [20260724_TS_BigBang_LazyRequire] Lazy require("electron") — import is
       // hoisted and would load electron at module init, but this is only needed
@@ -1614,7 +1619,6 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
       const { app } = require("electron");
       return path.join(app.getPath("userData"), "templates");
     })();
-  // [20260724_TS_BigBang_LazyRequire] END
 
   ipcMain.handle(
     C.AI.PROCESS,
