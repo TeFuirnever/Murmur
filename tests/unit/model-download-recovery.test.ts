@@ -681,3 +681,123 @@ describe("[20260906_Spec259_T2] getModelCachePath resolution", () => {
     expect(() => makeMM().getDownloadScriptPath()).toThrow();
   });
 });
+
+// [20260913_Fix_256_AnchorParity] R2 hardening for the download pipeline:
+//   1. download_models.py never parses argv, so the `--output <cache>` spawn
+//      arg was dead — the arg list must be exactly [scriptPath].
+//   2. The script's final status line carries "cache_root"
+//      (resolved_cache_root(), the dir modelscope ACTUALLY wrote to); the
+//      old stdout parser discarded it. It must be surfaced through the
+//      logger exactly once per download run.
+describe("[20260913_Fix_256_AnchorParity] downloadModels spawn args + cache_root signal", () => {
+  interface DownloadSurface {
+    downloadModels: (
+      cb: ((p: Record<string, unknown>) => void) | null,
+      pythonCmd: string,
+    ) => Promise<{ success: boolean; message?: string }>;
+    checkModelFiles: ReturnType<typeof vi.fn>;
+    getModelCachePath: () => string;
+  }
+
+  // [20260913_Fix_256_AnchorParity] Typed mock logger: vitest's bare vi.fn()
+  // yields Mock<Procedure | Constructable>, which is NOT assignable to
+  // ModelManager's strict Logger interface — the call signature must be
+  // pinned to the logger's (message, ...args) shape.
+  type LoggerFn = ReturnType<
+    typeof vi.fn<(message: string, ...args: unknown[]) => void>
+  >;
+
+  function makeMMWithLogger(): {
+    mm: DownloadSurface;
+    logger: { info: LoggerFn; warn: LoggerFn; error: LoggerFn };
+  } {
+    const logger = {
+      info: vi.fn<(message: string, ...args: unknown[]) => void>(),
+      warn: vi.fn<(message: string, ...args: unknown[]) => void>(),
+      error: vi.fn<(message: string, ...args: unknown[]) => void>(),
+    };
+    const mm = new ModelManager(logger) as unknown as DownloadSurface;
+    mm.checkModelFiles = vi.fn(async () => ({
+      success: true,
+      models_downloaded: false,
+      missing_models: ["asr", "vad", "punc"],
+    }));
+    mm.getModelCachePath = () => "/tmp/fake-cache";
+    return { mm, logger };
+  }
+
+  function spawnFakeProcess(): {
+    proc: EventEmitter & { kill: () => boolean };
+    stdout: EventEmitter;
+  } {
+    const proc = new EventEmitter() as EventEmitter & {
+      stdout: EventEmitter;
+      stderr: EventEmitter;
+      stdin: EventEmitter;
+      kill: () => boolean;
+    };
+    proc.stdout = new EventEmitter();
+    proc.stderr = new EventEmitter();
+    proc.stdin = new EventEmitter();
+    proc.kill = () => true;
+    spawnMock.mockReturnValue(proc);
+    return { proc, stdout: proc.stdout };
+  }
+
+  function emitLine(stdout: EventEmitter, payload: object): void {
+    stdout.emit("data", Buffer.from(JSON.stringify(payload) + "\n", "utf8"));
+  }
+
+  async function runDownloadToSuccess(mm: DownloadSurface): Promise<void> {
+    const { proc, stdout } = spawnFakeProcess();
+    const done = mm.downloadModels(null, "/py/3.11");
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled());
+    emitLine(stdout, { success: true });
+    proc.emit("close", 0);
+    await done;
+  }
+
+  function stubScriptExists(): ReturnType<typeof vi.spyOn> {
+    return vi
+      .spyOn(fs, "existsSync")
+      .mockImplementation(((p: fs.PathLike) =>
+        String(p).endsWith("download_models.py")) as typeof fs.existsSync);
+  }
+
+  it("spawns the download script without the dead --output flag", async () => {
+    const existsSpy = stubScriptExists();
+    const { mm } = makeMMWithLogger();
+
+    await runDownloadToSuccess(mm);
+    existsSpy.mockRestore();
+
+    // The arg list must be EXACTLY [scriptPath]: download_models.py reads no
+    // argv, and the stale `--output <cache>` flag implied a cache override
+    // the script never honored.
+    expect(spawnMock).toHaveBeenCalledTimes(1);
+    const [, args] = spawnMock.mock.calls[0]! as [string, string[]];
+    expect(args).toEqual([expect.stringContaining("download_models.py")]);
+  });
+
+  it("logs the script-reported cache_root exactly once per download run", async () => {
+    const existsSpy = stubScriptExists();
+    const { mm, logger } = makeMMWithLogger();
+    const { proc, stdout } = spawnFakeProcess();
+    const done = mm.downloadModels(null, "/py/3.11");
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled());
+
+    // Two cache_root-bearing lines: the once-per-run gate must collapse them.
+    emitLine(stdout, { cache_root: "/ms/cache/models" });
+    emitLine(stdout, { cache_root: "/ms/cache/models" });
+    emitLine(stdout, { success: true });
+    proc.emit("close", 0);
+    await done;
+    existsSpy.mockRestore();
+
+    expect(logger.info).toHaveBeenCalledTimes(1);
+    expect(logger.info).toHaveBeenCalledWith(
+      "模型下载实际落盘目录:",
+      "/ms/cache/models",
+    );
+  });
+});

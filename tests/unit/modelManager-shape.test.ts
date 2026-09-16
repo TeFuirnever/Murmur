@@ -246,7 +246,12 @@ describe("[20260906_Spec259_T2] modelManager branch close-out (fs)", () => {
         "speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
       );
       fs.mkdirSync(primaryDir, { recursive: true });
-      fs.writeFileSync(path.join(primaryDir, "config.yaml"), "y");
+      // [20260913_Fix_256_AnchorParity] Marker switched config.yaml →
+      // model.yaml: the unified anchor set (parity with funasr_server.py
+      // _READY_PATTERNS) drops config.yaml (Python never matched it) and
+      // adds model.yaml. Test intent unchanged — a primary with any valid
+      // marker must skip the fallback probe.
+      fs.writeFileSync(path.join(primaryDir, "model.yaml"), "y");
 
       m.getModelCachePath = () => tmpDir;
       const r = await m.checkModelFiles();
@@ -273,7 +278,10 @@ describe("[20260906_Spec259_T2] modelManager branch close-out (fs)", () => {
 
       const dir2 = path.join(tmpDir, "d2");
       fs.mkdirSync(dir2, { recursive: true });
-      fs.writeFileSync(path.join(dir2, "config.yaml"), "y");
+      // [20260913_Fix_256_AnchorParity] Marker switched config.yaml →
+      // model.yaml (see the primary-probe test above): model.yaml is part of
+      // the Python-parity anchor set; config.yaml no longer is.
+      fs.writeFileSync(path.join(dir2, "model.yaml"), "y");
       expect(
         m._verifyModel(dir2, {
           name: "n",
