@@ -21,6 +21,6 @@
     "@playwright/test": "^1.60.0",
     "playwright-core": "^1.60.0",
     "typescript": "^6.0.0",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.11"
   }
 }
