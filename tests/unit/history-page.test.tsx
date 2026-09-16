@@ -335,13 +335,53 @@ describe("[20260816_Test_HistoryPage] history window entry", () => {
         manually_edited: true,
       });
     });
-    // The list reflects the saved edit without refetching. The edited text
-    // is the record's final content AND its processed_text (same two-column
-    // rule as the T1 polish write-back), so both result cards show it.
-    expect(await screen.findAllByText("用户改过的文本")).toHaveLength(2);
+    // The list reflects the saved edit without refetching.
+    // [20260913_Fix_197_AiLabelBaseline] A manual edit is NOT an AI change —
+    // text === processed_text after the save, so the AI优化 card is hidden
+    // under the new text-comparison baseline (one card, no AI label).
+    expect(await screen.findAllByText("用户改过的文本")).toHaveLength(1);
     expect(screen.queryByText("原始最终文本")).not.toBeInTheDocument();
+    expect(screen.queryByText("AI优化:")).not.toBeInTheDocument();
     const { toast } = await import("sonner");
     expect(toast.success).toHaveBeenCalledWith("记录已更新");
+  });
+
+  // [20260913_Fix_197_AiLabelBaseline] The AI-participation label compares
+  // processed_text against TEXT (the displayed transcription), not raw_text:
+  // legacy records with empty raw_text but a cleaner-only change used to
+  // show a misleading "AI优化" label with no AI involved.
+  it("hides the AI优化 label when processed_text equals the displayed text", async () => {
+    apiMocks.getTranscriptions.mockResolvedValue([
+      // Cleaner changed the ASR text (raw_text empty, processed_text ===
+      // text): no AI ran — the record must render one card, no AI label.
+      makeRecord(11, "清洗后的文本", {
+        processed_text: "清洗后的文本",
+        raw_text: null,
+      }),
+      // Raw differs from text (cleaner-only change, no processed_text):
+      // also no AI label — the raw-recognition card covers it.
+      makeRecord(12, "清洗后的文本", {
+        raw_text: "原始含语气词文本",
+      }),
+    ]);
+    await mountHistory();
+    expect((await screen.findAllByText("清洗后的文本")).length).toBeGreaterThan(
+      0,
+    );
+    expect(screen.queryByText("AI优化:")).not.toBeInTheDocument();
+  });
+
+  it("shows the AI优化 label only when processed_text differs from the displayed text", async () => {
+    apiMocks.getTranscriptions.mockResolvedValue([
+      makeRecord(13, "原始识别文本", {
+        processed_text: "AI 润色后的文本",
+        raw_text: "原始识别文本",
+      }),
+    ]);
+    await mountHistory();
+    await screen.findByText("AI 润色后的文本");
+    expect(screen.getByText("AI优化:")).toBeInTheDocument();
+    expect(screen.getByText("AI 润色后的文本")).toBeInTheDocument();
   });
 
   it("cancels the inline editor without touching the bridge", async () => {
@@ -668,7 +708,25 @@ describe("[20260816_Test_BranchPush] history branch matrix", () => {
     expect(screen.getByText("原始文本")).toBeInTheDocument();
   });
 
-  it("hides the AI-optimized card when it matches the raw text", async () => {
+  // [20260913_Fix_197_AiLabelBaseline] was "matches the raw text" — the
+  // accepted baseline change compares processed_text against the DISPLAYED
+  // text: a polish that differs from the displayed transcription shows the
+  // AI card even when it equals the raw ASR output; equal-to-display hides.
+  it("hides the AI-optimized card when it matches the displayed text", async () => {
+    apiMocks.getTranscriptions.mockResolvedValue([
+      makeRecord(1, "相同内容", {
+        raw_text: "相同内容",
+        processed_text: "相同内容",
+      }),
+    ]);
+    await mountHistory();
+    expect(await screen.findByText("相同内容")).toBeInTheDocument();
+    expect(screen.queryByText("AI优化:")).not.toBeInTheDocument();
+    // raw === text → the raw-recognition card hides as well.
+    expect(screen.queryByText("原始识别:")).not.toBeInTheDocument();
+  });
+
+  it("shows the AI-optimized card when it differs from the displayed text", async () => {
     apiMocks.getTranscriptions.mockResolvedValue([
       makeRecord(1, "相同最终", {
         raw_text: "相同内容",
@@ -677,7 +735,12 @@ describe("[20260816_Test_BranchPush] history branch matrix", () => {
     ]);
     await mountHistory();
     expect(await screen.findByText("相同最终")).toBeInTheDocument();
-    expect(screen.queryByText("AI优化:")).not.toBeInTheDocument();
+    // processed ("相同内容") ≠ displayed text ("相同最终") → the AI card
+    // shows; the raw-recognition card is hidden (processed === raw).
+    expect(screen.getByText("AI优化:")).toBeInTheDocument();
+    expect(screen.getAllByText("相同内容").length).toBeGreaterThan(0);
+    // raw ("相同内容") ≠ displayed text ("相同最终") → the raw-recognition
+    // card shows as well (that is its purpose).
     expect(screen.getByText("原始识别:")).toBeInTheDocument();
   });
 

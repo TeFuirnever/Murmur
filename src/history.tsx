@@ -498,10 +498,15 @@ const HistoryContent = ({
                     )}
                   </div>
 
-                  {/* AI优化文本 */}
-                  {item.processed_text &&
-                    item.processed_text.trim() !==
-                      (item.raw_text || "").trim() && (
+                  {/* AI优化文本 — [20260913_Fix_197_AiLabelBaseline] the
+                      AI-participation baseline is `text` (the displayed
+                      transcription), NOT `raw_text` (the pre-clean ASR
+                      original): legacy records with empty raw_text but a
+                      cleaner-only change used to show a misleading "AI优化"
+                      label. Compare against what the record actually
+                      displays. */}
+                  {item.processed_text?.trim() &&
+                    item.processed_text.trim() !== item.text.trim() && (
                       <div className="mb-4">
                         <h4 className="text-sm font-medium text-[#0071e3] dark:text-[#2997ff] mb-2">
                           {t("history.aiOptimized", "AI优化:")}
