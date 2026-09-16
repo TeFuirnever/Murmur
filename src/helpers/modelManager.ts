@@ -69,6 +69,28 @@ const HUB_REPO_PREFIX = "damo--";
 const PINNED_MODEL_REVISION = "v2.0.4";
 // [20260911_Fix_336_HubLayout] END
 
+// [20260913_Fix_256_AnchorParity] Issue #256 hardening: the directory
+// readiness anchors must stay in lockstep with the AUTHORITATIVE Python
+// gate (funasr_server.py _repo_ready / module-level _READY_PATTERNS —
+// Python is the actual model loader, so its judgment is the source of
+// truth). The old inline 4-name set was missing model.yaml, *.onnx and
+// vocab* (a repo whose only marker is one of those reads "ready" to
+// Python but "missing" to Node — the #256/#336 state-flap class) and also
+// accepted config.yaml, which Python never matched. Kept as exported data
+// so tests/unit/modelManager-anchor-parity.test.ts can assert set equality
+// against the Python source text. fnmatch semantics: model.yaml is an
+// EXACT name; "*.onnx" ≡ endsWith(".onnx"); "vocab*" ≡ startsWith("vocab").
+export const READY_ANCHOR_EXACT: readonly string[] = [
+  "model.pt",
+  "pytorch_model.bin",
+  "config.json",
+  "configuration.json",
+  "model.yaml",
+];
+export const READY_ANCHOR_SUFFIXES: readonly string[] = [".onnx"];
+export const READY_ANCHOR_PREFIXES: readonly string[] = ["vocab"];
+// [20260913_Fix_256_AnchorParity] END
+
 class ModelManager {
   private logger: Logger;
   modelsDownloaded: boolean | null;
@@ -370,12 +392,14 @@ class ModelManager {
       const stats = fs.statSync(modelFile);
       if (stats.isDirectory()) {
         const entries = fs.readdirSync(modelFile);
+        // [20260913_Fix_256_AnchorParity] Anchor matching unified with the
+        // Python gate: exact names plus fnmatch-equivalent suffix/prefix
+        // rules for the glob patterns (READY_ANCHOR_* above).
         return entries.some(
           (e) =>
-            e === "model.pt" ||
-            e === "pytorch_model.bin" ||
-            e === "configuration.json" ||
-            e === "config.yaml",
+            READY_ANCHOR_EXACT.includes(e) ||
+            READY_ANCHOR_SUFFIXES.some((suffix) => e.endsWith(suffix)) ||
+            READY_ANCHOR_PREFIXES.some((prefix) => e.startsWith(prefix)),
         );
       }
       return stats.size >= config.expected_size * 0.9;
@@ -425,19 +449,21 @@ class ModelManager {
       throw new Error("下载脚本不存在: " + scriptPath);
     }
 
-    const cachePath = this.getModelCachePath();
-
     return new Promise((resolve, reject) => {
-      const downloadProcess = spawn(
-        pythonCmd,
-        [scriptPath, "--output", cachePath],
-        {
-          stdio: ["pipe", "pipe", "pipe"],
-          windowsHide: true,
-        },
-      );
+      // [20260913_Fix_256_AnchorParity] Dropped the dead `--output <cache>`
+      // arg: download_models.py never parses argv (the cache root is
+      // modelscope-internal and is reported back via the cache_root status
+      // field), so the flag only implied an override that never happened.
+      const downloadProcess = spawn(pythonCmd, [scriptPath], {
+        stdio: ["pipe", "pipe", "pipe"],
+        windowsHide: true,
+      });
 
       let hasError = false;
+      // [20260913_Fix_256_AnchorParity] Once-per-run gate for the
+      // cache_root log below (the script may emit the field on several
+      // status lines; the first one wins).
+      let cacheRootAnnounced = false;
       // [20260905_Fix_254_DownloadStallTimeout] Stall watchdog state: the
       // timer re-arms only on STRICT progress growth (a repeated percentage
       // is a heartbeat, not progress), so idle time is what counts.
@@ -472,7 +498,22 @@ class ModelManager {
               progress?: number;
               overall_progress?: number;
               success?: boolean;
+              cache_root?: string;
             };
+            // [20260913_Fix_256_AnchorParity] download_models.py's status
+            // lines carry cache_root — the directory modelscope ACTUALLY
+            // wrote to (resolved_cache_root()). The old parser discarded
+            // it. Log once per download run: when Node's resolved cache
+            // path and Python's real one diverge (#216/#336 class), this
+            // log line records the ground truth.
+            if (
+              typeof result.cache_root === "string" &&
+              result.cache_root.length > 0 &&
+              !cacheRootAnnounced
+            ) {
+              cacheRootAnnounced = true;
+              this.logger.info?.("模型下载实际落盘目录:", result.cache_root);
+            }
             if (result.error) {
               hasError = true;
               clearStallTimer();

@@ -55,6 +55,19 @@ logger = logging.getLogger(__name__)
 logger.info(f"FunASR服务器日志文件: {log_file_path}")
 
 
+# [20260913_Fix_256_AnchorParity] The AUTHORITATIVE model-readiness anchors,
+# hoisted from _repo_ready()'s inline list so the cross-language contract
+# test (tests/unit/modelManager-anchor-parity.test.ts) has a stable parse
+# target: Node's _verifyModel must accept exactly this name set, otherwise a
+# repo reads "ready" to Python and "missing" to Node (the #256/#336 flap
+# class). Exact names match literally; "*.onnx"/"vocab*" are fnmatch globs.
+# Behavior is identical to the former inline list — hoist only.
+_READY_PATTERNS = [
+    "model.pt", "pytorch_model.bin", "*.onnx",
+    "config.json", "configuration.json", "model.yaml", "vocab*"
+]
+
+
 # [20260820_Fix_SuppressStdoutRace] The model loaders run in parallel
 # threads and each wraps its AutoModel call in suppress_stdout(). The
 # previous per-thread save/restore of the PROCESS-GLOBAL sys.stdout raced:
@@ -389,11 +402,9 @@ class FunASRServer:
         """目录存在且包含非分片的常见权重/配置文件即认为已就绪"""
         if not os.path.isdir(repo_dir):
             return False
-        patterns = [
-            "model.pt", "pytorch_model.bin", "*.onnx",
-            "config.json", "configuration.json", "model.yaml", "vocab*"
-        ]
-        for pat in patterns:
+        # [20260913_Fix_256_AnchorParity] Same-site usage of the hoisted
+        # module-level _READY_PATTERNS (list contents unchanged).
+        for pat in _READY_PATTERNS:
             matches = [
                 m for m in glob.glob(os.path.join(repo_dir, pat))
                 if not FunASRServer._SHARD_SUFFIX_RE.search(os.path.basename(m))

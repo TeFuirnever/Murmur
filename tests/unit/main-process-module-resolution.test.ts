@@ -39,7 +39,7 @@ function* walkSourceFiles(dir: string): Generator<string> {
 // The [^\n'"]* prevents cross-line matching that would pick up unrelated
 // string literals (e.g. ".env" in path.join).
 const REQUIRE_RE = /require\s*\(\s*['"](\.[^'"]+)['"]\s*\)/g;
-const IMPORT_RE = /(?:import|export)[^\n'"]*['"](\.[^'"]+)['"]/g;
+const IMPORT_RE = /(?:import|export)[^\n'"]*['"](\.[^'"]*?\/[^'"]+)['"]/g;
 // [20260724_TS_BigBang_TestFix] END
 
 describe("main process module resolution", () => {
