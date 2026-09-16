@@ -1,5 +1,11 @@
 // [20260724_TS_BigBang_ModelHandlers] Migrated from .js to .ts (ADR-010).
 import * as C from "../ipc-contracts";
+// [20260912_Refactor_261_TranscriptionService] Ticket #261 (spec #258
+// Phase 0): the MODELS.CHECK engine-status probe moved into
+// checkEngineStatusService (src/helpers/services/transcriptionService.ts)
+// so it is callable without a renderer/window/sender. The handler stays a
+// thin shell that forwards its funasrManager via the deps bag.
+import { checkEngineStatusService } from "../services/transcriptionService";
 
 interface FunasrManager {
   checkModelFiles(): Promise<
@@ -20,7 +26,9 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
   const { funasrManager } = managers;
 
   ipcMain.handle(C.MODELS.CHECK, async () => {
-    return await funasrManager.checkModelFiles();
+    // [20260912_Refactor_261_TranscriptionService] Thin shell delegating to
+    // the extracted service function (pure pass-through to checkModelFiles).
+    return await checkEngineStatusService({ funasrManager });
   });
 
   ipcMain.handle(C.MODELS.DOWNLOAD, async (event) => {

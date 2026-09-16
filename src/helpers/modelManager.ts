@@ -46,6 +46,51 @@ let globalModelCheckCache: ModelCheckResult | null = null;
 let globalModelCheckTime = 0;
 const GLOBAL_CACHE_TIME = 2000;
 
+// [20260905_Fix_254_DownloadStallTimeout] Issue #254: the old watchdog was a
+// 10-minute ABSOLUTE cap, killing slow-network downloads of >1.2GB models
+// mid-flight even while bytes kept flowing (#212 symptom chain
+// "下载→到点→重来"). snapshot_download resumes from partial state, so the
+// watchdog is now STALL-based: only a window with zero forward progress
+// trips it, and the timeout error tells the user the partial download is
+// kept and a retry resumes. The window keeps the familiar 10-minute budget.
+const DOWNLOAD_STALL_TIMEOUT_MS = 10 * 60 * 1000;
+const DOWNLOAD_STALL_TIMEOUT_MESSAGE =
+  "模型下载超时（10 分钟无进度）。已下载部分已保留，重试将自动断点续传";
+
+// [20260911_Fix_336_HubLayout] Issue #336: modelscope 1.39's real on-disk
+// layout is <cache>/models/damo--<repo>/snapshots/<rev>/ — NO `hub` layer,
+// repo dirs renamed `damo--<name>`, an extra `snapshots/<revision>` level.
+// Node's check and the Python readiness gate (funasr_server.py
+// _resolve_repo_dir) must resolve to the SAME place, otherwise the UI
+// flaps between 已加载/下载中. These constants drive the shared shape.
+const HUB_REPO_PREFIX = "damo--";
+// Pinned to the server-side model_revision; preferred when a repo dir
+// holds several snapshots.
+const PINNED_MODEL_REVISION = "v2.0.4";
+// [20260911_Fix_336_HubLayout] END
+
+// [20260913_Fix_256_AnchorParity] Issue #256 hardening: the directory
+// readiness anchors must stay in lockstep with the AUTHORITATIVE Python
+// gate (funasr_server.py _repo_ready / module-level _READY_PATTERNS —
+// Python is the actual model loader, so its judgment is the source of
+// truth). The old inline 4-name set was missing model.yaml, *.onnx and
+// vocab* (a repo whose only marker is one of those reads "ready" to
+// Python but "missing" to Node — the #256/#336 state-flap class) and also
+// accepted config.yaml, which Python never matched. Kept as exported data
+// so tests/unit/modelManager-anchor-parity.test.ts can assert set equality
+// against the Python source text. fnmatch semantics: model.yaml is an
+// EXACT name; "*.onnx" ≡ endsWith(".onnx"); "vocab*" ≡ startsWith("vocab").
+export const READY_ANCHOR_EXACT: readonly string[] = [
+  "model.pt",
+  "pytorch_model.bin",
+  "config.json",
+  "configuration.json",
+  "model.yaml",
+];
+export const READY_ANCHOR_SUFFIXES: readonly string[] = [".onnx"];
+export const READY_ANCHOR_PREFIXES: readonly string[] = ["vocab"];
+// [20260913_Fix_256_AnchorParity] END
+
 class ModelManager {
   private logger: Logger;
   modelsDownloaded: boolean | null;
@@ -131,6 +176,17 @@ class ModelManager {
       "hub",
       "models",
     );
+    // [20260911_Fix_336_HubLayout] modelscope 1.39 drops the `hub` layer:
+    // fresh downloads land in ~/.cache/modelscope/models/damo--<repo>.
+    // $MODELSCOPE_CACHE can point anywhere, so probe its models roots too —
+    // Python's _default_damo_root()/_hub_models_roots() honor the same env.
+    const modelScopeCacheNoHub = path.join(
+      os.homedir(),
+      ".cache",
+      "modelscope",
+      "models",
+    );
+    const envCache = process.env.MODELSCOPE_CACHE;
 
     const candidates: string[] = [];
     if (process.env.NODE_ENV === "development") {
@@ -146,7 +202,15 @@ class ModelManager {
       // [20260724_TS_BigBang_DirnameFix] END
     }
     candidates.push(userDataModels);
+    // [20260911_Fix_336_HubLayout] Env-configured caches are probed BEFORE
+    // the home defaults: modelscope downloads INTO $MODELSCOPE_CACHE when
+    // set, so that is where the models actually are.
+    if (envCache) {
+      candidates.push(path.join(envCache, "models"));
+      candidates.push(path.join(envCache, "hub", "models"));
+    }
     candidates.push(modelScopeCache);
+    candidates.push(modelScopeCacheNoHub);
 
     for (const candidate of candidates) {
       if (!fs.existsSync(candidate)) continue;
@@ -154,15 +218,19 @@ class ModelManager {
       if (fs.existsSync(damoSub) && fs.readdirSync(damoSub).length > 0)
         return damoSub;
       if (fs.readdirSync(candidate).length > 0) {
-        const hasExpected = fs
-          .readdirSync(candidate)
-          .some(
-            (n) =>
-              n.startsWith("speech_seaco_paraformer") ||
-              n.startsWith("speech_paraformer") ||
-              n.startsWith("speech_fsmn") ||
-              n.startsWith("punc_ct"),
+        const hasExpected = fs.readdirSync(candidate).some((n) => {
+          // [20260911_Fix_336_HubLayout] Hub-layout repos carry a
+          // `damo--` prefix over the plain repo dir name.
+          const repoName = n.startsWith(HUB_REPO_PREFIX)
+            ? n.slice(HUB_REPO_PREFIX.length)
+            : n;
+          return (
+            repoName.startsWith("speech_seaco_paraformer") ||
+            repoName.startsWith("speech_paraformer") ||
+            repoName.startsWith("speech_fsmn") ||
+            repoName.startsWith("punc_ct")
           );
+        });
         if (hasExpected) return candidate;
       }
     }
@@ -182,6 +250,52 @@ class ModelManager {
     fs.mkdirSync(userDataModels, { recursive: true });
     return userDataModels;
   }
+
+  // [20260911_Fix_336_HubLayout] Per-repo resolver mirroring the Python
+  // gate (funasr_server.py _resolve_repo_dir): a repo lives either directly
+  // under the cache root (legacy damo-root shape) or in the modelscope 1.39
+  // hub shape damo--<repo>/snapshots/<rev>/. Returns the first dir that
+  // carries a marker file, or null — Node's check and the server gate then
+  // agree on "downloaded" (the mismatch WAS the #336 flapping UI).
+  _resolveRepoDir(cachePath: string, repoDirName: string): string | null {
+    const direct = path.join(cachePath, repoDirName);
+    if (fs.existsSync(direct)) return direct;
+    const snapshotsDir = path.join(
+      cachePath,
+      `${HUB_REPO_PREFIX}${repoDirName}`,
+      "snapshots",
+    );
+    if (!fs.existsSync(snapshotsDir)) return null;
+    const revisions = fs
+      .readdirSync(snapshotsDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort((a, b) => {
+        // Pinned revision first — it is what the server loads; then the
+        // newest remaining revision.
+        if (a === PINNED_MODEL_REVISION) return -1;
+        if (b === PINNED_MODEL_REVISION) return 1;
+        return b.localeCompare(a);
+      });
+    for (const revision of revisions) {
+      const candidate = path.join(snapshotsDir, revision);
+      // Marker check via _verifyModel's directory branch (expected_size is
+      // ignored there): a mid-download snapshot holding only part-files
+      // must not count as present.
+      if (
+        this._verifyModel(candidate, {
+          name: repoDirName,
+          cache_path: repoDirName,
+          expected_size: 0,
+          required: false,
+        })
+      ) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+  // [20260911_Fix_336_HubLayout] END
 
   async checkModelFiles(): Promise<ModelCheckResult> {
     const now = Date.now();
@@ -219,20 +333,29 @@ class ModelManager {
       // satisfies minimum_ready — the server runs on the old generation
       // instead of refusing to start (review MAJOR fix).
       let isComplete = false;
-      const modelFile = path.join(cachePath, config.cache_path);
-      if (fs.existsSync(modelFile)) {
-        isComplete = this._verifyModel(modelFile, config);
+      // [20260911_Fix_336_HubLayout] Resolve through the hub layout too —
+      // a bare path.join would miss damo--<repo>/snapshots/<rev>/.
+      const resolvedPrimary = this._resolveRepoDir(
+        cachePath,
+        config.cache_path,
+      );
+      if (resolvedPrimary) {
+        isComplete = this._verifyModel(resolvedPrimary, config);
       }
       let ready = isComplete;
       if (!ready && config.fallback_name) {
-        const fallbackFile = path.join(
+        const fallbackDirName = config.fallback_name
+          .split("/")
+          .slice(1)
+          .join("/");
+        const resolvedFallback = this._resolveRepoDir(
           cachePath,
-          config.fallback_name.split("/").slice(1).join("/"),
+          fallbackDirName,
         );
-        if (fs.existsSync(fallbackFile)) {
-          ready = this._verifyModel(fallbackFile, {
+        if (resolvedFallback) {
+          ready = this._verifyModel(resolvedFallback, {
             ...config,
-            cache_path: config.fallback_name.split("/").slice(1).join("/"),
+            cache_path: fallbackDirName,
           });
         }
       }
@@ -269,12 +392,14 @@ class ModelManager {
       const stats = fs.statSync(modelFile);
       if (stats.isDirectory()) {
         const entries = fs.readdirSync(modelFile);
+        // [20260913_Fix_256_AnchorParity] Anchor matching unified with the
+        // Python gate: exact names plus fnmatch-equivalent suffix/prefix
+        // rules for the glob patterns (READY_ANCHOR_* above).
         return entries.some(
           (e) =>
-            e === "model.pt" ||
-            e === "pytorch_model.bin" ||
-            e === "configuration.json" ||
-            e === "config.yaml",
+            READY_ANCHOR_EXACT.includes(e) ||
+            READY_ANCHOR_SUFFIXES.some((suffix) => e.endsWith(suffix)) ||
+            READY_ANCHOR_PREFIXES.some((prefix) => e.startsWith(prefix)),
         );
       }
       return stats.size >= config.expected_size * 0.9;
@@ -304,10 +429,13 @@ class ModelManager {
   async downloadModels(
     progressCallback: ProgressCallback | null = null,
     pythonCmd: string,
-  ): Promise<{ success: boolean; message?: string }> {
+  ): Promise<{ success: boolean; message?: string; skipped?: boolean }> {
     const checkResult = await this.checkModelFiles();
     if (checkResult.models_downloaded) {
-      return { success: true, message: "模型文件已下载" };
+      // [20260905_Fix_216_DownloadRecovery] skipped flags the host that no
+      // fetch ran — funasrManager must not restart a healthy server on this
+      // path (review MAJOR: it bounced an already-ready server for nothing).
+      return { success: true, message: "模型文件已下载", skipped: true };
     }
 
     const hasPartial =
@@ -321,19 +449,41 @@ class ModelManager {
       throw new Error("下载脚本不存在: " + scriptPath);
     }
 
-    const cachePath = this.getModelCachePath();
-
     return new Promise((resolve, reject) => {
-      const downloadProcess = spawn(
-        pythonCmd,
-        [scriptPath, "--output", cachePath],
-        {
-          stdio: ["pipe", "pipe", "pipe"],
-          windowsHide: true,
-        },
-      );
+      // [20260913_Fix_256_AnchorParity] Dropped the dead `--output <cache>`
+      // arg: download_models.py never parses argv (the cache root is
+      // modelscope-internal and is reported back via the cache_root status
+      // field), so the flag only implied an override that never happened.
+      const downloadProcess = spawn(pythonCmd, [scriptPath], {
+        stdio: ["pipe", "pipe", "pipe"],
+        windowsHide: true,
+      });
 
       let hasError = false;
+      // [20260913_Fix_256_AnchorParity] Once-per-run gate for the
+      // cache_root log below (the script may emit the field on several
+      // status lines; the first one wins).
+      let cacheRootAnnounced = false;
+      // [20260905_Fix_254_DownloadStallTimeout] Stall watchdog state: the
+      // timer re-arms only on STRICT progress growth (a repeated percentage
+      // is a heartbeat, not progress), so idle time is what counts.
+      let lastProgressValue = -1;
+      let stallTimer: ReturnType<typeof setTimeout> | null = null;
+      const clearStallTimer = () => {
+        if (stallTimer !== null) {
+          clearTimeout(stallTimer);
+          stallTimer = null;
+        }
+      };
+      const armStallWatchdog = () => {
+        clearStallTimer();
+        stallTimer = setTimeout(() => {
+          hasError = true;
+          downloadProcess.kill();
+          reject(new Error(DOWNLOAD_STALL_TIMEOUT_MESSAGE));
+        }, DOWNLOAD_STALL_TIMEOUT_MS);
+      };
+      armStallWatchdog();
 
       downloadProcess.stdout.on("data", (data: Buffer) => {
         const lines = data
@@ -345,23 +495,59 @@ class ModelManager {
             const result = JSON.parse(line) as {
               error?: string;
               stage?: string;
-              percentage?: number;
+              progress?: number;
+              overall_progress?: number;
               success?: boolean;
+              cache_root?: string;
             };
+            // [20260913_Fix_256_AnchorParity] download_models.py's status
+            // lines carry cache_root — the directory modelscope ACTUALLY
+            // wrote to (resolved_cache_root()). The old parser discarded
+            // it. Log once per download run: when Node's resolved cache
+            // path and Python's real one diverge (#216/#336 class), this
+            // log line records the ground truth.
+            if (
+              typeof result.cache_root === "string" &&
+              result.cache_root.length > 0 &&
+              !cacheRootAnnounced
+            ) {
+              cacheRootAnnounced = true;
+              this.logger.info?.("模型下载实际落盘目录:", result.cache_root);
+            }
             if (result.error) {
               hasError = true;
+              clearStallTimer();
               reject(new Error(result.error));
               return;
             }
+            // [20260905_Fix_254_DownloadStallTimeout] Growth check runs for
+            // every progress-bearing event, independent of the callback —
+            // forward progress is what proves the pipeline is alive.
+            const overall =
+              typeof result.overall_progress === "number"
+                ? result.overall_progress
+                : typeof result.progress === "number"
+                  ? result.progress
+                  : null;
+            if (overall !== null && overall > lastProgressValue) {
+              lastProgressValue = overall;
+              armStallWatchdog();
+            }
             if (result.stage && progressCallback) {
+              // [20260905_Fix_216_DownloadRecovery] download_models.py sends
+              // `progress` (per-model) and `overall_progress` — never
+              // `percentage`. The old mapper read `result.percentage || 0`,
+              // so every event reached the UI as 0% for the whole download
+              // (issue #212's "一直未见有进度").
               progressCallback({
                 stage: result.stage,
-                percentage: result.percentage || 0,
-                overall_progress: result.percentage || 0,
-                progress: result.percentage || 0,
+                percentage: overall ?? 0,
+                overall_progress: overall ?? 0,
+                progress: overall ?? 0,
               });
             }
             if (result.success !== undefined) {
+              clearStallTimer();
               if (result.success) {
                 this.modelsDownloaded = true;
                 this.clearCache();
@@ -382,6 +568,7 @@ class ModelManager {
       });
 
       downloadProcess.on("close", (code: number | null) => {
+        clearStallTimer();
         if (!hasError) {
           if (code === 0) {
             this.modelsDownloaded = true;
@@ -394,19 +581,11 @@ class ModelManager {
       });
 
       downloadProcess.on("error", (error: Error) => {
+        clearStallTimer();
         if (!hasError) {
           reject(new Error(`启动下载进程失败: ${error.message}`));
         }
       });
-
-      setTimeout(
-        () => {
-          hasError = true;
-          downloadProcess.kill();
-          reject(new Error("模型下载超时（10分钟）"));
-        },
-        10 * 60 * 1000,
-      );
     });
   }
 

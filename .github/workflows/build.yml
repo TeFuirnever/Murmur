@@ -13,22 +13,19 @@ jobs:
   test:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v4
         with:
           version: 11
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: pnpm
 
       - name: Install dependencies
         run: pnpm install
-
-      - name: Rebuild native modules for system Node
-        run: pnpm rebuild better-sqlite3
 
       - name: Build main bundle
         run: pnpm run build:main
@@ -47,48 +44,41 @@ jobs:
         continue-on-error: true
 
       - name: Test with coverage
-        run: pnpm test -- --coverage
+        # [20260905_Fix_CoverageForwarding] pnpm 11 forwards `--` literally
+        run: pnpm run test:coverage
 
   build-mac:
     needs: test
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v4
         with:
           version: 11
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: pnpm
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
 
       - name: Install dependencies
         run: pnpm install
 
-      # [20260816_Fix_MacCiNodeAbi] The old `npx electron-builder
-      # install-app-deps` step silently no-opped on CI (~0.2s "finished"):
-      # pnpm's onlyBuiltDependencies allowlist let better-sqlite3's own
-      # install script download a system-Node prebuild (ABI 137), and the
-      # unforced rebuild never replaced it — the shipped v1.3.0 macOS dmg
-      # crashed at launch under Electron 39 (ABI 140). -f forces a real
-      # Electron-ABI rebuild every time.
-      - name: Rebuild native modules for Electron
-        run: npx @electron/rebuild -f -w better-sqlite3
-
-      # [20260816_Fix_MacCiNodeAbi] Gate: the native module must actually
-      # open a database under the bundled Electron runtime before we are
-      # allowed to package. ELECTRON_RUN_AS_NODE runs Electron's own Node
-      # (ABI 140); a node-ABI binary exits non-zero here.
-      - name: Verify native sqlite ABI under Electron (packaging gate)
+      # [20260905_Feat_NodeSqlite] The forced @electron/rebuild step and the
+      # native-addon ABI gate are obsolete: better-sqlite3 was replaced by
+      # node:sqlite (spec #226), which ships inside both Node and Electron,
+      # so there is no native binary to rebuild or mis-ABI. The gate is NOT
+      # downgraded — packaging still requires a real database open under the
+      # bundled Electron runtime, now via the built-in module.
+      - name: Verify sqlite opens under Electron (packaging gate)
         run: |
-          ELECTRON_RUN_AS_NODE=1 npx electron -e "const D=require('better-sqlite3'); new D(':memory:').prepare('select 1 as ok').get(); console.log('native ABI gate passed')"
-      # [20260816_Fix_MacCiNodeAbi] END
+          ELECTRON_RUN_AS_NODE=1 npx electron -e "const {DatabaseSync}=require('node:sqlite'); new DatabaseSync(':memory:').prepare('select 1 as ok').get(); console.log('sqlite gate passed')"
+      # [20260905_Feat_NodeSqlite] END
       # [20260818_T3_PythonPackagingGate] Ticket #184: cache the embedded
       # Python env (torch/funasr wheels are the slow, disk-hungry part) and
       # HARD-gate the package on it. This combo replaces the old
@@ -141,11 +131,58 @@ jobs:
         run: pnpm run build:renderer
 
       - name: Build macOS DMG
-        run: pnpm electron-builder --mac --publish never
+        # [20260912_Fix_MacPackagingEMFILE] electron-builder unpacks the
+        # embedded-python tree (torch ships tens of thousands of headers)
+        # with one open fd per file; the default 256 soft limit on macOS
+        # runners made the DMG step die with EMFILE 2/2 in run 34631944103
+        # and again in 34636557974 where `ulimit -n 65536 || true` silently
+        # failed (soft > hard is rejected; || true swallowed it). Set soft
+        # to the runner's hard limit (capped at 65536), fall back to 10240,
+        # and LOG the effective value so the next failure is diagnosable.
+        run: |
+          HARD=$(ulimit -Hn)
+          echo "fd hard limit: $HARD, soft before: $(ulimit -Sn)"
+          if [ "$HARD" = "unlimited" ]; then TARGET=65536; elif [ "$HARD" -gt 65536 ]; then TARGET=65536; else TARGET=$HARD; fi
+          ulimit -n "$TARGET" || ulimit -n 10240 || true
+          echo "fd soft limit effective: $(ulimit -Sn)"
+          pnpm electron-builder --mac --publish never
+        # [20260912_Fix_MacPackagingEMFILE] END
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # [20260911_Gate_MacSignature] Issue #337: with CSC_IDENTITY_AUTO_DISCOVERY=false
+      # and no Developer ID in the keychain, electron-builder skipped signing
+      # entirely, so the shipped .app kept Electron's linker ad-hoc signature
+      # with NO resource seal ("code has no resources but signature indicates
+      # they must be present"). On Apple Silicon a quarantined app in that
+      # state is rejected by Gatekeeper as "已损坏 / damaged" — right-click →
+      # Open cannot bypass it. Two-part fix:
+      #   1) package.json build.mac.identity="-" forces electron-builder's
+      #      ad-hoc signing pass (full @electron/osx-sign deep sign with a
+      #      real resource seal). The hardenedRuntime warning this triggers is
+      #      covered: entitlements.mac.plist already carries
+      #      com.apple.security.cs.disable-library-validation. Once a
+      #      Developer ID cert (CSC_LINK) is configured in secrets, replace
+      #      "-" with the cert name and add notarization.
+      #   2) This gate: codesign --verify --deep --strict fails the build on a
+      #      broken/missing seal but PASSES a valid ad-hoc seal (ad-hoc needs
+      #      no certificate), so releases stay green until a Developer ID is
+      #      configured, while the #337 broken-seal state can never ship again.
+      - name: Verify packaged app signature (packaging gate)
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP=$(find dist -maxdepth 2 -name "*.app" -print -quit)
+          test -n "$APP" || { echo "::error::no .app found under dist/"; exit 1; }
+          echo "verifying signature of: $APP"
+          codesign --verify --deep --strict --verbose=2 "$APP" || {
+            echo "::error::packaged app signature invalid (broken seal). See issue #337 — the dmg would install as 'damaged' on Apple Silicon."
+            exit 1
+          }
+          codesign -dv "$APP" 2>&1 | grep -E "Signature|Sealed" || true
+          echo "macOS signature gate passed"
+      # [20260911_Gate_MacSignature] END
       # [20260816_Gate_PackagedBootSmoke] Install the DMG we just built and
       # boot the real app. Asserts on the boot log: window created, startup
       # complete, and the renderer→preload→IPC bridge alive (hotkey
@@ -163,19 +200,28 @@ jobs:
           cp -R "/Volumes/$VOL/Murmur.app" /tmp/murmur-smoke/
           hdiutil detach "/Volumes/$VOL" -quiet || true
           rm -f "$HOME/Library/Application Support/Murmur/logs/app.log"
+          # [20260905_Fix_150SmokeColdCache] Warm the embedded python's page
+          # cache before booting the app. On a cache-hit run the unpacked
+          # environment is freshly extracted (cold disk): `import funasr`
+          # pulls several hundred MB of torch through the filesystem and on
+          # the runner exceeded the whole 180s smoke window — twice, while
+          # the same import took ~5s when warm. Warming is not a gate
+          # relaxation: every milestone assertion below still applies, the
+          # self-check still has to genuinely pass on top of a warm cache.
+          /tmp/murmur-smoke/Murmur.app/Contents/Resources/app.asar.unpacked/python/bin/python3.11 -c "import funasr" || true
           /tmp/murmur-smoke/Murmur.app/Contents/MacOS/Murmur > /tmp/murmur-smoke/stdout.log 2>&1 &
           APP_PID=$!
           LOG="$HOME/Library/Application Support/Murmur/logs/app.log"
           # [20260818_T3_PythonSelfCheckMilestone] Poll for milestones instead
           # of a fixed sleep: the python self-check spawns `import funasr`
           # (cold torch load) which can exceed a fixed 60s window on a cold
-          # runner disk. Poll up to 180s, break as soon as all are present.
+          # runner disk. Poll up to 360s, break as soon as all are present.
           # Review fixup: a missing app.log must count as NOT present — the
           # first draft broke out after one 5s tick when the log had not been
           # created yet, shrinking the old 60s grace window to 5s.
           MILESTONES=("主窗口创建成功" "应用启动完成" "注册成功" "Python链路自检通过")
           ALL_PRESENT=1
-          for _ in $(seq 1 36); do
+          for _ in $(seq 1 72); do
             sleep 5
             ALL_PRESENT=1
             if [ ! -f "$LOG" ]; then
@@ -189,7 +235,7 @@ jobs:
           done
           test -f "$LOG" || { echo "::error::app.log never appeared"; cat /tmp/murmur-smoke/stdout.log | tail -20; exit 1; }
           if [ "$ALL_PRESENT" != "1" ]; then
-            echo "::error::boot milestones incomplete after 180s"
+            echo "::error::boot milestones incomplete after 360s"
             for milestone in "${MILESTONES[@]}"; do
               grep -q "$milestone" "$LOG" || echo "missing: $milestone"
             done
@@ -210,6 +256,15 @@ jobs:
           pkill -f "murmur-smoke/Murmur.app" 2>/dev/null || true
           echo "packaged app smoke passed: boot milestones + preload bridge verified"
       # [20260816_Gate_PackagedBootSmoke] END
+      # [20260906_Test_PackagedBootHealth] Spec #266 T11 (#288): run the full
+      # boot-health probes (preload bridge surface, mic button, mascot,
+      # CSP, 6s quit) against the INSTALLED app copied by the smoke step
+      # above — packaged asar layout is invisible to the dev-mode e2e job.
+      # DB isolation rides on MURMUR_DB_PATH=:memory: (electron-launch).
+      - name: Boot-health e2e probes against packaged app (mac)
+        run: pnpm exec playwright test tests/e2e/suites/00-boot-health.test.ts
+        env:
+          MURMUR_PACKAGED_EXECUTABLE: /tmp/murmur-smoke/Murmur.app/Contents/MacOS/Murmur
       - name: Generate SHA256 checksums
         run: |
           cd dist
@@ -229,18 +284,18 @@ jobs:
     needs: test
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v4
         with:
           version: 11
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: pnpm
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
 
@@ -257,23 +312,21 @@ jobs:
       - name: Install dependencies (skip postinstall)
         run: pnpm install --ignore-scripts
 
-      - name: Rebuild native modules for Electron
-        run: npx @electron/rebuild -f -w better-sqlite3
+      # [20260905_Feat_NodeSqlite] no native module to rebuild (node:sqlite
+      # is built in; spec #226) — the pnpm-on-Windows workaround above keeps
+      # guarding the install path itself.
       # [20260802_Fix_WinCiPnpmPostinstall] END
 
-      # [20260816_Fix_MacCiNodeAbi] Same ABI gate as build-mac: prove the
-      # native sqlite module opens a database under the bundled Electron
-      # before packaging, so a wrong-ABI binary can never reach an installer.
-      # This job installs with --ignore-scripts, so electron's own postinstall
-      # never extracted its binary — run it here first. The zip is already in
-      # the @electron/get cache warmed by @electron/rebuild, so it only
-      # extracts (no second download).
-      - name: Verify native sqlite ABI under Electron (packaging gate)
+      # [20260905_Feat_NodeSqlite] Same gate as build-mac, engine-swapped:
+      # prove sqlite opens a database under the bundled Electron before
+      # packaging. This job installs with --ignore-scripts, so electron's own
+      # postinstall never extracted its binary — run it here first.
+      - name: Verify sqlite opens under Electron (packaging gate)
         shell: bash
         run: |
           node node_modules/electron/install.js
-          ELECTRON_RUN_AS_NODE=1 npx electron -e "const D=require('better-sqlite3'); new D(':memory:').prepare('select 1 as ok').get(); console.log('native ABI gate passed')"
-      # [20260816_Fix_MacCiNodeAbi] END
+          ELECTRON_RUN_AS_NODE=1 npx electron -e "const {DatabaseSync}=require('node:sqlite'); new DatabaseSync(':memory:').prepare('select 1 as ok').get(); console.log('sqlite gate passed')"
+      # [20260905_Feat_NodeSqlite] END
       # [20260818_T3_PythonPackagingGate] Ticket #184: the old
       # continue-on-error here (torch/funasr pip may exceed CI time/disk)
       # shipped v1.2.0-v1.3.2 Windows installers whose Python env was
@@ -357,15 +410,21 @@ jobs:
           if (-not (Test-Path $appExe)) { throw "installed app not found at $appExe" }
           $logDir = Join-Path $env:APPDATA 'Murmur\logs'
           Remove-Item (Join-Path $logDir 'app.log') -ErrorAction SilentlyContinue
+          # [20260905_Fix_150SmokeColdCache] Warm the embedded python page
+          # cache (parity with the mac smoke): a cache-hit unpack is cold on
+          # disk and `import funasr` pulls several hundred MB of torch.
+          # Milestone assertions below still apply in full.
+          $warmPy = Join-Path $env:LOCALAPPDATA 'Programs\murmur\resources\app.asar.unpacked\python\python.exe'
+          if (Test-Path $warmPy) { & $warmPy -c "import funasr" 2>$null }
           Start-Process -FilePath $appExe
           $log = Join-Path $logDir 'app.log'
           # [20260818_T3_PythonSelfCheckMilestone] Poll for milestones
           # instead of a fixed sleep — cold `import funasr` (torch) can
-          # outrun a fixed window. Poll up to 240s, break when all present.
+          # outrun a fixed window. Poll up to 360s, break when all present.
           $milestones = @('主窗口创建成功','应用启动完成','注册成功','Python链路自检通过')
           $missing = @($milestones)
           $allPresent = $false
-          for ($i = 0; $i -lt 48; $i++) {
+          for ($i = 0; $i -lt 72; $i++) {
             Start-Sleep -Seconds 5
             if (Test-Path $log) {
               $content = Get-Content $log -Raw -Encoding UTF8
@@ -377,7 +436,7 @@ jobs:
           if (-not $allPresent) {
             Write-Host "missing milestones: $($missing -join ', ')"
             Get-Content $log -Tail 20
-            throw "boot milestones incomplete after 240s"
+            throw "boot milestones incomplete after 360s"
           }
           # Review fixup: re-read so fatal patterns written AFTER the
           # break-early snapshot are still caught (parity with mac's live
@@ -392,6 +451,16 @@ jobs:
           Stop-Process -Name 'Murmur' -Force -ErrorAction SilentlyContinue
           Write-Host 'packaged installer smoke passed: boot milestones + preload bridge verified'
       # [20260816_Gate_PackagedBootSmoke] END
+      # [20260906_Test_PackagedBootHealth] Spec #266 T11 (#288): Windows
+      # counterpart — boot-health probes against the NSIS-installed exe.
+      # Stop the smoke's leftover process first so the probes boot a fresh
+      # instance with isolated DB.
+      - name: Boot-health e2e probes against packaged app (win)
+        shell: pwsh
+        run: |
+          Stop-Process -Name 'Murmur' -Force -ErrorAction SilentlyContinue
+          $env:MURMUR_PACKAGED_EXECUTABLE = Join-Path $env:LOCALAPPDATA 'Programs\murmur\Murmur.exe'
+          pnpm exec playwright test tests/e2e/suites/00-boot-health.test.ts
       - name: Generate SHA256 checksums
         shell: pwsh
         run: |

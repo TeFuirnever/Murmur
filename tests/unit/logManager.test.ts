@@ -158,4 +158,51 @@ describe("LogManager", () => {
     const mgr = createManager();
     expect(mgr.getLogFilePath()).toBe(path.join(tmpDir, "app.log"));
   });
+
+  // [20260906_Spec259_T2] Branch close-out for the instrumented helpers
+  // (Spec #259 T2, ticket #274): cover the getFunASRLogs read paths (never
+  // exercised before — default-arg, missing-file, and parsed-file arms) and
+  // the ensureLogDirectory mkdir arm for a logDir that does not exist yet.
+  describe("[20260906_Spec259_T2] branch close-out", () => {
+    it("getFunASRLogs returns parsed entries using the default line count", () => {
+      const mgr = createManager();
+      fs.appendFileSync(
+        surface(mgr).funasrLogFile,
+        JSON.stringify({ message: "funasr ready", timestamp: "t1" }) + "\n",
+      );
+      fs.appendFileSync(
+        surface(mgr).funasrLogFile,
+        JSON.stringify({ message: "funasr warmup", timestamp: "t2" }) + "\n",
+      );
+      fs.appendFileSync(
+        surface(mgr).funasrLogFile,
+        JSON.stringify({ message: "funasr live", timestamp: "t3" }) + "\n",
+      );
+
+      // No argument → default lines=100 arm; all three entries fit.
+      const logs = mgr.getFunASRLogs();
+      expect(logs).toHaveLength(3);
+      expect(logs[2]!.message).toBe("funasr live");
+    });
+
+    it("getFunASRLogs returns empty array when the file does not exist", () => {
+      const mgr = createManager();
+      // funasrLogFile points at a path that was never written.
+      expect(mgr.getFunASRLogs(5)).toEqual([]);
+    });
+
+    it("ensureLogDirectory creates the directory when it is missing", () => {
+      const mgr = new LogManager();
+      const s = surface(mgr);
+      // Point logDir at a nested path that does not exist yet — the mkdir
+      // arm must create it (external file-system effect, asserted below).
+      const nestedDir = path.join(tmpDir, "nested", "logs");
+      s.logDir = nestedDir;
+      s._initialized = true;
+
+      mgr.ensureLogDirectory();
+
+      expect(fs.existsSync(nestedDir)).toBe(true);
+    });
+  });
 });

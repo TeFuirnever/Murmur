@@ -21,6 +21,9 @@ import * as hotkeyHandlers from "./hotkeyHandlers";
 import * as clipboardHandlers from "./clipboardHandlers";
 import * as systemHandlers from "./systemHandlers";
 import * as updateHandlers from "../updateManager";
+// [20260912_Feat_242_TemplateSystem] Ticket #242 (spec #193 T15): the
+// template-editor handlers (LIST/READ/SAVE/DELETE over templatesService).
+import * as templateHandlers from "./templateHandlers";
 import createRateLimitedHandler from "../ipcRateLimiter";
 
 // The managers bag is an opaque object owned by main.ts; each handler's
@@ -42,9 +45,36 @@ function wrapWithRateLimits(ipcMain: Electron.IpcMain): Electron.IpcMain {
   const RATE_LIMITS: Record<string, RateLimitConfig> = {
     [C.AI.PROCESS]: { maxCalls: 20, windowMs: 60_000 },
     [C.AI.CHECK_STATUS]: { maxCalls: 30, windowMs: 60_000 },
+    // [20260907_Feat_233_ListModels] Model-list derivation (T6): small
+    // quota — it fires on base_url edits, not per keystroke.
+    [C.AI.LIST_MODELS]: { maxCalls: 10, windowMs: 60_000 },
+    // [20260908_Feat_240_VocabCorrections] T13 settings-page CRUD.
+    [C.AI.VOCAB_LIST]: { maxCalls: 30, windowMs: 60_000 },
+    [C.AI.VOCAB_ADD]: { maxCalls: 30, windowMs: 60_000 },
+    [C.AI.VOCAB_DELETE]: { maxCalls: 30, windowMs: 60_000 },
+    [C.AI.VOCAB_CLEAR]: { maxCalls: 5, windowMs: 60_000 },
+    // [20260910_Feat_237_StreamDegradation] T10 settings-page view/reset.
+    [C.AI.STREAM_DEGRADATION_LIST]: { maxCalls: 30, windowMs: 60_000 },
+    [C.AI.STREAM_DEGRADATION_RESET]: { maxCalls: 5, windowMs: 60_000 },
+    // [20260912_Feat_242_TemplateSystem] Template editor CRUD. DELETE is a
+    // destructive restore-default arm (small quota, mirroring VOCAB_CLEAR /
+    // STREAM_DEGRADATION_RESET).
+    // [20260912_Fix_242_ReviewRound2] SAVE allows 120/min: the editor
+    // autosaves on a 400ms debounce, and ~1 edit per 0.5s of sustained
+    // typing was already reachable at the old 60/min — hitting the limiter
+    // surfaces in the UI as a failed save (payload effectively lost).
+    [C.TEMPLATES.LIST]: { maxCalls: 30, windowMs: 60_000 },
+    [C.TEMPLATES.READ]: { maxCalls: 30, windowMs: 60_000 },
+    [C.TEMPLATES.SAVE]: { maxCalls: 120, windowMs: 60_000 },
+    [C.TEMPLATES.DELETE]: { maxCalls: 5, windowMs: 60_000 },
     [C.TRANSCRIPTION.SAVE]: { maxCalls: 30, windowMs: 60_000 },
+    // [20260906_Feat_TranscriptionUpdate] Manual polish write-back (spec #193
+    // T1, ticket #228): fires once per polish action, so it carries the same
+    // budget as the sibling SAVE row.
+    [C.TRANSCRIPTION.UPDATE]: { maxCalls: 30, windowMs: 60_000 },
     [C.MODELS.DOWNLOAD]: { maxCalls: 3, windowMs: 300_000 },
-    [C.FUNASR.INSTALL]: { maxCalls: 3, windowMs: 300_000 },
+    // [20260906_Refactor_DeadChannelCleanup] Ticket #250: the FUNASR.INSTALL
+    // rate-limit entry was removed with the channel (zero renderer callers).
   };
 
   // Reassign handle with a rate-limiting wrapper. Cast through unknown to
@@ -117,6 +147,12 @@ export function registerAll(
   systemHandlers.register(
     wrappedIpc,
     asManagers<Parameters<typeof systemHandlers.register>[1]>(managers),
+  );
+  // [20260912_Feat_242_TemplateSystem] Template editor handlers (repo rule:
+  // every new handler file registers here).
+  templateHandlers.register(
+    wrappedIpc,
+    asManagers<Parameters<typeof templateHandlers.register>[1]>(managers),
   );
   updateHandlers.register(
     wrappedIpc,

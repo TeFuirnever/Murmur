@@ -232,9 +232,11 @@ describe("IPC contract completeness", () => {
   let registrations: Array<{ channel: string; handler: unknown }>;
 
   beforeEach(() => {
-    // WINDOW.OPEN_DEV_TOOLS and WINDOW.RELOAD are only registered when
-    // NODE_ENV === "development" (see systemHandlers.ts). Force dev so the
-    // completeness check covers the full contract surface.
+    // [20260906_Refactor_DeadChannelCleanup] Ticket #250 removed the last
+    // NODE_ENV-gated registrations (dev-only WINDOW.OPEN_DEV_TOOLS and
+    // WINDOW.RELOAD in systemHandlers.ts), so nothing is environment-gated
+    // anymore; the dev forcing stays as harmless belt-and-braces in case a
+    // future handler registers conditionally.
     originalNodeEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = "development";
 
@@ -273,6 +275,7 @@ describe("IPC contract completeness", () => {
       C.TRANSCRIPTION,
       C.AI,
       C.SETTINGS,
+      C.TEMPLATES,
       C.WINDOW,
       C.HOTKEY,
       C.CLIPBOARD,
@@ -317,6 +320,7 @@ describe("IPC contract completeness", () => {
       C.TRANSCRIPTION,
       C.AI,
       C.SETTINGS,
+      C.TEMPLATES,
       C.WINDOW,
       C.HOTKEY,
       C.CLIPBOARD,

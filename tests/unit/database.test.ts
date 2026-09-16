@@ -115,20 +115,28 @@ describe("DatabaseManager", () => {
       // [20260726_Tier3_DatabaseMigrate] DatabaseManager.db is private, but
       // this test asserts the pragma state set during initialize(). Access
       // via a structural cast through `unknown` (no `any`) exposing only the
-      // `pragma` method used here. File-based temp DB (not :memory:), so WAL
+      // query surface used here. File-based temp DB (not :memory:), so WAL
       // pragma takes effect.
+      // [20260905_Feat_NodeSqlite] pragma reads migrated off
+      // better-sqlite3's .pragma() helper: node:sqlite reads pragmas like any
+      // other query, returning a single row object per PRAGMA statement.
       const rawDb = (
         db as unknown as {
           db: {
-            pragma: (name: string, opts?: { simple?: boolean }) => unknown;
+            prepare: (sql: string) => { get: () => unknown };
           };
         }
       ).db;
-      const mode = rawDb.pragma("journal_mode", { simple: true });
-      expect(mode).toBe("wal");
+      const mode = rawDb.prepare("PRAGMA journal_mode").get() as {
+        journal_mode: string;
+      };
+      expect(mode.journal_mode).toBe("wal");
 
-      const timeout = rawDb.pragma("busy_timeout", { simple: true });
-      expect(timeout).toBe(5000);
+      // the result column of PRAGMA busy_timeout is named "timeout"
+      const timeoutRow = rawDb.prepare("PRAGMA busy_timeout").get() as {
+        timeout: number;
+      };
+      expect(timeoutRow.timeout).toBe(5000);
     });
   });
 

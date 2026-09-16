@@ -92,10 +92,11 @@ describe("Project type safety — all .ts/.tsx/.d.ts follow standards", () => {
       pattern: "(window as any).webkitAudioContext",
       reason: "Legacy Safari/Chrome prefixed AudioContext — not in TS DOM lib",
     },
-    {
-      pattern: "finalData as any",
-      reason: "AudioWorklet port message shape — untyped at the boundary",
-    },
+    // [20260912_Refactor_322_InsertUpdateFlow] the `finalData as any` entry
+    // was removed — the INSERT payload is now typed by inference and
+    // satisfies the widened saveTranscription declaration (contract test:
+    // preload-bridge-contract.test.ts), so no cast remains in
+    // useRecording.ts.
     {
       pattern: "(import.meta as any).hot",
       reason:

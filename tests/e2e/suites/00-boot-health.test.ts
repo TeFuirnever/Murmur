@@ -32,6 +32,9 @@
 // [20260725_E2E_BootHealthGate] END
 
 import { test, expect } from "@playwright/test";
+import fs from "fs";
+import os from "os";
+import path from "path";
 import {
   launchElectronApp,
   closeElectronApp,
@@ -58,21 +61,137 @@ const KNOWN_RENDERER_NOISE = [
 // test evaluates them by name inside the browser (the old call(window) form
 // ran on the Node side, where the Playwright Page has no electronAPI — the
 // test could only ever fail).
+// [20260906_Refactor_DeadChannelCleanup] Ticket #250: the get-system-info and
+// is-window-maximized probes were removed with their zero-renderer-caller
+// channels (SYSTEM.INFO / WINDOW.IS_MAX); 6 side-effect-free probes remain.
 const BOOT_PROBES = {
   "check-funasr-status": "checkFunASRStatus",
   "check-model-files": "checkModelFiles",
   "get-ai-modes": "getAIModes",
   "get-all-settings": "getAllSettings",
-  "get-system-info": "getSystemInfo",
   "get-app-version": "getAppVersion",
-  "is-window-maximized": "isWindowMaximized",
   "get-current-hotkey": "getCurrentHotkey",
 };
 // [20260725_E2E_BootHealthGate] END
 
+// [20260912_Test_WinPackagedBootFunasrSettle] v1.5.1 release CI (run
+// 34581815142, both workflow attempts) failed this suite on Windows 4/4
+// sub-runs: the FunASR manager self-check takes ~20s on the 4-core
+// runner, so the Python server spawn lands exactly while 0.3-0.6 probe
+// the app; the interpreter+funasr import storm collided with 0.5's
+// reload / 0.6's evaluate and the app received a teardown (will-quit,
+// exit 0) mid-probe. Waiting for the server's first init result (test
+// 0.2b below) moves the storm BEFORE the fragile probes, and parks the
+// Python process in stdin readline so 0.7's gracefulShutdown "exit"
+// command is answered immediately.
+//
+// "Settled" = ANY terminal FunASR state, not just a spawned server
+// (PR #347 CI run 34629631370 failed 0.2b on BOTH platforms because
+// the lint-and-test runners have no embedded Python env at all):
+//   1. 启动成功   — server up, models initialized (dev machines);
+//   2. 初始化失败 — server up, models_not_downloaded (release runners);
+//   3. 启动初始化失败 — initializeAtStartup threw (e.g. "嵌入式Python环境
+//      不可用" on PR CI); the server NEVER spawns in this state
+//      (preInitializeModels early-returns on installed:false,
+//      funasrManager.ts:329-333), so there is no storm to wait out and
+//      0.2b resolves immediately.
+// All three are logger.info/warn lines and therefore land in app.log
+// (logManager.ts:72-103 routes every level to the file). The server
+// milestones are the same app.log contract the release smoke gates on
+// (see funasrManager.ts [20260818_T3_PythonSelfCheckMilestone]).
+// Budget note: the settle timeout value is platform-scaled — see
+// [20260912_Test_MacPackagedBootSettleBudget] below.
+const FUNASR_INIT_SETTLE_POLL_MS = 500;
+const FUNASR_INIT_MILESTONE =
+  /FunASR服务器(启动成功|初始化失败)|FunASR启动初始化失败/;
+
+// Mirrors LogManager.getLogDirectory(): <userData>/logs/app.log, with
+// userData resolved from the app name ("murmur") per platform. Matches
+// the packaged path observed in release CI (%APPDATA%\murmur\logs).
+function funasrAppLogPath(): string {
+  if (process.platform === "win32") {
+    return path.join(process.env.APPDATA ?? "", "murmur", "logs", "app.log");
+  }
+  if (process.platform === "darwin") {
+    return path.join(
+      os.homedir(),
+      "Library",
+      "Application Support",
+      "murmur",
+      "logs",
+      "app.log",
+    );
+  }
+  return path.join(os.homedir(), ".config", "murmur", "logs", "app.log");
+}
+// [20260912_Test_WinPackagedBootFunasrSettle] END
+
+// [20260912_Test_WinPackagedQuitBudget] Quit budget for test 0.7. The
+// will-quit handler races FunASR gracefulShutdown at 5s
+// (main.ts:397-400); packaged teardown then measured ~3-5s more on
+// Windows (run 34581815142: total close 6.5s vs the old flat 6s
+// budget). [20260912_Test_MacPackagedQuitBudget] With the 0.2b settle
+// in place the FunASR server is fully booted at quit time, so darwin
+// now pays the real gracefulShutdown + torch-interpreter teardown too:
+// run 34641412843 measured 10.8s and 11.3s vs the old darwin 6s
+// budget. The assertion exists to catch quit HANGS, not to time the
+// shutdown — 15s both platforms (5s race + ~6s teardown + slack).
+const QUIT_BUDGET_MS = 15_000;
+// [20260912_Test_WinPackagedQuitBudget] END
+
+// [20260912_Test_MacPackagedBootSettleBudget] Release run 34644372201
+// (build-mac) failed 0.2b: on the 3-core mac release runner the FunASR
+// python cold boot measured 56.4s from spawn to init milestone
+// (20:39:04.48 → 20:40:00.90) — 7x the warm run's 8.0s (run
+// 34641412843) and consistent with the smoke step's documented >180s
+// fully-cold torch import ([20260905_Fix_150SmokeColdCache], the reason
+// the mac smoke budgets 360s for the same milestone family). The flat
+// 30s settle budget was structurally unfit for that runner. darwin gets
+// 300s — a ceiling, not an expectation: warm boots settle in ~8s, PR CI
+// (env-unavailable milestone) on the first poll, and a genuinely
+// wedged python still fails the suite, just later. win32 keeps 30s
+// (python boot measured 5-6s in both v1.5.1 release attempts).
+const FUNASR_INIT_SETTLE_TIMEOUT_MS =
+  process.platform === "darwin" ? 300_000 : 30_000;
+
+// Suite per-test ceiling, same root cause: 0.2's check-funasr-status
+// probe pays a cold `import funasr` per STATUS call on the mac runner
+// (78s measured in attempt 1 of run 34644372201 against the old 90s
+// ceiling). darwin 360s aligns with the mac smoke budget; win32 keeps
+// 90s. A real hang still fails the test — the budget shapes WHEN, not
+// WHETHER.
+const BOOT_TEST_TIMEOUT_MS = process.platform === "darwin" ? 360_000 : 90_000;
+// [20260912_Test_MacPackagedBootSettleBudget] END
+
 test.describe.serial("Suite 0: Boot Health (Phase A-E)", () => {
+  // [20260906_Test_PackagedBootHealth] Spec #266 T11: in packaged-app runs
+  // (release workflow) first boot pays cold asar/entitlements cost; the
+  // config default 45s would mask the real launch timeout of 60s.
+  // [20260912_Test_MacPackagedBootSettleBudget] Value platform-scaled —
+  // see tag above (darwin 360s for the mac runner's cold torch import,
+  // win32 stays 90s).
+  test.setTimeout(BOOT_TEST_TIMEOUT_MS);
+
   let electronApp;
   let window;
+  // [20260912_Test_WinPackagedBootFunasrSettle] Byte offset into app.log
+  // captured BEFORE launch in beforeAll; the 0.2b milestone scan only
+  // reads content appended AFTER it, so a previous instance's log (the
+  // release pipeline's PowerShell smoke boots the same packaged app
+  // first) cannot false-positive the settle wait. It must be captured
+  // pre-launch because the env-unavailable milestone (state 3 above)
+  // fires DURING boot — potentially before launchElectronApp() returns.
+  let funasrLogOffset = 0;
+  // [20260912_Test_WinPackagedBootFunasrSettle] END
+  // [20260912_Test_MacPackagedBootSettleBudget] Set when the packaged
+  // app process terminates (Playwright 'close' event). 0.2b polls
+  // app.log for up to 300s on darwin; if the app dies mid-wait (the
+  // clean will-quit/exit 0 teardown seen in runs 34581815142 and
+  // 34644372201) the poll must fail fast with a precise cause instead
+  // of timing out opaquely. Test 0.7's intentional close also sets it,
+  // but no poll is active by then.
+  let appTerminated = false;
+  // [20260912_Test_MacPackagedBootSettleBudget] END
   // [20260725_E2E_BootHealthGate_CodeReviewS2] Renderer console listener
   // is attached in beforeAll IMMEDIATELY after firstWindow() resolves so
   // it catches initial-mount errors, not just post-reload ones. Previously
@@ -83,7 +202,22 @@ test.describe.serial("Suite 0: Boot Health (Phase A-E)", () => {
   const consoleErrors = [];
 
   test.beforeAll(async () => {
+    // [20260912_Test_WinPackagedBootFunasrSettle] Capture the app.log
+    // offset BEFORE launch so boot-time milestones (state 3 fires ~0.5s
+    // in) are guaranteed to land after it.
+    try {
+      funasrLogOffset = fs.statSync(funasrAppLogPath()).size;
+    } catch {
+      funasrLogOffset = 0; // first boot on this machine — no log yet
+    }
+    // [20260912_Test_WinPackagedBootFunasrSettle] END
     ({ app: electronApp, window } = await launchElectronApp());
+    // [20260912_Test_MacPackagedBootSettleBudget] Track process
+    // termination so 0.2b's poll can fail fast (see declaration above).
+    electronApp.on("close", () => {
+      appTerminated = true;
+    });
+    // [20260912_Test_MacPackagedBootSettleBudget] END
     window.on("console", (msg) => {
       if (msg.type() === "error") consoleErrors.push(msg.text());
     });
@@ -111,6 +245,8 @@ test.describe.serial("Suite 0: Boot Health (Phase A-E)", () => {
   //
   // [20260816_Refactor_DeadChannels] get-current-model probe removed with the
   // placeholder MODELS.CURRENT channel; 8 side-effect-free probes remain.
+  // [20260906_Refactor_DeadChannelCleanup] …and ticket #250 removed the
+  // get-system-info / is-window-maximized probes; 6 probes remain.
   // [20260816_Fix_BootProbeContext] The probes used to run as call(window) on
   // the Node side, where the Playwright Page object has no electronAPI — the
   // test could only ever fail. Evaluate each probe inside the browser so the
@@ -120,7 +256,7 @@ test.describe.serial("Suite 0: Boot Health (Phase A-E)", () => {
       await expect(
         window.evaluate(
           // [20260816_Refactor_DeadChannels] get-current-model probe removed with the
-          // placeholder MODELS.CURRENT channel; 8 side-effect-free probes remain.
+          // placeholder MODELS.CURRENT channel.
           // [20260816_Fix_BootProbeContext] Runs in the browser: look the
           // method up on the real preload bridge by name so a rejection
           // ("No handler registered") surfaces as a test failure.
@@ -137,6 +273,54 @@ test.describe.serial("Suite 0: Boot Health (Phase A-E)", () => {
         `IPC channel "${channel}" did not resolve`,
       ).resolves.toBeDefined();
     }
+  });
+
+  // 0.2b — [20260912_Test_WinPackagedBootFunasrSettle] wait for FunASR
+  // to reach ANY terminal first-boot state before the reload / evaluate
+  // probes below. On Windows release CI the interpreter+funasr import
+  // storm (~5s on the 4-core runner) overlaps tests 0.3-0.6 and the app
+  // received a mid-probe teardown 4/4 sub-runs (run 34581815142).
+  // Web-first poll (R1) on the app.log milestone — no fixed
+  // waitForTimeout (§8). Terminal states (see tag above): server init
+  // success, server init failure (models_not_downloaded — the expected
+  // release-CI state), or FunASR unavailable (python env missing — the
+  // PR-CI state; no server ever spawns, so the wait resolves on the
+  // first poll). [20260912_Test_MacPackagedBootSettleBudget] The poll
+  // budget is 300s on darwin (cold torch import measured 56s, worst
+  // documented >180s) and the predicate fails fast if the app process
+  // terminates mid-wait — a dead app means the teardown recurred, not a
+  // slow boot.
+  test("0.2b FunASR first-boot init settles before renderer probes", async () => {
+    const logPath = funasrAppLogPath();
+    await expect
+      .poll(
+        () => {
+          if (appTerminated) {
+            throw new Error(
+              "packaged app terminated while waiting for the FunASR init " +
+                "milestone — clean will-quit/exit 0 teardown (Playwright-side " +
+                "graceful close under runner load), not a slow python boot; " +
+                "see [20260912_Test_MacPackagedBootSettleBudget]",
+            );
+          }
+          try {
+            const content = fs.readFileSync(logPath, "utf8");
+            // Clamp: if boot rotated/recreated the log (cleanOldLogs
+            // deletes >7d files), the pre-launch offset can exceed the
+            // new file's length — scan the whole fresh file instead.
+            return FUNASR_INIT_MILESTONE.test(
+              content.slice(Math.min(funasrLogOffset, content.length)),
+            );
+          } catch {
+            return false; // app.log not created yet
+          }
+        },
+        {
+          timeout: FUNASR_INIT_SETTLE_TIMEOUT_MS,
+          intervals: [FUNASR_INIT_SETTLE_POLL_MS],
+        },
+      )
+      .toBe(true);
   });
 
   // 0.3 — Phase C6: preload bridge exposes the contract. The threshold of
@@ -194,14 +378,32 @@ test.describe.serial("Suite 0: Boot Health (Phase A-E)", () => {
     expect(installed).toBe(true);
   });
 
+  // 0.7a — [20260905_Feat_BloubMascotWiring] the title-bar bot mascot
+  // (spec #224) must mount AND paint in the real app: the shell sets
+  // data-bot-state imperatively from its rAF loop, so a non-empty value
+  // proves renderer wiring + engine + paint loop all survived boot.
+  test("0.7a title-bar mascot is mounted and painted", async () => {
+    const mascot = window.locator("svg[data-bot-state]");
+    await expect(mascot).toBeAttached();
+    await expect
+      .poll(async () => await mascot.getAttribute("data-bot-state"), {
+        timeout: 5_000,
+      })
+      .toMatch(
+        /^(idle|wide|thinking|orbit|sleep|alert|exclaim|comet|burst|wink)$/,
+      );
+  });
+
   // 0.7 — Phase E3: graceful shutdown. will-quit race timeout is 5s
-  // (main.ts will-quit handler); 6s gives 1s of slack. If this fails, a
-  // manager's before-quit hook is hanging — typically FunASR Python spawn
-  // teardown or sqlite open handle. Nulls electronApp so afterAll skips.
-  test("0.7 app quits within 6s (will-quit race timeout is 5s)", async () => {
+  // (main.ts will-quit handler); QUIT_BUDGET_MS adds the platform
+  // teardown headroom measured in release CI (see tag above). If this
+  // fails, a manager's before-quit hook is hanging — typically FunASR
+  // Python spawn teardown or sqlite open handle. Nulls electronApp so
+  // afterAll skips.
+  test("0.7 app quits within budget (will-quit race timeout is 5s)", async () => {
     const start = Date.now();
     await closeElectronApp(electronApp);
-    expect(Date.now() - start).toBeLessThan(6_000);
+    expect(Date.now() - start).toBeLessThan(QUIT_BUDGET_MS);
     electronApp = null; // prevent double-close in afterAll
   });
 });

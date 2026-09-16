@@ -10,7 +10,13 @@ export default defineConfig({
   // [20260724_TS_BigBang_TestFix] END
   // [20260726_Tier43_E2EHelpers] END
   timeout: 45000,
-  retries: 0, // Start with 0 — increase to 1 only after suite stabilizes
+  // [20260906_Test_E2eGatePromotion] Spec #266 T01: boot health is now a
+  // blocking CI gate, and one CI-only retry absorbs the documented macOS
+  // firstWindow flakiness (architect recommendation from the original
+  // promotion plan). Local runs keep 0 retries so flakiness stays visible
+  // to developers.
+  retries: process.env.CI ? 1 : 0,
+  // [20260906_Test_E2eGatePromotion] END
   workers: 1, // Sequential: Electron can't parallelize
   use: {
     trace: "on-first-retry",

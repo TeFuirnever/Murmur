@@ -6,12 +6,14 @@ import type {
   LocalModelDetection,
   TranscriptionRecord,
   TranscriptionSaveResult,
+  TranscriptionUpdateResult,
+  ListModelsResult,
+  PolishChunk,
   FileTranscriptionResult,
   ExportResult,
   ExportAllResult,
   AIReviewResult,
   FunASRStatusResult,
-  FunASRInstallResult,
   ModelCheckResult,
   DownloadProgress,
   UpdateCheckResult,
@@ -19,20 +21,19 @@ import type {
   UpdateProgressData,
   UpdateCompleteData,
   UpdateErrorData,
-  PermissionResult,
   HotkeyRegistrationResult,
-  ProcessingUpdateData,
   FileTranscriptionProgressData,
   OperationResult,
+  TemplateListResult,
+  TemplateReadResult,
+  TemplateSaveResult,
 } from "./types/ipc";
 
 export interface ElectronAPI {
   // Window control
   hideWindow: () => Promise<void>;
-  showWindow: () => Promise<void>;
   minimizeWindow: () => Promise<void>;
   maximizeWindow: () => Promise<void>;
-  isWindowMaximized: () => Promise<boolean>;
   onWindowMaximizeChange: (
     callback: (isMaximized: boolean) => void,
   ) => () => void;
@@ -46,12 +47,6 @@ export interface ElectronAPI {
     options?: Record<string, unknown>,
   ) => Promise<FileTranscriptionResult>;
   checkFunASRStatus: () => Promise<FunASRStatusResult>;
-  installFunASR: () => Promise<FunASRInstallResult>;
-  restartFunasrServer: () => Promise<{
-    success: boolean;
-    message?: string;
-    error?: string;
-  }>;
   // [20260822_T12_IdleUnload] Fire-and-forget reload warm-up (#190).
   reloadFunasrModels: () => Promise<{
     success: boolean;
@@ -73,19 +68,64 @@ export interface ElectronAPI {
     text: string,
     mode: string,
     timeout?: number,
+    requestId?: string,
   ) => Promise<AIProcessResult>;
   checkAIStatus: (testConfig?: {
     ai_api_key?: string;
     ai_base_url?: string;
     ai_model?: string;
   }) => Promise<AICheckStatusResult>;
+  // [20260907_Feat_233_ListModels] Provider model-list derivation (T6).
+  listAIModels: (baseUrl: string, apiKey: string) => Promise<ListModelsResult>;
+  // [20260907_Feat_235_StreamPipeline] T8 streaming abort + chunk push.
+  abortPolish: (requestId: string) => Promise<OperationResult>;
+  // [20260908_Feat_240_VocabCorrections] T13 vocabulary CRUD.
+  listVocabCorrections: () => Promise<{
+    success: boolean;
+    entries: Array<{ wrong: string; right: string }>;
+  }>;
+  addVocabCorrection: (
+    wrong: string,
+    right: string,
+  ) => Promise<OperationResult>;
+  deleteVocabCorrection: (wrong: string) => Promise<OperationResult>;
+  clearVocabCorrections: () => Promise<OperationResult>;
+  // [20260910_Feat_237_StreamDegradation] T10 degradation-memory view/reset.
+  listStreamDegradations: () => Promise<{
+    success: boolean;
+    entries: Array<{ baseUrl: string; at: number }>;
+    error?: string;
+  }>;
+  resetStreamDegradations: () => Promise<
+    OperationResult & {
+      removed?: number;
+    }
+  >;
+  // [20260910_Feat_237_StreamDegradation] END
+  onPolishChunk: (callback: (chunk: PolishChunk) => void) => () => void;
   getAIModes: () => Promise<AIMode[]>;
   getAIProviderPresets: () => Promise<AIProviderPreset[]>;
   detectLocalModels: () => Promise<LocalModelDetection[]>;
 
+  // [20260912_Feat_242_TemplateSystem] Ticket #242 (spec #193 T15): custom
+  // template editor. Requests carry NAME+CONTENT only — never a path; the
+  // main process sanitizes the name into the on-disk filename.
+  // [20260912_Fix_242_ReviewRound2] READ/SAVE/DELETE take the on-disk
+  // fileName from LIST (a bare filename; sanitized again main-side).
+  listTemplates: () => Promise<TemplateListResult>;
+  readTemplate: (fileName: string) => Promise<TemplateReadResult>;
+  saveTemplate: (
+    fileName: string,
+    content: string,
+  ) => Promise<TemplateSaveResult>;
+  deleteTemplate: (fileName: string) => Promise<OperationResult>;
+  // [20260912_Feat_242_TemplateSystem] END
+
   // Clipboard
-  pasteText: (text: string) => Promise<void>;
-  copyText: (text: string) => Promise<void>;
+  // [20260820_E2E_PasteContractFix] PASTE resolves the same envelope COPY
+  // uses: {success:true} on success, {success:false, error} on failure.
+  pasteText: (text: string) => Promise<OperationResult>;
+  copyText: (text: string) => Promise<OperationResult>;
 
   // Transcription
   saveTranscription: (data: {
@@ -95,12 +135,37 @@ export interface ElectronAPI {
     confidence?: number;
     duration?: number;
     audio_format?: string;
+    // [20260912_TypeContract_SaveTranscriptionPayload] Ticket #322: language
+    // and file_size ride the SAVE channel from the recording auto-path
+    // INSERT (useRecording.ts) and the main-process handler persists them —
+    // declared here so the payload passes typecheck without casts (contract
+    // test: preload-bridge-contract.test.ts).
+    language?: string;
+    file_size?: number;
   }) => Promise<TranscriptionSaveResult>;
   getTranscriptions: (
     limit: number,
     offset: number,
   ) => Promise<TranscriptionRecord[]>;
   deleteTranscription: (id: number) => Promise<OperationResult>;
+  // [20260906_Feat_TranscriptionUpdate] Manual polish write-back (spec #193
+  // T1, ticket #228): only the polished-text columns are patchable — the DB
+  // whitelist rejects everything else, raw_text is never writable.
+  // [20260906_Feat_ManualEditProtection] Spec #193 T2 (ticket #229): the
+  // manual-edit flag joins the whitelist — the history-window edit-save sets
+  // it in the SAME atomic call that writes the edited text.
+  updateTranscription: (
+    id: number,
+    patch: {
+      processed_text?: string;
+      text?: string;
+      manually_edited?: boolean;
+    },
+    // [20260912_Fix_322_AutoUpdateGuard] Ticket #322: the auto-polish
+    // write-back passes the T2 manual-edit guard; omitted (undefined) by
+    // the user-triggered polish/edit path, which stays unrestricted.
+    options?: { skipWhenManuallyEdited?: boolean },
+  ) => Promise<TranscriptionUpdateResult>;
   diarizeAudio: (id: number) => Promise<{
     success: boolean;
     segments?: Array<{
@@ -117,15 +182,12 @@ export interface ElectronAPI {
   getSetting: (key: string, defaultValue?: unknown) => Promise<unknown>;
   setSetting: (key: string, value: unknown) => Promise<void>;
   getAllSettings: () => Promise<Record<string, unknown>>;
-  saveSetting: (key: string, value: unknown) => Promise<void>;
-  resetSettings: () => Promise<void>;
 
   // Hotkey
   registerHotkey: (hotkey: string) => Promise<HotkeyRegistrationResult>;
   unregisterHotkey: (hotkey: string) => Promise<HotkeyRegistrationResult>;
   getCurrentHotkey: () => Promise<string>;
   setRecordingState: (isRecording: boolean) => Promise<void>;
-  getRecordingState: () => Promise<boolean>;
   onHotkeyTriggered: (callback: (hotkey: string) => void) => () => void;
 
   // File operations
@@ -146,6 +208,9 @@ export interface ElectronAPI {
     extension?: string;
     error?: string;
   }>;
+  // [20260911_Fix_338_DragDropImport] webUtils.getPathForFile bridge for
+  // drag & drop imports (Electron >= 32 removed File.path).
+  getPathForFile: (file: File) => string;
   transcribeFile: (
     audioPath: string,
     options?: Record<string, unknown>,
@@ -162,11 +227,6 @@ export interface ElectronAPI {
   ) => Promise<AIReviewResult>;
 
   // System
-  getSystemInfo: () => Promise<Record<string, unknown>>;
-  checkPermissions: () => Promise<PermissionResult>;
-  requestPermissions: () => Promise<PermissionResult>;
-  testAccessibilityPermission: () => Promise<boolean>;
-  openSystemPermissions: () => Promise<void>;
   getAppVersion: () => Promise<string>;
 
   // Update management
@@ -191,17 +251,8 @@ export interface ElectronAPI {
   // Misc
   openExternal: (url: string) => Promise<void>;
   log: (level: string, message: string, data?: unknown) => Promise<void>;
-  reloadWindow: () => Promise<void>;
-  openDevTools: () => Promise<void>;
 
   // Event listeners
-  onTranscriptionUpdate: (
-    callback: (data: TranscriptionRecord) => void,
-  ) => () => void;
-  onProcessingUpdate: (
-    callback: (eventOrData: unknown, data?: ProcessingUpdateData) => void,
-  ) => () => void;
-  onError: (callback: (data: { error: string }) => void) => () => void;
   onSettingsUpdate: (
     callback: (data: Record<string, unknown>) => void,
   ) => () => void;
@@ -209,11 +260,9 @@ export interface ElectronAPI {
   // History window
   openHistoryWindow: () => Promise<void>;
   closeHistoryWindow: () => Promise<void>;
-  hideHistoryWindow: () => Promise<void>;
 
   // Settings window
   openSettingsWindow: () => Promise<void>;
-  closeSettingsWindow: () => Promise<void>;
   hideSettingsWindow: () => Promise<void>;
 }
 
@@ -242,6 +291,15 @@ declare global {
   // getTranscription/getTranscriptionStats, getSettings(legacy),
   // importSettings/exportSettings, and the TranscriptionStats/ModelInfo/
   // SettingsImportResult/SettingsExportResult interfaces in types/ipc.ts.
+  // [20260906_Refactor_DeadChannelCleanup] Ticket #250: removed the 20
+  // renderer-orphan channels measured by ipc-contracts-orphans.test.ts
+  // (yellow list) — showWindow, isWindowMaximized, installFunASR,
+  // restartFunasrServer, saveSetting, resetSettings, getRecordingState,
+  // getSystemInfo, checkPermissions, requestPermissions,
+  // testAccessibilityPermission, openSystemPermissions, reloadWindow,
+  // openDevTools, hideHistoryWindow, closeSettingsWindow,
+  // onTranscriptionUpdate, onProcessingUpdate, onError — plus the orphaned
+  // FunASRInstallResult/PermissionResult/ProcessingUpdateData imports.
   interface Window {
     electronAPI: ElectronAPI;
     constants: AppConstants;
