@@ -8,12 +8,14 @@ FunASR模型服务器
 import sys
 import json
 import os
+import re
 import logging
 import traceback
 import signal
 import contextlib
 import io
 import argparse
+import unicodedata
 import glob
 import threading
 import queue
@@ -53,17 +55,83 @@ logger = logging.getLogger(__name__)
 logger.info(f"FunASR服务器日志文件: {log_file_path}")
 
 
+# [20260913_Fix_256_AnchorParity] The AUTHORITATIVE model-readiness anchors,
+# hoisted from _repo_ready()'s inline list so the cross-language contract
+# test (tests/unit/modelManager-anchor-parity.test.ts) has a stable parse
+# target: Node's _verifyModel must accept exactly this name set, otherwise a
+# repo reads "ready" to Python and "missing" to Node (the #256/#336 flap
+# class). Exact names match literally; "*.onnx"/"vocab*" are fnmatch globs.
+# Behavior is identical to the former inline list — hoist only.
+_READY_PATTERNS = [
+    "model.pt", "pytorch_model.bin", "*.onnx",
+    "config.json", "configuration.json", "model.yaml", "vocab*"
+]
+
+
+# [20260820_Fix_SuppressStdoutRace] The model loaders run in parallel
+# threads and each wraps its AutoModel call in suppress_stdout(). The
+# previous per-thread save/restore of the PROCESS-GLOBAL sys.stdout raced:
+# with N threads inside at once, each thread's "old" stdout was the previous
+# thread's devnull, and after interleaved restores sys.stdout could point at
+# a devnull already closed by another thread's exit — the next protocol
+# print then raised "ValueError: I/O operation on closed file" and killed
+# the server AFTER models loaded successfully. Fix: serialize the
+# save/restore with a lock and reference-count concurrent users so the sink
+# is installed once (first entrant) and removed once (last exits). The lock
+# covers only the bookkeeping, never the suppressed body, so model loads
+# still run in parallel.
+_SUPPRESS_STDOUT_LOCK = threading.Lock()
+_SUPPRESS_STDOUT_DEPTH = 0
+_SUPPRESS_STDOUT_SAVED = None
+_SUPPRESS_STDOUT_SINK = None
+
+
 @contextlib.contextmanager
 def suppress_stdout():
-    """上下文管理器：临时重定向stdout到devnull，避免FunASR库的非JSON输出干扰IPC通信"""
-    old_stdout = sys.stdout
-    devnull = open(os.devnull, "w")
+    """上下文管理器：临时重定向stdout到devnull，避免FunASR库的非JSON输出干扰IPC通信
+
+    Thread-safe: multiple threads may be inside at once; only the first
+    entrant saves the original stdout and installs the shared sink, and the
+    last exiter restores it (lock + reference counting).
+    """
+    global _SUPPRESS_STDOUT_DEPTH, _SUPPRESS_STDOUT_SAVED, _SUPPRESS_STDOUT_SINK
+    with _SUPPRESS_STDOUT_LOCK:
+        if _SUPPRESS_STDOUT_DEPTH == 0:
+            _SUPPRESS_STDOUT_SAVED = sys.stdout
+            _SUPPRESS_STDOUT_SINK = open(os.devnull, "w")
+            sys.stdout = _SUPPRESS_STDOUT_SINK
+        _SUPPRESS_STDOUT_DEPTH += 1
     try:
-        sys.stdout = devnull
         yield
     finally:
-        sys.stdout = old_stdout
-        devnull.close()
+        with _SUPPRESS_STDOUT_LOCK:
+            _SUPPRESS_STDOUT_DEPTH -= 1
+            if _SUPPRESS_STDOUT_DEPTH == 0:
+                sys.stdout = _SUPPRESS_STDOUT_SAVED
+                _SUPPRESS_STDOUT_SAVED = None
+                if _SUPPRESS_STDOUT_SINK is not None:
+                    _SUPPRESS_STDOUT_SINK.close()
+                    _SUPPRESS_STDOUT_SINK = None
+# [20260820_Fix_SuppressStdoutRace] END
+
+
+# [20260905_Fix_208_ProtocolStreamImmune] Issue #208: protocol output must be
+# immune to suppress_stdout() windows. print() resolves sys.stdout
+# dynamically, so a protocol line emitted while any loader thread is inside a
+# suppression window (reload progress dequeued by _output_worker, command
+# responses on the main thread) landed in the shared devnull sink and was
+# silently dropped — #207 removed the closed-devnull crash, but the swallow
+# path remained. The protocol channel therefore writes to the stream captured
+# at process start (the original host pipe), never to the redirectable
+# global. Captured at import time, before any suppression can run.
+_PROTOCOL_STDOUT = sys.stdout
+
+
+def _protocol_print(payload):
+    """Write a protocol JSON line to the host pipe via the startup stream."""
+    _PROTOCOL_STDOUT.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    _PROTOCOL_STDOUT.flush()
+# [20260905_Fix_208_ProtocolStreamImmune] END
 
 
 # [20260819_T8_ThreadAdapt] Ticket #187 (spec #177 T8): inference thread
@@ -72,6 +140,33 @@ def suppress_stdout():
 # OMP_NUM_THREADS=4 (no headroom on 4-core, over-subscription on 2-core).
 THREAD_UI_HEADROOM = 2
 THREAD_CAP = 8
+
+# [20260820_T14_Hotwords] Ticket #183: Python-side defense-in-depth cap
+# for the hotword option (TS boundary validation is the primary gate; this
+# catches corrupted-DB / renderer-bug payloads that reach the protocol).
+HOTWORD_MAX_CHARS = 4096
+
+# [T11 review NIT] Shared error message for failed (re)initialization.
+INIT_FAILED_MESSAGE = "模型初始化失败"
+
+
+def sanitize_hotword(value):
+    """Coerce a protocol hotword to a safe string ('' on non-string).
+
+    [T14 review MINOR] Logs degradation/truncation (defense must be
+    observable) and strips Cc control characters so caller-supplied
+    garbage cannot reach generate() unfiltered.
+    """
+    if not isinstance(value, str):
+        if value:
+            logger.warning(f"热词类型非法({type(value).__name__})，降级为空串")
+        return ""
+    cleaned = "".join(
+        ch for ch in value if unicodedata.category(ch) != "Cc"
+    )[:HOTWORD_MAX_CHARS]
+    if len(cleaned) != len(value):
+        logger.warning("热词含控制字符或超长，已清洗/截断")
+    return cleaned
 
 
 def compute_inference_threads(cores, override=None):
@@ -97,6 +192,9 @@ def compute_inference_threads(cores, override=None):
 class FunASRServer:
     def __init__(self, damo_root=None):
         self.asr_model = None
+        # [20260820_T15_SeacoSwap] Which ASR generation actually loaded
+        # (exposed via check_status so the UI can flag degraded hotwords).
+        self.asr_model_name = None
         self.vad_model = None
         self.punc_model = None
         self.cam_model = None
@@ -108,6 +206,10 @@ class FunASRServer:
         self.request_queue = queue.Queue()
         self.response_queue = queue.Queue()
         self.cancel_event = threading.Event()
+        # [20260821_T11_UnloadReload] Serializes initialize() across the
+        # main read loop (mic lazy-init) and the inference worker
+        # (reload_models) — concurrent double model load = memory blowup.
+        self._init_lock = threading.RLock()
         self._inference_thread = None
         self._output_thread = None
 
@@ -239,24 +341,227 @@ class FunASRServer:
         logger.info(f"收到信号 {signum}，准备退出...")
         self.running = False
 
-    def _load_asr_model(self):
-        """加载ASR模型"""
-        try:
-            logger.info("开始加载ASR模型...")
-            with suppress_stdout():
-                from funasr import AutoModel
+    # [20260820_T15_SeacoSwap] Ticket #192: primary = hotword-capable
+    # SeACo (T13 spike: zero CER regression, timestamps intact); the old
+    # paraformer stays as the ROLLBACK when SeACo fails to load (missing
+    # files mid-upgrade, corrupt download) — the app stays usable.
+    ASR_MODEL_SEACO = "damo/speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch"
+    ASR_MODEL_FALLBACK = "damo/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch"
 
-                self.asr_model = AutoModel(
-                    model="damo/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
-                    model_revision="v2.0.4",
-                    disable_update=True,
-                    device=self.device,
-                )
-            logger.info("ASR模型加载完成")
-            return True
-        except Exception as e:
-            logger.error(f"ASR模型加载失败: {str(e)}")
+    # [20260820_T15_SeacoSwap] Promoted from a nested run() helper: the
+    # ASR loader's disk-presence gate needs the same resolution.
+    @staticmethod
+    def _default_damo_root():
+        """解析默认模型根目录（MODELSCOPE_CACHE + 新旧两种 modelscope 布局）
+
+        [20260905_Fix_216_DamoRootLayout] modelscope >= 1.19 downloads into
+        a NEW layout with an extra `models` layer — verified against 1.37:
+            <cache>/models/damo/<repo>
+        while older caches use <cache>/damo/<repo>. The old resolver only
+        knew the legacy shapes, so a machine whose models live in the new
+        layout failed the disk-presence gate forever with
+        models_not_downloaded (issue #216). Candidates are probed in order
+        (new layout first — fresh downloads land there) and the no-cache
+        default is the new-layout path so a fresh download is found on the
+        next gate run.
+        """
+        new_layers = ("models/damo", "hub/models/damo")
+        legacy_layers = ("damo", "hub/damo")
+        root = os.environ.get("MODELSCOPE_CACHE")
+        if root:
+            for layer in new_layers + legacy_layers:
+                candidate = os.path.join(root, *layer.split("/"))
+                if os.path.isdir(candidate):
+                    return candidate
+            # [20260905_Fix_Review_EnvCacheDefault] An explicitly configured
+            # cache must not fall through to the home directory when it has
+            # no models yet — modelscope will download INTO it, so the gate
+            # has to look there too.
+            return os.path.join(root, "models", "damo")
+        home_dir = os.path.expanduser("~")
+        base = os.path.join(home_dir, ".cache", "modelscope", "hub")
+        for layer in new_layers + legacy_layers:
+            candidate = os.path.join(base, *layer.split("/"))
+            if os.path.isdir(candidate):
+                return candidate
+        return os.path.join(base, "models", "damo")
+
+    # [20260905_Fix_255_RepoReadyShardGlob] Promoted from a nested run()
+    # helper so the readiness gate is directly testable, and hardened for
+    # issue #255: ModelScope's downloader leaves SHARD part-files in the
+    # repo dir mid-download (e.g. vocab.txt_0_167772159 — a byte-range temp
+    # name). The "vocab*" glob matched them, so a server (re)start during a
+    # download misread the repo as ready and AutoModel died with a confusing
+    # error instead of the clean models_not_downloaded path. Matching files
+    # whose name ends in a _<start>_<end> byte-range suffix never satisfy
+    # the gate; real anchors (config/weights/complete vocab) still do.
+    _SHARD_SUFFIX_RE = re.compile(r"_\d+_\d+$")
+
+    @staticmethod
+    def _repo_ready(repo_dir):
+        """目录存在且包含非分片的常见权重/配置文件即认为已就绪"""
+        if not os.path.isdir(repo_dir):
             return False
+        # [20260913_Fix_256_AnchorParity] Same-site usage of the hoisted
+        # module-level _READY_PATTERNS (list contents unchanged).
+        for pat in _READY_PATTERNS:
+            matches = [
+                m for m in glob.glob(os.path.join(repo_dir, pat))
+                if not FunASRServer._SHARD_SUFFIX_RE.search(os.path.basename(m))
+            ]
+            if matches:
+                return True
+        return False
+
+    # [20260911_Fix_336_HubLayout] Issue #336: modelscope 1.39's real
+    # on-disk layout matches NONE of the shapes _default_damo_root() knows:
+    #
+    #     <cache>/models/damo--<repo>/snapshots/<rev>/model.pt
+    #
+    # (NO `hub` layer, repo dirs renamed `damo--<name>`, an extra
+    # `snapshots/<revision>` level). Worse, the app always spawns the server
+    # with an EXPLICIT --damo-root (<userData>/models, which stays empty
+    # because download_models.py calls snapshot_download without cache_dir),
+    # so `_default_damo_root()` never ran and the gate reported
+    # models_not_downloaded forever while the UI flapped. The resolver chain
+    # below probes the explicit root FIRST (it wins when populated — the
+    # user's symlink workaround and upgrading users rely on that), then the
+    # modelscope default caches in both legacy and hub shapes.
+    _MODEL_REVISION = "v2.0.4"
+
+    @staticmethod
+    def _resolve_hub_repo(hub_root, repo_dir_name):
+        """Return the first READY hub-style snapshot dir for a repo, else None.
+
+        Hub layout (modelscope >= 1.39):
+            <hub_root>/damo--<repo>/snapshots/<rev>/<files>
+        The pinned revision is preferred (it is what AutoModel loads via
+        model_revision); any other READY snapshot is accepted so caches
+        populated with a different revision still pass the gate.
+        """
+        snapshots_dir = os.path.join(
+            hub_root, f"damo--{repo_dir_name}", "snapshots"
+        )
+        if not os.path.isdir(snapshots_dir):
+            return None
+        revisions = sorted(os.listdir(snapshots_dir), reverse=True)
+        revisions.sort(key=lambda rev: rev != FunASRServer._MODEL_REVISION)
+        for rev in revisions:
+            candidate = os.path.join(snapshots_dir, rev)
+            if FunASRServer._repo_ready(candidate):
+                return candidate
+        return None
+
+    @staticmethod
+    def _hub_models_roots():
+        """Directories that may hold damo--<repo> hub-style repos.
+
+        Covers $MODELSCOPE_CACHE (with and without the legacy `hub` layer)
+        and the default ~/.cache/modelscope — 1.39 drops the `hub` layer.
+        """
+        roots = []
+        env_root = os.environ.get("MODELSCOPE_CACHE")
+        if env_root:
+            roots.append(os.path.join(env_root, "models"))
+            roots.append(os.path.join(env_root, "hub", "models"))
+        home_dir = os.path.expanduser("~")
+        default_cache = os.path.join(home_dir, ".cache", "modelscope")
+        roots.append(os.path.join(default_cache, "models"))
+        roots.append(os.path.join(default_cache, "hub", "models"))
+        return roots
+
+    def _resolve_repo_dir(self, repo_dir_name):
+        """First READY on-disk directory for a repo across every known layout.
+
+        Order (explicit damo_root WINS when populated):
+          1. <damo_root>/<repo>                    — explicit, legacy shape
+          2. <damo_root>/damo--<repo>/snapshots/*  — explicit, hub shape
+             (covers --damo-root pointing AT the resolved modelscope root)
+          3. <default damo root>/<repo>            — modelscope cache, legacy
+          4. _hub_models_roots() hub shapes        — modelscope cache, 1.39
+        Returns None when the repo is ready nowhere (→ models_not_downloaded).
+        """
+        roots = []
+        if self.damo_root:
+            roots.append(self.damo_root)
+        default_root = self._default_damo_root()
+        if default_root not in roots:
+            roots.append(default_root)
+        for root in roots:
+            direct = os.path.join(root, repo_dir_name)
+            if self._repo_ready(direct):
+                return direct
+            found = self._resolve_hub_repo(root, repo_dir_name)
+            if found:
+                return found
+        for hub_root in self._hub_models_roots():
+            found = self._resolve_hub_repo(hub_root, repo_dir_name)
+            if found:
+                return found
+        return None
+
+    def _find_missing_required_models(self):
+        """必需模型中就绪检查未通过的 repo 列表（run() 的启动门禁用）
+
+        [20260911_Fix_336_HubLayout] Promoted from run() so the startup gate
+        is unit-testable, and switched from a single cache_path join to
+        _resolve_repo_dir so the hub layout and the empty-explicit-root
+        fallback are covered. ASR accepts either generation (SeACo primary,
+        old paraformer rollback — [20260820_T15_SeacoSwap]); punc optional.
+        """
+        vad_repo = "speech_fsmn_vad_zh-cn-16k-common-pytorch"
+        asr_repos = [
+            "speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+            "speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+        ]
+        missing = []
+        if not any(self._resolve_repo_dir(r) for r in asr_repos):
+            missing.append(asr_repos[0])
+        if not self._resolve_repo_dir(vad_repo):
+            missing.append(vad_repo)
+        return missing
+    # [20260911_Fix_336_HubLayout] END
+
+    def _load_asr_model(self):
+        """加载ASR模型（SeACo 优先，旧模型回退）"""
+        from funasr import AutoModel
+
+        # [T15 review BLOCKER] Disk-presence gate: a repo id that is NOT
+        # on local disk must be skipped WITHOUT calling AutoModel — funasr
+        # auto-downloads ~1GB from modelscope on cache miss, silently
+        # defeating the rollback (or blowing the 300s init timeout).
+        # [20260905_Fix_255_ReviewFixup] The readiness gate (not just
+        # isdir) applies here too: this path also serves reload/lazy-init,
+        # which bypasses run()'s startup gate — an isdir-only check let a
+        # mid-download dir holding only shard part-files through to
+        # AutoModel (the confusing failure #255 fixed on the startup path).
+        # [20260911_Fix_336_HubLayout] The single-cache-path join was
+        # replaced by _resolve_repo_dir: the explicit --damo-root is usually
+        # an empty <userData>/models while the models live in modelscope
+        # 1.39's hub layout (issue #336). AutoModel still receives the repo
+        # id and resolves through modelscope's own cache — only the gate
+        # needed the new shapes.
+        candidates = [
+            m
+            for m in (self.ASR_MODEL_SEACO, self.ASR_MODEL_FALLBACK)
+            if self._resolve_repo_dir(m.split("/", 1)[1]) is not None
+        ]
+        for model_name in candidates:
+            try:
+                logger.info(f"开始加载ASR模型: {model_name}")
+                with suppress_stdout():
+                    self.asr_model = AutoModel(
+                        model=model_name,
+                        model_revision="v2.0.4",
+                        disable_update=True,
+                        device=self.device,
+                    )
+                logger.info(f"ASR模型加载完成: {model_name}")
+                self.asr_model_name = model_name
+                return True
+            except Exception as e:
+                logger.error(f"ASR模型加载失败({model_name}): {str(e)}")
+        return False
 
     def _load_vad_model(self):
         """加载VAD模型"""
@@ -406,120 +711,132 @@ class FunASRServer:
         # non-finite input rejection) must not hit an unbound name in the
         # finally cleanup.
         infer_path = audio_path
-        if not self.initialized:
-            init_result = self.initialize()
-            if not init_result["success"]:
-                return init_result
+        # [T11 review MAJOR] Hold the models lock across the whole
+        # inference section: a worker unload/reload defers instead of
+        # freeing models mid-generate (busy = deferred, never
+        # concurrent — now true in BOTH directions). RLock because
+        # _ensure_initialized re-acquires inside.
+        with self._init_lock:
+            # [20260821_T11_UnloadReload] Lock-guarded lazy init (worker
+            # reload can race this main-loop path).
+            if not self._ensure_initialized():
+                return {"success": False, "error": INIT_FAILED_MESSAGE, "type": "init_error"}
 
-        try:
-            # 检查音频文件是否存在
-            if not os.path.exists(audio_path):
-                return {"success": False, "error": f"音频文件不存在: {audio_path}"}
+            try:
+                # 检查音频文件是否存在
+                if not os.path.exists(audio_path):
+                    return {"success": False, "error": f"音频文件不存在: {audio_path}"}
 
-            logger.info(f"开始转录音频文件: {audio_path}")
+                logger.info(f"开始转录音频文件: {audio_path}")
 
-            # 设置默认选项
-            default_options = {
-                "batch_size_s": 60,
-                "hotword": "",
-                "use_vad": True,
-                "use_punc": True,  # 使用FunASR自带的标点恢复
-                "language": "zh",
-            }
+                # 设置默认选项
+                default_options = {
+                    "batch_size_s": 60,
+                    "hotword": "",
+                    "use_vad": True,
+                    "use_punc": True,  # 使用FunASR自带的标点恢复
+                    "language": "zh",
+                }
 
-            if options:
-                default_options.update(options)
+                if options:
+                    default_options.update(options)
 
-            # [20260819_T7_MicPreprocess] Ticket #186 (spec #177 T7): run the
-            # DSP module on the push-to-talk path too. The renderer delivers
-            # a 16k mono WAV temp (created/cleaned by the TS side); the DSP
-            # output below is OUR temp and is unlinked in the finally block.
-            # Fallback policy mirrors the file path (see _apply_preprocessing).
-            infer_path = self._apply_preprocessing(audio_path)
-
-            # 执行语音识别
-            if default_options["use_vad"]:
-                vad_result = self.vad_model.generate(
-                    input=infer_path, batch_size_s=default_options["batch_size_s"]
+                # [20260820_T14_Hotwords] Defense-in-depth: coerce the hotword
+                # option to a safe string before it reaches generate().
+                default_options["hotword"] = sanitize_hotword(
+                    default_options.get("hotword", "")
                 )
-                logger.info("VAD处理完成")
 
-            # 执行ASR识别
-            asr_result = self.asr_model.generate(
-                input=infer_path,
-                batch_size_s=default_options["batch_size_s"],
-                hotword=default_options["hotword"],
-                cache={},
-            )
+                # [20260819_T7_MicPreprocess] Ticket #186 (spec #177 T7): run the
+                # DSP module on the push-to-talk path too. The renderer delivers
+                # a 16k mono WAV temp (created/cleaned by the TS side); the DSP
+                # output below is OUR temp and is unlinked in the finally block.
+                # Fallback policy mirrors the file path (see _apply_preprocessing).
+                infer_path = self._apply_preprocessing(audio_path)
 
-            # 提取识别文本
-            if isinstance(asr_result, list) and len(asr_result) > 0:
-                if isinstance(asr_result[0], dict) and "text" in asr_result[0]:
-                    raw_text = asr_result[0]["text"]
+                # 执行语音识别
+                if default_options["use_vad"]:
+                    vad_result = self.vad_model.generate(
+                        input=infer_path, batch_size_s=default_options["batch_size_s"]
+                    )
+                    logger.info("VAD处理完成")
+
+                # 执行ASR识别
+                asr_result = self.asr_model.generate(
+                    input=infer_path,
+                    batch_size_s=default_options["batch_size_s"],
+                    hotword=default_options["hotword"],
+                    cache={},
+                )
+
+                # 提取识别文本
+                if isinstance(asr_result, list) and len(asr_result) > 0:
+                    if isinstance(asr_result[0], dict) and "text" in asr_result[0]:
+                        raw_text = asr_result[0]["text"]
+                    else:
+                        raw_text = str(asr_result[0])
                 else:
-                    raw_text = str(asr_result[0])
-            else:
-                raw_text = str(asr_result)
+                    raw_text = str(asr_result)
 
-            logger.info(f"ASR识别完成，原始文本: {raw_text[:100]}...")
+                logger.info(f"ASR识别完成，原始文本: {raw_text[:100]}...")
 
-            # 使用FunASR进行标点恢复
-            final_text = raw_text
-            if default_options["use_punc"] and self.punc_model and raw_text.strip():
-                try:
-                    punc_result = self.punc_model.generate(input=raw_text)
-                    if isinstance(punc_result, list) and len(punc_result) > 0:
-                        if (
-                            isinstance(punc_result[0], dict)
-                            and "text" in punc_result[0]
-                        ):
-                            final_text = punc_result[0]["text"]
-                        else:
-                            final_text = str(punc_result[0])
-                    logger.info("FunASR标点恢复完成")
-                except Exception as e:
-                    logger.warning(f"FunASR标点恢复失败，使用原始文本: {str(e)}")
+                # 使用FunASR进行标点恢复
+                final_text = raw_text
+                if default_options["use_punc"] and self.punc_model and raw_text.strip():
+                    try:
+                        punc_result = self.punc_model.generate(input=raw_text)
+                        if isinstance(punc_result, list) and len(punc_result) > 0:
+                            if (
+                                isinstance(punc_result[0], dict)
+                                and "text" in punc_result[0]
+                            ):
+                                final_text = punc_result[0]["text"]
+                            else:
+                                final_text = str(punc_result[0])
+                        logger.info("FunASR标点恢复完成")
+                    except Exception as e:
+                        logger.warning(f"FunASR标点恢复失败，使用原始文本: {str(e)}")
 
-            duration = self._get_audio_duration(infer_path)
-            self.transcription_count += 1
+                duration = self._get_audio_duration(infer_path)
+                self.transcription_count += 1
 
-            result = {
-                "success": True,
-                "text": final_text,
-                "raw_text": raw_text,
-                "confidence": (
-                    getattr(asr_result[0], "confidence", 0.0)
-                    if isinstance(asr_result, list)
-                    else 0.0
-                ),
-                "duration": duration,
-                "language": "zh-CN",
-                "model_type": "pytorch",  # 标识使用的是pytorch版本
-            }
+                result = {
+                    "success": True,
+                    "text": final_text,
+                    "raw_text": raw_text,
+                    "confidence": (
+                        getattr(asr_result[0], "confidence", 0.0)
+                        if isinstance(asr_result, list)
+                        else 0.0
+                    ),
+                    "duration": duration,
+                    "language": "zh-CN",
+                    "model_type": "pytorch",  # 标识使用的是pytorch版本
+                }
 
-            # 生产环境：每10次转录后进行内存清理
-            if self.transcription_count % 10 == 0:
-                self._cleanup_memory()
-                logger.info(f"已完成 {self.transcription_count} 次转录，执行内存清理")
+                # 生产环境：每10次转录后进行内存清理
+                if self.transcription_count % 10 == 0:
+                    self._cleanup_memory()
+                    logger.info(f"已完成 {self.transcription_count} 次转录，执行内存清理")
 
-            logger.info(f"转录完成，最终文本: {final_text[:100]}...")
-            return result
+                logger.info(f"转录完成，最终文本: {final_text[:100]}...")
+                return result
 
-        except Exception as e:
-            error_msg = f"音频转录失败: {str(e)}"
-            logger.error(error_msg)
-            logger.error(traceback.format_exc())
-            return {"success": False, "error": error_msg, "type": "transcription_error"}
-        finally:
-            # [20260819_T7_MicPreprocess] Clean OUR temp only — the original
-            # mic temp belongs to the TS side (close-then-unlink discipline
-            # lives in audioFileHelpers); fallback returns the original path,
-            # which the != audio_path guard leaves untouched.
-            if infer_path != audio_path:
-                try:
-                    os.unlink(infer_path)
-                except Exception:
-                    pass
+            except Exception as e:
+                error_msg = f"音频转录失败: {str(e)}"
+                logger.error(error_msg)
+                logger.error(traceback.format_exc())
+                return {"success": False, "error": error_msg, "type": "transcription_error"}
+            finally:
+                # [20260819_T7_MicPreprocess] Clean OUR temp only — the original
+                # mic temp belongs to the TS side (close-then-unlink discipline
+                # lives in audioFileHelpers); fallback returns the original path,
+                # which the != audio_path guard leaves untouched.
+                if infer_path != audio_path:
+                    try:
+                        os.unlink(infer_path)
+                    except Exception:
+                        pass
 
     def transcribe_file_audio(self, audio_path, options=None):
         """带时间戳的文件转录，用于 transcribe_file 命令"""
@@ -527,7 +844,19 @@ class FunASRServer:
             options = {}
 
         request_id = options.get("request_id", "")
-        hotword = options.get("hotword", "")
+        # [20260820_T14_Hotwords] Defense-in-depth (file path).
+        hotword = sanitize_hotword(options.get("hotword", ""))
+        # [20260821_T11_UnloadReload] File path ran WITHOUT an init guard
+        # (review finding): after an unload it crashed on None models.
+        # Runs on the inference worker thread — reload stays off the read
+        # loop naturally.
+        if not self._ensure_initialized():
+            return {
+                "success": False,
+                "error": INIT_FAILED_MESSAGE,
+                "type": "init_error",
+                "request_id": request_id,
+            }
         self.cancel_event.clear()
         import time
         _t0 = time.time()
@@ -615,7 +944,7 @@ class FunASRServer:
             })
 
             if self.cancel_event.is_set():
-                return {"success": False, "error": "转录已取消", "request_id": request_id}
+                return {"success": False, "canceled": True, "error": "转录已取消", "request_id": request_id}
 
             # --- Helper: 从 ASR 时间戳构建 segments ---
             def _build_segments_from_timestamps(asr_text, asr_timestamps, time_offset_ms=0):
@@ -847,7 +1176,7 @@ class FunASRServer:
             _t_punc = time.time()
             if self.cancel_event.is_set():
                 logger.info(f"PUNC phase SKIPPED (cancelled) request_id={request_id}")
-                return {"success": False, "error": "转录已取消", "request_id": request_id}
+                return {"success": False, "canceled": True, "error": "转录已取消", "request_id": request_id}
 
             self.response_queue.put({
                 "request_id": request_id,
@@ -991,6 +1320,9 @@ class FunASRServer:
             "models_loaded": {
                 "asr": self.asr_model is not None,
                 "vad": self.vad_model is not None,
+            # [T15 review MINOR] Surface the loaded generation so the UI
+            # can flag silent hotword degradation on the old model.
+            "asr_model": self.asr_model_name,
                 "punc": self.punc_model is not None,
             },
         }
@@ -1008,6 +1340,9 @@ class FunASRServer:
                 "models": {
                     "asr": self.asr_model is not None,
                     "vad": self.vad_model is not None,
+            # [T15 review MINOR] Surface the loaded generation so the UI
+            # can flag silent hotword degradation on the old model.
+            "asr_model": self.asr_model_name,
                     "punc": self.punc_model is not None,  # FunASR标点恢复模型状态
                 },
             }
@@ -1018,6 +1353,63 @@ class FunASRServer:
                 "initialized": False,
                 "error": "FunASR未安装",
             }
+
+    # [20260821_T11_UnloadReload] Ticket #189 (spec #177 T11): init guard
+    # shared by both transcribe paths; double-checked under the init lock
+    # so a worker-thread reload and a main-loop mic transcribe collapse
+    # into a single initialize().
+    def _ensure_initialized(self):
+        if self.initialized:
+            return True
+        with self._init_lock:
+            if self.initialized:
+                return True
+            result = self.initialize()
+            return bool(result and result.get("success"))
+
+    # [20260821_T11_UnloadReload] Worker-thread handlers. Called ONLY from
+    # _inference_worker (queued via request_queue) — serialization with
+    # transcribe_file is structural; the main loop just enqueues, so ping
+    # stays answerable throughout.
+    def _do_unload(self, request_id):
+        """Free all models (incl. the lazy speaker model), reset state."""
+        # [T11 review MAJOR] Under the models lock: if a mic transcribe /
+        # diarize holds it on the read loop, unload WAITS (busy = deferred)
+        # instead of freeing models mid-generate.
+        with self._init_lock:
+            self.asr_model = None
+            self.vad_model = None
+            self.punc_model = None
+            # Lazy speaker model unloads too and stays lazy on reload.
+            self.cam_model = None
+            self.initialized = False
+        logger.info(f"模型已卸载 request_id={request_id}")
+        self.response_queue.put({
+            "request_id": request_id,
+            "type": "result",
+            "success": True,
+            "message": "模型已卸载",
+        })
+
+    def _do_reload(self, request_id):
+        """Reload models on the worker thread; progress renews TS timeouts."""
+        self.response_queue.put({
+            "request_id": request_id,
+            "type": "progress",
+            "phase": "reload",
+            "message": "模型重载中...",
+            "progress_pct": 0,
+        })
+        # [T11] Under the init lock (via _ensure_initialized): a mic
+        # transcribe on the main loop can lazy-init concurrently.
+        ok = self._ensure_initialized()
+        self.response_queue.put({
+            "request_id": request_id,
+            "type": "result",
+            "success": ok,
+            "error": None if ok else INIT_FAILED_MESSAGE,
+            "asr_model": self.asr_model_name,
+        })
 
     def _inference_worker(self):
         """推理线程：从 request_queue 取任务，执行推理"""
@@ -1031,7 +1423,13 @@ class FunASRServer:
                 action = task.get("action")
 
                 try:
-                    if action == "transcribe_file":
+                    if action == "unload_models":
+                        self._do_unload(request_id)
+                        continue
+                    elif action == "reload_models":
+                        self._do_reload(request_id)
+                        continue
+                    elif action == "transcribe_file":
                         opts = task.get("options", {})
                         opts["request_id"] = request_id
                         result = self.transcribe_file_audio(
@@ -1061,8 +1459,10 @@ class FunASRServer:
         while self.running:
             try:
                 msg = self.response_queue.get(timeout=0.5)
-                print(json.dumps(msg, ensure_ascii=False))
-                sys.stdout.flush()
+                # [20260905_Fix_208_ProtocolStreamImmune] Startup stream, not
+                # print(): a dequeue during a suppress_stdout() window must
+                # still reach the host (#208).
+                _protocol_print(msg)
             except queue.Empty:
                 continue
 
@@ -1104,88 +1504,93 @@ class FunASRServer:
         返回:
             segments列表，每个元素增加speaker字段
         """
-        import librosa
-        import numpy as np
+        # [T11 review MAJOR] Same models lock as transcribe_audio —
+        # diarize runs on the read loop too, unload must defer.
+        with self._init_lock:
 
-        if not segments or len(segments) == 0:
-            return {"success": False, "error": "无分段数据"}
+            import librosa
+            import numpy as np
 
-        try:
-            self._load_cam_model()
-        except RuntimeError as e:
-            return {"success": False, "error": str(e)}
+            if not segments or len(segments) == 0:
+                return {"success": False, "error": "无分段数据"}
 
-        # 加载整个音频文件到内存
-        audio, sr = librosa.load(audio_path, sr=16000, mono=True)
+            try:
+                self._load_cam_model()
+            except RuntimeError as e:
+                return {"success": False, "error": str(e)}
 
-        embeddings = []
-        valid_indices = []
-        for i, seg in enumerate(segments):
-            start_sample = int(seg["start_ms"] / 1000.0 * sr)
-            end_sample = int(seg["end_ms"] / 1000.0 * sr)
-            start_sample = max(0, start_sample)
-            end_sample = min(len(audio), end_sample)
+            # 加载整个音频文件到内存
+            audio, sr = librosa.load(audio_path, sr=16000, mono=True)
 
-            if end_sample - start_sample < sr * 0.1:
-                continue  # 跳过大短的片段（<100ms）
+            embeddings = []
+            valid_indices = []
+            for i, seg in enumerate(segments):
+                start_sample = int(seg["start_ms"] / 1000.0 * sr)
+                end_sample = int(seg["end_ms"] / 1000.0 * sr)
+                start_sample = max(0, start_sample)
+                end_sample = min(len(audio), end_sample)
 
-            chunk = audio[start_sample:end_sample]
-            # 使用CAM++提取声纹嵌入
-            result = self.cam_model(chunk, output_dir=None)
-            if result and len(result) > 0:
-                emb = result[0].get("spk_embedding") or result[0].get("embedding")
-                if emb is not None:
-                    embeddings.append(np.array(emb).flatten())
-                    valid_indices.append(i)
+                if end_sample - start_sample < sr * 0.1:
+                    continue  # 跳过大短的片段（<100ms）
 
-        if len(embeddings) == 0:
-            for seg in segments:
-                seg["speaker"] = "Speaker"
+                chunk = audio[start_sample:end_sample]
+                # 使用CAM++提取声纹嵌入
+                result = self.cam_model(chunk, output_dir=None)
+                if result and len(result) > 0:
+                    emb = result[0].get("spk_embedding") or result[0].get("embedding")
+                    if emb is not None:
+                        embeddings.append(np.array(emb).flatten())
+                        valid_indices.append(i)
+
+            if len(embeddings) == 0:
+                for seg in segments:
+                    seg["speaker"] = "Speaker"
+                return {"success": True, "segments": segments}
+
+            # 余弦相似度聚类
+            embeddings = np.stack(embeddings)  # (N, D)
+            N = len(embeddings)
+            threshold = 0.7
+            labels = list(range(N))  # 初始每个embedding一个cluster
+
+            for i in range(N):
+                for j in range(i + 1, N):
+                    sim = np.dot(embeddings[i], embeddings[j]) / (
+                        np.linalg.norm(embeddings[i]) * np.linalg.norm(embeddings[j]) + 1e-8
+                    )
+                    if sim > threshold:
+                        # 合并cluster
+                        root_i = labels[i]
+                        root_j = labels[j]
+                        new_label = min(root_i, root_j)
+                        for k in range(N):
+                            if labels[k] == root_i or labels[k] == root_j:
+                                labels[k] = new_label
+
+            # 重映射label到连续编号
+            unique_labels = sorted(set(labels))
+            label_map = {old: f"Speaker {chr(65 + idx)}" for idx, old in enumerate(unique_labels)}
+            if len(unique_labels) == 1:
+                label_map[unique_labels[0]] = "Speaker"
+
+            speaker_for_index = {}
+            for vi, label_id in zip(valid_indices, labels):
+                speaker_for_index[vi] = label_map[label_id]
+
+            for i, seg in enumerate(segments):
+                seg["speaker"] = speaker_for_index.get(i, "Speaker")
+
             return {"success": True, "segments": segments}
 
-        # 余弦相似度聚类
-        embeddings = np.stack(embeddings)  # (N, D)
-        N = len(embeddings)
-        threshold = 0.7
-        labels = list(range(N))  # 初始每个embedding一个cluster
+        # [20260817_T5_HandleCommand] Ticket #181 (spec #177 T5): the stdin
+        # command dispatch, extracted verbatim from run()'s read loop so it is
+        # unit-testable without spawning the process (protocol extensions for
+        # idle-unload/hotwords must extend tests/python accordingly).
+        # Returns (result, keep_running):
+        #   result is None     -> action was queued (transcribe_file); the read
+        #                         loop must NOT print anything for it
+        #   keep_running False -> stop the read loop after printing (exit)
 
-        for i in range(N):
-            for j in range(i + 1, N):
-                sim = np.dot(embeddings[i], embeddings[j]) / (
-                    np.linalg.norm(embeddings[i]) * np.linalg.norm(embeddings[j]) + 1e-8
-                )
-                if sim > threshold:
-                    # 合并cluster
-                    root_i = labels[i]
-                    root_j = labels[j]
-                    new_label = min(root_i, root_j)
-                    for k in range(N):
-                        if labels[k] == root_i or labels[k] == root_j:
-                            labels[k] = new_label
-
-        # 重映射label到连续编号
-        unique_labels = sorted(set(labels))
-        label_map = {old: f"Speaker {chr(65 + idx)}" for idx, old in enumerate(unique_labels)}
-        if len(unique_labels) == 1:
-            label_map[unique_labels[0]] = "Speaker"
-
-        speaker_for_index = {}
-        for vi, label_id in zip(valid_indices, labels):
-            speaker_for_index[vi] = label_map[label_id]
-
-        for i, seg in enumerate(segments):
-            seg["speaker"] = speaker_for_index.get(i, "Speaker")
-
-        return {"success": True, "segments": segments}
-
-    # [20260817_T5_HandleCommand] Ticket #181 (spec #177 T5): the stdin
-    # command dispatch, extracted verbatim from run()'s read loop so it is
-    # unit-testable without spawning the process (protocol extensions for
-    # idle-unload/hotwords must extend tests/python accordingly).
-    # Returns (result, keep_running):
-    #   result is None     -> action was queued (transcribe_file); the read
-    #                         loop must NOT print anything for it
-    #   keep_running False -> stop the read loop after printing (exit)
     def handle_command(self, command):
         if command.get("action") == "transcribe":
             audio_path = command.get("audio_path")
@@ -1198,6 +1603,15 @@ class FunASRServer:
         elif command.get("action") == "cleanup":
             self._cleanup_memory()
             return {"success": True, "message": "内存清理完成"}, True
+        elif command.get("action") in ("unload_models", "reload_models"):
+            # [20260821_T11_UnloadReload] Queued like transcribe_file:
+            # serialization with in-flight file work is structural (busy =
+            # deferred, never concurrent); the read loop only enqueues.
+            self.request_queue.put({
+                "request_id": command.get("request_id", ""),
+                "action": command.get("action"),
+            })
+            return None, True
         elif command.get("action") == "transcribe_file":
             # 放入推理队列，不立即返回确认
             # 推理结果和进度通过 response_queue → output_worker → stdout 发送
@@ -1230,48 +1644,21 @@ class FunASRServer:
         logger.info("FunASR服务器启动")
 
         # 解析 damo 根目录
-        def _default_damo_root():
-            # 允许通过 MODELSCOPE_CACHE 指定根；常见是 ~/.cache/modelscope/hub/damo
-            root = os.environ.get("MODELSCOPE_CACHE")
-            if root:
-                # 兼容两种布局：<cache>/damo 或 <cache>/hub/damo
-                if os.path.isdir(os.path.join(root, "damo")):
-                    return os.path.join(root, "damo")
-                if os.path.isdir(os.path.join(root, "hub", "damo")):
-                    return os.path.join(root, "hub", "damo")
-                # 像 Node 一样自定义到 /Volumes/APFS/AI/models/damo，就直接传入 --damo-root
-            # 默认回到用户主目录的 modelscope/hub/damo
-            home_dir = os.path.expanduser("~")
-            return os.path.join(home_dir, ".cache", "modelscope", "hub", "damo")
-
-        cache_path = self.damo_root if self.damo_root else _default_damo_root()
+        cache_path = self.damo_root if self.damo_root else self._default_damo_root()
         logger.info(f"使用的模型根目录(damo root): {cache_path}")
 
-        repos = [
-            "speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
-            "speech_fsmn_vad_zh-cn-16k-common-pytorch",
-            "punc_ct-transformer_zh-cn-common-vocab272727-pytorch",
-        ]
-        required_repos = repos[:2]  # ASR + VAD are required; punc is optional
+        # [20260820_T15_SeacoSwap] Either ASR generation satisfies the
+        # required-ASR check (SeACo for fresh installs / upgraded users,
+        # old paraformer for mid-upgrade rollback states).
+        # ASR (either generation) + VAD are required; punc is optional.
 
-        def _repo_ready(repo_dir):
-            # 目录存在且包含任意常见权重/配置文件即认为已就绪
-            if not os.path.isdir(repo_dir):
-                return False
-            patterns = [
-                "model.pt", "pytorch_model.bin", "*.onnx",
-                "config.json", "configuration.json", "model.yaml", "vocab*"
-            ]
-            for pat in patterns:
-                if glob.glob(os.path.join(repo_dir, pat)):
-                    return True
-            return False
-
-        missing_required = []
-        for r in required_repos:
-            rd = os.path.join(cache_path, r)
-            if not _repo_ready(rd):
-                missing_required.append(r)
+        # [20260905_Fix_255_RepoReadyShardGlob] Readiness gate promoted to
+        # FunASRServer._repo_ready (staticmethod, shard-aware, testable).
+        # [20260911_Fix_336_HubLayout] The gate itself was promoted to
+        # _find_missing_required_models() so the explicit-empty-damo_root
+        # fallback and the modelscope 1.39 hub layout resolve identically
+        # here, in _load_asr_model, and in the unit tests (issue #336).
+        missing_required = self._find_missing_required_models()
 
         if not missing_required:
             logger.info("模型文件存在，开始初始化")
@@ -1283,8 +1670,9 @@ class FunASRServer:
                 "error": "模型文件未下载，请先下载模型",
                 "type": "models_not_downloaded"
             }
-        print(json.dumps(init_result, ensure_ascii=False))
-        sys.stdout.flush()
+        # [20260905_Fix_208_ProtocolStreamImmune] Startup stream: reload
+        # re-initialization can be in flight while this init result prints.
+        _protocol_print(init_result)
 
         # 启动推理线程和输出线程
         self._inference_thread = threading.Thread(target=self._inference_worker, daemon=True)
@@ -1307,8 +1695,8 @@ class FunASRServer:
                     command = json.loads(line)
                 except json.JSONDecodeError:
                     result = {"success": False, "error": "无效的JSON命令"}
-                    print(json.dumps(result, ensure_ascii=False))
-                    sys.stdout.flush()
+                    # [20260905_Fix_208_ProtocolStreamImmune]
+                    _protocol_print(result)
                     continue
 
                 # 提取 request_id 用于响应关联
@@ -1325,8 +1713,8 @@ class FunASRServer:
                 if result is not None:
                     if request_id:
                         result["request_id"] = request_id
-                    print(json.dumps(result, ensure_ascii=False))
-                    sys.stdout.flush()
+                    # [20260905_Fix_208_ProtocolStreamImmune]
+                    _protocol_print(result)
 
                 if not keep_running:
                     break
@@ -1339,8 +1727,8 @@ class FunASRServer:
                     "error": str(e),
                     "traceback": traceback.format_exc(),
                 }
-                print(json.dumps(error_result, ensure_ascii=False))
-                sys.stdout.flush()
+                # [20260905_Fix_208_ProtocolStreamImmune]
+                _protocol_print(error_result)
 
         logger.info("FunASR服务器退出")
 

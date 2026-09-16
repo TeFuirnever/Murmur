@@ -3,6 +3,51 @@
 import { Tray, Menu, nativeImage, dialog, app } from "electron";
 import path from "path";
 import fs from "fs";
+// [20260906_Fix_TrayI18n] Spec #266 T15 (#292): the tray was the last
+// hardcoded-Chinese surface. Labels now resolve through the same locale
+// resources the renderer uses, and the language is pushed here by the
+// settings handler whenever the "language" setting changes.
+import zhCN from "../i18n/locales/zh-CN.json";
+import enUS from "../i18n/locales/en.json";
+
+type TrayLocale = {
+  tray: {
+    showWindow: string;
+    about: string;
+    quit: string;
+    tooltipReady: string;
+    tooltipRecording: string;
+    tooltipProcessing: string;
+    aboutTitle: string;
+    aboutDescription: string;
+  };
+};
+
+const TRAY_LOCALES: Record<string, TrayLocale> = {
+  "zh-CN": zhCN as unknown as TrayLocale,
+  en: enUS as unknown as TrayLocale,
+};
+
+const DEFAULT_LOCALE = "zh-CN";
+// Compile-time fallback so trayText can never return undefined even if the
+// resource import shapes drift.
+const DEFAULT_TRAY_LABELS: TrayLocale["tray"] = {
+  showWindow: "显示主窗口",
+  about: "关于",
+  quit: "退出",
+  tooltipReady: "Murmur - 中文语音转文字",
+  tooltipRecording: "Murmur - 正在录音...",
+  tooltipProcessing: "Murmur - 正在处理...",
+  aboutTitle: "关于 Murmur",
+  aboutDescription: "开源免费的 AI 语音输入工具",
+};
+let currentLocale = DEFAULT_LOCALE;
+
+function trayText(key: keyof TrayLocale["tray"]): string {
+  const locale = TRAY_LOCALES[currentLocale] ?? TRAY_LOCALES[DEFAULT_LOCALE];
+  if (!locale) return DEFAULT_TRAY_LABELS[key];
+  return locale.tray[key];
+}
 
 /** Logger interface (accepts console or LogManager). */
 interface Logger {
@@ -16,11 +61,23 @@ class TrayManager {
   private tray: Tray | null;
   private mainWindow: Electron.BrowserWindow | null;
   private logger: Logger | null;
+  private currentStatus = "ready";
 
   constructor(logger: Logger | null = null) {
     this.tray = null;
     this.mainWindow = null;
     this.logger = logger;
+  }
+
+  // [20260906_Fix_TrayI18n] Switch the menu/tooltips to a new locale and
+  // rebuild the live tray so the change is immediate (called by the
+  // settings handler when the "language" setting is written).
+  setLanguage(lang: string): void {
+    currentLocale = TRAY_LOCALES[lang] ? lang : DEFAULT_LOCALE;
+    if (this.tray) {
+      this.updateContextMenu();
+      this.setStatus(this.currentStatus);
+    }
   }
 
   setWindows(mainWindow: Electron.BrowserWindow | null): void {
@@ -48,7 +105,7 @@ class TrayManager {
       }
 
       this.tray = new Tray(trayIcon);
-      this.tray.setToolTip("Murmur - 中文语音转文字");
+      this.tray.setToolTip(trayText("tooltipReady"));
 
       // 创建上下文菜单
       this.updateContextMenu();
@@ -108,7 +165,7 @@ class TrayManager {
 
     const contextMenu = Menu.buildFromTemplate([
       {
-        label: "显示主窗口",
+        label: trayText("showWindow"),
         click: () => {
           if (this.mainWindow && !this.mainWindow.isDestroyed()) {
             this.mainWindow.show();
@@ -118,14 +175,14 @@ class TrayManager {
       },
       { type: "separator" },
       {
-        label: "关于",
+        label: trayText("about"),
         click: () => {
           dialog.showMessageBox({
             type: "info",
-            title: "关于 Murmur",
+            title: trayText("aboutTitle"),
             message: `Murmur v${app.getVersion()}`,
             detail: [
-              "开源免费的 AI 语音输入工具",
+              trayText("aboutDescription"),
               "",
               `Electron: ${process.versions.electron}`,
               `Node.js: ${process.versions.node}`,
@@ -140,7 +197,7 @@ class TrayManager {
       },
       { type: "separator" },
       {
-        label: "退出",
+        label: trayText("quit"),
         click: () => {
           app.quit();
         },
@@ -160,18 +217,14 @@ class TrayManager {
   setStatus(status: string): void {
     if (!this.tray) return;
 
-    switch (status) {
-      case "recording":
-        this.tray.setToolTip("Murmur - 正在录音...");
-        break;
-      case "processing":
-        this.tray.setToolTip("Murmur - 正在处理...");
-        break;
-      case "ready":
-      default:
-        this.tray.setToolTip("Murmur - 中文语音转文字");
-        break;
-    }
+    this.currentStatus = status;
+    const tooltipKey =
+      status === "recording"
+        ? "tooltipRecording"
+        : status === "processing"
+          ? "tooltipProcessing"
+          : "tooltipReady";
+    this.tray.setToolTip(trayText(tooltipKey));
   }
 }
 

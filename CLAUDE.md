@@ -75,8 +75,8 @@ Murmur targets **Windows** and **macOS** (Apple Silicon). Code must work on both
 - **Python paths**: macOS uses `python/bin/python3.11` (embedded); Windows uses `python/python.exe` (embedded). The `prepare-embedded-python.js` script supports both platforms via platform-aware getters (`pythonBin`, `sitePackagesPath`, `downloadPlatform`).
 - **Process management**: `gracefulShutdown()` uses `taskkill /T /F /PID` on Windows, `proc.kill("SIGKILL")` on Unix — see `src/helpers/funasrServer.ts`.
 - **Path validation**: `audioPathValidator.ts` allows all `C:\` drive paths on Windows; UNC paths (`\\server\share`) are rejected early to avoid network timeouts. macOS uses realpath + `/Volumes/` prefix checks.
-- **Native modules**: `better-sqlite3` needs the Electron ABI. Beware: `electron-builder install-app-deps` can silently no-op (~0.2s "finished") while pnpm's `onlyBuiltDependencies` allowlist lets better-sqlite3's own install fetch a system-Node-ABI prebuild — the release pipeline therefore forces `npx @electron/rebuild -f -w better-sqlite3` and gates packaging on a real DB open under Electron. Locally: `pnpm rebuild better-sqlite3` before tests, `npx electron-rebuild` before dev.
-- **CI build**: `.github/workflows/build.yml` runs `build-win` on `windows-latest` and `build-mac` on `macos-latest` (embedded Python is `continue-on-error` on Windows). Releases are tag-triggered (`v*`) and must pass the four release gates — native ABI, preload presence, mac/win packaged boot smoke — documented in `CONTRIBUTING.md` → Release Gates. The NSIS installer is named `Murmur Setup <version>.exe` (spaces, not dots).
+- **Storage engine** ([20260905_Feat_NodeSqlite], spec #226): SQLite access is `node:sqlite` (`DatabaseSync`), built into Node ≥22.5 and the bundled Electron 39 — there is no native addon, no `better-sqlite3`, and no ABI to flip between `pnpm test` and `pnpm dev`. Historical hazard (pre-migration, kept for context): the better-sqlite3 addon needed per-runtime rebuilds and `electron-rebuild` without `-f` cache-skipped silently; if a native addon is ever reintroduced, that choreography and the packaging-gate real-DB-open check must come back with it (see build.yml's sqlite packaging gate).
+- **CI build**: `.github/workflows/build.yml` runs `build-win` on `windows-latest` and `build-mac` on `macos-latest` (embedded Python prep is a hard, cache-backed step on both platforms with an import gate — the old Windows `continue-on-error` shipped v1.2.0–v1.3.2 installers without a Python env while builds stayed green). Releases are tag-triggered (`v*`) and must pass the five release gates — native ABI, preload presence, Python packaging import gate, mac/win packaged boot smoke — documented in `CONTRIBUTING.md` → Release Gates. The NSIS installer is named `Murmur Setup <version>.exe` (spaces, not dots).
 
 When adding platform-specific code, use `process.platform === "win32"` checks. Add tests with `it.skipIf(process.platform === "win32")` for Unix-only behavior.
 
@@ -128,6 +128,7 @@ When adding platform-specific code, use `process.platform === "win32"` checks. A
 - `docs/faq.md` — user FAQ (bilingual)
 - `docs/troubleshooting.md` — troubleshooting guide (bilingual)
 - `docs/follow-ups.md` — tracked technical debt and deferred items
+- `VISION.md` — project acceptance policy: what aligns and what gets resisted
 
 ## Reference
 
@@ -136,6 +137,7 @@ When adding platform-specific code, use `process.platform === "win32"` checks. A
 - IPC contracts → `src/helpers/ipc-contracts.ts` (single source of truth, `as const` channels)
 - AI prompt templates → `src/helpers/aiPrompts.ts`
 - Security measures → `SECURITY.md`
+- Vision & positioning → `VISION.md` (acceptance policy), `docs/vision-answers.md` (review verdicts), `docs/competitive-positioning.md` (streaming go/no-go gates)
 - CI gate check → `scripts/ci-check.js` and `/ci-gate` skill
 
 #
@@ -144,7 +146,7 @@ When adding platform-specific code, use `process.platform === "win32"` checks. A
 
 ### Issue tracker
 
-Issues and PRDs live as GitHub issues. Use the `gh` CLI for all operations. See `docs/agents/issue-tracker.md`.
+Issues and PRDs live as GitHub issues. Use the `gh-axi` CLI for all operations (agent-ergonomic `gh` wrapper, same auth, lower token cost). See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
@@ -153,6 +155,12 @@ Five canonical triage roles: `needs-triage`, `needs-info`, `ready-for-agent`, `r
 ### Domain docs
 
 Domain context: see `docs/agents/domain.md`.
+
+### Agent tooling
+
+- **Push gate**: prefer `git push no-mistakes <branch>` for non-trivial deliveries - the local pipeline (AI review, tests, docs, lint) must be green before the branch reaches `origin`. Usage guide: `docs/agents/no-mistakes-gate.md`.
+- `backlog.md` is the shared task ledger for all agent sessions and worktrees. Use `tasks-axi` (`add` / `start` / `done` / `block` / `ready`) for all task state — never hand-edit task lines in the ledger.
+- Browser automation: use `chrome-devtools-axi` (`open`, `snapshot`, `click @uid`, `eval`) instead of screenshot-and-guess.
 
 ## GBrain Configuration (configured by /setup-gbrain)
 

@@ -68,6 +68,41 @@ export interface LocalModelDetection {
   models: string[];
 }
 
+// [20260912_Feat_242_TemplateSystem] Ticket #242 (spec #193 T15): custom
+// template editor results. Only NAME+CONTENT cross the IPC boundary — the
+// main process derives the on-disk filename through the templatesService
+// sanitizer, so no result carries (and no request may carry) a path.
+// [20260912_Fix_242_ReviewRound2] A file's frontmatter name can diverge
+// from its stem, so LIST carries the ON-DISK fileName and READ/SAVE/
+// DELETE key off that fileName (still a bare filename — never a path).
+export interface TemplateMeta {
+  name: string;
+  label: string;
+  fileName: string;
+}
+
+export interface TemplateListResult {
+  success: boolean;
+  templates: TemplateMeta[];
+  error?: string;
+}
+
+export interface TemplateReadResult {
+  success: boolean;
+  content?: string;
+  error?: string;
+}
+
+export interface TemplateSaveResult {
+  success: boolean;
+  fileName?: string;
+  // [20260912_Fix_242_ReviewRound2] "missing_frontmatter": the file was
+  // written but will never appear as a mode until frontmatter is added.
+  warning?: string;
+  error?: string;
+}
+// [20260912_Feat_242_TemplateSystem] END
+
 // ─── Transcription ───
 
 export interface TranscriptionRecord {
@@ -91,6 +126,26 @@ export interface TranscriptionSaveResult {
   error?: string;
 }
 
+// [20260906_Feat_TranscriptionUpdate] Manual polish write-back result
+// (spec #193 T1, ticket #228): echoes the refreshed row fields on success.
+// raw_text is returned for readback only — the DB whitelist makes it
+// unwritable, so it always still holds the original ASR output.
+export interface TranscriptionUpdateResult {
+  success: boolean;
+  text?: string;
+  processed_text?: string;
+  raw_text?: string;
+  // [20260906_Feat_ManualEditProtection] Spec #193 T2 (ticket #229): the
+  // refreshed record's manual-edit flag (SQLite INTEGER 0/1) echoed back so
+  // the edit-save caller can observe the persisted mark.
+  manually_edited?: number;
+  // [20260912_Fix_322_AutoUpdateGuard] Ticket #322: true when the T2
+  // skipWhenManuallyEdited guard skipped the write (a success no-op — the
+  // user's manual edit won); the auto path falls back to the raw text.
+  skipped?: boolean;
+  error?: string;
+}
+
 export interface FileTranscriptionResult {
   success: boolean;
   text?: string;
@@ -111,6 +166,10 @@ export interface FileTranscriptionResult {
   // cleaned text/raw_text so the DB raw column keeps the recoverable
   // original (ticket #188).
   original_text?: string;
+  // [20260820_T14_Hotwords] True when transcription succeeded only after
+  // the empty-hotword retry — the UI should point the user at the hotword
+  // settings (ticket #183).
+  hotword_degraded?: boolean;
   file_size?: number;
 }
 
@@ -119,6 +178,37 @@ export interface ExportResult {
   path?: string;
   error?: string;
   canceled?: boolean;
+}
+
+// [20260907_Feat_233_ListModels] Ticket #233: provider model derivation.
+// success=false carries a reason and an empty list — the renderer silently
+// degrades to the manual-input path.
+// [20260907_Feat_235_StreamPipeline] T8 chunk protocol — a tagged union
+// pushed to the initiating window while a streaming polish runs.
+export type PolishChunk =
+  | { type: "start"; requestId: string }
+  | { type: "delta"; requestId: string; text: string }
+  | {
+      type: "progress";
+      requestId: string;
+      // [20260911_Feat_241_LongTextChunking] T14: bytes stays for the
+      // file-import byte counter (T9 ③); the block triplet carries the
+      // chunked-polish "第几块/共几块 + 已耗时" progress. Both optional —
+      // producers send whichever dimension they own.
+      bytes?: number;
+      chunkIndex?: number;
+      chunkCount?: number;
+      elapsedMs?: number;
+    }
+  | { type: "degraded"; requestId: string; reason: string }
+  | { type: "finish"; requestId: string; text: string; reasoningChars: number }
+  | { type: "abort"; requestId: string }
+  | { type: "error"; requestId: string; error: string };
+
+export interface ListModelsResult {
+  success: boolean;
+  reason?: string;
+  models: string[];
 }
 
 export interface ExportAllResult {
@@ -145,6 +235,9 @@ export interface FunASRStatusResult {
   missing_models?: string[];
   initializing: boolean;
   models_initialized?: boolean;
+  // [T12 review BLOCKER] Process-alive flag — true + models_initialized
+  // false = idle-unloaded (recordable state, #190).
+  server_ready?: boolean;
   status_message?: string;
 }
 
@@ -191,12 +284,8 @@ export interface PythonInstallResult {
   error?: string;
 }
 
-export interface FunASRInstallResult {
-  installed: boolean;
-  packages?: string[];
-  error?: string;
-}
-
+// [20260906_Refactor_DeadChannelCleanup] FunASRInstallResult removed —
+// pythonEnvironment declares its own; the IPC copy had zero importers.
 // ─── Update ───
 
 export interface UpdateCheckResult {
@@ -235,14 +324,6 @@ export interface UpdateErrorData {
   error: string;
 }
 
-// ─── Permissions ───
-
-export interface PermissionResult {
-  accessibility: boolean;
-  microphone: boolean;
-  [key: string]: boolean;
-}
-
 // ─── Hotkey ───
 
 export interface HotkeyRegistrationResult {
@@ -255,14 +336,8 @@ export interface HotkeyRegistrationResult {
 // in preload.ts (callback param + handler param) and src/electronAPI.d.ts
 // (callback param). Single source of truth for event payload shapes.
 
-/** Payload for the `processing-update` event (model status changes). */
-export interface ProcessingUpdateData {
-  status?: string;
-  progress?: number;
-  type?: string;
-  isLoading?: boolean;
-  isReady?: boolean;
-}
+// [20260906_Refactor_DeadChannelCleanup] ProcessingUpdateData removed with
+// its event (processing-update had a listener but no main-process sender).
 
 /** Payload for the `file-transcription-progress` event. */
 export interface FileTranscriptionProgressData {

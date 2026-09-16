@@ -57,8 +57,12 @@ describe("Phase 4: Internationalization i18n", () => {
       expect(i18nConfig).toMatch(/i18next/);
     });
 
-    it("should configure escapeValue: true for security", () => {
-      expect(i18nConfig).toMatch(/escapeValue\s*:\s*true/);
+    it("should disable i18next HTML escaping (React escapes rendered text)", () => {
+      // [20260905_Fix_247_ReviewEscape] escapeValue:true double-escaped
+      // interpolated error messages (quotes/apostrophes rendered literally
+      // as &#39;) — React already escapes text nodes, so the i18next-level
+      // escape is pure harm here.
+      expect(i18nConfig).toMatch(/escapeValue\s*:\s*false/);
     });
 
     it("should support zh-CN and en languages", () => {

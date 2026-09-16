@@ -12,7 +12,6 @@ interface HotkeyManager {
   unregisterHotkey(hotkey: string): boolean;
   getRegisteredHotkeys(): string[];
   setRecordingState(isRecording: boolean): void;
-  getRecordingState(): boolean;
 }
 
 interface WindowManager {
@@ -28,17 +27,33 @@ interface Managers {
 export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
   const { hotkeyManager, windowManager, logger } = managers;
 
-  const hotkeyRegisteredSenders = new Set<number>();
+  // [20260905_Fix_246_HotkeySettingsUi] Sender → registered combo (was a bare
+  // Set of sender ids). The Set early-returned success on ANY second
+  // registration from the same sender, so a runtime hotkey change (settings
+  // window → SETTINGS_UPDATE → re-register) silently kept the old combo
+  // alive. A map lets the same combo dedup while a different combo replaces.
+  const senderHotkeys = new Map<number, string>();
 
   ipcMain.handle(C.HOTKEY.REGISTER, (event, hotkey: string) => {
     try {
       if (hotkeyManager) {
         const senderId = event.sender.id;
 
-        if (hotkeyRegisteredSenders.has(senderId)) {
-          logger.info?.(`发送者 ${senderId} 已注册过热键，跳过重复注册`);
+        // Same combo already live for this sender — genuine dedup.
+        if (senderHotkeys.get(senderId) === hotkey) {
+          logger.info?.(`发送者 ${senderId} 已注册相同热键，跳过重复注册`);
           return { success: true };
         }
+
+        // [20260905_Fix_246_HotkeyReplaceAtomic] Atomic replace: attempt the
+        // new combo FIRST and release the previous one only after success.
+        // The previous unregister-before-register order could leave NO live
+        // combo after a failed registration while the map still claimed the
+        // old one — reverting then hit the dedup above and never re-registered
+        // (permanently dead hotkey reported as success). On failure here the
+        // old combo is genuinely still live and the mapping stays truthful.
+        const previous = senderHotkeys.get(senderId);
+        const firstForSender = previous === undefined;
 
         const success = hotkeyManager.registerHotkey(hotkey, () => {
           logger.info?.(`热键 ${hotkey} 被触发，发送事件到主窗口`);
@@ -55,12 +70,19 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
         });
 
         if (success) {
-          hotkeyRegisteredSenders.add(senderId);
+          if (previous !== undefined) {
+            hotkeyManager.unregisterHotkey(previous);
+          }
+          senderHotkeys.set(senderId, hotkey);
 
-          event.sender.on("destroyed", () => {
-            hotkeyRegisteredSenders.delete(senderId);
-            logger.info?.(`清理发送者 ${senderId} 的热键注册记录`);
-          });
+          // Attach the cleanup listener once per sender, not once per
+          // registration (a long-lived webContents would accumulate them).
+          if (firstForSender) {
+            event.sender.on("destroyed", () => {
+              senderHotkeys.delete(senderId);
+              logger.info?.(`清理发送者 ${senderId} 的热键注册记录`);
+            });
+          }
 
           logger.info?.(`热键 ${hotkey} 注册成功，发送者: ${senderId}`);
         } else {
@@ -119,17 +141,8 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
     }
   });
 
-  ipcMain.handle(C.HOTKEY.GET_STATE, () => {
-    try {
-      if (hotkeyManager) {
-        const isRecording = hotkeyManager.getRecordingState();
-        return { success: true, isRecording };
-      }
-      return { success: false, error: "热键管理器未初始化" };
-    } catch (error) {
-      logger.error?.("获取录音状态失败:", error);
-      return { success: false, error: (error as Error).message };
-    }
-  });
+  // [20260906_Refactor_DeadChannelCleanup] Ticket #250: the HOTKEY.GET_STATE
+  // handler was removed — zero renderer callers (orphans yellow list); the
+  // recording state is consumed main-internally.
 }
 // [20260724_TS_BigBang_HotkeyHandlers] END

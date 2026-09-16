@@ -55,6 +55,44 @@ describe("[20260816_Test_BranchPush] audioPathValidator branch coverage", () => 
     expect(spy).toHaveBeenCalled();
   });
 
+  // [20260905_Fix_195_DriveLetterPolicy] Issue #195 design decision (option
+  // 1 + 3): the drive-letter fast-accept stays INTENTIONAL — Windows users
+  // keep audio on arbitrary drives and allowed-roots is a macOS-centric
+  // concept — but the highest-value exfiltration targets (system trees) are
+  // now explicitly rejected. Compatibility contract: any non-system drive
+  // path remains valid; UNC stays rejected.
+  it.each([
+    ["C:\\Windows\\Media\\alarm.wav"],
+    ["C:\\windows\\system32\\config.wav"],
+    ["C:\\Program Files\\SomeApp\\capture.wav"],
+    ["C:\\Program Files (x86)\\SomeApp\\capture.wav"],
+    ["C:\\ProgramData\\SomeApp\\clip.wav"],
+    ["D:\\Windows\\Media\\x.wav"],
+    ["C:\\PROGRA~1\\SomeApp\\capture.wav"], // 8.3 short name (review MFIX 1)
+    ["C:\\Windows.\\Media\\x.wav"], // trailing-dot segment (review MFIX 1)
+    ["C:\\windows\\Media\\alarm.wav "], // trailing space (review MFIX 1)
+  ])("rejects a windows system-directory path %s", (candidate) => {
+    setPlatform("win32");
+    const target = path.join(tmpDir, "audio.wav");
+    fs.writeFileSync(target, "x");
+    vi.spyOn(fs, "realpathSync").mockReturnValue(candidate);
+    const result = validateAudioPath(target);
+    expect(result).toEqual({ valid: false, error: "路径不在允许范围内" });
+  });
+
+  it.each([
+    ["D:\\Music\\recordings\\lecture.wav"],
+    ["E:\\ Meetings\\2026\\session.mp3"],
+    ["C:\\Users\\user\\Desktop\\memo.wav"],
+  ])("still accepts a non-system drive-letter path %s", (candidate) => {
+    setPlatform("win32");
+    const target = path.join(tmpDir, "audio.wav");
+    fs.writeFileSync(target, "x");
+    vi.spyOn(fs, "realpathSync").mockReturnValue(candidate);
+    const result = validateAudioPath(target);
+    expect(result.valid).toBe(true);
+  });
+
   it("resolves a relative path against the cwd and accepts it under tmpdir", () => {
     const origCwd = process.cwd();
     process.chdir(tmpDir);
@@ -92,11 +130,12 @@ describe("[20260816_Test_BranchPush] audioPathValidator branch coverage", () => 
   });
 
   // [20260817_T4_CiMatrix] Outside-root rejection is POSIX-only semantics:
-  // isPathAllowed fast-accepts ANY drive-letter path on Windows
-  // (audioPathValidator.ts /^[A-Za-z]:\\/ → return true), so no local
-  // Windows path can be "outside the allowed roots" — only UNC is rejected
-  // there (covered by the test above). Tracked as a design question in its
-  // own issue; until then these tests document the POSIX contract.
+  // isPathAllowed fast-accepts drive-letter paths on Windows
+  // (audioPathValidator.ts /^[A-Za-z]:[\\/]/ arm), so no local Windows path
+  // can be "outside the allowed roots" — only UNC and, since the #195 design
+  // decision, the Windows system trees are rejected there (covered above).
+  // Until allowed-roots semantics are redesigned for win32 these tests
+  // document the POSIX contract.
   it.skipIf(process.platform === "win32")(
     "rejects an absolute path outside every allowed root",
     () => {

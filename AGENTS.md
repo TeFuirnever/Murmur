@@ -104,6 +104,11 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
   - `src/helpers/windowManager.ts` (sandbox, CSP, window creation)
   - `src/helpers/database.ts` (safeStorage encryption, schema)
   - `src/helpers/audioPathValidator.ts` (cross-platform path validation)
+  - `src/bot/` (vendored bloub animation engine, spec #224: numeric constants
+    are frame-by-frame video measurements — never round or "fix" them; the
+    eye-fit table is build-time only, never re-solve per frame; see
+    `docs/bot/measurements.md`. Note: unrelated to the removed ogl/motion
+    visual-effects stack)
   - Packaging/release and electron-builder configuration
   - User-visible text and i18n resources
 
@@ -113,7 +118,7 @@ Murmur targets **Windows** and **macOS**. See `CLAUDE.md` → _Cross-Platform Su
 
 - Use `process.platform === "win32"` for platform checks, not `os.platform()` or feature detection.
 - Windows paths use backslashes; UNC paths (`\\server\share`) are rejected by `audioPathValidator`.
-- Native modules (`better-sqlite3`) need Electron ABI. Hazard: `electron-builder install-app-deps` can silently no-op while pnpm's build allowlist fetches a system-Node-ABI prebuild — release CI forces `@electron/rebuild -f` and gates packaging on a real DB open under Electron (details in `CLAUDE.md` → Cross-Platform Support).
+- SQLite is `node:sqlite` (built into Node ≥22.5 / Electron 39, spec #226) — no native addon, no ABI choreography between test and dev. If a native addon is ever reintroduced, restore the forced-rebuild + packaged-DB-open gates (see `CLAUDE.md` → Cross-Platform Support).
 - Embedded Python (`prepare-embedded-python.js`) supports both macOS (`-apple-darwin`) and Windows (`-pc-windows-msvc-shared`) downloads.
 - Add `it.skipIf(process.platform === "win32")` for Unix-only test behavior.
 
@@ -153,7 +158,7 @@ Murmur targets **Windows** and **macOS**. See `CLAUDE.md` → _Cross-Platform Su
 - **Bug fix:** reproduce the bug, add a failing test **first**, then fix and verify.
 - **High-risk** (session flow, IPC, security, privacy, release packaging): include a risk statement and fresh verification evidence.
 - **Gate failure:** run `node scripts/ci-check.js --json` to diagnose; use `--fix` for auto-fixable issues.
-- **Releases:** push a `v*` tag → `build.yml` builds installers behind four release gates (native ABI, preload presence, mac/win packaged boot smoke). Never bypass or downgrade these gates — every release before v1.3.2 shipped broken while CI stayed green. See `CONTRIBUTING.md` → Release Gates.
+- **Releases:** push a `v*` tag → `build.yml` builds installers behind five release gates (native ABI, preload presence, Python packaging import gate, mac/win packaged boot smoke). Never bypass or downgrade these gates — every release before v1.3.2 shipped broken while CI stayed green. See `CONTRIBUTING.md` → Release Gates.
 
 ### Commit Format
 

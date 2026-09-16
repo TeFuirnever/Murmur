@@ -2,7 +2,7 @@
  * Suite 7: Settings Persistence E2E Tests
  *
  * Tests settings CRUD, theme persistence, AI provider presets.
- * Uses resetSettings in afterEach for isolation.
+ * Uses setSetting restoration in afterAll for isolation.
  */
 import { test, expect } from "@playwright/test";
 import {
@@ -19,8 +19,13 @@ test.describe("Suite 7: Settings Persistence", () => {
   });
 
   test.afterAll(async () => {
-    // Clean up settings
-    await window.evaluate(() => window.electronAPI.resetSettings());
+    // Clean up settings.
+    // [20260906_Refactor_DeadChannelCleanup] Ticket #250 removed the
+    // zero-renderer-caller resetSettings binding; isolation now restores the
+    // keys this suite wrote ("theme") to the DEFAULT_SETTINGS value.
+    await window.evaluate(() =>
+      window.electronAPI.setSetting("theme", "system"),
+    );
     await closeElectronApp(electronApp);
   });
 
