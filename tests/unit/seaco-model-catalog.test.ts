@@ -62,7 +62,13 @@ describe("[20260820_T15_SeacoSwap] source-contract sync points", () => {
     );
     expect(check).toContain("speech_seaco_paraformer_large");
     expect(check).toContain("speech_paraformer-large");
-    expect(check).toContain("asr_satisfied");
+    // [20260911_Fix_336_HubLayout] The gate was promoted from run()'s inline
+    // `asr_satisfied` to _find_missing_required_models() (issue #336: hub
+    // layout + empty-explicit-root fallback). The either-generation contract
+    // is unchanged — anchor on the new resolution call.
+    expect(check).toContain(
+      "any(self._resolve_repo_dir(r) for r in asr_repos)",
+    );
   });
 
   it("cache discovery prefixes include the SeACo directory", () => {

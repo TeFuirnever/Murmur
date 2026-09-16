@@ -41,7 +41,7 @@ FunASR 是达摩院开源的中文语音识别引擎，专为中国用户优化�
 
 | 层级     | 技术                                                  |
 | -------- | ----------------------------------------------------- |
-| 桌面框架 | Electron 36                                           |
+| 桌面框架 | Electron 39                                           |
 | 前端     | React 19 + Tailwind CSS 4 + Vite                      |
 | 语音识别 | FunASR (Paraformer-large + FSMN-VAD + CT-Transformer) |
 | AI 优化  | 兼容 OpenAI API 的任意模型                            |

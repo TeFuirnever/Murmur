@@ -6,6 +6,10 @@
 #   2. Fix InstallerUrl to the real asset name (Murmur.Setup.<version>.exe).
 #   3. Fill InstallerSha256 from checksums-sha256.txt in the release.
 # Submit to: https://github.com/microsoft/winget-pkgs
+#
+# The NSIS installer adds resources\cli to the USER Path (see
+# build/installer.nsh), so the bundled `murmur` CLI works from any new
+# shell without a system Node.js (ticket #272).
 
 PackageIdentifier: TeFuirnever.Murmur
 PackageVersion: 1.0.0
@@ -18,6 +22,8 @@ Description: |
   Murmur is a desktop voice input tool that lets you type by speaking.
   It uses FunASR speech recognition with all audio processed locally.
   Optionally connect an AI model to auto-polish your text.
+  Ships a `murmur` CLI that the installer puts on your PATH (uses the
+  bundled Electron runtime, no system Node.js required).
 Tags:
   - speech-to-text
   - voice-input

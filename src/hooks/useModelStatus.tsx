@@ -236,23 +236,15 @@ export function ModelStatusProvider({
           isLoading: true,
         }));
 
-        try {
-          console.log("模型下载完成，重启FunASR服务器...");
-          await window.electronAPI.restartFunasrServer();
-          console.log("FunASR服务器重启完成");
-
-          setTimeout(() => {
-            checkModelStatus();
-          }, 3000);
-        } catch (restartError) {
-          console.error("重启FunASR服务器失败:", restartError);
-          setModelStatus((prev) => ({
-            ...prev,
-            isLoading: false,
-            error: "重启服务器失败: " + (restartError as Error).message,
-            stage: "error",
-          }));
-        }
+        // [20260905_Fix_216_DownloadRecovery] The server restart after a
+        // successful download is now owned by the MAIN process
+        // (funasrManager.downloadModels fires restartServer itself). The
+        // renderer-side restart here raced it into a double full-model
+        // load (review MAJOR); the status poll below picks up the server
+        // state once the main-process restart settles.
+        setTimeout(() => {
+          checkModelStatus();
+        }, 3000);
 
         return { success: true };
       } else {
@@ -340,33 +332,9 @@ export function ModelStatusProvider({
     }
   }, []);
 
-  React.useEffect(() => {
-    if (window.electronAPI && window.electronAPI.onProcessingUpdate) {
-      const unsubscribe = window.electronAPI.onProcessingUpdate(
-        // [20260725_CodeReview_S1] Same narrowing as onModelDownloadProgress:
-        // narrow once via the d.ts-declared shape (inline in electronAPI.d.ts
-        // until Tier 2.3 finalize extracts it to types/ipc.ts).
-        (event, data) => {
-          const d = (data ?? event) as {
-            type?: string;
-            isLoading?: boolean;
-            isReady?: boolean;
-            progress?: number;
-          };
-          if (d.type === "model_initialization") {
-            setModelStatus((prev) => ({
-              ...prev,
-              isLoading: d.isLoading ?? prev.isLoading,
-              isReady: d.isReady ?? prev.isReady,
-              progress: d.progress || prev.progress,
-              stage: d.isReady ? "ready" : "loading",
-            }));
-          }
-        },
-      );
-      return unsubscribe;
-    }
-  }, []);
+  // [20260906_Refactor_DeadChannelCleanup] Ticket #250: the processing-update
+  // push-event subscription was removed with the channel — the
+  // model_initialization push had no live producer.
 
   React.useEffect(() => {
     if (isSettingsPage()) return;

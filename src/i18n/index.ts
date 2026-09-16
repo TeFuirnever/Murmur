@@ -16,7 +16,10 @@ i18n.use(initReactI18next).init({
   lng: savedLanguage || navigator.language || "zh-CN",
   fallbackLng: "zh-CN",
   interpolation: {
-    escapeValue: true,
+    // [20260905_Fix_247_ReviewEscape] React already escapes rendered text —
+    // i18next's own HTML-escaping double-escaped interpolated values (error
+    // messages with quotes/apostrophes rendered literally as &#39;).
+    escapeValue: false,
   },
 });
 

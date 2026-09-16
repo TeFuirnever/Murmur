@@ -8,6 +8,7 @@ FunASR模型服务器
 import sys
 import json
 import os
+import re
 import logging
 import traceback
 import signal
@@ -52,6 +53,19 @@ logger = logging.getLogger(__name__)
 
 # 记录日志文件位置
 logger.info(f"FunASR服务器日志文件: {log_file_path}")
+
+
+# [20260913_Fix_256_AnchorParity] The AUTHORITATIVE model-readiness anchors,
+# hoisted from _repo_ready()'s inline list so the cross-language contract
+# test (tests/unit/modelManager-anchor-parity.test.ts) has a stable parse
+# target: Node's _verifyModel must accept exactly this name set, otherwise a
+# repo reads "ready" to Python and "missing" to Node (the #256/#336 flap
+# class). Exact names match literally; "*.onnx"/"vocab*" are fnmatch globs.
+# Behavior is identical to the former inline list — hoist only.
+_READY_PATTERNS = [
+    "model.pt", "pytorch_model.bin", "*.onnx",
+    "config.json", "configuration.json", "model.yaml", "vocab*"
+]
 
 
 # [20260820_Fix_SuppressStdoutRace] The model loaders run in parallel
@@ -99,6 +113,25 @@ def suppress_stdout():
                     _SUPPRESS_STDOUT_SINK.close()
                     _SUPPRESS_STDOUT_SINK = None
 # [20260820_Fix_SuppressStdoutRace] END
+
+
+# [20260905_Fix_208_ProtocolStreamImmune] Issue #208: protocol output must be
+# immune to suppress_stdout() windows. print() resolves sys.stdout
+# dynamically, so a protocol line emitted while any loader thread is inside a
+# suppression window (reload progress dequeued by _output_worker, command
+# responses on the main thread) landed in the shared devnull sink and was
+# silently dropped — #207 removed the closed-devnull crash, but the swallow
+# path remained. The protocol channel therefore writes to the stream captured
+# at process start (the original host pipe), never to the redirectable
+# global. Captured at import time, before any suppression can run.
+_PROTOCOL_STDOUT = sys.stdout
+
+
+def _protocol_print(payload):
+    """Write a protocol JSON line to the host pipe via the startup stream."""
+    _PROTOCOL_STDOUT.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    _PROTOCOL_STDOUT.flush()
+# [20260905_Fix_208_ProtocolStreamImmune] END
 
 
 # [20260819_T8_ThreadAdapt] Ticket #187 (spec #177 T8): inference thread
@@ -319,15 +352,175 @@ class FunASRServer:
     # ASR loader's disk-presence gate needs the same resolution.
     @staticmethod
     def _default_damo_root():
-        """解析默认模型根目录（MODELSCOPE_CACHE 兼容两种布局）"""
+        """解析默认模型根目录（MODELSCOPE_CACHE + 新旧两种 modelscope 布局）
+
+        [20260905_Fix_216_DamoRootLayout] modelscope >= 1.19 downloads into
+        a NEW layout with an extra `models` layer — verified against 1.37:
+            <cache>/models/damo/<repo>
+        while older caches use <cache>/damo/<repo>. The old resolver only
+        knew the legacy shapes, so a machine whose models live in the new
+        layout failed the disk-presence gate forever with
+        models_not_downloaded (issue #216). Candidates are probed in order
+        (new layout first — fresh downloads land there) and the no-cache
+        default is the new-layout path so a fresh download is found on the
+        next gate run.
+        """
+        new_layers = ("models/damo", "hub/models/damo")
+        legacy_layers = ("damo", "hub/damo")
         root = os.environ.get("MODELSCOPE_CACHE")
         if root:
-            if os.path.isdir(os.path.join(root, "damo")):
-                return os.path.join(root, "damo")
-            if os.path.isdir(os.path.join(root, "hub", "damo")):
-                return os.path.join(root, "hub", "damo")
+            for layer in new_layers + legacy_layers:
+                candidate = os.path.join(root, *layer.split("/"))
+                if os.path.isdir(candidate):
+                    return candidate
+            # [20260905_Fix_Review_EnvCacheDefault] An explicitly configured
+            # cache must not fall through to the home directory when it has
+            # no models yet — modelscope will download INTO it, so the gate
+            # has to look there too.
+            return os.path.join(root, "models", "damo")
         home_dir = os.path.expanduser("~")
-        return os.path.join(home_dir, ".cache", "modelscope", "hub", "damo")
+        base = os.path.join(home_dir, ".cache", "modelscope", "hub")
+        for layer in new_layers + legacy_layers:
+            candidate = os.path.join(base, *layer.split("/"))
+            if os.path.isdir(candidate):
+                return candidate
+        return os.path.join(base, "models", "damo")
+
+    # [20260905_Fix_255_RepoReadyShardGlob] Promoted from a nested run()
+    # helper so the readiness gate is directly testable, and hardened for
+    # issue #255: ModelScope's downloader leaves SHARD part-files in the
+    # repo dir mid-download (e.g. vocab.txt_0_167772159 — a byte-range temp
+    # name). The "vocab*" glob matched them, so a server (re)start during a
+    # download misread the repo as ready and AutoModel died with a confusing
+    # error instead of the clean models_not_downloaded path. Matching files
+    # whose name ends in a _<start>_<end> byte-range suffix never satisfy
+    # the gate; real anchors (config/weights/complete vocab) still do.
+    _SHARD_SUFFIX_RE = re.compile(r"_\d+_\d+$")
+
+    @staticmethod
+    def _repo_ready(repo_dir):
+        """目录存在且包含非分片的常见权重/配置文件即认为已就绪"""
+        if not os.path.isdir(repo_dir):
+            return False
+        # [20260913_Fix_256_AnchorParity] Same-site usage of the hoisted
+        # module-level _READY_PATTERNS (list contents unchanged).
+        for pat in _READY_PATTERNS:
+            matches = [
+                m for m in glob.glob(os.path.join(repo_dir, pat))
+                if not FunASRServer._SHARD_SUFFIX_RE.search(os.path.basename(m))
+            ]
+            if matches:
+                return True
+        return False
+
+    # [20260911_Fix_336_HubLayout] Issue #336: modelscope 1.39's real
+    # on-disk layout matches NONE of the shapes _default_damo_root() knows:
+    #
+    #     <cache>/models/damo--<repo>/snapshots/<rev>/model.pt
+    #
+    # (NO `hub` layer, repo dirs renamed `damo--<name>`, an extra
+    # `snapshots/<revision>` level). Worse, the app always spawns the server
+    # with an EXPLICIT --damo-root (<userData>/models, which stays empty
+    # because download_models.py calls snapshot_download without cache_dir),
+    # so `_default_damo_root()` never ran and the gate reported
+    # models_not_downloaded forever while the UI flapped. The resolver chain
+    # below probes the explicit root FIRST (it wins when populated — the
+    # user's symlink workaround and upgrading users rely on that), then the
+    # modelscope default caches in both legacy and hub shapes.
+    _MODEL_REVISION = "v2.0.4"
+
+    @staticmethod
+    def _resolve_hub_repo(hub_root, repo_dir_name):
+        """Return the first READY hub-style snapshot dir for a repo, else None.
+
+        Hub layout (modelscope >= 1.39):
+            <hub_root>/damo--<repo>/snapshots/<rev>/<files>
+        The pinned revision is preferred (it is what AutoModel loads via
+        model_revision); any other READY snapshot is accepted so caches
+        populated with a different revision still pass the gate.
+        """
+        snapshots_dir = os.path.join(
+            hub_root, f"damo--{repo_dir_name}", "snapshots"
+        )
+        if not os.path.isdir(snapshots_dir):
+            return None
+        revisions = sorted(os.listdir(snapshots_dir), reverse=True)
+        revisions.sort(key=lambda rev: rev != FunASRServer._MODEL_REVISION)
+        for rev in revisions:
+            candidate = os.path.join(snapshots_dir, rev)
+            if FunASRServer._repo_ready(candidate):
+                return candidate
+        return None
+
+    @staticmethod
+    def _hub_models_roots():
+        """Directories that may hold damo--<repo> hub-style repos.
+
+        Covers $MODELSCOPE_CACHE (with and without the legacy `hub` layer)
+        and the default ~/.cache/modelscope — 1.39 drops the `hub` layer.
+        """
+        roots = []
+        env_root = os.environ.get("MODELSCOPE_CACHE")
+        if env_root:
+            roots.append(os.path.join(env_root, "models"))
+            roots.append(os.path.join(env_root, "hub", "models"))
+        home_dir = os.path.expanduser("~")
+        default_cache = os.path.join(home_dir, ".cache", "modelscope")
+        roots.append(os.path.join(default_cache, "models"))
+        roots.append(os.path.join(default_cache, "hub", "models"))
+        return roots
+
+    def _resolve_repo_dir(self, repo_dir_name):
+        """First READY on-disk directory for a repo across every known layout.
+
+        Order (explicit damo_root WINS when populated):
+          1. <damo_root>/<repo>                    — explicit, legacy shape
+          2. <damo_root>/damo--<repo>/snapshots/*  — explicit, hub shape
+             (covers --damo-root pointing AT the resolved modelscope root)
+          3. <default damo root>/<repo>            — modelscope cache, legacy
+          4. _hub_models_roots() hub shapes        — modelscope cache, 1.39
+        Returns None when the repo is ready nowhere (→ models_not_downloaded).
+        """
+        roots = []
+        if self.damo_root:
+            roots.append(self.damo_root)
+        default_root = self._default_damo_root()
+        if default_root not in roots:
+            roots.append(default_root)
+        for root in roots:
+            direct = os.path.join(root, repo_dir_name)
+            if self._repo_ready(direct):
+                return direct
+            found = self._resolve_hub_repo(root, repo_dir_name)
+            if found:
+                return found
+        for hub_root in self._hub_models_roots():
+            found = self._resolve_hub_repo(hub_root, repo_dir_name)
+            if found:
+                return found
+        return None
+
+    def _find_missing_required_models(self):
+        """必需模型中就绪检查未通过的 repo 列表（run() 的启动门禁用）
+
+        [20260911_Fix_336_HubLayout] Promoted from run() so the startup gate
+        is unit-testable, and switched from a single cache_path join to
+        _resolve_repo_dir so the hub layout and the empty-explicit-root
+        fallback are covered. ASR accepts either generation (SeACo primary,
+        old paraformer rollback — [20260820_T15_SeacoSwap]); punc optional.
+        """
+        vad_repo = "speech_fsmn_vad_zh-cn-16k-common-pytorch"
+        asr_repos = [
+            "speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+            "speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+        ]
+        missing = []
+        if not any(self._resolve_repo_dir(r) for r in asr_repos):
+            missing.append(asr_repos[0])
+        if not self._resolve_repo_dir(vad_repo):
+            missing.append(vad_repo)
+        return missing
+    # [20260911_Fix_336_HubLayout] END
 
     def _load_asr_model(self):
         """加载ASR模型（SeACo 优先，旧模型回退）"""
@@ -337,11 +530,21 @@ class FunASRServer:
         # on local disk must be skipped WITHOUT calling AutoModel — funasr
         # auto-downloads ~1GB from modelscope on cache miss, silently
         # defeating the rollback (or blowing the 300s init timeout).
-        cache_path = self.damo_root or self._default_damo_root()
+        # [20260905_Fix_255_ReviewFixup] The readiness gate (not just
+        # isdir) applies here too: this path also serves reload/lazy-init,
+        # which bypasses run()'s startup gate — an isdir-only check let a
+        # mid-download dir holding only shard part-files through to
+        # AutoModel (the confusing failure #255 fixed on the startup path).
+        # [20260911_Fix_336_HubLayout] The single-cache-path join was
+        # replaced by _resolve_repo_dir: the explicit --damo-root is usually
+        # an empty <userData>/models while the models live in modelscope
+        # 1.39's hub layout (issue #336). AutoModel still receives the repo
+        # id and resolves through modelscope's own cache — only the gate
+        # needed the new shapes.
         candidates = [
             m
             for m in (self.ASR_MODEL_SEACO, self.ASR_MODEL_FALLBACK)
-            if os.path.isdir(os.path.join(cache_path, m.split("/", 1)[1]))
+            if self._resolve_repo_dir(m.split("/", 1)[1]) is not None
         ]
         for model_name in candidates:
             try:
@@ -1256,8 +1459,10 @@ class FunASRServer:
         while self.running:
             try:
                 msg = self.response_queue.get(timeout=0.5)
-                print(json.dumps(msg, ensure_ascii=False))
-                sys.stdout.flush()
+                # [20260905_Fix_208_ProtocolStreamImmune] Startup stream, not
+                # print(): a dequeue during a suppress_stdout() window must
+                # still reach the host (#208).
+                _protocol_print(msg)
             except queue.Empty:
                 continue
 
@@ -1445,32 +1650,15 @@ class FunASRServer:
         # [20260820_T15_SeacoSwap] Either ASR generation satisfies the
         # required-ASR check (SeACo for fresh installs / upgraded users,
         # old paraformer for mid-upgrade rollback states).
-        vad_repo = "speech_fsmn_vad_zh-cn-16k-common-pytorch"
-        asr_repos = [
-            "speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
-            "speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
-        ]
         # ASR (either generation) + VAD are required; punc is optional.
 
-        def _repo_ready(repo_dir):
-            # 目录存在且包含任意常见权重/配置文件即认为已就绪
-            if not os.path.isdir(repo_dir):
-                return False
-            patterns = [
-                "model.pt", "pytorch_model.bin", "*.onnx",
-                "config.json", "configuration.json", "model.yaml", "vocab*"
-            ]
-            for pat in patterns:
-                if glob.glob(os.path.join(repo_dir, pat)):
-                    return True
-            return False
-
-        asr_satisfied = any(
-            _repo_ready(os.path.join(cache_path, r)) for r in asr_repos
-        )
-        missing_required = [] if asr_satisfied else asr_repos[:1]
-        if not _repo_ready(os.path.join(cache_path, vad_repo)):
-            missing_required.append(vad_repo)
+        # [20260905_Fix_255_RepoReadyShardGlob] Readiness gate promoted to
+        # FunASRServer._repo_ready (staticmethod, shard-aware, testable).
+        # [20260911_Fix_336_HubLayout] The gate itself was promoted to
+        # _find_missing_required_models() so the explicit-empty-damo_root
+        # fallback and the modelscope 1.39 hub layout resolve identically
+        # here, in _load_asr_model, and in the unit tests (issue #336).
+        missing_required = self._find_missing_required_models()
 
         if not missing_required:
             logger.info("模型文件存在，开始初始化")
@@ -1482,8 +1670,9 @@ class FunASRServer:
                 "error": "模型文件未下载，请先下载模型",
                 "type": "models_not_downloaded"
             }
-        print(json.dumps(init_result, ensure_ascii=False))
-        sys.stdout.flush()
+        # [20260905_Fix_208_ProtocolStreamImmune] Startup stream: reload
+        # re-initialization can be in flight while this init result prints.
+        _protocol_print(init_result)
 
         # 启动推理线程和输出线程
         self._inference_thread = threading.Thread(target=self._inference_worker, daemon=True)
@@ -1506,8 +1695,8 @@ class FunASRServer:
                     command = json.loads(line)
                 except json.JSONDecodeError:
                     result = {"success": False, "error": "无效的JSON命令"}
-                    print(json.dumps(result, ensure_ascii=False))
-                    sys.stdout.flush()
+                    # [20260905_Fix_208_ProtocolStreamImmune]
+                    _protocol_print(result)
                     continue
 
                 # 提取 request_id 用于响应关联
@@ -1524,8 +1713,8 @@ class FunASRServer:
                 if result is not None:
                     if request_id:
                         result["request_id"] = request_id
-                    print(json.dumps(result, ensure_ascii=False))
-                    sys.stdout.flush()
+                    # [20260905_Fix_208_ProtocolStreamImmune]
+                    _protocol_print(result)
 
                 if not keep_running:
                     break
@@ -1538,8 +1727,8 @@ class FunASRServer:
                     "error": str(e),
                     "traceback": traceback.format_exc(),
                 }
-                print(json.dumps(error_result, ensure_ascii=False))
-                sys.stdout.flush()
+                # [20260905_Fix_208_ProtocolStreamImmune]
+                _protocol_print(error_result)
 
         logger.info("FunASR服务器退出")
 

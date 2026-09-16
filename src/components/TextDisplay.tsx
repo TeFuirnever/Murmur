@@ -5,6 +5,7 @@ export const TextDisplay = ({
   originalText,
   processedText,
   isProcessing,
+  aiOptimized,
   onCopy,
   onExport,
   onPaste,
@@ -12,6 +13,11 @@ export const TextDisplay = ({
   originalText: string;
   processedText: string;
   isProcessing: boolean;
+  // [20260913_Fix_197_AiLabelBaseline] Explicit AI-involved flag (Spec #197
+  // root fix: "compare processed_text ≠ text — or an explicit flag"). When
+  // omitted, the same comparison the ticket prescribes is derived here, so
+  // the badge can never drift from the displayed-vs-transcribed baseline.
+  aiOptimized?: boolean;
   onCopy: (text: string) => void;
   onExport: (text: string) => void;
   onPaste: (text: string) => void;
@@ -19,6 +25,21 @@ export const TextDisplay = ({
   if (!originalText && !processedText) {
     return null;
   }
+
+  // [20260913_Fix_197_AiLabelBaseline] The "AI优化后" block previously
+  // rendered whenever processedText was non-empty, so a record whose text
+  // was rewritten by the main-process CLEANER (no AI involved) still showed
+  // the AI-optimized block. Gate it on the polish actually having changed
+  // the text relative to the transcription; the in-flight processing state
+  // still renders regardless. Paste/copy/export stay conditioned on
+  // processedText inside the block (unchanged) — when texts are equal the
+  // remaining single transcription block already carries a copy button, so
+  // no capability is lost.
+  // [20260913_Fix_197_AiLabelBaseline_Review] Trim both sides — the history
+  // gate trims, and a whitespace-only polish must not read as an AI change.
+  const hasAIChange =
+    aiOptimized ?? processedText.trim() !== originalText.trim();
+  const showAIBlock = (hasAIChange && processedText) || isProcessing;
 
   return (
     <div className="space-y-4">
@@ -39,7 +60,7 @@ export const TextDisplay = ({
         </div>
       )}
 
-      {(processedText || isProcessing) && (
+      {showAIBlock && (
         <div className="bg-[#e8f4fd] dark:bg-[#0a2540] rounded-xl p-5 border-l-4 border-[#0071e3] shadow-lg">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-base font-semibold text-heading text-[#0071e3] dark:text-[#2997ff]">

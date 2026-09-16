@@ -32,6 +32,59 @@ function makeElectronAPIStub(
   } as unknown as ElectronAPI;
 }
 
+// [20260905_Test_BranchRecovery] No-bridge arms: every IPC call in the hook
+// guards `window.electronAPI` and every catch guards an optional `log` —
+// exercise both sides so the guards are pinned, not just painted green by
+// the full stub.
+describe("useHotkey without a bridge", () => {
+  const asWin = () => globalThis.window as TestWindow;
+
+  afterEach(() => {
+    delete asWin().electronAPI;
+  });
+
+  it("survives mount, register, unregister and sync with no electronAPI", async () => {
+    delete asWin().electronAPI;
+    const { result } = renderHook(() => useHotkey());
+    await act(async () => {
+      await result.current.registerHotkey("CmdOrCtrl+K");
+      await result.current.unregisterHotkey();
+      await result.current.syncRecordingState(true);
+    });
+    expect(result.current.hotkey).toBeTruthy();
+  });
+
+  it("logs nothing when the bridge exists but log() does not", async () => {
+    const stub = makeElectronAPIStub({
+      registerHotkey: vi.fn().mockRejectedValue(new Error("boom")),
+      unregisterHotkey: vi.fn().mockRejectedValue(new Error("boom")),
+      getCurrentHotkey: vi.fn().mockRejectedValue(new Error("boom")),
+    });
+    delete (stub as Partial<ElectronAPI>).log;
+    asWin().electronAPI = stub;
+    const { result } = renderHook(() => useHotkey());
+    await act(async () => {
+      await result.current.registerHotkey("CmdOrCtrl+K");
+      await result.current.unregisterHotkey();
+      await result.current.syncRecordingState(false);
+    });
+    expect(result.current.hotkey).toBeTruthy();
+  });
+
+  it("swallows failure results (success: false) without state changes", async () => {
+    asWin().electronAPI = makeElectronAPIStub({
+      registerHotkey: vi.fn().mockResolvedValue({ success: false }),
+      unregisterHotkey: vi.fn().mockResolvedValue({ success: false }),
+    });
+    const { result } = renderHook(() => useHotkey());
+    await act(async () => {
+      await result.current.registerHotkey("CmdOrCtrl+K");
+      await result.current.unregisterHotkey();
+    });
+    expect(result.current.isRegistered).toBe(false);
+  });
+});
+
 describe("useHotkey hook", () => {
   let originalAPI: ElectronAPI | undefined;
 

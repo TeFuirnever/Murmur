@@ -23,8 +23,12 @@ test.describe("Suite 8: History Management", () => {
   });
 
   test("8.1 — getTranscriptions returns array", async () => {
+    // [20260820_E2E_GetTranscriptionsSignatureFix] preload contract is
+    // positional (limit: number, offset: number) — an options object
+    // reaches better-sqlite3 and throws RangeError. 8.2 is the correct
+    // reference call.
     const result = await window.evaluate(() =>
-      window.electronAPI.getTranscriptions({ limit: 10, offset: 0 }),
+      window.electronAPI.getTranscriptions(10, 0),
     );
     expect(result).toBeDefined();
     expect(Array.isArray(result.transcriptions || result)).toBe(true);
@@ -78,7 +82,10 @@ test.describe("Suite 8: History Management", () => {
     );
 
     expect(saved).toBeDefined();
-    const id = saved.id || saved;
+    // [20260820_E2E_SaveContractFix] TRANSCRIPTION.SAVE returns
+    // {success, lastInsertRowid, changes} — the new row's id is
+    // lastInsertRowid, not .id.
+    const id = saved.lastInsertRowid;
     // [20260816_Refactor_DeadChannels] Assert the id shape up front so the
     // delete+verify block below can never be silently skipped.
     expect(typeof id).toBe("number");
