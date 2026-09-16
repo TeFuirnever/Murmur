@@ -10,6 +10,10 @@ export default tseslint.config(
       "dist/",
       "dist-main/",
       "dist-preload/",
+      // [20260912_Feat_267_BridgeTranscribe] Generated bundle (build:cli
+      // output of src/helpers/localChannel/client.ts) — same treatment as
+      // the other build outputs above; generated code is never linted.
+      "cli/dist/",
       "node_modules/",
       "src/dist/",
       "src/node_modules/",
@@ -17,6 +21,7 @@ export default tseslint.config(
       ".venv/",
       "python/",
       ".omc/",
+      "website/.astro/",
     ],
   },
 
@@ -36,18 +41,31 @@ export default tseslint.config(
         },
       ],
       "@typescript-eslint/no-explicit-any": "off",
+      // [20260726_Tier33_NoRequireImports] Tier 3.3 originally targeted ALL
+      // require() in the codebase, but source files legitimately use lazy
+      // `require("electron")` inside try/catch (see aiHandlers.ts:431,
+      // clipboard.ts:108, etc.) — Electron imports at top level break unit
+      // tests because electron is absent. Keeping the rule OFF globally;
+      // enabling it test-files-only below.
       "@typescript-eslint/no-require-imports": "off",
+      // [20260726_Tier33_NoRequireImports] END
       "@typescript-eslint/no-unused-expressions": "off",
     },
   },
 
   // Node.js globals for main process and test files
+  // [20260725_Autopilot_T1.2] main.js/preload.js → main.ts/preload.ts
+  // after ADR-010 big-bang backend migration.
   {
     files: [
-      "main.js",
-      "preload.js",
+      "main.ts",
+      "preload.ts",
       "tests/**/*.{js,ts}",
       "scripts/**/*.js",
+      // [20260912_Feat_CliSkeleton] the murmur CLI is plain ESM .mjs
+      // (zero deps, runs under ELECTRON_RUN_AS_NODE) — same node-globals
+      // treatment as scripts/*.js.
+      "cli/**/*.mjs",
       "src/helpers/**/*.{js,ts}",
       "src/utils/**/*.{js,ts}",
     ],
@@ -57,6 +75,20 @@ export default tseslint.config(
       },
     },
   },
+
+  // [20260726_Tier33_TestRequireBan] Tier 3.3: ban require() in UNIT test
+  // files only. Source files legitimately use lazy require("electron")
+  // inside try/catch (Electron imports at top level break unit tests);
+  // e2e tests (still .js, Tier 4.3 deferred) use require for Playwright
+  // helpers. This narrow rule prevents future unit tests from re-
+  // introducing require() patterns.
+  {
+    files: ["tests/unit/**/*.{js,ts,tsx}"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "error",
+    },
+  },
+  // [20260726_Tier33_TestRequireBan] END
 
   // React-specific rules for frontend files
   {

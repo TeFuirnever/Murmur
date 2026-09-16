@@ -113,17 +113,13 @@ describe("TranscriptionResult", () => {
   // --- New: rawText stacking ---
 
   it("shows blue AI card when rawText differs from text", () => {
-    render(
-      <TranscriptionResult text="优化后" rawText="原始文本" />,
-    );
+    render(<TranscriptionResult text="优化后" rawText="原始文本" />);
     expect(screen.getByText("优化后")).toBeTruthy();
     expect(screen.getByText("查看原文")).toBeTruthy();
   });
 
   it("does not show raw section when rawText equals text", () => {
-    render(
-      <TranscriptionResult text="same" rawText="same" />,
-    );
+    render(<TranscriptionResult text="same" rawText="same" />);
     expect(screen.queryByText("查看原文")).toBeNull();
   });
 
@@ -133,9 +129,7 @@ describe("TranscriptionResult", () => {
   });
 
   it("toggles raw text visibility on click", () => {
-    render(
-      <TranscriptionResult text="optimized" rawText="raw content" />,
-    );
+    render(<TranscriptionResult text="optimized" rawText="raw content" />);
     fireEvent.click(screen.getByText("查看原文"));
     expect(screen.getByText("raw content")).toBeTruthy();
     expect(screen.getByText("收起原文")).toBeTruthy();
@@ -144,16 +138,12 @@ describe("TranscriptionResult", () => {
   // --- New: isOptimizing ---
 
   it("shows loading state when isOptimizing is true", () => {
-    render(
-      <TranscriptionResult text="raw text" isOptimizing={true} />,
-    );
+    render(<TranscriptionResult text="raw text" isOptimizing={true} />);
     expect(screen.getByText("AI正在优化文本...")).toBeTruthy();
   });
 
   it("hides loading state when isOptimizing is false", () => {
-    render(
-      <TranscriptionResult text="raw text" isOptimizing={false} />,
-    );
+    render(<TranscriptionResult text="raw text" isOptimizing={false} />);
     expect(screen.queryByText("AI正在优化文本...")).toBeNull();
   });
 
@@ -200,9 +190,7 @@ describe("TranscriptionResult", () => {
 
   it("calls onAIOptimize fallback when processText unavailable", () => {
     const onAIOptimize = vi.fn().mockResolvedValue("优化结果");
-    render(
-      <TranscriptionResult text="original" onAIOptimize={onAIOptimize} />,
-    );
+    render(<TranscriptionResult text="original" onAIOptimize={onAIOptimize} />);
     // Without electronAPI, component should render without crash
     expect(screen.getByText("original")).toBeTruthy();
   });
@@ -218,6 +206,29 @@ describe("TranscriptionResult", () => {
     fireEvent.click(screen.getByText("应用"));
     await waitFor(() => {
       expect(screen.getByText("AI 服务错误")).toBeTruthy();
+    });
+    clearElectronAPI();
+  });
+
+  // [20260815_Fix_AiEmptyContent] Regression: when processText resolves with
+  // { success: false, error: "..." } the UI must surface the main-process
+  // error, not the generic "AI处理失败，请重试". Previously result.error was
+  // discarded, hiding the real cause (e.g. max_tokens exhausted by reasoning).
+  it("shows main-process error message when processText resolves with failure", async () => {
+    stubElectronAPI({
+      processText: vi.fn().mockResolvedValue({
+        success: false,
+        error: "AI输出为空，请调大 max_tokens",
+      }),
+    });
+    render(<TranscriptionResult text="hello" />);
+    await waitFor(() => {
+      expect(screen.getByText("应用")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText("应用"));
+    await waitFor(() => {
+      expect(screen.getByText("AI输出为空，请调大 max_tokens")).toBeTruthy();
+      expect(screen.queryByText("AI处理失败，请重试")).toBeNull();
     });
     clearElectronAPI();
   });

@@ -29,6 +29,8 @@ Markdown + YAML frontmatter 是最轻量的模板格式，不需要额外依赖�
 
 ## 影响
 
-- `src/helpers/aiPrompts.js` — 新增 `parseTemplateFile` 和 `loadCustomTemplates`
-- `src/helpers/ipc/aiHandlers.js` — `processTextWithAI` 加载自定义模板，新增 `getAIModes` IPC
-- `preload.js` — 暴露 `getAIModes` API
+> [20260725_Autopilot_T1.5] 文件名已迁移到 `.ts`（ADR-010 big-bang），下文保留原始决策时（.js 时代）的文件名作为历史记录。
+
+- `src/helpers/aiPrompts.js`（现为 `aiPrompts.ts`）— 新增 `parseTemplateFile` 和 `loadCustomTemplates`
+- `src/helpers/ipc/aiHandlers.js`（现为 `aiHandlers.ts`）— `processTextWithAI` 加载自定义模板，新增 `getAIModes` IPC
+- `preload.js`（现为 `preload.ts`）— 暴露 `getAIModes` API

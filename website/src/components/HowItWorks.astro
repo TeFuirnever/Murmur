@@ -11,8 +11,12 @@ const steps = [
 ];
 ---
 
+<!-- [20260803_Feature_WebsiteRedesign] HowItWorks restyled as a 3-step
+     timeline. Desktop = horizontal row with a connecting line; mobile =
+     vertical stack. Glowing step numerals use the fox gradient. Preserves
+     how_* keys, section_getting_started overline, and .reveal-up. -->
 <section class="py-28 sm:py-36 px-6 bg-bg-elevated">
-  <div class="max-w-[720px] mx-auto">
+  <div class="max-w-[980px] mx-auto">
     <p class="reveal-up text-xs font-medium tracking-[0.2em] uppercase text-text-tertiary text-center mb-4">
       {t.section_getting_started}
     </p>
@@ -20,20 +24,31 @@ const steps = [
       {t.how_title}
     </h2>
 
-    <div class="flex flex-col gap-16">
-      {steps.map((step, i) => (
-        <div class={`reveal-up delay-${i + 2} flex items-start gap-8`}>
-          <!-- Number -->
-          <div class="flex-shrink-0 w-16 text-right">
-            <span class="text-4xl font-bold font-display gradient-text opacity-80">{step.num}</span>
+    <div class="relative">
+      <!-- Connecting line (desktop only) -->
+      <div class="hidden lg:block absolute top-10 left-[16.66%] right-[16.66%] h-px bg-gradient-to-r from-transparent via-accent/40 to-transparent"></div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-10 lg:gap-8">
+        {steps.map((step, i) => (
+          <div class={`reveal-up delay-${i + 2} relative flex flex-col items-center text-center`}>
+            <!-- Glowing step numeral -->
+            <div class="relative z-10 w-20 h-20 rounded-full glass flex items-center justify-center mb-6 card-lift">
+              <span class="text-2xl font-bold font-display gradient-text-fox">{step.num}</span>
+            </div>
+            <!-- Icon + content -->
+            <div class="w-full max-w-xs">
+              <div class="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center mb-4 mx-auto">
+                <svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+                  <path d={step.icon} />
+                </svg>
+              </div>
+              <h3 class="text-xl font-semibold font-display tracking-tight mb-2">{step.title}</h3>
+              <p class="text-text-secondary leading-relaxed text-sm">{step.desc}</p>
+            </div>
           </div>
-          <!-- Content -->
-          <div class="flex-1 pt-1">
-            <h3 class="text-xl font-semibold font-display tracking-tight mb-2">{step.title}</h3>
-            <p class="text-text-secondary leading-relaxed">{step.desc}</p>
-          </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   </div>
 </section>
+<!-- [20260803_Feature_WebsiteRedesign] END -->

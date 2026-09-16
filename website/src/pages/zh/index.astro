@@ -1,8 +1,11 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import Header from '../../components/Header.astro';
+// [20260803_Feature_WebsiteRedesign] StatsStrip inserted between Hero and FeatureGrid.
 import Hero from '../../components/Hero.astro';
+import StatsStrip from '../../components/StatsStrip.astro';
 import FeatureGrid from '../../components/FeatureGrid.astro';
+// [20260803_Feature_WebsiteRedesign] END
 import HowItWorks from '../../components/HowItWorks.astro';
 import ComparisonTable from '../../components/ComparisonTable.astro';
 import AIModels from '../../components/AIModels.astro';
@@ -16,6 +19,7 @@ import t from '../../i18n/zh.json';
   <Header lang="zh" t={t} />
   <main>
     <Hero t={t} />
+    <StatsStrip t={t} />
     <FeatureGrid t={t} />
     <HowItWorks t={t} />
     <ComparisonTable t={t} />

@@ -1,0 +1,511 @@
+// [20260729_Test_Hooks] Integration tests for the ModelStatusProvider +
+// useModelStatus React context hook. Runs under jsdom because the hook uses
+// React state/effects, setInterval, and window.electronAPI. We wrap the
+// consumer in the provider via a small wrapper passed to renderHook, and
+// assert the model lifecycle stages (checking -> need_download -> downloading
+// -> loading -> ready / error) plus the IPC surface.
+// @vitest-environment jsdom
+import "../setup/react";
+import React from "react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { renderHook, act, waitFor } from "@testing-library/react";
+import {
+  ModelStatusProvider,
+  useModelStatus,
+} from "../../src/hooks/useModelStatus";
+import type { ElectronAPI } from "../../src/electronAPI";
+import type { ModelCheckResult, FunASRStatusResult } from "../../src/types/ipc";
+
+// [20260729_Test_Hooks] See useSettings-hook test for the rationale: the
+// production declaration makes electronAPI required, but the test owns its
+// lifecycle. Omit + re-add as optional, cast through unknown only.
+type TestWindow = Omit<Window, "electronAPI"> & { electronAPI?: ElectronAPI };
+
+// [20260729_Test_Hooks] Event-listener methods (onModelDownloadProgress,
+// onSettingsUpdate) return an unsubscribe fn. We give them
+// no-op unsubscribers so the provider's cleanup effects don't throw. The
+// callback is captured by the provider but we don't drive it here.
+const NOOP_UNSUB = () => {};
+
+// [20260729_Test_Hooks] Canonical fixtures for the two IPC calls checkModelStatus
+// depends on. Helper below composes a stub from per-test overrides.
+// [20260906_Refactor_DeadChannelCleanup] Ticket #250: the restartFunasrServer
+// and onProcessingUpdate stubs were removed with the deleted bindings — the
+// provider never called the former (#216 moved the restart to main) and the
+// PROCESSING_UPDATE subscription was deleted.
+const MODEL_FILES_READY: ModelCheckResult = {
+  success: true,
+  models_downloaded: true,
+  minimum_ready: true,
+  missing_models: [],
+};
+
+const MODEL_FILES_MISSING: ModelCheckResult = {
+  success: true,
+  models_downloaded: false,
+  minimum_ready: false,
+  missing_models: ["asr", "vad"],
+};
+
+const SERVER_READY: FunASRStatusResult = {
+  success: true,
+  installed: true,
+  models_downloaded: true,
+  initializing: false,
+  models_initialized: true,
+};
+
+const SERVER_INITIALIZING: FunASRStatusResult = {
+  success: true,
+  installed: true,
+  models_downloaded: true,
+  initializing: true,
+  models_initialized: false,
+};
+
+function makeElectronAPIStub(
+  overrides: Partial<ElectronAPI> = {},
+): ElectronAPI {
+  return {
+    checkModelFiles: vi.fn().mockResolvedValue(MODEL_FILES_READY),
+    checkFunASRStatus: vi.fn().mockResolvedValue(SERVER_READY),
+    downloadModels: vi.fn().mockResolvedValue({ success: true }),
+    // [20260815_Refactor_DeadIpc] getDownloadProgress stub removed with the
+    // dead pull channel (progress arrives via onModelDownloadProgress).
+    onModelDownloadProgress: vi.fn().mockReturnValue(NOOP_UNSUB),
+    onSettingsUpdate: vi.fn().mockReturnValue(NOOP_UNSUB),
+    log: vi.fn().mockResolvedValue(undefined),
+    ...overrides,
+  } as unknown as ElectronAPI;
+}
+
+// [20260729_Test_Hooks] renderHook wrapper that mounts the consumer inside
+// the provider. The consumer forwards the context value via a ref so tests
+// can read result.current synchronously after state updates.
+function renderProviderHook() {
+  return renderHook(() => useModelStatus(), {
+    wrapper: ({ children }) => (
+      <ModelStatusProvider>{children}</ModelStatusProvider>
+    ),
+  });
+}
+
+describe("useModelStatus hook", () => {
+  let originalAPI: ElectronAPI | undefined;
+
+  beforeEach(() => {
+    originalAPI = (globalThis.window as TestWindow).electronAPI;
+  });
+
+  afterEach(() => {
+    const win = globalThis.window as TestWindow;
+    if (originalAPI === undefined) {
+      delete win.electronAPI;
+    } else {
+      win.electronAPI = originalAPI;
+    }
+    vi.restoreAllMocks();
+  });
+
+  it("throws when used outside the provider", () => {
+    (globalThis.window as TestWindow).electronAPI = makeElectronAPIStub();
+    // Suppress the expected console.error from React for the thrown render.
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(() => renderHook(() => useModelStatus())).toThrow(
+      "useModelStatus must be used within a ModelStatusProvider",
+    );
+    spy.mockRestore();
+  });
+
+  it("starts in the checking stage and transitions to ready when models are present", async () => {
+    (globalThis.window as TestWindow).electronAPI = makeElectronAPIStub();
+    const { result } = renderProviderHook();
+
+    // Initial render before the mount effect resolves.
+    expect(result.current.stage).toBe("checking");
+    expect(result.current.isLoading).toBe(true);
+
+    await waitFor(() => {
+      expect(result.current.stage).toBe("ready");
+    });
+
+    expect(result.current.isReady).toBe(true);
+    expect(result.current.modelsDownloaded).toBe(true);
+    expect(result.current.progress).toBe(100);
+    expect(result.current.isLoading).toBe(false);
+  });
+
+  it("enters the need_download stage when minimum_ready is false", async () => {
+    const stub = makeElectronAPIStub({
+      checkModelFiles: vi.fn().mockResolvedValue(MODEL_FILES_MISSING),
+      checkFunASRStatus: vi.fn().mockResolvedValue(SERVER_READY),
+    });
+    (globalThis.window as TestWindow).electronAPI = stub;
+
+    const { result } = renderProviderHook();
+
+    await waitFor(() => {
+      expect(result.current.stage).toBe("need_download");
+    });
+
+    expect(result.current.isReady).toBe(false);
+    expect(result.current.modelsDownloaded).toBe(false);
+    expect(result.current.missingModels).toEqual(["asr", "vad"]);
+    expect(result.current.progress).toBe(0);
+  });
+
+  it("enters the loading stage (50%) when the server is initializing but models are present", async () => {
+    const stub = makeElectronAPIStub({
+      checkModelFiles: vi.fn().mockResolvedValue(MODEL_FILES_READY),
+      checkFunASRStatus: vi.fn().mockResolvedValue(SERVER_INITIALIZING),
+    });
+    (globalThis.window as TestWindow).electronAPI = stub;
+
+    const { result } = renderProviderHook();
+
+    await waitFor(() => {
+      expect(result.current.stage).toBe("loading");
+    });
+
+    expect(result.current.isLoading).toBe(true);
+    expect(result.current.isReady).toBe(false);
+    expect(result.current.modelsDownloaded).toBe(true);
+    expect(result.current.progress).toBe(50);
+  });
+
+  it("enters the error stage when the server is not initializing and not initialized", async () => {
+    const notReady: FunASRStatusResult = {
+      success: true,
+      installed: true,
+      models_downloaded: true,
+      initializing: false,
+      models_initialized: false,
+      error: "服务器未就绪",
+    };
+    const stub = makeElectronAPIStub({
+      checkModelFiles: vi.fn().mockResolvedValue(MODEL_FILES_READY),
+      checkFunASRStatus: vi.fn().mockResolvedValue(notReady),
+    });
+    (globalThis.window as TestWindow).electronAPI = stub;
+
+    const { result } = renderProviderHook();
+
+    await waitFor(() => {
+      expect(result.current.stage).toBe("error");
+    });
+
+    expect(result.current.isReady).toBe(false);
+    expect(result.current.error).toBe("服务器未就绪");
+  });
+
+  it("reports an error stage when electronAPI is absent", async () => {
+    // No stub -> checkModelStatus short-circuits with an Electron API error.
+    const { result } = renderProviderHook();
+
+    await waitFor(() => {
+      expect(result.current.stage).toBe("error");
+    });
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.error).toBe("Electron API 不可用");
+  });
+
+  it("reports an error stage when checkModelFiles returns success:false", async () => {
+    const stub = makeElectronAPIStub({
+      checkModelFiles: vi.fn().mockResolvedValue({
+        success: false,
+        models_downloaded: false,
+        missing_models: [],
+      }),
+    });
+    (globalThis.window as TestWindow).electronAPI = stub;
+
+    const { result } = renderProviderHook();
+
+    await waitFor(() => {
+      expect(result.current.stage).toBe("error");
+    });
+    expect(result.current.error).toBe("检查模型文件失败");
+  });
+
+  it("downloadModels calls downloadModels IPC and moves to the loading stage", async () => {
+    const downloadModels = vi.fn().mockResolvedValue({ success: true });
+    // Start from need_download so downloadModels is a meaningful transition.
+    const stub = makeElectronAPIStub({
+      checkModelFiles: vi.fn().mockResolvedValue(MODEL_FILES_MISSING),
+      checkFunASRStatus: vi.fn().mockResolvedValue(SERVER_READY),
+      downloadModels,
+    });
+    (globalThis.window as TestWindow).electronAPI = stub;
+
+    const { result } = renderProviderHook();
+    await waitFor(() => {
+      expect(result.current.stage).toBe("need_download");
+    });
+
+    let res: { success: boolean } = { success: false };
+    await act(async () => {
+      res = await result.current.downloadModels();
+    });
+
+    expect(res.success).toBe(true);
+    expect(downloadModels).toHaveBeenCalledTimes(1);
+    // [20260905_Fix_216_DownloadRecovery] The post-download server restart
+    // is owned by the MAIN process; the hook just flips to loading and lets
+    // the status poll observe the restart. (Ticket #250 deleted the
+    // restartFunasrServer binding entirely, so the renderer cannot call it.)
+    await waitFor(() => {
+      expect(result.current.stage).toBe("loading");
+    });
+    expect(result.current.modelsDownloaded).toBe(true);
+    expect(result.current.downloadProgress).toBe(100);
+    expect(result.current.isDownloading).toBe(false);
+  });
+
+  it("downloadModels surfaces a failure result and enters the error stage", async () => {
+    const downloadModels = vi
+      .fn()
+      .mockResolvedValue({ success: false, error: "网络错误" });
+    const stub = makeElectronAPIStub({
+      checkModelFiles: vi.fn().mockResolvedValue(MODEL_FILES_MISSING),
+      checkFunASRStatus: vi.fn().mockResolvedValue(SERVER_READY),
+      downloadModels,
+    });
+    (globalThis.window as TestWindow).electronAPI = stub;
+
+    const { result } = renderProviderHook();
+    await waitFor(() => {
+      expect(result.current.stage).toBe("need_download");
+    });
+
+    let res: { success: boolean; error?: string } = { success: true };
+    await act(async () => {
+      res = await result.current.downloadModels();
+    });
+
+    expect(res.success).toBe(false);
+    expect(res.error).toBe("网络错误");
+    // Restart must not run when the download itself failed — the restart is
+    // main-owned since #216 (the renderer-side binding is gone since #250).
+    expect(result.current.isDownloading).toBe(false);
+    expect(result.current.stage).toBe("error");
+  });
+
+  // [20260815_Refactor_DeadIpc] The checkModelFiles/checkModelStatus context
+  // proxy tests were removed with the dead context surface — both methods are
+  // provider-internal (called by its effects); consumers read the derived
+  // stage fields. The IPC stubs themselves remain covered by the stage tests.
+
+  // [20260906_Refactor_DeadChannelCleanup] Ticket #250: the processing-update
+  // listener registration test and the "applies model_initialization
+  // processing updates" test were removed with the EVENTS.PROCESSING_UPDATE
+  // subscription. The download/settings listeners stay covered below.
+  it("registers the model-download and settings-update listeners on mount", async () => {
+    const onModelDownloadProgress = vi.fn().mockReturnValue(NOOP_UNSUB);
+    const onSettingsUpdate = vi.fn().mockReturnValue(NOOP_UNSUB);
+    const stub = makeElectronAPIStub({
+      onModelDownloadProgress,
+      onSettingsUpdate,
+    });
+    (globalThis.window as TestWindow).electronAPI = stub;
+
+    renderProviderHook();
+
+    await waitFor(() => {
+      expect(onModelDownloadProgress).toHaveBeenCalledTimes(1);
+    });
+    // onSettingsUpdate may be undefined in some electronAPI stubs.
+    if (onSettingsUpdate) {
+      expect(onSettingsUpdate).toHaveBeenCalledTimes(1);
+    }
+    // Each listener registration returns an unsubscribe that the provider
+    // returns from the effect for cleanup.
+    expect(onModelDownloadProgress.mock.results[0]?.value).toBeTypeOf(
+      "function",
+    );
+  });
+});
+
+// [20260816_Test_UseModelStatusExpanded] Error branches, event-listener
+// callbacks, and the download failure paths that were previously uncovered.
+describe("useModelStatus hook — errors, listeners, downloads", () => {
+  let originalAPI: ElectronAPI | undefined;
+
+  beforeEach(() => {
+    originalAPI = (globalThis.window as TestWindow).electronAPI;
+  });
+
+  afterEach(() => {
+    const win = globalThis.window as TestWindow;
+    if (originalAPI === undefined) delete win.electronAPI;
+    else win.electronAPI = originalAPI;
+    vi.restoreAllMocks();
+  });
+
+  it("reports the error stage when the bridge is missing entirely", async () => {
+    delete (globalThis.window as TestWindow).electronAPI;
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { result } = renderProviderHook();
+    await waitFor(() => {
+      expect(result.current.stage).toBe("error");
+    });
+    expect(result.current.error).toContain("Electron API");
+    errSpy.mockRestore();
+  });
+
+  it("reports the error stage when checkModelFiles throws", async () => {
+    (globalThis.window as TestWindow).electronAPI = makeElectronAPIStub({
+      checkModelFiles: vi.fn().mockRejectedValue(new Error("fs broken")),
+    });
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { result } = renderProviderHook();
+    await waitFor(() => {
+      expect(result.current.stage).toBe("error");
+    });
+    errSpy.mockRestore();
+  });
+
+  it("reports the error stage when the server check throws", async () => {
+    (globalThis.window as TestWindow).electronAPI = makeElectronAPIStub({
+      checkFunASRStatus: vi.fn().mockRejectedValue(new Error("net down")),
+    });
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { result } = renderProviderHook();
+    await waitFor(() => {
+      expect(result.current.stage).toBe("error");
+    });
+    errSpy.mockRestore();
+  });
+
+  it("lands on the error stage when files exist but the server is not ready", async () => {
+    (globalThis.window as TestWindow).electronAPI = makeElectronAPIStub({
+      checkFunASRStatus: vi.fn().mockResolvedValue({
+        ...SERVER_INITIALIZING,
+        initializing: false,
+        models_initialized: false,
+        success: true,
+      }),
+    });
+    const { result } = renderProviderHook();
+    await waitFor(() => {
+      expect(result.current.stage).toBe("error");
+    });
+    expect(result.current.error).toBeTruthy();
+  });
+
+  it("forwards download-progress events into stage/modelProgress state", async () => {
+    let progressCb: ((...args: unknown[]) => void) | undefined;
+    (globalThis.window as TestWindow).electronAPI = makeElectronAPIStub({
+      onModelDownloadProgress: vi.fn((cb) => {
+        progressCb = cb;
+        return NOOP_UNSUB;
+      }),
+    });
+    const { result } = renderProviderHook();
+    await waitFor(() => expect(result.current.stage).toBe("ready"));
+
+    act(() => {
+      progressCb?.(undefined, {
+        model: "asr",
+        stage: "downloading",
+        progress: 40,
+        overall_progress: 33,
+      });
+    });
+    expect(result.current.stage).toBe("downloading");
+    expect(result.current.downloadProgress).toBe(33);
+    expect(result.current.modelProgress.asr?.progress).toBe(40);
+    expect(result.current.modelProgress.asr?.status).toBe("downloading");
+
+    act(() => {
+      progressCb?.(undefined, {
+        model: "vad",
+        stage: "completed",
+        progress: 100,
+        overall_progress: 60,
+      });
+    });
+    expect(result.current.modelProgress.vad?.status).toBe("completed");
+  });
+
+  it("ignores download-progress events for unknown model keys", async () => {
+    let progressCb: ((...args: unknown[]) => void) | undefined;
+    (globalThis.window as TestWindow).electronAPI = makeElectronAPIStub({
+      onModelDownloadProgress: vi.fn((cb) => {
+        progressCb = cb;
+        return NOOP_UNSUB;
+      }),
+    });
+    const { result } = renderProviderHook();
+    await waitFor(() => expect(result.current.stage).toBe("ready"));
+
+    act(() => {
+      progressCb?.(undefined, { model: "unknown", progress: 10 });
+    });
+    expect(result.current.modelProgress.unknown).toBeUndefined();
+    expect(result.current.stage).toBe("downloading"); // stage still flips
+  });
+
+  // [20260906_Refactor_DeadChannelCleanup] Ticket #250: the "applies
+  // model_initialization processing updates" test was removed with the
+  // EVENTS.PROCESSING_UPDATE subscription and its preload binding.
+
+  it("re-checks model status when settings change", async () => {
+    const checkFunASRStatus = vi.fn().mockResolvedValue(SERVER_READY);
+    let settingsCb: (() => void) | undefined;
+    (globalThis.window as TestWindow).electronAPI = makeElectronAPIStub({
+      checkFunASRStatus,
+      onSettingsUpdate: vi.fn((cb) => {
+        settingsCb = cb;
+        return NOOP_UNSUB;
+      }),
+    });
+    const { result } = renderProviderHook();
+    await waitFor(() => expect(result.current.stage).toBe("ready"));
+    const before = checkFunASRStatus.mock.calls.length;
+
+    act(() => {
+      settingsCb?.();
+    });
+    await waitFor(() => {
+      expect(checkFunASRStatus.mock.calls.length).toBeGreaterThan(before);
+    });
+  });
+
+  it("surfaces a failed downloadModels result as the error stage", async () => {
+    (globalThis.window as TestWindow).electronAPI = makeElectronAPIStub({
+      downloadModels: vi.fn().mockResolvedValue({
+        success: false,
+        error: "disk full",
+      }),
+    });
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { result } = renderProviderHook();
+    await waitFor(() => expect(result.current.stage).toBe("ready"));
+
+    await act(async () => {
+      await result.current.downloadModels();
+    });
+    expect(result.current.stage).toBe("error");
+    expect(result.current.error).toContain("disk full");
+    errSpy.mockRestore();
+  });
+
+  // [20260906_Refactor_DeadChannelCleanup] Ticket #250: the "enters loading
+  // without a renderer-side restart" test was removed with the deleted
+  // restartFunasrServer binding; the loading-stage transition after a
+  // successful download stays covered in the first describe block.
+
+  it("returns a failed result when downloadModels is called without the bridge", async () => {
+    delete (globalThis.window as TestWindow).electronAPI;
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { result } = renderProviderHook();
+    await waitFor(() => expect(result.current.stage).toBe("error"));
+
+    let outcome: { success: boolean; error?: string } | undefined;
+    await act(async () => {
+      outcome = await result.current.downloadModels();
+    });
+    expect(outcome?.success).toBe(false);
+    errSpy.mockRestore();
+  });
+});

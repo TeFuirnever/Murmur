@@ -10,9 +10,20 @@ yarn.lock
 
 # Production builds
 dist/
-build/
+# [20260912_Feat_272DistCli] build/ stays ignored except the electron-builder
+# packaging assets that package.json references by path (build.afterPack,
+# build.nsis.include) — without the whitelist they would be silently dropped
+# from checkouts and packaging would break.
+build/*
+!build/afterPack.js
+!build/installer.nsh
 out/
 dist-preload/
+# [20260912_Feat_267_BridgeTranscribe] Explicit: the CLI's bundled TS client
+# kernel (build:cli output). Redundant with the unanchored `dist/` pattern
+# above today; kept self-documenting so anchoring that pattern never leaks
+# the bundle into git.
+cli/dist/
 
 # Environment variables
 .env
@@ -115,7 +126,10 @@ temp/
 .gyp
 .gyprc
 
-python
+# [20260817_T4_PythonTests] Anchored to repo root: this ignores the embedded
+# Python runtime distribution (python/) only. The old bare `python` pattern
+# also swallowed tests/python/ — the stdlib-unittest protocol suite (T5).
+/python/
 
 # OMC & AI agent config (local only)
 .omc/
@@ -125,3 +139,20 @@ dist-main/
 .claude/
 .gstack/
 .codegraph/
+.zcode/
+graphify-out/
+playwright-report/
+test-results/
+backups/
+
+# Renderer build output (Vite) — not tracked, regenerated on build
+src/dist/
+
+# Icon design exploration masters (5MB+ WIP; exported-png/ is the reproducible source kept tracked)
+design/icon-rebrand/candidates/
+
+# machine-local ASR regression run report (scripts/asr-regression.js)
+scripts/asr_regression_results.json
+
+# coverage.py data file (python suite gate)
+.coverage

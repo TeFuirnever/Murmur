@@ -11,7 +11,16 @@ env:
 
 jobs:
   lint-and-test:
-    runs-on: macos-latest
+    # [20260817_T4_CiMatrix] Ticket #180 (spec #177 T4): dual-platform matrix.
+    # Unit tests previously ran on macOS only, so Windows-only regressions
+    # (taskkill vs signals, path separators, python.exe layout) never hit CI
+    # until a release build. Known Windows-skipped suites already guard
+    # themselves with it.skipIf(process.platform === "win32").
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
 
@@ -24,8 +33,26 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
+      # [20260817_T4_CiMatrix] Python supply for tests/python (stdlib
+      # unittest + numpy). CI runners have no embedded env; the runner
+      # script falls back to this system python.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # [20260819_T10_CiDeps] numpy covers the DSP math; soundfile covers
+      # the file-I/O tests (audio_preprocessing load/write) — CI runners
+      # have no embedded env, and the local gate's embedded python hid this
+      # gap until the matrix caught it (soundfile imports errored on CI).
+      - name: Install Python test deps
+        # [20260906_Spec259_T4] coverage.py powers the python-suite coverage floor
+        run: python -m pip install numpy soundfile coverage
+
       - name: Install dependencies
         run: pnpm install
+
+      - name: Build main bundle
+        run: pnpm run build:main
 
       - name: Build preload bundle
         run: pnpm run build:preload
@@ -38,6 +65,13 @@ jobs:
 
       - name: Typecheck
         run: pnpm typecheck
+
+      # [20260725_CodeReview_CiSync] Mirror scripts/ci-check.js stage 1:
+      # typecheck:tests runs tsc against tsconfig.test.json which covers
+      # tests/**. The local gate runs both; CI must too or the test type
+      # safety gate is informational only. See ts-migration-audit-and-evolution.md §5.0 Tier 2.2.
+      - name: Typecheck tests
+        run: pnpm typecheck:tests
 
       - name: Security audit
         run: pnpm audit --audit-level moderate
@@ -52,12 +86,96 @@ jobs:
         with:
           fail-on-severity: high
 
+      # [20260905_Feat_NodeSqlite] The ABI-split rebuild is obsolete: sqlite
+      # now comes from node:sqlite, built into both runtimes (spec #226).
+      # Unit tests and e2e share the same install with nothing to flip.
+
       - name: Test with coverage
-        run: pnpm test -- --coverage
+        # [20260905_Fix_CoverageForwarding] pnpm 11 forwards `--` literally;
+        # use the script form so coverage actually runs.
+        # [20260905_Fix_CoveragePlatformScope] thresholds are authored from
+        # macOS actuals (see vitest.config.ts) and platform-conditional
+        # branches (win32/darwin arms) make cross-platform percentages
+        # non-comparable: the first honest Windows measurement landed at
+        # 91.53% branch — win32 legs cover their own arms and miss the
+        # darwin-only ones. Enforce the floor on the authoring platform;
+        # Windows still runs the FULL suite, just without the threshold.
+        if: runner.os == 'macOS'
+        run: pnpm run test:coverage
+
+      # [20260906_Test_CoverageSignal] Spec #266 T05: the Windows leg has no
+      # threshold (see vitest.config.ts platform-scope note — platform-
+      # conditional branches make the percentages non-comparable), which made
+      # cross-leg divergence invisible (first honest win measurement:
+      # 91.53 branch vs 92.19 mac). Run coverage with a text reporter so
+      # both legs' numbers land in the CI log for comparison. The four
+      # threshold=0 flags neutralize the global thresholds from
+      # vitest.config.ts for THIS step only (the macOS leg keeps enforcing
+      # them) — report-only, non-blocking by construction.
+      - name: Test (full suite) with coverage report (no threshold on win)
+        if: runner.os == 'Windows'
+        run: >-
+          pnpm exec vitest run --coverage --coverage.reporter=text
+          --coverage.thresholds.statements=0
+          --coverage.thresholds.branches=0
+          --coverage.thresholds.functions=0
+          --coverage.thresholds.lines=0
+
+      # [20260817_T4_CiMatrix] Mirror of the local ci-check stage1 entry:
+      # stdlib-unittest suite (protocol contract + numpy smoke) via the
+      # platform-aware runner script.
+      - name: Python unit tests
+        run: pnpm run test:python:unit
 
       - name: Build renderer
         run: pnpm run build:renderer
 
+      # [20260816_Refactor_RemoveEffects] The effects chunk isolation step was
+      # removed with the visual-effects feature (ogl/motion deps deleted); it
+      # mirrors the equally-removed ci-check.js stage3b.
+
+      # [20260725_E2E_LaunchDiagnosis] Diagnostic step: launches ONLY the
+      # Electron app with full stderr/stdout/console capture (see
+      # tests/e2e/helpers/electron-launch.js attachDiagnosticListeners).
+      # Grep "[e2e-launch]" in this step's output to find:
+      #   - env snapshot (NODE_ENV, RUNNER_OS, CSC_IDENTITY_AUTO_DISCOVERY)
+      #   - bundle existence check (dist-main/main.js etc.)
+      #   - main process console.log/error
+      #   - raw stdout/stderr (ELECTRON_ENABLE_LOGGING=1 forces Electron
+      #     to emit GPU/code-signing/init errors here)
+      #   - process exit code/signal
+      #   - window event timing
+      #
+      # This step is non-blocking. Its purpose is to surface WHY every
+      # e2e test times out at firstWindow() on CI macOS. See spec §7
+      # Stage 0 "2026-07-25 update" for context.
+      - name: E2E launch diagnosis (non-blocking)
+        run: pnpm test:e2e:diag
+        continue-on-error: true
+
+      # [20260906_Test_E2eGatePromotion] Gate 3 (boot health) — PROMOTED to
+      # blocking per Spec #266 T01: the node:sqlite migration (spec #226)
+      # removed the native-ABI failure class and the suite is green locally
+      # at this HEAD (8/8). One CI-only retry (playwright.config.ts)
+      # absorbs the documented macOS firstWindow flakiness. A red boot
+      # health now blocks merge on both matrix legs.
+      #
+      # NOTE: the Windows leg has never been observed green in CI (this
+      # step ran behind continue-on-error since 20260725). First red win
+      # run: diagnose via the [e2e-launch] output above before any gate
+      # change.
+      #
+      # Escape hatch (use sparingly): if a leg flakes despite the retry,
+      # capture the [e2e-launch] diagnostic output above before any
+      # allowlist change — do not silently re-add continue-on-error.
+      - name: E2E boot health
+        run: pnpm test:e2e:boot
+
+      # [20260906_Test_E2eGatePromotion] Full e2e remains NON-BLOCKING for
+      # now: promote it (remove continue-on-error) only after boot health
+      # above has been green on 2-3 consecutive PRs on BOTH matrix legs.
+      # Original promotion context: e2e-functional-verification-strategy.md
+      # §7 Stage 1.
       - name: E2E tests
         run: pnpm test:e2e
         continue-on-error: true

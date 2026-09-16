@@ -1,0 +1,59 @@
+{
+  "generatedAt": "2026-09-06T12:58:34.401Z",
+  "goldenDir": "/Users/guanxueliang/Desktop/oh-my-ai/Murmur/scripts/golden_set",
+  "includeVariants": false,
+  "interpreter": "/Users/guanxueliang/Desktop/oh-my-ai/Murmur/python/bin/python3.11",
+  "cases": [
+    {
+      "name": "s00_base",
+      "cer": 0,
+      "passed": true,
+      "reference": "今天我们讨论第三季度的产品路线图",
+      "hypothesis": "今天我们讨论第三季度的产品路线图。"
+    },
+    {
+      "name": "s01_base",
+      "cer": 0,
+      "passed": true,
+      "reference": "会议纪要需要在周五之前发给所有参会人员",
+      "hypothesis": "会议纪要需要在周五之前发给所有参会人员。"
+    },
+    {
+      "name": "s02_base",
+      "cer": 0,
+      "passed": true,
+      "reference": "这个方案的预算超出了原定计划的百分之十五",
+      "hypothesis": "这个方案的预算超出了原定计划的百分之十五。"
+    },
+    {
+      "name": "s03_base",
+      "cer": 0,
+      "passed": true,
+      "reference": "客户端支持视窗和苹果双平台运行",
+      "hypothesis": "客户端支持视窗和苹果双平台运行。"
+    },
+    {
+      "name": "s04_base",
+      "cer": 0,
+      "passed": true,
+      "reference": "语音识别的准确率直接影响用户体验",
+      "hypothesis": "语音识别的准确率直接影响用户体验。"
+    },
+    {
+      "name": "s05_base",
+      "cer": 0,
+      "passed": true,
+      "reference": "下周一上午十点在三号会议室进行评审",
+      "hypothesis": "下周一上午十点在三号会议室进行评审。"
+    }
+  ],
+  "summary": {
+    "total": 6,
+    "failed": 0,
+    "threshold": 0.15,
+    "meanCer": 0,
+    "maxCer": 0
+  },
+  "passed": true,
+  "elapsedMs": 15411
+}

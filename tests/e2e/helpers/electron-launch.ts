@@ -1,0 +1,417 @@
+/**
+ * Shared Electron app lifecycle helpers for E2E tests.
+ *
+ * Launches the Electron app in test mode with:
+ * - In-memory SQLite database (MURMUR_DB_PATH=:memory:)
+ * - MediaRecorder mock (navigator.mediaDevices.getUserMedia)
+ * - Clean state per suite
+ */
+// [20260726_Tier43_E2EHelpers] Migrated .js→.ts for TypeScript types.
+// IMPORTANT: This file deliberately uses CommonJS syntax (require /
+// module.exports) rather than ESM import/export. Reason: the 12 e2e
+// suites are still .js (CJS) — see US-003. Playwright 1.60 + Node 24
+// hit "exports is not defined in ES module scope" (microsoft/playwright
+// #37890) when a CJS .js suite imports an ESM-compiled .ts helper.
+// Keeping the helper CJS-compiled preserves runtime parity with the
+// pre-migration .js helpers. Type annotations come from JSDoc; the
+// type names (ElectronApplication, Page) resolve via the @playwright/test
+// types picked up by tsconfig's moduleResolution.
+
+const { _electron: electron } = require("@playwright/test");
+const path = require("path");
+const fs = require("fs");
+const { execSync } = require("child_process");
+// [20260726_Tier43_E2EHelpers] END
+
+// [20260724_TS_BigBang_TestFix] Fix PROJECT_ROOT: tests/e2e/helpers is 3
+// levels below project root (helpers → e2e → tests → Murmur). The original
+// "../../../.." (4 levels) resolved to the parent of Murmur, which was
+// masked because e2e never actually ran (playwright-core CLI was broken).
+const PROJECT_ROOT = path.resolve(__dirname, "../../..");
+// [20260724_TS_BigBang_TestFix] END
+
+// [20260725_E2E_LaunchDiagnosis] Verbose diagnostic prefix used in all
+// instrumentation logs. Grep-friendly so we can extract them from CI
+// output: `grep "\[e2e-launch\]" <ci-log>`.
+const DIAG_PREFIX = "[e2e-launch]";
+// [20260725_E2E_LaunchDiagnosis] END
+
+// [20260725_E2E_LaunchDiagnosis] Newer Electron on macOS Sequoia (15.x)
+// can silently block window creation when the binary lacks a valid code
+// signing or has quarantine attributes carried in from extraction.
+// Log the relevant env so CI output shows whether the gate fired.
+function logDiagnosticEnvironment() {
+  const interesting = [
+    "NODE_ENV",
+    "MURMUR_DB_PATH",
+    "CI",
+    "RUNNER_OS",
+    "MACOSX_DEPLOYMENT_TARGET",
+    "CSC_IDENTITY_AUTO_DISCOVERY",
+    "APPLE_ID",
+    "APP_PATH",
+    "ELECTRON_ENABLE_LOGGING",
+  ];
+  console.log(`${DIAG_PREFIX} env snapshot:`);
+  for (const k of interesting) {
+    if (process.env[k] !== undefined) {
+      console.log(`${DIAG_PREFIX}   ${k}=${process.env[k]}`);
+    }
+  }
+  console.log(`${DIAG_PREFIX} PROJECT_ROOT=${PROJECT_ROOT}`);
+  console.log(
+    `${DIAG_PREFIX} platform=${process.platform} arch=${process.arch} node=${process.version}`,
+  );
+}
+// [20260725_E2E_LaunchDiagnosis] END
+
+// [20260725_E2E_LaunchDiagnosis] Attach every stream Playwright exposes
+// to console so the CI log surfaces WHY firstWindow() never resolves.
+// Without this we only see "Timeout 30000ms exceeded" and no signal.
+// Sources: https://playwright.dev/docs/api/class-electronapplication
+function attachDiagnosticListeners(app, label) {
+  // Main-process console.log / console.error calls. Per Playwright docs
+  // the 'console' event fires when JS in the main process uses the
+  // console API. Main-process logs from Electron itself (e.g. GPU init
+  // errors, code-signing warnings) often go to stderr instead — see
+  // the process() listener below for those.
+  app.on("console", (msg) => {
+    console.log(
+      `${DIAG_PREFIX} [main:${label}] console.${msg.type()}: ${msg.text()}`,
+    );
+  });
+
+  // ChildProcess events — raw stdout/stderr from the Electron binary.
+  // This is where code-signing rejections, GPU errors, and missing-file
+  // crashes surface. Without ELECTRON_ENABLE_LOGGING=1 Electron suppress
+  // most output; we set that env in launchElectronApp below.
+  const proc = app.process();
+  if (proc) {
+    proc.stdout?.on("data", (chunk) => {
+      const text = chunk.toString().trim();
+      if (text) console.log(`${DIAG_PREFIX} [main:${label}] stdout: ${text}`);
+    });
+    proc.stderr?.on("data", (chunk) => {
+      const text = chunk.toString().trim();
+      if (text) console.log(`${DIAG_PREFIX} [main:${label}] stderr: ${text}`);
+    });
+    proc.on("exit", (code, signal) => {
+      console.log(
+        `${DIAG_PREFIX} [main:${label}] exit code=${code} signal=${signal}`,
+      );
+    });
+    proc.on("error", (err) => {
+      console.log(
+        `${DIAG_PREFIX} [main:${label}] process error: ${err.message}`,
+      );
+    });
+  }
+
+  // Window lifecycle — fires when any BrowserWindow is created/loaded.
+  // If we NEVER see this event, the main process failed to open a window.
+  app.on("window", (page) => {
+    console.log(
+      `${DIAG_PREFIX} [main:${label}] window event: url=${page.url()}`,
+    );
+  });
+
+  // Application terminated — fires before 'exit' when the process is
+  // killed. Differentiates "playwright closed it" vs "it crashed".
+  app.on("close", () => {
+    console.log(`${DIAG_PREFIX} [main:${label}] close event (app terminated)`);
+  });
+}
+// [20260725_E2E_LaunchDiagnosis] END
+
+/**
+ * Launch the Murmur Electron app for testing.
+ * @param {object} [options] - Launch options
+ * @param {Record<string, string>} [options.env] - Additional env vars
+ * @returns {Promise<{app: ElectronApplication, window: Page}>}
+ */
+async function launchElectronApp({ env = {} } = {}) {
+  // [20260725_E2E_LaunchDiagnosis] Dump env + paths BEFORE launch so
+  // even an immediate crash leaves a breadcrumb.
+  logDiagnosticEnvironment();
+  // [20260725_E2E_LaunchDiagnosis] END
+
+  // [20260724_TS_BigBang_TestFix] Launch via project root so Electron reads
+  // package.json "main" field (dist-main/main.js). Passing the bundle path
+  // directly as args[] causes app.getAppPath() to return dist-main/ instead
+  // of the project root, breaking renderer/preload path resolution.
+  // Launching with "." makes getAppPath() return the package.json directory.
+  const appRoot = PROJECT_ROOT;
+  // [20260724_TS_BigBang_TestFix] END
+
+  // [20260725_E2E_LaunchDiagnosis] Verify the bundle exists BEFORE launch
+  // — if global-setup didn't run (or the build silently failed) the
+  // launch would hang for 30s with no clear cause.
+  const mainBundle = path.join(appRoot, "dist-main/main.js");
+  const preloadBundle = path.join(appRoot, "dist-preload/preload.js");
+  // [20260725_E2E_CiStartupProbe] Correct path: build:renderer script is
+  // `cd src && vite build`, and vite.config.js sets outDir: "dist", so
+  // the renderer HTML ends up at src/dist/, not <root>/dist/. Previous
+  // diagnostic reported false negative (existed=false when file was fine).
+  const rendererHtml = path.join(appRoot, "src/dist/index.html");
+  console.log(`${DIAG_PREFIX} bundle check:`);
+  console.log(
+    `${DIAG_PREFIX}   dist-main/main.js exists=${fs.existsSync(mainBundle)}`,
+  );
+  console.log(
+    `${DIAG_PREFIX}   dist-preload/preload.js exists=${fs.existsSync(preloadBundle)}`,
+  );
+  console.log(
+    `${DIAG_PREFIX}   src/dist/index.html exists=${fs.existsSync(rendererHtml)}`,
+  );
+  // [20260725_E2E_CiStartupProbe] END
+
+  // [20260725_E2E_ElectronBinaryCheck] Verify the Electron binary exists
+  // in node_modules. The electron npm package's postinstall downloads
+  // Electron.app to node_modules/electron/dist/. If that dir is empty or
+  // missing, electron.launch() will silently spawn a broken process.
+  const electronPath = require("electron");
+  console.log(`${DIAG_PREFIX} electron path: ${electronPath}`);
+  const electronBundleExists = fs.existsSync(electronPath);
+  console.log(`${DIAG_PREFIX} electron binary exists: ${electronBundleExists}`);
+  if (fs.existsSync(electronPath)) {
+    const stat = fs.statSync(electronPath);
+    console.log(
+      `${DIAG_PREFIX} electron binary size: ${stat.size} bytes (stub launcher, ~50KB expected)`,
+    );
+  }
+  // [20260725_E2E_ElectronBinaryCheck_v2] The 50KB binary is just the
+  // launcher stub; the real Electron framework lives in
+  // Electron.app/Contents/Frameworks/. Total dist/ should be ~200-300MB.
+  // If it's only a few MB on CI, the postinstall download failed.
+  // Path: electronPath = .../dist/Electron.app/Contents/MacOS/Electron
+  //   dist dir = 4 levels up (MacOS → Contents → Electron.app → dist)
+  const electronDistDir = path.dirname(
+    path.dirname(path.dirname(path.dirname(electronPath))),
+  );
+  let totalSize = 0;
+  try {
+    const duOut = execSync(`du -sk ${electronDistDir}`, { encoding: "utf8" });
+    totalSize = parseInt(duOut.split(/\s+/)[0], 10) || 0;
+  } catch (e) {
+    const msg =
+      e && typeof e === "object" && "message" in e ? e.message : String(e);
+    console.log(`${DIAG_PREFIX} du failed: ${msg}`);
+  }
+  console.log(
+    `${DIAG_PREFIX} electron dist total: ${totalSize} KB (expected ~200000-300000 KB)`,
+  );
+  const frameworkDir = path.join(
+    electronDistDir,
+    "Electron.app",
+    "Contents",
+    "Frameworks",
+    "Electron Framework.framework",
+  );
+  console.log(
+    `${DIAG_PREFIX} Electron Framework.framework exists: ${fs.existsSync(frameworkDir)}`,
+  );
+  // [20260725_E2E_ElectronBinaryCheck_v2] END
+
+  console.log(
+    `${DIAG_PREFIX} calling electron.launch() at ${new Date().toISOString()}`,
+  );
+  const launchStart = Date.now();
+
+  // [20260906_Test_PackagedBootHealth] Spec #266 T11 (#288): target an
+  // INSTALLED packaged executable (release-workflow smoke target) instead
+  // of the dev bundle. The packaged app embeds its own main.js, so neither
+  // the ci-probe require nor the appRoot argument applies there.
+  const packagedExecutable = process.env.MURMUR_PACKAGED_EXECUTABLE;
+  const packagedOptions = packagedExecutable
+    ? {
+        executablePath: packagedExecutable,
+        args: ["--lang=zh-CN"],
+        env: {
+          ...process.env,
+          NODE_ENV: "test",
+          MURMUR_DB_PATH: ":memory:",
+          ELECTRON_ENABLE_LOGGING: "1",
+          ...env,
+        },
+        timeout: 60_000,
+      }
+    : undefined;
+  const app = await electron.launch(
+    packagedOptions ?? {
+      // [20260725_E2E_CiStartupProbe] Pass --require ci-probe.js as the
+      // FIRST arg so it executes before dist-main/main.js. If [probe]
+      // lines appear in CI logs but [main:canary] don't, the problem
+      // is in main.ts module-load (e.g. an import side-effect that
+      // hangs on CI macOS).
+      // [20260726_Tier43_E2EHelpers] ci-probe stays .js: Electron's
+      // --require flag cannot transpile TypeScript, only .js/.json/.node.
+      args: [
+        "--require",
+        path.join(PROJECT_ROOT, "tests/e2e/helpers/ci-probe.js"),
+        // [20260906_Test_E2eDeterministicLocale] The main/settings/history
+        // windows are i18n-wired now (spec #247): without a pinned locale the
+        // UI language follows navigator.language, so Chinese-text selectors
+        // broke on English-locale machines (invisible while e2e was
+        // non-blocking). All suites assert zh-CN labels; make it explicit.
+        "--lang=zh-CN",
+        appRoot,
+      ],
+      // [20260725_E2E_CiStartupProbe] END
+      env: {
+        ...process.env,
+        NODE_ENV: "test",
+        MURMUR_DB_PATH: ":memory:",
+        // [20260725_E2E_LaunchDiagnosis] Force Electron to emit verbose
+        // logs to stderr. Without this the main process stays silent and
+        // the 'console' event listener only catches explicit console.log
+        // calls, not GPU/code-signing/init errors.
+        ELECTRON_ENABLE_LOGGING: "1",
+        // [20260725_E2E_LaunchDiagnosis] END
+        ...env,
+      },
+      // [20260725_E2E_LaunchDiagnosis] Default Playwright launch timeout
+      // is 30s; CI macOS firstWindow flakiness is documented in spec
+      // §7 Stage 0. Bump to 60s for the diagnostic run so we get more
+      // process output before the timeout fires.
+      timeout: 60_000,
+      // [20260725_E2E_LaunchDiagnosis] END
+    },
+  );
+
+  console.log(
+    `${DIAG_PREFIX} electron.launch() returned after ${Date.now() - launchStart}ms (pid=${app.process()?.pid})`,
+  );
+
+  // [20260725_E2E_LaunchDiagnosis] Attach diagnostic listeners BEFORE
+  // awaiting firstWindow — the window event may fire during this wait,
+  // and stderr/stdout during launch is the most valuable signal.
+  attachDiagnosticListeners(app, "launch");
+  // [20260725_E2E_LaunchDiagnosis] END
+
+  console.log(
+    `${DIAG_PREFIX} awaiting firstWindow() at ${new Date().toISOString()}`,
+  );
+  const window = await app.firstWindow();
+  console.log(
+    `${DIAG_PREFIX} firstWindow() resolved: url=${window.url()} after ${Date.now() - launchStart}ms total`,
+  );
+
+  // Inject MediaRecorder mock — getUserMedia returns an empty audio stream.
+  // This prevents "NotAllowedError: Permission denied" in test environment.
+  await window.addInitScript(() => {
+    const nav = navigator;
+    if (!nav.mediaDevices) {
+      // lib.dom.d.ts marks mediaDevices as readonly; in the test harness
+      // we intentionally stub it before the app reads it.
+      Object.defineProperty(nav, "mediaDevices", {
+        value: {},
+        writable: true,
+        configurable: true,
+      });
+    }
+    // [20260910_Fix_E2e_GetUserMediaStub] Always override. The old
+    // existence guard let the REAL getUserMedia through on any Chromium
+    // new enough to ship mediaDevices natively (Electron 39), turning
+    // every mic-click suite into a TCC permission request that headless
+    // test runs answer with "Permission denied".
+    nav.mediaDevices.getUserMedia = async () => {
+      // Create a silent audio context to produce a real MediaStream
+      const ctx = new AudioContext();
+      const oscillator = ctx.createOscillator();
+      const dest = ctx.createMediaStreamDestination();
+      oscillator.connect(dest);
+      oscillator.start();
+      return dest.stream;
+    };
+    // [20260910_Fix_E2e_GetUserMediaStub] END
+
+    // [20260910_Fix_E2e_MediaRecorderStub] Deterministic MediaRecorder:
+    // the real recorder against the silent oscillator stream yields an
+    // undecodable/empty webm in headless runs (AudioContext starts
+    // suspended without a user gesture), so stop() → decodeAudioData
+    // rejected and no transcription ever completed. The stub replays a
+    // short valid WAV on stop() — decodeAudioData sniffs the RIFF header
+    // regardless of the blob's declared type, so the app's webm→wav
+    // conversion path runs unmodified.
+    const MOCK_WAV_SAMPLE_RATE = 16000;
+    const MOCK_WAV_DURATION_SEC = 0.5;
+    const buildMockWavBytes = () => {
+      const sampleCount = Math.floor(
+        MOCK_WAV_SAMPLE_RATE * MOCK_WAV_DURATION_SEC,
+      );
+      const dataSize = sampleCount * 2;
+      const buffer = new ArrayBuffer(44 + dataSize);
+      const view = new DataView(buffer);
+      const writeAscii = (offset: number, text: string) => {
+        for (let i = 0; i < text.length; i++) {
+          view.setUint8(offset + i, text.charCodeAt(i));
+        }
+      };
+      writeAscii(0, "RIFF");
+      view.setUint32(4, 36 + dataSize, true);
+      writeAscii(8, "WAVE");
+      writeAscii(12, "fmt ");
+      view.setUint32(16, 16, true); // PCM chunk size
+      view.setUint16(20, 1, true); // PCM format
+      view.setUint16(22, 1, true); // mono
+      view.setUint32(24, MOCK_WAV_SAMPLE_RATE, true);
+      view.setUint32(28, MOCK_WAV_SAMPLE_RATE * 2, true); // byte rate
+      view.setUint16(32, 2, true); // block align
+      view.setUint16(34, 16, true); // bits per sample
+      writeAscii(36, "data");
+      view.setUint32(40, dataSize, true);
+      // Samples left as zero (silence) — content is irrelevant; the
+      // transcription backend is IPC-mocked in every suite.
+      return new Uint8Array(buffer);
+    };
+    class MockMediaRecorder {
+      state = "inactive";
+      ondataavailable: ((event: { data: Blob }) => void) | null = null;
+      onstop: (() => void) | null = null;
+      onerror: ((event: { error?: Error }) => void) | null = null;
+      static isTypeSupported() {
+        return true;
+      }
+      start() {
+        this.state = "recording";
+      }
+      stop() {
+        if (this.state !== "recording") return;
+        this.state = "inactive";
+        const blob = new Blob([buildMockWavBytes()], {
+          type: "audio/webm;codecs=opus",
+        });
+        // Async like the real recorder: data first, then stop.
+        setTimeout(() => {
+          this.ondataavailable?.({ data: blob });
+          this.onstop?.();
+        }, 50);
+      }
+    }
+    (window as unknown as { MediaRecorder: unknown }).MediaRecorder =
+      MockMediaRecorder;
+    // [20260910_Fix_E2e_MediaRecorderStub] END
+  });
+
+  // Wait for the app to be ready
+  await window.waitForLoadState("domcontentloaded");
+  console.log(`${DIAG_PREFIX} domcontentloaded fired`);
+
+  return { app, window };
+}
+
+/**
+ * Gracefully close the Electron app.
+ * @param {ElectronApplication} app
+ */
+async function closeElectronApp(app) {
+  if (app) {
+    try {
+      await app.close();
+    } catch {
+      // App may have already exited (e.g. close_behavior=quit test)
+    }
+  }
+}
+
+module.exports = { launchElectronApp, closeElectronApp };

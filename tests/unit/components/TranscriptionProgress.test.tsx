@@ -43,7 +43,12 @@ describe("TranscriptionProgress", () => {
 
   it("shows progress bar with correct width for ASR with progressPct", () => {
     const { container } = render(
-      <TranscriptionProgress phase="asr" totalMs={60000} progressPct={50} onCancel={() => {}} />,
+      <TranscriptionProgress
+        phase="asr"
+        totalMs={60000}
+        progressPct={50}
+        onCancel={() => {}}
+      />,
     );
     expect(screen.getByText(/音频时长/)).toBeTruthy();
     expect(container.querySelector(".animate-indeterminate")).toBeNull();
@@ -53,7 +58,12 @@ describe("TranscriptionProgress", () => {
 
   it("shows progress bar without percentage text", () => {
     const { container } = render(
-      <TranscriptionProgress phase="asr" totalMs={5000} progressPct={50} onCancel={() => {}} />,
+      <TranscriptionProgress
+        phase="asr"
+        totalMs={5000}
+        progressPct={50}
+        onCancel={() => {}}
+      />,
     );
     expect(screen.getByText(/音频时长/)).toBeTruthy();
     expect(screen.queryByText(/50%/)).toBeNull();
@@ -72,7 +82,11 @@ describe("TranscriptionProgress", () => {
 
   it("shows progress bar for punc phase with progressPct", () => {
     const { container } = render(
-      <TranscriptionProgress phase="punc" progressPct={96} onCancel={() => {}} />,
+      <TranscriptionProgress
+        phase="punc"
+        progressPct={96}
+        onCancel={() => {}}
+      />,
     );
     expect(screen.getByText("标点恢复中")).toBeTruthy();
     const bar = container.querySelector("[style]");
@@ -81,7 +95,11 @@ describe("TranscriptionProgress", () => {
 
   it("shows progress bar for convert phase with progressPct", () => {
     const { container } = render(
-      <TranscriptionProgress phase="convert" progressPct={2} onCancel={() => {}} />,
+      <TranscriptionProgress
+        phase="convert"
+        progressPct={2}
+        onCancel={() => {}}
+      />,
     );
     expect(screen.getByText("格式转换中")).toBeTruthy();
     const bar = container.querySelector("[style]");
@@ -98,7 +116,11 @@ describe("TranscriptionProgress", () => {
 
   it("shows green checkmark and bar when done", () => {
     const { container } = render(
-      <TranscriptionProgress phase="done" progressPct={100} onCancel={() => {}} />,
+      <TranscriptionProgress
+        phase="done"
+        progressPct={100}
+        onCancel={() => {}}
+      />,
     );
     expect(screen.getByText("转录完成")).toBeTruthy();
     const bar = container.querySelector("[style]");
@@ -107,9 +129,7 @@ describe("TranscriptionProgress", () => {
   });
 
   it("shows fileName when provided", () => {
-    render(
-      <TranscriptionProgress fileName="test.m4a" onCancel={() => {}} />,
-    );
+    render(<TranscriptionProgress fileName="test.m4a" onCancel={() => {}} />);
     expect(screen.getByText("test.m4a")).toBeTruthy();
   });
 });

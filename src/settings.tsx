@@ -1,7 +1,14 @@
 import React, { useState } from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
-import { Toaster } from "sonner";
+// [20260905_Fix_247_I18nMainHistory] Initialize i18n for the settings window
+// entry (same pattern as main.tsx / history.tsx). Without it react-i18next's
+// global instance stays uninitialized in this window and t() falls back to
+// the hardcoded Chinese defaults regardless of the chosen language.
+import "./i18n";
+// [ADR-015] Use theme-aware wrapper instead of bare sonner, and position at
+// bottom-center so the toast never overlaps form content or action buttons.
+import { Toaster } from "./components/ui/sonner";
 import { useTranslation } from "react-i18next";
 import { Loader2, X } from "lucide-react";
 import { assertElectronAPI } from "./bootstrap/assertElectronAPI.js";
@@ -11,14 +18,19 @@ import {
   type SettingsSection,
 } from "./settings/SettingsSidebar";
 import { GeneralSection } from "./settings/sections/GeneralSection";
+import { BotSection } from "./settings/sections/BotSection";
 import { PermissionsSection } from "./settings/sections/PermissionsSection";
 import { AIConfigSection } from "./settings/sections/AIConfigSection";
+// [20260912_Feat_242_TemplateSystem] Ticket #242 (spec #193 T15)
+import { TemplatesSection } from "./settings/sections/TemplatesSection";
 import { AboutSection } from "./settings/sections/AboutSection";
 
 const sectionTitles: Record<SettingsSection, string> = {
   general: "settings.sections.general",
+  bot: "settings.sections.bot", // [20260905_Feat_BloubSettings]
   permissions: "settings.sections.permissions",
   ai: "settings.sections.ai",
+  templates: "settings.sections.templates", // [20260912_Feat_242_TemplateSystem]
   about: "settings.sections.about",
 };
 
@@ -26,15 +38,36 @@ const sectionTitles: Record<SettingsSection, string> = {
 // (the i18n key resolves to the correct language at runtime).
 const sectionTitleDefaults: Record<SettingsSection, string> = {
   general: "General",
+  bot: "Bot", // [20260905_Feat_BloubSettings]
   permissions: "Permissions",
   ai: "AI Configuration",
+  templates: "Templates", // [20260912_Feat_242_TemplateSystem]
   about: "About Murmur",
 };
 
 const SettingsPage = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [activeSection, setActiveSection] =
     useState<SettingsSection>("general");
+
+  // [20260905_Fix_247_LanguageOnMount] The window booted with the navigator
+  // language (i18n init has no async IPC at import); the user's persisted
+  // choice lives in the settings DB — apply it on mount. Without this the
+  // settings window could render a different language than the one the user
+  // picked in a previous session.
+  React.useEffect(() => {
+    if (!window.electronAPI?.getSetting) return;
+    window.electronAPI
+      .getSetting("language", "zh-CN")
+      .then((value) => {
+        i18n.changeLanguage(
+          typeof value === "string" && value ? value : "zh-CN",
+        );
+      })
+      .catch(() => {
+        // Settings read raced window teardown — keep navigator language.
+      });
+  }, [i18n]);
 
   const {
     settings,
@@ -123,6 +156,13 @@ const SettingsPage = () => {
                   onInputChange={handleInputChange}
                 />
               )}
+              {activeSection === "bot" && (
+                // [20260905_Feat_BloubSettings] bot mascot catalogue pickers
+                <BotSection
+                  settings={settings}
+                  onInputChange={handleInputChange}
+                />
+              )}
               {activeSection === "permissions" && <PermissionsSection />}
               {activeSection === "ai" && (
                 <AIConfigSection
@@ -143,6 +183,10 @@ const SettingsPage = () => {
                   saving={saving}
                   showQuickStart={showQuickStart}
                 />
+              )}
+              {activeSection === "templates" && (
+                // [20260912_Feat_242_TemplateSystem] custom-template editor
+                <TemplatesSection />
               )}
               {activeSection === "about" && (
                 <AboutSection
@@ -170,7 +214,7 @@ if (document.getElementById("settings-root") && assertElectronAPI()) {
   root.render(
     <React.Fragment>
       <SettingsPage />
-      <Toaster position="top-right" />
+      <Toaster position="bottom-center" />
     </React.Fragment>,
   );
 }

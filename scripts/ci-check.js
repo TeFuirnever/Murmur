@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 
-const { execSync } = require("child_process");
+const { execSync, spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
@@ -54,6 +54,106 @@ function run(cmd, label) {
       output: (e.stdout || "") + (e.stderr || ""),
     };
   }
+}
+
+// [20260816_DevSmokeGate] pnpm run dev gate: launches the dev stack
+// (build:preload + concurrently: vite dev server + electron main) in the
+// background and waits for the renderer to be reachable on the vite port, or
+// for the main process to emit a fatal error. The gate exists because the app
+// once booted with a stale native-sqlite ABI and crashed at startup — a state
+// no build/test gate catches. [20260905_Feat_NodeSqlite] the ABI class itself
+// is gone with better-sqlite3; the crash fast-detect stays as a cheap guard.
+// Ports mirror src/vite.config.js server.port; VITE_DEV_PORT overrides.
+const DEV_VITE_PORT = process.env.VITE_DEV_PORT || "5173";
+const DEV_READY_TIMEOUT_MS = 120_000;
+// [20260906_Test_DevSmokeHeartbeat] Spec #266 T(#251): port reachability
+// only proves the RENDERER (vite) is up — a main-process crash after boot
+// left the smoke green (the pre-node:sqlite sqlite crash episode). The
+// smoke now additionally requires the main process to print its
+// "window-created" startup milestone (main.ts) before the gate passes.
+const DEV_MAIN_READY_PATTERN = /\[main:startup\] phase=window-created/;
+
+async function runDevSmoke() {
+  const start = performance.now();
+  // [20260905_Feat_NodeSqlite] The electron-rebuild step is gone with
+  // better-sqlite3 (spec #226): node:sqlite is built into both runtimes, so
+  // there is no ABI to flip before launching the dev stack.
+  const child = spawn("pnpm", ["run", "dev"], {
+    cwd: ROOT,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let output = "";
+  let fatal = null;
+  let portReady = false;
+  let mainReady = false;
+  const onData = (buf) => {
+    const text = buf.toString();
+    output += text;
+    // A main-process crash aborts the run
+    // early so the gate fails fast instead of waiting out the timeout.
+    if (/SQLite 原生模块版本不匹配|NODE_MODULE_VERSION/.test(text)) {
+      fatal = text.slice(0, 300);
+    }
+    if (DEV_MAIN_READY_PATTERN.test(text)) {
+      mainReady = true;
+    }
+  };
+  child.stdout.on("data", onData);
+  child.stderr.on("data", onData);
+
+  const deadline = Date.now() + DEV_READY_TIMEOUT_MS;
+  let result;
+  while (Date.now() < deadline) {
+    if (fatal) break;
+    try {
+      const res = await fetch(`http://localhost:${DEV_VITE_PORT}/`);
+      if (res.ok) {
+        portReady = true;
+        if (mainReady) {
+          const dur = ((performance.now() - start) / 1000).toFixed(1);
+          result = {
+            step: "dev smoke (pnpm run dev)",
+            ok: true,
+            duration: dur,
+            output:
+              "dev server reached on :" +
+              DEV_VITE_PORT +
+              " + main process window-created milestone\n" +
+              output.slice(-800),
+          };
+          break;
+        }
+      }
+    } catch {
+      // Port not up yet — keep polling.
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  child.kill("SIGTERM");
+  // Give concurrently a moment to tear down.
+  await new Promise((r) => setTimeout(r, 1500));
+  if (!result) {
+    const dur = ((performance.now() - start) / 1000).toFixed(1);
+    // [20260906_Test_DevSmokeHeartbeat] Distinguish the two failure shapes:
+    // renderer up but main never reporting its milestone is the exact blind
+    // spot this heartbeat was added for.
+    const reason = fatal
+      ? fatal
+      : portReady
+        ? "dev server reached, but the main process never reported " +
+          "[main:startup] phase=window-created within the timeout"
+        : "dev server did not become ready within the timeout";
+    result = {
+      step: "dev smoke (pnpm run dev)",
+      ok: false,
+      duration: dur,
+      output: reason + "\n" + output.slice(-1200),
+    };
+  }
+  // [20260905_Feat_NodeSqlite] The ABI restore note is obsolete with the
+  // engine swap (spec #226): no native sqlite binary exists to leave in any
+  // particular state.
+  return result;
 }
 
 function extractFailHint(result) {
@@ -154,27 +254,72 @@ async function main() {
   }
 
   // Stage 1: parallel fast checks
+  // [20260725_Autopilot_T2.2] Add typecheck:tests — runs tsc against
+  // tsconfig.test.json which covers tests/**. Catches type errors in .ts
+  // and .tsx test files that pnpm test (vitest transform) does not.
+  // [20260817_T4_PythonTestRunner] Add test:python:unit — the stdlib-unittest
+  // suite under tests/python (protocol contract + numpy smoke), so Python
+  // server changes are gate-covered locally too. CI mirrors this in the
+  // "Python unit tests" step of ci.yml on both platform matrix entries.
   const stage1 = await Promise.all([
     run("pnpm format:check", "format:check"),
     run("pnpm lint", "lint"),
     run("pnpm license:check", "license:check"),
+    run("pnpm typecheck", "typecheck"),
+    run("pnpm typecheck:tests", "typecheck:tests"),
+    run("pnpm run test:python:unit", "test:python:unit"),
   ]);
   stage1.forEach(printResult);
+  // [20260725_Autopilot_T2.2] END
 
-  // Stage 2: build preload then test
+  // [20260724_TS_BigBang_BuildPipeline] Add build:main to ci-check so the
+  // main bundle is validated locally, matching CI workflows.
+  // Stage 2: build main + preload then test
+  const stage2main = run("pnpm run build:main", "build:main");
+  printResult(stage2main);
+  // [20260724_TS_BigBang_BuildPipeline] END
   const stage2a = run("pnpm run build:preload", "build:preload");
   printResult(stage2a);
-  const stage2b = run("pnpm test -- --coverage", "test + coverage");
+  // [20260912_Feat_267_BridgeTranscribe] Validate the CLI bridge-client
+  // bundle locally, matching CI workflows (packaging reads cli/dist).
+  const stage2cli = run("pnpm run build:cli", "build:cli");
+  printResult(stage2cli);
+  // [20260905_Fix_CoverageForwarding] pnpm 11 forwards `--` LITERALLY to the
+  // script (verified: `pnpm test -- --coverage` runs `vitest run -- --coverage`,
+  // which vitest treats as file filters — coverage silently never ran and the
+  // thresholds never enforced). Invoke vitest directly with the flag.
+  const stage2b = run("pnpm exec vitest run --coverage", "test + coverage");
   printResult(stage2b);
 
   // Stage 3: build renderer
   const stage3 = run("pnpm run build:renderer", "build:renderer");
   printResult(stage3);
 
-  const results = [...stage1, stage2a, stage2b, stage3];
+  // [20260816_Refactor_RemoveEffects] The effects chunk isolation gate was
+  // removed with the visual-effects feature (ogl/motion deps deleted).
+
+  // [20260816_DevSmokeGate] pnpm run dev gate: verifies the dev stack boots
+  // end-to-end (preload build, vite dev server, main
+  // process) and the renderer becomes reachable — a regression the static
+  // gates cannot see.
+  const stageDev = await runDevSmoke();
+  printResult(stageDev);
+
+  const results = [...stage1, stage2main, stage2a, stage2b, stage3, stageDev];
 
   // Security audit (non-blocking)
-  const audit = run("pnpm audit --audit-level moderate", "security audit");
+  // [20260816_Fix_AuditRegistry] The local install registry (npmmirror.com)
+  // does not implement the npm audit endpoint, which made every audit run
+  // fail with ERR_PNPM_AUDIT_ENDPOINT_NOT_EXISTS and show a misleading
+  // "found issues" warning. Audit against the official registry explicitly;
+  // MURMUR_AUDIT_REGISTRY overrides it (e.g. for an internal mirror that
+  // does implement the endpoint).
+  const auditRegistry =
+    process.env.MURMUR_AUDIT_REGISTRY || "https://registry.npmjs.org";
+  const audit = run(
+    `pnpm audit --audit-level moderate --registry=${auditRegistry}`,
+    "security audit",
+  );
   if (!audit.ok) {
     warnings.push("Security audit found issues (non-blocking)");
     if (!QUIET && !JSON_OUT) {

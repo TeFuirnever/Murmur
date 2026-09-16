@@ -1,16 +1,51 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Murmur favicon: simplified fox mascot silhouette (kawaii style).
+       Derived from the chosen app icon (L-cute-fox). Lavender background + warm-orange fox.
+       Kept minimal so it stays crisp at 16x16 in browser tabs. -->
   <defs>
-    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#6366F1"/>
-      <stop offset="100%" style="stop-color:#A855F7"/>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#e9d5ff"/>
+      <stop offset="100%" stop-color="#c4b5fd"/>
+    </linearGradient>
+    <linearGradient id="fur" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fdba74"/>
+      <stop offset="100%" stop-color="#fb923c"/>
     </linearGradient>
   </defs>
-  <rect width="128" height="128" rx="28" fill="url(#g)"/>
-  <!-- Microphone icon -->
-  <g transform="translate(32, 20)" fill="none" stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="16" y="4" width="32" height="52" rx="16" fill="none"/>
-    <path d="M8 44v4a24 24 0 0 0 48 0v-4"/>
-    <line x1="32" y1="72" x2="32" y2="84"/>
-    <line x1="20" y1="84" x2="44" y2="84"/>
+
+  <!-- Rounded squircle background (browser tabs crop to square/circle anyway). -->
+  <rect width="128" height="128" rx="28" fill="url(#bg)"/>
+
+  <!-- Fox face: rounded triangle head + two pointy ears + white muzzle + cheeks. -->
+  <g>
+    <!-- Ears (pointed, behind head). -->
+    <path d="M 32 30 L 44 58 L 24 56 Z" fill="url(#fur)"/>
+    <path d="M 96 30 L 104 56 L 84 58 Z" fill="url(#fur)"/>
+    <!-- Inner ears (pink). -->
+    <path d="M 34 36 L 41 52 L 30 52 Z" fill="#fbcfe8"/>
+    <path d="M 94 36 L 98 52 L 87 52 Z" fill="#fbcfe8"/>
+
+    <!-- Head: rounded chunky face. -->
+    <ellipse cx="64" cy="72" rx="34" ry="30" fill="url(#fur)"/>
+
+    <!-- White muzzle (lower face). -->
+    <ellipse cx="64" cy="82" rx="22" ry="18" fill="#fff7ed"/>
+
+    <!-- Eyes: big round kawaii eyes. -->
+    <circle cx="50" cy="68" r="6" fill="#1c1917"/>
+    <circle cx="78" cy="68" r="6" fill="#1c1917"/>
+    <!-- Eye sparkles. -->
+    <circle cx="52" cy="66" r="2" fill="#ffffff"/>
+    <circle cx="80" cy="66" r="2" fill="#ffffff"/>
+
+    <!-- Nose. -->
+    <ellipse cx="64" cy="78" rx="3.5" ry="2.5" fill="#1c1917"/>
+
+    <!-- Shy smile. -->
+    <path d="M 58 86 Q 64 90 70 86" fill="none" stroke="#1c1917" stroke-width="1.8" stroke-linecap="round"/>
+
+    <!-- Pink cheek blush. -->
+    <circle cx="42" cy="80" r="4" fill="#fda4af" opacity="0.6"/>
+    <circle cx="86" cy="80" r="4" fill="#fda4af" opacity="0.6"/>
   </g>
 </svg>

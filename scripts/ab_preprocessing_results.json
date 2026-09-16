@@ -1,0 +1,335 @@
+{
+  "voice": "Tingting",
+  "model": "paraformer-large",
+  "variants": 36,
+  "mean_raw_cer": 0.0,
+  "mean_preprocessed_cer": 0.0,
+  "quiet_mean_raw_cer": 0.0,
+  "quiet_mean_preprocessed_cer": 0.0,
+  "rows": [
+    {
+      "sentence": 0,
+      "variant": "g002_clean",
+      "reference": "今天我们讨论第三季度的产品路线图",
+      "raw_text": "今天我们讨论第三季度的产品路线图",
+      "raw_cer": 0.0,
+      "preprocessed_text": "今天我们讨论第三季度的产品路线图",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 0,
+      "variant": "g002_rumble",
+      "reference": "今天我们讨论第三季度的产品路线图",
+      "raw_text": "今天我们讨论第三季度的产品路线图",
+      "raw_cer": 0.0,
+      "preprocessed_text": "今天我们讨论第三季度的产品路线图",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 0,
+      "variant": "g010_clean",
+      "reference": "今天我们讨论第三季度的产品路线图",
+      "raw_text": "今天我们讨论第三季度的产品路线图",
+      "raw_cer": 0.0,
+      "preprocessed_text": "今天我们讨论第三季度的产品路线图",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 0,
+      "variant": "g010_rumble",
+      "reference": "今天我们讨论第三季度的产品路线图",
+      "raw_text": "今天我们讨论第三季度的产品路线图",
+      "raw_cer": 0.0,
+      "preprocessed_text": "今天我们讨论第三季度的产品路线图",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 0,
+      "variant": "g100_clean",
+      "reference": "今天我们讨论第三季度的产品路线图",
+      "raw_text": "今天我们讨论第三季度的产品路线图",
+      "raw_cer": 0.0,
+      "preprocessed_text": "今天我们讨论第三季度的产品路线图",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 0,
+      "variant": "g100_rumble",
+      "reference": "今天我们讨论第三季度的产品路线图",
+      "raw_text": "今天我们讨论第三季度的产品路线图",
+      "raw_cer": 0.0,
+      "preprocessed_text": "今天我们讨论第三季度的产品路线图",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 1,
+      "variant": "g002_clean",
+      "reference": "会议纪要需要在周五之前发给所有参会人员",
+      "raw_text": "会议纪要需要在周五之前发给所有参会人员",
+      "raw_cer": 0.0,
+      "preprocessed_text": "会议纪要需要在周五之前发给所有参会人员",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 1,
+      "variant": "g002_rumble",
+      "reference": "会议纪要需要在周五之前发给所有参会人员",
+      "raw_text": "会议纪要需要在周五之前发给所有参会人员",
+      "raw_cer": 0.0,
+      "preprocessed_text": "会议纪要需要在周五之前发给所有参会人员",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 1,
+      "variant": "g010_clean",
+      "reference": "会议纪要需要在周五之前发给所有参会人员",
+      "raw_text": "会议纪要需要在周五之前发给所有参会人员",
+      "raw_cer": 0.0,
+      "preprocessed_text": "会议纪要需要在周五之前发给所有参会人员",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 1,
+      "variant": "g010_rumble",
+      "reference": "会议纪要需要在周五之前发给所有参会人员",
+      "raw_text": "会议纪要需要在周五之前发给所有参会人员",
+      "raw_cer": 0.0,
+      "preprocessed_text": "会议纪要需要在周五之前发给所有参会人员",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 1,
+      "variant": "g100_clean",
+      "reference": "会议纪要需要在周五之前发给所有参会人员",
+      "raw_text": "会议纪要需要在周五之前发给所有参会人员",
+      "raw_cer": 0.0,
+      "preprocessed_text": "会议纪要需要在周五之前发给所有参会人员",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 1,
+      "variant": "g100_rumble",
+      "reference": "会议纪要需要在周五之前发给所有参会人员",
+      "raw_text": "会议纪要需要在周五之前发给所有参会人员",
+      "raw_cer": 0.0,
+      "preprocessed_text": "会议纪要需要在周五之前发给所有参会人员",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 2,
+      "variant": "g002_clean",
+      "reference": "这个方案的预算超出了原定计划的百分之十五",
+      "raw_text": "这个方案的预算超出了原定计划的百分之十五",
+      "raw_cer": 0.0,
+      "preprocessed_text": "这个方案的预算超出了原定计划的百分之十五",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 2,
+      "variant": "g002_rumble",
+      "reference": "这个方案的预算超出了原定计划的百分之十五",
+      "raw_text": "这个方案的预算超出了原定计划的百分之十五",
+      "raw_cer": 0.0,
+      "preprocessed_text": "这个方案的预算超出了原定计划的百分之十五",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 2,
+      "variant": "g010_clean",
+      "reference": "这个方案的预算超出了原定计划的百分之十五",
+      "raw_text": "这个方案的预算超出了原定计划的百分之十五",
+      "raw_cer": 0.0,
+      "preprocessed_text": "这个方案的预算超出了原定计划的百分之十五",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 2,
+      "variant": "g010_rumble",
+      "reference": "这个方案的预算超出了原定计划的百分之十五",
+      "raw_text": "这个方案的预算超出了原定计划的百分之十五",
+      "raw_cer": 0.0,
+      "preprocessed_text": "这个方案的预算超出了原定计划的百分之十五",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 2,
+      "variant": "g100_clean",
+      "reference": "这个方案的预算超出了原定计划的百分之十五",
+      "raw_text": "这个方案的预算超出了原定计划的百分之十五",
+      "raw_cer": 0.0,
+      "preprocessed_text": "这个方案的预算超出了原定计划的百分之十五",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 2,
+      "variant": "g100_rumble",
+      "reference": "这个方案的预算超出了原定计划的百分之十五",
+      "raw_text": "这个方案的预算超出了原定计划的百分之十五",
+      "raw_cer": 0.0,
+      "preprocessed_text": "这个方案的预算超出了原定计划的百分之十五",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 3,
+      "variant": "g002_clean",
+      "reference": "客户端支持视窗和苹果双平台运行",
+      "raw_text": "客户端支持视窗和苹果双平台运行",
+      "raw_cer": 0.0,
+      "preprocessed_text": "客户端支持视窗和苹果双平台运行",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 3,
+      "variant": "g002_rumble",
+      "reference": "客户端支持视窗和苹果双平台运行",
+      "raw_text": "客户端支持视窗和苹果双平台运行",
+      "raw_cer": 0.0,
+      "preprocessed_text": "客户端支持视窗和苹果双平台运行",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 3,
+      "variant": "g010_clean",
+      "reference": "客户端支持视窗和苹果双平台运行",
+      "raw_text": "客户端支持视窗和苹果双平台运行",
+      "raw_cer": 0.0,
+      "preprocessed_text": "客户端支持视窗和苹果双平台运行",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 3,
+      "variant": "g010_rumble",
+      "reference": "客户端支持视窗和苹果双平台运行",
+      "raw_text": "客户端支持视窗和苹果双平台运行",
+      "raw_cer": 0.0,
+      "preprocessed_text": "客户端支持视窗和苹果双平台运行",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 3,
+      "variant": "g100_clean",
+      "reference": "客户端支持视窗和苹果双平台运行",
+      "raw_text": "客户端支持视窗和苹果双平台运行",
+      "raw_cer": 0.0,
+      "preprocessed_text": "客户端支持视窗和苹果双平台运行",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 3,
+      "variant": "g100_rumble",
+      "reference": "客户端支持视窗和苹果双平台运行",
+      "raw_text": "客户端支持视窗和苹果双平台运行",
+      "raw_cer": 0.0,
+      "preprocessed_text": "客户端支持视窗和苹果双平台运行",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 4,
+      "variant": "g002_clean",
+      "reference": "语音识别的准确率直接影响用户体验",
+      "raw_text": "语音识别的准确率直接影响用户体验",
+      "raw_cer": 0.0,
+      "preprocessed_text": "语音识别的准确率直接影响用户体验",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 4,
+      "variant": "g002_rumble",
+      "reference": "语音识别的准确率直接影响用户体验",
+      "raw_text": "语音识别的准确率直接影响用户体验",
+      "raw_cer": 0.0,
+      "preprocessed_text": "语音识别的准确率直接影响用户体验",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 4,
+      "variant": "g010_clean",
+      "reference": "语音识别的准确率直接影响用户体验",
+      "raw_text": "语音识别的准确率直接影响用户体验",
+      "raw_cer": 0.0,
+      "preprocessed_text": "语音识别的准确率直接影响用户体验",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 4,
+      "variant": "g010_rumble",
+      "reference": "语音识别的准确率直接影响用户体验",
+      "raw_text": "语音识别的准确率直接影响用户体验",
+      "raw_cer": 0.0,
+      "preprocessed_text": "语音识别的准确率直接影响用户体验",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 4,
+      "variant": "g100_clean",
+      "reference": "语音识别的准确率直接影响用户体验",
+      "raw_text": "语音识别的准确率直接影响用户体验",
+      "raw_cer": 0.0,
+      "preprocessed_text": "语音识别的准确率直接影响用户体验",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 4,
+      "variant": "g100_rumble",
+      "reference": "语音识别的准确率直接影响用户体验",
+      "raw_text": "语音识别的准确率直接影响用户体验",
+      "raw_cer": 0.0,
+      "preprocessed_text": "语音识别的准确率直接影响用户体验",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 5,
+      "variant": "g002_clean",
+      "reference": "下周一上午十点在三号会议室进行评审",
+      "raw_text": "下周一上午十点在三号会议室进行评审",
+      "raw_cer": 0.0,
+      "preprocessed_text": "下周一上午十点在三号会议室进行评审",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 5,
+      "variant": "g002_rumble",
+      "reference": "下周一上午十点在三号会议室进行评审",
+      "raw_text": "下周一上午十点在三号会议室进行评审",
+      "raw_cer": 0.0,
+      "preprocessed_text": "下周一上午十点在三号会议室进行评审",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 5,
+      "variant": "g010_clean",
+      "reference": "下周一上午十点在三号会议室进行评审",
+      "raw_text": "下周一上午十点在三号会议室进行评审",
+      "raw_cer": 0.0,
+      "preprocessed_text": "下周一上午十点在三号会议室进行评审",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 5,
+      "variant": "g010_rumble",
+      "reference": "下周一上午十点在三号会议室进行评审",
+      "raw_text": "下周一上午十点在三号会议室进行评审",
+      "raw_cer": 0.0,
+      "preprocessed_text": "下周一上午十点在三号会议室进行评审",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 5,
+      "variant": "g100_clean",
+      "reference": "下周一上午十点在三号会议室进行评审",
+      "raw_text": "下周一上午十点在三号会议室进行评审",
+      "raw_cer": 0.0,
+      "preprocessed_text": "下周一上午十点在三号会议室进行评审",
+      "preprocessed_cer": 0.0
+    },
+    {
+      "sentence": 5,
+      "variant": "g100_rumble",
+      "reference": "下周一上午十点在三号会议室进行评审",
+      "raw_text": "下周一上午十点在三号会议室进行评审",
+      "raw_cer": 0.0,
+      "preprocessed_text": "下周一上午十点在三号会议室进行评审",
+      "preprocessed_cer": 0.0
+    }
+  ]
+}

@@ -2,6 +2,8 @@
 
 **状态**: 已采纳 (2026-05-23)
 
+> [20260725_CodeReview_T1.5] 本 ADR 写于 ADR-010 big-bang 之前。下文 `.js` 文件名是写作时的快照，当前源码已迁移到 `.ts`（`providerPresets.ts`、`detectLocalModels.ts`、`aiHandlers.ts`）。见 `docs/adr/010-backend-ts-migration-strategy.md`。
+
 ## 上下文
 
 用户配置 AI 时需要手动查找并填写 base URL 和模型名称，门槛高。本地运行的模型（Ollama、LM Studio）虽然有 SSRF 支持，但用户不知道如何配置。

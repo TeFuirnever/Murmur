@@ -1,0 +1,689 @@
+// [20260724_TS_BigBang_Database] Migrated implementation from .js to .ts
+// (ADR-010). Was a type re-export stub; now the full SQLite implementation
+// lives here. `module.exports = DatabaseManager` (class) became
+// `export default DatabaseManager`.
+// [20260905_Feat_NodeSqlite] Engine migration better-sqlite3 -> node:sqlite
+// (spec #226): node:sqlite is built into Node >=22.5 and Electron >=39, so
+// the native-addon ABI state machine (system-Node vs Electron builds of
+// better_sqlite3.node — the root cause of the v1.3.0 crash, the ci:check
+// ordering failures and the pnpm dev boot crash) is eliminated structurally.
+// External behaviour is unchanged: same schema, same WAL/pragmas, same
+// method signatures. node:sqlite refusals to bind `undefined` are normalised
+// to null in the private helpers, matching better-sqlite3's coercion.
+import { DatabaseSync, type StatementSync } from "node:sqlite";
+import path from "path";
+import fs from "fs";
+import { loadFileConfig } from "./fileConfig";
+import { saveFileConfig, FILE_CONFIGURABLE_KEYS } from "./fileConfig";
+// [20260908_Feat_240_VocabCorrections] T13 correction-table contracts.
+import { VOCAB_MAX_ENTRIES, isValidVocabTerm } from "./vocab";
+
+/** A transcription record as stored in SQLite. */
+export interface TranscriptionRecord {
+  id?: number;
+  text: string;
+  raw_text?: string;
+  processed_text?: string;
+  confidence?: number;
+  language?: string;
+  duration?: number;
+  file_size?: number;
+  source_type?: string;
+  source_file_path?: string;
+  segments?: string;
+  // [20260906_Feat_ManualEditProtection] Spec #193 T2 (ticket #229): SQLite
+  // has no boolean type, so the record-level "user edited this" flag is an
+  // INTEGER 0/1 column (added by _migrateSchema). 1 = the user manually
+  // edited and saved the record; the end-of-recording auto-polish must then
+  // never overwrite its text/processed_text (see updateTranscription).
+  manually_edited?: number;
+  parsedSegments?: Array<{ start_ms: number; end_ms: number; text: string }>;
+  created_at?: string;
+  updated_at?: string;
+}
+
+/** SafeStorage interface for encryption. */
+interface SafeStorage {
+  encryptString(plain: string): Buffer;
+  decryptString(encrypted: Buffer): string;
+  isEncryptionAvailable(): boolean;
+}
+
+/** Logger interface (accepts console or LogManager). */
+interface Logger {
+  info?(...args: unknown[]): void;
+  debug?(...args: unknown[]): void;
+  warn?(...args: unknown[]): void;
+  error?(...args: unknown[]): void;
+}
+
+type Primitive = string | number | boolean | null | undefined;
+
+// [20260905_Feat_NodeSqlite] node:sqlite's run() result has the same shape as
+// better-sqlite3's RunResult; values may be bigint for very large counts, and
+// every consumer already narrows via Number(...) (transcriptionHandlers.ts).
+export interface RunResult {
+  changes: number;
+  lastInsertRowid: number;
+}
+
+// [20260906_Feat_TranscriptionUpdate_Review] UPDATE patch whitelist — hoisted
+// to module scope so the Sets are allocated once, not per updateTranscription
+// call (review LOW finding; the previous in-function placement contradicted
+// this comment, fixed by [20260907_Fix_313_HoistUpdateSets]).
+const UPDATABLE_COLUMNS = new Set([
+  "processed_text",
+  "text",
+  // [20260906_Feat_ManualEditProtection] The manual-edit flag itself is
+  // patchable (see updateTranscription block comment); it is stored as
+  // INTEGER 0/1.
+  "manually_edited",
+]);
+// [20260906_Feat_ManualEditProtection] Columns that carry SQLite booleans
+// (INTEGER 0/1). Their patch values may be JS booleans or the numbers
+// 0/1; anything else is rejected, and booleans are bound as 1/0.
+const BOOLEAN_COLUMNS = new Set(["manually_edited"]);
+
+// [20260726_TechDebt_TypedRows] Typed helper wrapping the engine's
+// untyped .get()/.all() returns. Eliminates the 10 `as { field: type }`
+// casts that were scattered across this file. The engine returns
+// `unknown` by design (the row shape depends on the query), so a typed
+// wrapper is the idiomatic fix per the library docs.
+/** Cast a row to a typed shape. Use for single-row queries. */
+function getRow<T>(stmt: StatementSync, ...params: Primitive[]): T | undefined {
+  // [20260905_Feat_NodeSqlite] normalise undefined -> null, then through
+  // unknown: node:sqlite's SQLInputValue rejects undefined (better-sqlite3
+  // coerced it), and its SQLOutputValue row shape needs the double cast.
+  const bound = params.map((p) =>
+    p === undefined ? null : p,
+  ) as unknown as Parameters<StatementSync["get"]>;
+  return stmt.get(...bound) as unknown as T | undefined;
+}
+
+// [20260905_Feat_NodeSqlite] Run wrapper: node:sqlite rejects `undefined`
+// bind values (better-sqlite3 coerced them to null) and reports
+// changes/lastInsertRowid as number|bigint — normalise both here so every
+// call site keeps the old RunResult contract.
+function runStmt(stmt: StatementSync, ...params: Primitive[]): RunResult {
+  const bound = params.map((p) =>
+    p === undefined ? null : p,
+  ) as unknown as Parameters<StatementSync["run"]>;
+  const result = stmt.run(...bound);
+  return {
+    changes: Number(result.changes),
+    lastInsertRowid: Number(result.lastInsertRowid),
+  };
+}
+// [20260905_Feat_NodeSqlite] END
+
+class DatabaseManager {
+  private db: DatabaseSync | null = null;
+  private dbPath: string | null = null;
+  private logger: Logger | null;
+  private safeStorage: SafeStorage | null = null;
+  private _encryptedKeys: Set<string>;
+  private _fileConfigPath: string | null = null;
+  private _fileConfigCache: Record<string, unknown> | null = null;
+
+  constructor(logger: Logger | null = null) {
+    this.db = null;
+    this.dbPath = null;
+    this.logger = logger;
+    this.safeStorage = null;
+    this._encryptedKeys = new Set(["ai_api_key"]);
+    this._fileConfigPath = null;
+    this._fileConfigCache = null;
+  }
+
+  setSafeStorage(safeStorage: SafeStorage): void {
+    this.safeStorage = safeStorage;
+    this._migrateSettings();
+  }
+
+  setFileConfigPath(configPath: string): void {
+    this._fileConfigPath = configPath;
+    this._fileConfigCache = loadFileConfig(configPath);
+  }
+
+  // [20260725_Fix_EncryptionFailure] Catch encryptString exceptions and fall
+  // back to plaintext. When OS keyring is locked or unavailable, encryptString
+  // throws — without this catch, setSetting propagates the error and the
+  // setting value is lost entirely. Falling back to plaintext ensures the
+  // value persists and can be retrieved (just not encrypted).
+  private _encryptValue(value: Primitive): string {
+    if (!this.safeStorage || !this.safeStorage.isEncryptionAvailable()) {
+      return JSON.stringify(value);
+    }
+    if (typeof value === "string") {
+      try {
+        const encrypted = this.safeStorage.encryptString(value);
+        return JSON.stringify({ _enc: encrypted.toString("base64") });
+      } catch {
+        // Encryption failed (e.g. keyring locked) — store as plaintext
+        return JSON.stringify(value);
+      }
+    }
+    return JSON.stringify(value);
+  }
+  // [20260725_Fix_EncryptionFailure] END
+
+  private _decryptValue(raw: string | null): unknown {
+    if (raw == null) return raw;
+    try {
+      const parsed = JSON.parse(raw) as { _enc?: string } | unknown;
+      if (
+        parsed &&
+        typeof parsed === "object" &&
+        (parsed as { _enc?: string })._enc
+      ) {
+        if (!this.safeStorage) return null;
+        return this.safeStorage.decryptString(
+          Buffer.from((parsed as { _enc: string })._enc, "base64"),
+        );
+      }
+      return parsed;
+    } catch {
+      return raw;
+    }
+  }
+
+  initialize(dataDirectory: string): void {
+    // Allow test isolation via env var (e.g. MURMUR_DB_PATH=:memory: or /tmp/test.db)
+    this.dbPath =
+      process.env.MURMUR_DB_PATH ||
+      path.join(dataDirectory, "transcriptions.db");
+
+    // In-memory databases don't need directories
+    if (this.dbPath !== ":memory:") {
+      const dir = path.dirname(this.dbPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+    }
+
+    // [20260905_Feat_NodeSqlite] node:sqlite ships inside the runtime — the
+    // NODE_MODULE_VERSION mismatch branch below existed only for the
+    // better-sqlite3 native addon and is gone with it.
+    this.db = new DatabaseSync(this.dbPath);
+    this.db.exec("PRAGMA journal_mode = WAL");
+    this.db.exec("PRAGMA busy_timeout = 5000");
+
+    const integrity = this.db
+      .prepare("PRAGMA integrity_check")
+      .all() as unknown as Array<{ integrity_check: string }>;
+    if (integrity[0]?.integrity_check !== "ok") {
+      if (this.logger?.warn) {
+        this.logger.warn("Database integrity check failed", integrity);
+      }
+    }
+
+    this.createTables();
+    this._migrateSchema();
+  }
+
+  createTables(): void {
+    // 创建转录记录表
+    this.db!.exec(`
+      CREATE TABLE IF NOT EXISTS transcriptions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        text TEXT NOT NULL,
+        raw_text TEXT,
+        processed_text TEXT,
+        confidence REAL,
+        language TEXT DEFAULT 'zh-CN',
+        duration REAL,
+        file_size INTEGER,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // 创建设置表
+    this.db!.exec(`
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // [20260908_Feat_240_VocabCorrections] T13: the vocabulary corrections
+    // table — wrong-word UNIQUE (re-insert replaces + touches recency),
+    // Recency-evicted (LRU with touch) at VOCAB_MAX_ENTRIES by the add path.
+    this.db!.exec(`
+      CREATE TABLE IF NOT EXISTS vocabulary (
+        wrong TEXT PRIMARY KEY,
+        right TEXT NOT NULL,
+        used_ms INTEGER NOT NULL DEFAULT 0
+      )
+    `);
+
+    // 创建索引
+    this.db!.exec(`
+      CREATE INDEX IF NOT EXISTS idx_transcriptions_created_at
+      ON transcriptions(created_at DESC)
+    `);
+
+    // [20260815_Refactor_DeadIpc] The FTS5 virtual table + sync triggers were
+    // removed with the dead server-side search pipeline: the renderer never
+    // called searchTranscriptions (the history page filters client-side).
+  }
+
+  private _migrateSchema(): void {
+    const columns = (
+      this.db!.prepare(
+        "PRAGMA table_info(transcriptions)",
+      ).all() as unknown as Array<{
+        name: string;
+      }>
+    ).map((col) => col.name);
+
+    const migrations = [
+      {
+        column: "source_type",
+        sql: "ALTER TABLE transcriptions ADD COLUMN source_type TEXT DEFAULT 'recording'",
+      },
+      {
+        column: "source_file_path",
+        sql: "ALTER TABLE transcriptions ADD COLUMN source_file_path TEXT",
+      },
+      {
+        column: "segments",
+        sql: "ALTER TABLE transcriptions ADD COLUMN segments TEXT",
+      },
+      // [20260906_Feat_ManualEditProtection] Spec #193 T2 (ticket #229):
+      // record-level manual-edit flag. Lossless by construction — ALTER TABLE
+      // ADD COLUMN keeps every existing row; old rows read back the DEFAULT 0
+      // (never manually edited), so the auto-polish behavior is unchanged
+      // after an upgrade.
+      {
+        column: "manually_edited",
+        sql: "ALTER TABLE transcriptions ADD COLUMN manually_edited INTEGER DEFAULT 0",
+      },
+    ];
+
+    for (const migration of migrations) {
+      if (!columns.includes(migration.column)) {
+        try {
+          this.db!.exec(migration.sql);
+        } catch (error) {
+          if (this.logger && this.logger.warn) {
+            this.logger.warn(`Schema迁移失败: ${migration.column}`, error);
+          }
+        }
+      }
+    }
+  }
+
+  private _migrateSettings(): void {
+    const CURRENT_VERSION = 1;
+    const version = this.getSetting("settings_schema_version", 0) as number;
+    if (version >= CURRENT_VERSION) return;
+
+    if (version < 1) {
+      // v1: encrypt api_api_key if stored as plaintext
+      const stmt = this.db!.prepare("SELECT value FROM settings WHERE key = ?");
+      // [20260726_TechDebt_TypedRows] Using getRow helper instead of cast
+      const row = getRow<{ value: string }>(stmt, "ai_api_key");
+      if (row && this.safeStorage && this.safeStorage.isEncryptionAvailable()) {
+        try {
+          const parsed = JSON.parse(row.value);
+          if (typeof parsed === "string" && !parsed.startsWith('{"_enc":')) {
+            this.setSetting("ai_api_key", parsed);
+          }
+        } catch (e) {
+          this.logger?.warn?.(
+            "API key encryption migration failed",
+            (e as Error).message,
+          );
+        }
+      } else if (row) {
+        // [20260820_Fix_211_KeychainBootOrder] setSafeStorage is now
+        // injected unconditionally at boot (issue #211 ordering), so this
+        // migration can run while encryption is unavailable. A plaintext
+        // ai_api_key exists but cannot be encrypted yet — keep schema
+        // version 0 so a later boot with working encryption retries the
+        // migration; bumping here would permanently skip it.
+        return;
+      }
+    }
+
+    this.setSetting("settings_schema_version", CURRENT_VERSION);
+  }
+
+  saveTranscription(data: Partial<TranscriptionRecord>): RunResult {
+    if (!data || typeof data !== "object") {
+      throw new Error("转录数据无效");
+    }
+
+    // 确保text字段存在且不为空
+    const text = data.text || data.raw_text || "";
+    if (!text || text.trim().length === 0) {
+      throw new Error("转录文本不能为空");
+    }
+
+    const stmt = this.db!.prepare(`
+      INSERT INTO transcriptions (
+        text, raw_text, processed_text, confidence,
+        language, duration, file_size, source_type,
+        source_file_path, segments
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    return runStmt(
+      stmt,
+      text.trim(),
+      data.raw_text || null,
+      data.processed_text || null,
+      data.confidence || 0,
+      data.language || "zh-CN",
+      data.duration || 0,
+      data.file_size || 0,
+      data.source_type || "recording",
+      data.source_file_path || null,
+      data.segments || null,
+    );
+  }
+
+  getTranscriptions(limit = 50, offset = 0): TranscriptionRecord[] {
+    const stmt = this.db!.prepare(`
+      SELECT * FROM transcriptions
+      ORDER BY created_at DESC
+      LIMIT ? OFFSET ?
+    `);
+    return stmt.all(limit, offset) as unknown as TranscriptionRecord[];
+  }
+
+  getTranscriptionById(id: number): TranscriptionRecord | undefined {
+    const stmt = this.db!.prepare("SELECT * FROM transcriptions WHERE id = ?");
+    return stmt.get(id) as unknown as TranscriptionRecord | undefined;
+  }
+
+  // [20260906_Feat_TranscriptionUpdate] Spec #193 T1 (ticket #228): write-back
+  // for manually polished transcriptions — persists the polished text into an
+  // EXISTING record (UPDATE processed_text AND text). The column whitelist is
+  // the security contract: only the polished-text columns are writable;
+  // raw_text ALWAYS keeps the original ASR output, and any other key —
+  // including a SQL fragment smuggled in as a column name — is rejected
+  // before it can reach the SQL string. Values are bound as parameters, so
+  // injection via values is structurally impossible; the whitelist closes the
+  // identifier hole. updated_at is refreshed like the save path does for the
+  // settings table (CURRENT_TIMESTAMP, server-side).
+  //
+  // [20260906_Feat_ManualEditProtection] Spec #193 T2 (ticket #229):
+  // 1. The whitelist gains `manually_edited` (chosen over a dedicated flag
+  //    channel: one IPC call persists the edited text AND the flag
+  //    atomically; a separate seam would double the IPC surface and force a
+  //    non-atomic two-call save). Boolean patches are bound as SQLite 0/1.
+  // 2. `options.skipWhenManuallyEdited` is the AUTO-polish write seam: the
+  //    end-of-recording polish pipeline (and the future orchestrator
+  //    write-back) must pass it so a record the user has manually edited
+  //    (manually_edited = 1) is never overwritten — the call is a no-op that
+  //    reports skipped. Callers that omit the option (the user-triggered
+  //    polish/edit path) stay unrestricted by design.
+  updateTranscription(
+    id: number,
+    patch: Record<string, unknown>,
+    options?: { skipWhenManuallyEdited?: boolean },
+  ): RunResult & { skipped?: boolean } {
+    // [20260907_Fix_313_HoistUpdateSets] UPDATABLE_COLUMNS / BOOLEAN_COLUMNS
+    // live at module scope (see above) — this function only consumes them.
+
+    if (!patch || typeof patch !== "object") {
+      throw new Error("更新数据无效");
+    }
+
+    const columns = Object.keys(patch).filter(
+      (key) => patch[key] !== undefined,
+    );
+    if (columns.length === 0) {
+      throw new Error("更新数据无效");
+    }
+
+    for (const column of columns) {
+      if (!UPDATABLE_COLUMNS.has(column)) {
+        throw new Error(`不允许更新的字段: ${column}`);
+      }
+      const value = patch[column];
+      // [20260906_Feat_TranscriptionUpdate_Review] null is NOT admitted:
+      // the patch contract is string|number per column (raw_text is
+      // immutable by design), so null would NULL the column and diverge
+      // from the declared patch type.
+      if (value === null) {
+        throw new Error("更新数据无效");
+      }
+      if (BOOLEAN_COLUMNS.has(column)) {
+        // [20260906_Feat_ManualEditProtection] Flag columns admit only
+        // boolean / 0 / 1 — a stray string or object must not coerce its
+        // way into the row.
+        if (typeof value !== "boolean" && value !== 0 && value !== 1) {
+          throw new Error("更新数据无效");
+        }
+      } else if (typeof value !== "string" && typeof value !== "number") {
+        throw new Error("更新数据无效");
+      }
+    }
+
+    // [20260906_Feat_ManualEditProtection] Auto-polish guard: read the mark
+    // BEFORE any write so a record the user edited keeps its content even
+    // if a second auto-polish races in.
+    if (options?.skipWhenManuallyEdited) {
+      const existing = this.getTranscriptionById(id);
+      if (existing && Number(existing.manually_edited) === 1) {
+        return { changes: 0, lastInsertRowid: 0, skipped: true };
+      }
+    }
+
+    const setClause = columns.map((column) => `${column} = ?`).join(", ");
+    const stmt = this.db!.prepare(`
+      UPDATE transcriptions
+      SET ${setClause}, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `);
+    return runStmt(
+      stmt,
+      ...columns.map((column) => {
+        const value = patch[column];
+        // [20260906_Feat_ManualEditProtection] SQLite has no boolean type:
+        // bind flags as INTEGER 1/0 so reads return stable numeric values.
+        if (BOOLEAN_COLUMNS.has(column)) {
+          return value ? 1 : 0;
+        }
+        return value as Primitive;
+      }),
+      id,
+    );
+  }
+
+  // [20260815_Refactor_DeadIpc] getTranscriptionWithSegments removed — the
+  // live path (transcriptionHandlers) reads via getTranscriptionById and
+  // parses the segments JSON itself. searchTranscriptions/_searchLike and
+  // backup were removed the same day (zero production callers).
+
+  deleteTranscription(id: number): RunResult {
+    const stmt = this.db!.prepare("DELETE FROM transcriptions WHERE id = ?");
+    return runStmt(stmt, id);
+  }
+
+  clearAllTranscriptions(): RunResult {
+    const stmt = this.db!.prepare("DELETE FROM transcriptions");
+    return runStmt(stmt);
+  }
+
+  // [20260816_Refactor_DeadChannels] getTranscriptionStats removed with the
+  // zero-caller TRANSCRIPTION.STATS channel (the history page counts its
+  // client-side filtered list).
+
+  setSetting(key: string, value: unknown): RunResult {
+    const stmt = this.db!.prepare(`
+      INSERT OR REPLACE INTO settings (key, value, updated_at)
+      VALUES (?, ?, CURRENT_TIMESTAMP)
+    `);
+    const serialized = this._encryptedKeys.has(key)
+      ? this._encryptValue(value as Primitive)
+      : JSON.stringify(value);
+    return runStmt(stmt, key, serialized);
+  }
+
+  // [20260910_Feat_237_StreamDegradation] Per-key delete for the T10
+  // degradation memory (reset + oldest-first eviction). The settings table
+  // previously only had a delete-ALL; deleting by key keeps tombstones out
+  // of the store.
+  deleteSetting(key: string): RunResult {
+    const stmt = this.db!.prepare("DELETE FROM settings WHERE key = ?");
+    return runStmt(stmt, key);
+  }
+  // [20260910_Feat_237_StreamDegradation] END
+
+  getSetting(key: string, defaultValue: unknown = null): unknown {
+    const stmt = this.db!.prepare("SELECT value FROM settings WHERE key = ?");
+    // [20260726_TechDebt_TypedRows] Using getRow helper instead of cast
+    const result = getRow<{ value: string }>(stmt, key);
+
+    if (result) {
+      if (this._encryptedKeys.has(key)) {
+        const decrypted = this._decryptValue(result.value);
+        return decrypted !== null ? decrypted : defaultValue;
+      }
+      try {
+        return JSON.parse(result.value);
+      } catch (_error) {
+        return result.value;
+      }
+    }
+
+    if (this._fileConfigCache && key in this._fileConfigCache) {
+      return this._fileConfigCache[key];
+    }
+
+    return defaultValue;
+  }
+
+  getAllSettings(): Record<string, unknown> {
+    const stmt = this.db!.prepare("SELECT key, value FROM settings");
+    const rows = stmt.all() as unknown as Array<{ key: string; value: string }>;
+
+    const settings: Record<string, unknown> = {};
+    for (const row of rows) {
+      if (this._encryptedKeys.has(row.key)) {
+        const decrypted = this._decryptValue(row.value);
+        if (decrypted !== null) {
+          settings[row.key] = decrypted;
+        }
+      } else {
+        try {
+          settings[row.key] = JSON.parse(row.value);
+        } catch (_error) {
+          settings[row.key] = row.value;
+        }
+      }
+    }
+
+    return settings;
+  }
+
+  resetSettings(): RunResult {
+    const stmt = this.db!.prepare("DELETE FROM settings");
+    return runStmt(stmt);
+  }
+
+  syncToFileConfig(): void {
+    if (!this._fileConfigPath) return;
+    const allSettings = this.getAllSettings();
+    const filtered: Record<string, unknown> = {};
+    for (const key of FILE_CONFIGURABLE_KEYS) {
+      if (key in allSettings) filtered[key] = allSettings[key];
+    }
+    saveFileConfig(this._fileConfigPath, filtered);
+    this._fileConfigCache = loadFileConfig(this._fileConfigPath);
+  }
+
+  // [20260908_Feat_240_VocabCorrections] T13: upsert a correction pair.
+  // Re-inserting an existing wrong word replaces the pair and touches
+  // recency (used_at). Evicts the oldest rows beyond the FIFO cap.
+  addVocabCorrection(wrongRaw: string, rightRaw: string): void {
+    // [20260908_Fix_240_Review] Trim at the write boundary — whitespace-only
+    // terms would pass length checks but match nothing meaningful.
+    const wrong = wrongRaw.trim();
+    const right = rightRaw.trim();
+    if (!isValidVocabTerm(wrong) || !isValidVocabTerm(right)) {
+      throw new Error("修正表词对不合法（空/过长/含控制字符或孤立代理项）");
+    }
+    this.addVocabCorrectionsBatch([[wrong, right]]);
+  }
+
+  // [20260908_Fix_240_WinPerf] The FIFO test inserts 1005 pairs; per-call
+  // COUNT/MAX probes pushed the Windows CI leg past the 5s test budget.
+  // The eviction check runs ONCE per batch inside a transaction.
+  addVocabCorrectionsBatch(pairs: Array<[string, string]>): void {
+    const tx = this.db!;
+    const insert = tx.prepare(
+      `INSERT INTO vocabulary (wrong, right, used_ms)
+       VALUES (?, ?, ?)
+       ON CONFLICT(wrong) DO UPDATE SET
+         right = excluded.right,
+         used_ms = excluded.used_ms`,
+    );
+    tx.exec("BEGIN");
+    try {
+      for (const [wrongRaw, rightRaw] of pairs) {
+        const wrong = wrongRaw.trim();
+        const right = rightRaw.trim();
+        if (!isValidVocabTerm(wrong) || !isValidVocabTerm(right)) {
+          throw new Error("修正表词对不合法（空/过长/含控制字符或孤立代理项）");
+        }
+        insert.run(wrong, right, this._nextVocabStamp());
+      }
+      const count = tx
+        .prepare("SELECT COUNT(*) AS n FROM vocabulary")
+        .get() as { n: number };
+      if (count.n > VOCAB_MAX_ENTRIES) {
+        tx.prepare(
+          `DELETE FROM vocabulary WHERE wrong IN (
+             SELECT wrong FROM vocabulary
+             ORDER BY used_ms ASC, rowid ASC
+             LIMIT ?
+           )`,
+        ).run(count.n - VOCAB_MAX_ENTRIES);
+      }
+      tx.exec("COMMIT");
+    } catch (error) {
+      tx.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  // [20260908_Feat_240_VocabCorrections] Monotonic stamp: Date.now() can
+  // tie within one millisecond for rapid successive calls, collapsing the
+  // recency order — always strictly greater than the stored maximum.
+  private _nextVocabStamp(): number {
+    const max = this.db!.prepare(
+      "SELECT MAX(used_ms) AS m FROM vocabulary",
+    ).get() as { m: number | null };
+    return Math.max(Date.now(), (max.m ?? 0) + 1);
+  }
+
+  // Oldest-first (injection picks the most recent from the tail).
+  listVocabCorrections(): Array<{ wrong: string; right: string }> {
+    return this.db!.prepare(
+      "SELECT wrong, right FROM vocabulary ORDER BY used_ms ASC, rowid ASC",
+    ).all() as Array<{ wrong: string; right: string }>;
+  }
+
+  deleteVocabCorrection(wrong: string): void {
+    this.db!.prepare("DELETE FROM vocabulary WHERE wrong = ?").run(wrong);
+  }
+
+  clearVocabCorrections(): void {
+    this.db!.exec("DELETE FROM vocabulary");
+  }
+
+  close(): void {
+    if (this.db) {
+      this.db.close();
+      this.db = null;
+    }
+  }
+}
+
+export default DatabaseManager;
