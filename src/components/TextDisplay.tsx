@@ -35,7 +35,10 @@ export const TextDisplay = ({
   // processedText inside the block (unchanged) — when texts are equal the
   // remaining single transcription block already carries a copy button, so
   // no capability is lost.
-  const hasAIChange = aiOptimized ?? processedText !== originalText;
+  // [20260913_Fix_197_AiLabelBaseline_Review] Trim both sides — the history
+  // gate trims, and a whitespace-only polish must not read as an AI change.
+  const hasAIChange =
+    aiOptimized ?? processedText.trim() !== originalText.trim();
   const showAIBlock = (hasAIChange && processedText) || isProcessing;
 
   return (
