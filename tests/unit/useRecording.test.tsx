@@ -20,6 +20,13 @@
 //   - Real timers: FileReader/Blob.arrayBuffer use microtasks that fake
 //     timers would break; each transcription test drains the 100ms
 //     optimization timeout (via isOptimizing===false) before asserting.
+//
+// [20260912_Refactor_322_InsertUpdateFlow] Ticket #322: the save flow is
+// INSERT → UPDATE. saveTranscription (INSERT with raw_text) fires
+// IMMEDIATELY at transcription completion; polished columns land via the
+// T1 updateTranscription channel after the orchestrator resolves. The
+// renderer must never save twice. Mock shapes therefore carry
+// lastInsertRowid on saveTranscription plus an updateTranscription mock.
 import "../setup/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
@@ -31,6 +38,7 @@ import type { ElectronAPI } from "../../src/electronAPI";
 const mockModelStatus = {
   isLoading: false,
   isReady: false,
+  isUnloaded: false,
   isDownloading: false,
   modelsDownloaded: false,
   error: null as string | null,
@@ -39,10 +47,7 @@ const mockModelStatus = {
   missingModels: [] as string[],
   stage: "need_download",
   modelProgress: {} as Record<string, unknown>,
-  checkModelStatus: vi.fn(),
   downloadModels: vi.fn(),
-  getDownloadProgress: vi.fn(),
-  checkModelFiles: vi.fn(),
 };
 vi.mock("../../src/hooks/useModelStatus", () => ({
   useModelStatus: () => mockModelStatus,
@@ -78,11 +83,20 @@ interface FakeRecorderErrorEvent {
   error?: Error;
 }
 class FakeMediaRecorder {
+  // [20260816_Test_BranchPush] Instance registry so tests can reach the
+  // recorder created inside the hook (held in a ref) to fire onerror /
+  // ondataavailable manually for branch-arc coverage.
+  static instances: FakeMediaRecorder[] = [];
+
   ondataavailable: ((event: FakeRecorderEvent) => void) | null = null;
   onstop: (() => void) | null = null;
   onerror: ((event: FakeRecorderErrorEvent) => void) | null = null;
   state: "inactive" | "recording" = "inactive";
   private stopped = false;
+
+  constructor() {
+    FakeMediaRecorder.instances.push(this);
+  }
 
   start(_timeslice?: number): void {
     this.state = "recording";
@@ -223,12 +237,37 @@ describe("[20260729_Test_UseRecording] useRecording — startRecording gate", ()
     vi.clearAllMocks();
   });
 
-  it("throws and sets error when model is loading", async () => {
+  // [20260822_T12_IdleUnload] Gate contract (T12 review MAJOR): ONLY the
+  // UNLOADED state (process alive, models freed) is recordable — the
+  // hotkey press fires the reload pre-trigger; loading/error/dead states
+  // block at the START (recording through them loses audio at stop).
+  it("UNLOADED model: recording PROCEEDS and fires the reload pre-trigger", async () => {
     mockModelStatus.isReady = false;
+    mockModelStatus.isUnloaded = true;
+    mockModelStatus.isLoading = false;
+    mockModelStatus.error = null;
+    mockModelStatus.stage = "unloaded";
+    const reloadSpy = vi.fn();
+    setElectronAPI({ reloadFunasrModels: reloadSpy });
+
+    const { result } = renderHook(() => useRecording());
+
+    await act(async () => {
+      await result.current.startRecording();
+    });
+
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
+    expect(result.current.error).toBeNull();
+  });
+
+  it("loading model: recording is blocked (audio would be lost at stop)", async () => {
+    mockModelStatus.isReady = false;
+    mockModelStatus.isUnloaded = false;
     mockModelStatus.isLoading = true;
     mockModelStatus.error = null;
     mockModelStatus.stage = "loading";
-    setElectronAPI({});
+    const reloadSpy = vi.fn();
+    setElectronAPI({ reloadFunasrModels: reloadSpy });
 
     const { result } = renderHook(() => useRecording());
 
@@ -236,17 +275,19 @@ describe("[20260729_Test_UseRecording] useRecording — startRecording gate", ()
       await result.current.startRecording();
     });
 
+    expect(reloadSpy).not.toHaveBeenCalled();
     expect(result.current.isRecording).toBe(false);
-    expect(result.current.error).toContain("FunASR");
     expect(result.current.error).toContain("启动");
   });
 
-  it("throws and sets error when model has an error", async () => {
+  it("error-stage model: recording is blocked", async () => {
     mockModelStatus.isReady = false;
+    mockModelStatus.isUnloaded = false;
     mockModelStatus.isLoading = false;
     mockModelStatus.error = "boom";
     mockModelStatus.stage = "error";
-    setElectronAPI({});
+    const reloadSpy = vi.fn();
+    setElectronAPI({ reloadFunasrModels: reloadSpy });
 
     const { result } = renderHook(() => useRecording());
 
@@ -254,26 +295,9 @@ describe("[20260729_Test_UseRecording] useRecording — startRecording gate", ()
       await result.current.startRecording();
     });
 
+    expect(reloadSpy).not.toHaveBeenCalled();
     expect(result.current.isRecording).toBe(false);
-    expect(result.current.error).toContain("FunASR");
     expect(result.current.error).toContain("未就绪");
-  });
-
-  it("throws the generic prep error when model is neither ready, loading, nor errored", async () => {
-    mockModelStatus.isReady = false;
-    mockModelStatus.isLoading = false;
-    mockModelStatus.error = null;
-    mockModelStatus.stage = "need_download";
-    setElectronAPI({});
-
-    const { result } = renderHook(() => useRecording());
-
-    await act(async () => {
-      await result.current.startRecording();
-    });
-
-    expect(result.current.isRecording).toBe(false);
-    expect(result.current.error).toContain("准备");
   });
 
   it("throws when getUserMedia is unavailable (unsupported browser)", async () => {
@@ -373,7 +397,10 @@ describe("[20260729_Test_UseRecording] useRecording — stopRecording", () => {
         duration: 1.5,
       }),
       getSetting: vi.fn().mockResolvedValue("off"),
-      saveTranscription: vi.fn().mockResolvedValue({ success: true }),
+      saveTranscription: vi
+        .fn()
+        .mockResolvedValue({ success: true, lastInsertRowid: 1 }),
+      updateTranscription: vi.fn().mockResolvedValue({ success: true }),
       log: vi.fn().mockResolvedValue(undefined),
     });
 
@@ -432,7 +459,10 @@ describe("[20260729_Test_UseRecording] useRecording — transcription flow", () 
       }),
       // 'off' skips AI optimization so we don't wait on processText.
       getSetting: vi.fn().mockResolvedValue("off"),
-      saveTranscription: vi.fn().mockResolvedValue({ success: true }),
+      saveTranscription: vi
+        .fn()
+        .mockResolvedValue({ success: true, lastInsertRowid: 2 }),
+      updateTranscription: vi.fn().mockResolvedValue({ success: true }),
       log: vi.fn().mockResolvedValue(undefined),
     });
 
@@ -479,7 +509,10 @@ describe("[20260729_Test_UseRecording] useRecording — transcription flow", () 
     setElectronAPI({
       transcribeAudio,
       getSetting: vi.fn().mockResolvedValue("off"),
-      saveTranscription: vi.fn().mockResolvedValue({ success: true }),
+      saveTranscription: vi
+        .fn()
+        .mockResolvedValue({ success: true, lastInsertRowid: 3 }),
+      updateTranscription: vi.fn().mockResolvedValue({ success: true }),
       log: vi.fn().mockResolvedValue(undefined),
     });
 
@@ -511,6 +544,9 @@ describe("[20260729_Test_UseRecording] useRecording — transcription flow", () 
       success: true,
       text: "你好，世界。",
     });
+    const updateTranscription = vi
+      .fn()
+      .mockResolvedValue({ success: true, changes: 1 });
     setElectronAPI({
       transcribeAudio: vi.fn().mockResolvedValue({
         success: true,
@@ -521,7 +557,10 @@ describe("[20260729_Test_UseRecording] useRecording — transcription flow", () 
       // 'auto' => determineProcessingMode picks the mode.
       getSetting: vi.fn().mockResolvedValue("auto"),
       processText,
-      saveTranscription: vi.fn().mockResolvedValue({ success: true }),
+      saveTranscription: vi
+        .fn()
+        .mockResolvedValue({ success: true, lastInsertRowid: 42 }),
+      updateTranscription,
       log: vi.fn().mockResolvedValue(undefined),
     });
 
@@ -543,6 +582,18 @@ describe("[20260729_Test_UseRecording] useRecording — transcription flow", () 
       expect.stringContaining("optimize"),
     );
 
+    // [20260912_Refactor_322_InsertUpdateFlow] The polish result lands via
+    // the T1 UPDATE channel against the INSERTed row, not a second INSERT.
+    await waitFor(() => expect(updateTranscription).toHaveBeenCalledTimes(1));
+    expect(updateTranscription).toHaveBeenCalledWith(
+      42,
+      {
+        processed_text: "你好，世界。",
+        text: "你好，世界。",
+      },
+      { skipWhenManuallyEdited: true },
+    );
+
     // The optimization timeout also flips isOptimizing true→false.
     await waitFor(() => expect(result.current.isOptimizing).toBe(false));
     expect(onAIOptimizationComplete).toHaveBeenCalledTimes(1);
@@ -557,6 +608,9 @@ describe("[20260729_Test_UseRecording] useRecording — transcription flow", () 
     });
   });
 
+  // [20260912_Refactor_322_InsertUpdateFlow] The INSERT now fires at
+  // transcription completion, so onSaveComplete carries the row id before
+  // the polish timeout ever arms.
   it("fires onSaveComplete with the inserted row id after saving", async () => {
     const onSaveComplete = vi.fn();
     setElectronAPI({
@@ -571,6 +625,7 @@ describe("[20260729_Test_UseRecording] useRecording — transcription flow", () 
         success: true,
         lastInsertRowid: 42,
       }),
+      updateTranscription: vi.fn().mockResolvedValue({ success: true }),
       log: vi.fn().mockResolvedValue(undefined),
     });
 
@@ -583,14 +638,150 @@ describe("[20260729_Test_UseRecording] useRecording — transcription flow", () 
       result.current.stopRecording();
     });
 
-    // saveTranscription runs in the 100ms optimization timeout even when
-    // AI is off.
+    // The INSERT runs in processAudio right after transcription — long
+    // before the 100ms optimization timeout.
     await waitFor(() => expect(onSaveComplete).toHaveBeenCalledTimes(1));
     expect(onSaveComplete).toHaveBeenCalledWith({ id: 42 });
 
     // Drain the timeout fully so isOptimizing flips false and no timer
     // leaks into the next test.
     await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+  });
+
+  // [20260906_Feat_ManualEditProtection] Spec #193 T2 (ticket #229) regres-
+  // sion lock on the end-of-recording auto-polish persist site.
+  // [20260912_Refactor_322_InsertUpdateFlow] Ticket #322 contract: the raw
+  // record is INSERTed exactly once at transcription completion; the polish
+  // lands via the T1 UPDATE channel; the auto path never sets the
+  // manually_edited flag (that flag belongs to the user's edit-save).
+  it("auto-polishes a fresh record: INSERT raw once, polish updated via UPDATE, flag never set", async () => {
+    const processText = vi.fn().mockResolvedValue({
+      success: true,
+      text: "润色后的文本",
+    });
+    const saveTranscription = vi
+      .fn()
+      .mockResolvedValue({ success: true, lastInsertRowid: 7 });
+    const updateTranscription = vi
+      .fn()
+      .mockResolvedValue({ success: true, changes: 1 });
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "原始识别文本",
+        confidence: 0.9,
+        duration: 1.2,
+      }),
+      getSetting: vi.fn().mockResolvedValue("auto"),
+      processText,
+      saveTranscription,
+      updateTranscription,
+      log: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { result } = renderHook(() => useRecording());
+
+    await act(async () => {
+      await result.current.startRecording();
+    });
+    await act(async () => {
+      result.current.stopRecording();
+    });
+
+    // INSERTed exactly once, before the polish, carrying only raw fields.
+    await waitFor(() => expect(saveTranscription).toHaveBeenCalledTimes(1));
+    const inserted = saveTranscription.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
+    expect(inserted.text).toBe("原始识别文本");
+    expect(inserted).not.toHaveProperty("processed_text");
+    expect(inserted).not.toHaveProperty("manually_edited");
+
+    // The polish columns arrive via UPDATE against the INSERTed row id.
+    await waitFor(() => expect(updateTranscription).toHaveBeenCalledTimes(1));
+    expect(updateTranscription).toHaveBeenCalledWith(
+      7,
+      {
+        processed_text: "润色后的文本",
+        text: "润色后的文本",
+      },
+      { skipWhenManuallyEdited: true },
+    );
+    const patch = updateTranscription.mock.calls[0]![1] as Record<
+      string,
+      unknown
+    >;
+    expect(patch).not.toHaveProperty("manually_edited");
+    // No second save — the renderer never INSERTs twice.
+    expect(saveTranscription).toHaveBeenCalledTimes(1);
+
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+  });
+
+  // [20260912_Refactor_322_InsertUpdateFlow] The record must exist (raw_text
+  // persisted) the moment transcription completes — not one polish later —
+  // so a crash or slow AI call can no longer lose the transcription.
+  it("INSERTs the raw record immediately at transcription completion, before the polish timeout", async () => {
+    const onTranscriptionComplete = vi.fn();
+    const onSaveComplete = vi.fn();
+    const processText = vi
+      .fn()
+      .mockResolvedValue({ success: true, text: "润色结果" });
+    const saveTranscription = vi
+      .fn()
+      .mockResolvedValue({ success: true, lastInsertRowid: 9 });
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "原始文本",
+        confidence: 0.9,
+        duration: 1.5,
+      }),
+      getSetting: vi.fn().mockResolvedValue("auto"),
+      processText,
+      saveTranscription,
+      updateTranscription: vi.fn().mockResolvedValue({ success: true }),
+      log: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { result } = renderHook(() =>
+      useRecording({ onTranscriptionComplete, onSaveComplete }),
+    );
+
+    await act(async () => {
+      await result.current.startRecording();
+    });
+    await act(async () => {
+      result.current.stopRecording();
+    });
+
+    // The INSERT is NOT deferred to the 100ms optimization timeout: by the
+    // time the preliminary result is shown, the row already exists.
+    await waitFor(() =>
+      expect(onTranscriptionComplete).toHaveBeenCalledTimes(1),
+    );
+    expect(saveTranscription).toHaveBeenCalledTimes(1);
+    const inserted = saveTranscription.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
+    expect(inserted).toMatchObject({
+      raw_text: "原始文本",
+      text: "原始文本",
+      confidence: 0.9,
+      duration: 1.5,
+    });
+    expect(inserted).not.toHaveProperty("processed_text");
+    expect(onSaveComplete).toHaveBeenCalledWith({ id: 9 });
+
+    // Drain the polish chain, then prove ordering: the INSERT preceded the
+    // orchestrator call.
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+    expect(processText).toHaveBeenCalled();
+    expect(saveTranscription.mock.invocationCallOrder[0]!).toBeLessThan(
+      processText.mock.invocationCallOrder[0]!,
+    );
   });
 
   it("migrates legacy enable_ai_optimization setting when default_mode is null", async () => {
@@ -609,7 +800,10 @@ describe("[20260729_Test_UseRecording] useRecording — transcription flow", () 
       }),
       getSetting,
       processText,
-      saveTranscription: vi.fn().mockResolvedValue({ success: true }),
+      saveTranscription: vi
+        .fn()
+        .mockResolvedValue({ success: true, lastInsertRowid: 4 }),
+      updateTranscription: vi.fn().mockResolvedValue({ success: true }),
       log: vi.fn().mockResolvedValue(undefined),
     });
 
@@ -726,7 +920,10 @@ describe("[20260729_Test_UseRecording] useRecording — cancelRecording", () => 
         duration: 0.5,
       }),
       getSetting: vi.fn().mockResolvedValue("off"),
-      saveTranscription: vi.fn().mockResolvedValue({ success: true }),
+      saveTranscription: vi
+        .fn()
+        .mockResolvedValue({ success: true, lastInsertRowid: 23 }),
+      updateTranscription: vi.fn().mockResolvedValue({ success: true }),
       log: vi.fn().mockResolvedValue(undefined),
     });
 
@@ -805,4 +1002,1145 @@ afterEach(() => {
     (window as unknown as { AudioContext: typeof AudioContext }).AudioContext =
       ORIGINAL_AUDIO_CONTEXT;
   }
+});
+
+// ─── [20260816_Test_BranchPush] Branch-arc coverage ────────────────────────
+// Targets the uncovered branch arcs reported by coverage: the web-env mock
+// path, the optimization-timeout lifecycle (armed → cleared / cancelled /
+// timed out), AI failure shapes (success:false, missing text, throws),
+// missing log bridge, recorder onerror / zero-size ondataavailable
+// callbacks, missing transcription fields, and cancelRecording races.
+describe("[20260816_Test_BranchPush] useRecording — branch arcs", () => {
+  type RecordingHookResult = ReturnType<typeof useRecording>;
+
+  // Starts and stops one recording so the synchronous onstop callback opens
+  // the async processAudio pipeline.
+  async function startAndStop(result: {
+    current: RecordingHookResult;
+  }): Promise<void> {
+    await act(async () => {
+      await result.current.startRecording();
+    });
+    await act(async () => {
+      result.current.stopRecording();
+    });
+  }
+
+  beforeEach(async () => {
+    // [20260816_Test_BranchPush] Earlier tests in this file drain their
+    // optimization timeout via waitFor(isOptimizing === false), which can
+    // pass before the 100ms timer has even armed. Any such stale timer would
+    // fire into THIS test's electronAPI (the callback resolves
+    // window.electronAPI late). Sleep once up front so leftover callbacks
+    // complete against the previous test's API instead of polluting ours.
+    await new Promise((resolve) => {
+      setTimeout(resolve, 150);
+    });
+    Object.defineProperty(navigator, "mediaDevices", {
+      value: { getUserMedia: vi.fn().mockResolvedValue(makeFakeStream()) },
+      configurable: true,
+    });
+    (
+      window as unknown as { MediaRecorder: typeof MediaRecorder }
+    ).MediaRecorder = FakeMediaRecorder as unknown as typeof MediaRecorder;
+    (window as unknown as { AudioContext: typeof AudioContext }).AudioContext =
+      FakeAudioContext as unknown as typeof AudioContext;
+    setModelReady(true);
+  });
+
+  afterEach(() => {
+    FakeMediaRecorder.instances.length = 0;
+    vi.clearAllMocks();
+    vi.useRealTimers();
+  });
+
+  it("returns the web mock result when electronAPI is absent", async () => {
+    setElectronAPI(undefined);
+    const onTranscriptionComplete = vi.fn();
+    const { result } = renderHook(() =>
+      useRecording({ onTranscriptionComplete }),
+    );
+
+    await startAndStop(result);
+
+    await waitFor(() =>
+      expect(onTranscriptionComplete).toHaveBeenCalledTimes(1),
+    );
+    expect(onTranscriptionComplete.mock.calls[0]![0]).toMatchObject({
+      success: true,
+      text: "模拟识别结果。",
+      confidence: 0.95,
+      duration: 3.5,
+    });
+    expect(result.current.error).toBeNull();
+    await waitFor(() => expect(result.current.isProcessing).toBe(false));
+  });
+
+  // [20260912_Refactor_322_InsertUpdateFlow] The INSERT fires at
+  // transcription completion, so clearing the armed polish timeout can no
+  // longer un-save the record — what it prevents is the polish UPDATE and,
+  // critically, any SECOND saveTranscription (the renderer never INSERTs
+  // twice).
+  it("clears an armed optimization timeout when a new recording starts", async () => {
+    const saveTranscription = vi
+      .fn()
+      .mockResolvedValue({ success: true, lastInsertRowid: 1 });
+    const updateTranscription = vi.fn().mockResolvedValue({ success: true });
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "重启清超时",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue("off"),
+      saveTranscription,
+      updateTranscription,
+      log: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { result } = renderHook(() => useRecording());
+    await startAndStop(result);
+    // The immediate INSERT has landed; the 100ms polish timeout is now
+    // armed (isOptimizing === true).
+    await waitFor(() => expect(result.current.isOptimizing).toBe(true));
+    expect(saveTranscription).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await result.current.startRecording();
+    });
+    expect(result.current.isRecording).toBe(true);
+
+    // The cleared timeout never fires, so no polish UPDATE runs and — the
+    // regression this test locks — no second INSERT happens either.
+    await act(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 250);
+      });
+    });
+    expect(saveTranscription).toHaveBeenCalledTimes(1);
+    expect(updateTranscription).not.toHaveBeenCalled();
+
+    // End the second recording; the cancelled flag neutralizes its own
+    // optimization timeout after the test ends.
+    act(() => {
+      result.current.cancelRecording();
+    });
+  });
+
+  it("skips zero-size data chunks from ondataavailable", async () => {
+    // Local recorder variant whose only data event carries an empty Blob, so
+    // the size>0 guard runs on its false arc while the pipeline continues.
+    class EmptyChunkRecorder {
+      ondataavailable: ((event: { data: Blob }) => void) | null = null;
+      onstop: (() => void) | null = null;
+      onerror: ((event: { error?: Error }) => void) | null = null;
+      start(_timeslice?: number): void {}
+      stop(): void {
+        this.ondataavailable?.({ data: new Blob([]) });
+        this.onstop?.();
+      }
+    }
+    (
+      window as unknown as { MediaRecorder: typeof MediaRecorder }
+    ).MediaRecorder = EmptyChunkRecorder as unknown as typeof MediaRecorder;
+
+    const onTranscriptionComplete = vi.fn();
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "空块测试",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue("off"),
+      saveTranscription: vi
+        .fn()
+        .mockResolvedValue({ success: true, lastInsertRowid: 5 }),
+      updateTranscription: vi.fn().mockResolvedValue({ success: true }),
+      log: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { result } = renderHook(() =>
+      useRecording({ onTranscriptionComplete }),
+    );
+    await startAndStop(result);
+
+    // The empty chunk was skipped but processing still completes cleanly.
+    await waitFor(() =>
+      expect(onTranscriptionComplete).toHaveBeenCalledTimes(1),
+    );
+    expect(result.current.error).toBeNull();
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+  });
+
+  it("surfaces the recorder error message and stops the stream tracks", async () => {
+    const stopFn = vi.fn();
+    const track = { stop: stopFn } as unknown as MediaStreamTrack;
+    const stream = { getTracks: () => [track] } as unknown as MediaStream;
+    Object.defineProperty(navigator, "mediaDevices", {
+      value: { getUserMedia: vi.fn().mockResolvedValue(stream) },
+      configurable: true,
+    });
+    setElectronAPI({ log: vi.fn().mockResolvedValue(undefined) });
+
+    const { result } = renderHook(() => useRecording());
+    await act(async () => {
+      await result.current.startRecording();
+    });
+
+    const recorder = FakeMediaRecorder.instances.at(-1)!;
+    act(() => {
+      recorder.onerror?.({ error: new Error("麦克风中断") });
+    });
+
+    expect(result.current.error).toBe("录音错误: 麦克风中断");
+    expect(result.current.isRecording).toBe(false);
+    expect(result.current.isProcessing).toBe(false);
+    // The onerror handler stopped the live stream tracks exactly once.
+    expect(stopFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses the unknown-error fallback and skips track cleanup after cancel", async () => {
+    const stopFn = vi.fn();
+    const track = { stop: stopFn } as unknown as MediaStreamTrack;
+    const stream = { getTracks: () => [track] } as unknown as MediaStream;
+    Object.defineProperty(navigator, "mediaDevices", {
+      value: { getUserMedia: vi.fn().mockResolvedValue(stream) },
+      configurable: true,
+    });
+    setElectronAPI(undefined);
+
+    const { result } = renderHook(() => useRecording());
+    await act(async () => {
+      await result.current.startRecording();
+    });
+    // Cancel first: this stops the tracks and clears streamRef while the
+    // recorder instance (and its onerror handler) survives.
+    await act(async () => {
+      result.current.cancelRecording();
+    });
+    expect(stopFn).toHaveBeenCalledTimes(1);
+
+    const recorder = FakeMediaRecorder.instances.at(-1)!;
+    act(() => {
+      recorder.onerror?.({}); // event without an error field
+    });
+
+    expect(result.current.error).toBe("录音错误: 未知错误");
+    // streamRef was already null, so onerror must not stop tracks again.
+    expect(stopFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("defaults missing transcription fields when saving", async () => {
+    const saveTranscription = vi
+      .fn()
+      .mockResolvedValue({ success: true, lastInsertRowid: 6 });
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({ success: true }),
+      getSetting: vi.fn().mockResolvedValue("off"),
+      saveTranscription,
+      updateTranscription: vi.fn().mockResolvedValue({ success: true }),
+      log: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { result } = renderHook(() => useRecording());
+    await startAndStop(result);
+
+    await waitFor(() => expect(saveTranscription).toHaveBeenCalledTimes(1));
+    const saved = saveTranscription.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
+    expect(saved.raw_text).toBe("");
+    expect(saved.text).toBe("");
+    expect(saved.confidence).toBe(0);
+    expect(saved.duration).toBe(0);
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+  });
+
+  it("uses the generic failure message when transcription fails without an error", async () => {
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({ success: false }),
+      log: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { result } = renderHook(() => useRecording());
+    await startAndStop(result);
+
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+    expect(result.current.error).toContain("语音识别失败");
+    expect(result.current.isProcessing).toBe(false);
+  });
+
+  it("invokes onAIOptimizationComplete with the raw text when AI is off", async () => {
+    const onAIOptimizationComplete = vi.fn();
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "关闭优化",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue("off"),
+      saveTranscription: vi
+        .fn()
+        .mockResolvedValue({ success: true, lastInsertRowid: 7 }),
+      updateTranscription: vi.fn().mockResolvedValue({ success: true }),
+      log: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { result } = renderHook(() =>
+      useRecording({ onAIOptimizationComplete }),
+    );
+    await startAndStop(result);
+
+    await waitFor(() =>
+      expect(onAIOptimizationComplete).toHaveBeenCalledTimes(1),
+    );
+    expect(onAIOptimizationComplete.mock.calls[0]![0]).toMatchObject({
+      text: "关闭优化",
+      enhanced_by_ai: false,
+    });
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+  });
+
+  it("migrates enable_ai_optimization=true to auto mode and runs the optimizer", async () => {
+    const getSetting = vi.fn().mockImplementation((key: string) => {
+      if (key === "default_mode") return Promise.resolve(null);
+      // Legacy enable_ai_optimization flag: true migrates to "auto".
+      return Promise.resolve(true);
+    });
+    const processText = vi
+      .fn()
+      .mockResolvedValue({ success: true, text: "迁移优化结果" });
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "迁移原文",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting,
+      processText,
+      saveTranscription: vi
+        .fn()
+        .mockResolvedValue({ success: true, lastInsertRowid: 8 }),
+      updateTranscription: vi.fn().mockResolvedValue({ success: true }),
+      log: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { result } = renderHook(() => useRecording());
+    await startAndStop(result);
+
+    await waitFor(() => expect(processText).toHaveBeenCalledTimes(1));
+    expect(processText).toHaveBeenCalledWith("迁移原文", "optimize");
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+  });
+
+  it("derives the mode automatically when default_mode is undefined", async () => {
+    // undefined (not null) skips the migration branch and is not "off", so
+    // the hook falls back to determineProcessingMode for the mode.
+    const processText = vi
+      .fn()
+      .mockResolvedValue({ success: true, text: "模式推导结果" });
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "短文本",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue(undefined),
+      processText,
+      saveTranscription: vi
+        .fn()
+        .mockResolvedValue({ success: true, lastInsertRowid: 10 }),
+      updateTranscription: vi.fn().mockResolvedValue({ success: true }),
+      log: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { result } = renderHook(() => useRecording());
+    await startAndStop(result);
+
+    await waitFor(() => expect(processText).toHaveBeenCalledTimes(1));
+    expect(processText).toHaveBeenCalledWith("短文本", "optimize");
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+  });
+
+  it("logs an AI failure and falls back to the raw text", async () => {
+    const log = vi.fn().mockResolvedValue(undefined);
+    const processText = vi
+      .fn()
+      .mockResolvedValue({ success: false, error: "上游500" });
+    const onAIOptimizationComplete = vi.fn();
+    const updateTranscription = vi.fn().mockResolvedValue({ success: true });
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "失败原文",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue("auto"),
+      processText,
+      saveTranscription: vi
+        .fn()
+        .mockResolvedValue({ success: true, lastInsertRowid: 11 }),
+      updateTranscription,
+      log,
+    });
+
+    const { result } = renderHook(() =>
+      useRecording({ onAIOptimizationComplete }),
+    );
+    await startAndStop(result);
+
+    await waitFor(() =>
+      expect(log).toHaveBeenCalledWith(
+        "error",
+        "AI文本优化失败:",
+        expect.objectContaining({ success: false }),
+      ),
+    );
+    // A failed polish leaves the just-INSERTed raw row untouched.
+    expect(updateTranscription).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(onAIOptimizationComplete).toHaveBeenCalledTimes(1),
+    );
+    expect(onAIOptimizationComplete.mock.calls[0]![0]).toMatchObject({
+      text: "失败原文",
+      enhanced_by_ai: false,
+    });
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+  });
+
+  it("keeps the raw text when the optimized text is identical", async () => {
+    const saveTranscription = vi
+      .fn()
+      .mockResolvedValue({ success: true, lastInsertRowid: 12 });
+    const updateTranscription = vi
+      .fn()
+      .mockResolvedValue({ success: true, changes: 1 });
+    const onAIOptimizationComplete = vi.fn();
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "完全相同",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue("auto"),
+      processText: vi.fn().mockResolvedValue({
+        success: true,
+        text: "完全相同",
+      }),
+      saveTranscription,
+      updateTranscription,
+      log: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { result } = renderHook(() =>
+      useRecording({ onAIOptimizationComplete }),
+    );
+    await startAndStop(result);
+
+    await waitFor(() => expect(saveTranscription).toHaveBeenCalledTimes(1));
+    const inserted = saveTranscription.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
+    // The INSERT carries the raw (cleaned) text only.
+    expect(inserted.text).toBe("完全相同");
+
+    // [20260912_Refactor_322_InsertUpdateFlow] processed_text is still
+    // recorded for an identical polish, but the patch must NOT overwrite
+    // the main text (no `text` key when the polish is not different).
+    await waitFor(() => expect(updateTranscription).toHaveBeenCalledTimes(1));
+    const patch = updateTranscription.mock.calls[0]![1] as Record<
+      string,
+      unknown
+    >;
+    expect(patch).toEqual({ processed_text: "完全相同" });
+
+    await waitFor(() =>
+      expect(onAIOptimizationComplete).toHaveBeenCalledTimes(1),
+    );
+    expect(onAIOptimizationComplete.mock.calls[0]![0]).toMatchObject({
+      text: "完全相同",
+      enhanced_by_ai: false,
+    });
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+  });
+
+  it("handles an AI success result that carries no text", async () => {
+    const log = vi.fn().mockResolvedValue(undefined);
+    const onAIOptimizationComplete = vi.fn();
+    const saveTranscription = vi
+      .fn()
+      .mockResolvedValue({ success: true, lastInsertRowid: 13 });
+    const updateTranscription = vi.fn().mockResolvedValue({ success: true });
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "无文本结果",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue("auto"),
+      processText: vi.fn().mockResolvedValue({ success: true }),
+      saveTranscription,
+      updateTranscription,
+      log,
+    });
+
+    const { result } = renderHook(() =>
+      useRecording({ onAIOptimizationComplete }),
+    );
+    await startAndStop(result);
+
+    // The success log coerces the missing text to "" before substring.
+    await waitFor(() =>
+      expect(log).toHaveBeenCalledWith("info", "AI文本优化成功", "..."),
+    );
+    // No polished text => nothing to write back via UPDATE.
+    expect(updateTranscription).not.toHaveBeenCalled();
+    await waitFor(() => expect(saveTranscription).toHaveBeenCalledTimes(1));
+    const inserted = saveTranscription.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
+    expect(inserted.processed_text).toBeUndefined();
+    expect(inserted.text).toBe("无文本结果");
+    await waitFor(() =>
+      expect(onAIOptimizationComplete).toHaveBeenCalledTimes(1),
+    );
+    expect(onAIOptimizationComplete.mock.calls[0]![0]).toMatchObject({
+      text: "无文本结果",
+      enhanced_by_ai: false,
+    });
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+  });
+
+  it("logs a thrown AI error and still saves the raw transcription", async () => {
+    const log = vi.fn().mockResolvedValue(undefined);
+    const saveTranscription = vi
+      .fn()
+      .mockResolvedValue({ success: true, lastInsertRowid: 14 });
+    const updateTranscription = vi.fn().mockResolvedValue({ success: true });
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "异常原文",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue("auto"),
+      processText: vi.fn().mockRejectedValue(new Error("模型崩溃")),
+      saveTranscription,
+      updateTranscription,
+      log,
+    });
+
+    const { result } = renderHook(() => useRecording());
+    await startAndStop(result);
+
+    await waitFor(() =>
+      expect(log).toHaveBeenCalledWith(
+        "error",
+        "AI文本优化捕获到错误:",
+        expect.any(Error),
+      ),
+    );
+    expect(updateTranscription).not.toHaveBeenCalled();
+    await waitFor(() => expect(saveTranscription).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+  });
+
+  it("runs the optimization pipeline without a log bridge method", async () => {
+    const saveTranscription = vi
+      .fn()
+      .mockResolvedValue({ success: true, lastInsertRowid: 15 });
+    const updateTranscription = vi
+      .fn()
+      .mockResolvedValue({ success: true, changes: 1 });
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "无日志原文",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue("auto"),
+      processText: vi.fn().mockResolvedValue({
+        success: true,
+        text: "无日志优化",
+      }),
+      saveTranscription,
+      updateTranscription,
+      // No `log` key on purpose: every log guard must short-circuit.
+    });
+
+    const { result } = renderHook(() => useRecording());
+    await startAndStop(result);
+
+    await waitFor(() => expect(saveTranscription).toHaveBeenCalledTimes(1));
+    const inserted = saveTranscription.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
+    // The INSERT carries the raw text; the polish lands via UPDATE.
+    expect(inserted.text).toBe("无日志原文");
+    await waitFor(() => expect(updateTranscription).toHaveBeenCalledTimes(1));
+    expect(updateTranscription).toHaveBeenCalledWith(
+      15,
+      {
+        processed_text: "无日志优化",
+        text: "无日志优化",
+      },
+      { skipWhenManuallyEdited: true },
+    );
+    expect(result.current.error).toBeNull();
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+  });
+
+  it("tolerates a missing log method when the AI step fails", async () => {
+    const onAIOptimizationComplete = vi.fn();
+    const saveTranscription = vi
+      .fn()
+      .mockResolvedValue({ success: true, lastInsertRowid: 16 });
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "静默失败原文",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue("auto"),
+      processText: vi.fn().mockResolvedValue({ success: false }),
+      saveTranscription,
+      updateTranscription: vi.fn().mockResolvedValue({ success: true }),
+    });
+
+    const { result } = renderHook(() =>
+      useRecording({ onAIOptimizationComplete }),
+    );
+    await startAndStop(result);
+
+    await waitFor(() => expect(saveTranscription).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(onAIOptimizationComplete).toHaveBeenCalledTimes(1),
+    );
+    expect(onAIOptimizationComplete.mock.calls[0]![0]).toMatchObject({
+      text: "静默失败原文",
+      enhanced_by_ai: false,
+    });
+    expect(result.current.error).toBeNull();
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+  });
+
+  it("tolerates a missing log method when processText throws", async () => {
+    const saveTranscription = vi
+      .fn()
+      .mockResolvedValue({ success: true, lastInsertRowid: 17 });
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "静默异常原文",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue("auto"),
+      processText: vi.fn().mockRejectedValue(new Error("静默失败")),
+      saveTranscription,
+      updateTranscription: vi.fn().mockResolvedValue({ success: true }),
+    });
+
+    const { result } = renderHook(() => useRecording());
+    await startAndStop(result);
+
+    await waitFor(() => expect(saveTranscription).toHaveBeenCalledTimes(1));
+    expect(result.current.error).toBeNull();
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+  });
+
+  // [20260912_Refactor_322_InsertUpdateFlow] With the INSERT hoisted to
+  // transcription completion, a bridge that dies mid-settings-read can only
+  // skip the polish UPDATE — the raw record is already persisted and no
+  // second save may appear.
+  it("skips the polish write-back when the bridge disappears while settings are loading", async () => {
+    let resolveSettings: (value: unknown) => void = () => {};
+    const getSetting = vi.fn(
+      (_key: string) =>
+        new Promise<unknown>((resolve) => {
+          resolveSettings = resolve;
+        }),
+    );
+    const saveTranscription = vi
+      .fn()
+      .mockResolvedValue({ success: true, lastInsertRowid: 18 });
+    const updateTranscription = vi.fn().mockResolvedValue({ success: true });
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "桥接消失",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting,
+      saveTranscription,
+      updateTranscription,
+      log: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { result } = renderHook(() => useRecording());
+    await startAndStop(result);
+    // Wait until the 100ms callback has invoked getSetting (bridge alive).
+    await waitFor(() => expect(getSetting).toHaveBeenCalled());
+
+    setElectronAPI(undefined);
+    act(() => {
+      resolveSettings("off");
+    });
+
+    // With mode "off" no polished text is ever produced, so the write-back
+    // has nothing to send; the INSERT already happened exactly once.
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+    expect(saveTranscription).toHaveBeenCalledTimes(1);
+    expect(updateTranscription).not.toHaveBeenCalled();
+    expect(result.current.error).toBeNull();
+  });
+
+  it("surfaces a processing error when the bridge disappears before the timeout fires", async () => {
+    const saveTranscription = vi
+      .fn()
+      .mockResolvedValue({ success: true, lastInsertRowid: 19 });
+    const updateTranscription = vi.fn().mockResolvedValue({ success: true });
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "超时前消失",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue("off"),
+      saveTranscription,
+      updateTranscription,
+      log: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { result } = renderHook(() => useRecording());
+    await startAndStop(result);
+    await waitFor(() => expect(result.current.isOptimizing).toBe(true));
+
+    setElectronAPI(undefined);
+    await waitFor(() => expect(result.current.error).toContain("转录处理失败"));
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+    // The raw INSERT survived (it fired at transcription completion); the
+    // vanished bridge must not trigger a second save or a partial UPDATE.
+    expect(saveTranscription).toHaveBeenCalledTimes(1);
+    expect(updateTranscription).not.toHaveBeenCalled();
+  });
+
+  it("clears an armed optimization timeout when cancelRecording runs during optimization", async () => {
+    const saveTranscription = vi
+      .fn()
+      .mockResolvedValue({ success: true, lastInsertRowid: 20 });
+    const updateTranscription = vi.fn().mockResolvedValue({ success: true });
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "取消清超时",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue("off"),
+      saveTranscription,
+      updateTranscription,
+      log: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { result } = renderHook(() => useRecording());
+    await startAndStop(result);
+    await waitFor(() => expect(result.current.isOptimizing).toBe(true));
+
+    act(() => {
+      result.current.cancelRecording();
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 250);
+      });
+    });
+    // The raw INSERT stands; the cleared timeout prevents the polish chain
+    // (and any second save) from running.
+    expect(saveTranscription).toHaveBeenCalledTimes(1);
+    expect(updateTranscription).not.toHaveBeenCalled();
+  });
+
+  it("skips the optimization callback when recording is cancelled mid-processing", async () => {
+    const saveTranscription = vi
+      .fn()
+      .mockResolvedValue({ success: true, lastInsertRowid: 21 });
+    const updateTranscription = vi.fn().mockResolvedValue({ success: true });
+    const onAIOptimizationComplete = vi.fn();
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "处理中取消",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue("off"),
+      saveTranscription,
+      updateTranscription,
+      log: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { result } = renderHook(() =>
+      useRecording({ onAIOptimizationComplete }),
+    );
+    await act(async () => {
+      await result.current.startRecording();
+    });
+    await act(async () => {
+      result.current.stopRecording();
+      // Cancel synchronously after stop: cancelledRef flips before the async
+      // onstop pipeline schedules its optimization timeout.
+      result.current.cancelRecording();
+    });
+
+    await waitFor(() => expect(result.current.isOptimizing).toBe(true));
+    await act(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 250);
+      });
+    });
+    // The immediate INSERT stands (it preceded the cancel); the cancelled
+    // callback neutralizes the polish chain entirely.
+    expect(saveTranscription).toHaveBeenCalledTimes(1);
+    expect(updateTranscription).not.toHaveBeenCalled();
+    expect(onAIOptimizationComplete).not.toHaveBeenCalled();
+    // The cancelled callback returned before its finally block, so the
+    // optimizing flag stays latched at true.
+    expect(result.current.isOptimizing).toBe(true);
+  });
+
+  it("is a no-op when cancelling with no active session", () => {
+    setElectronAPI({});
+    const { result } = renderHook(() => useRecording());
+    act(() => {
+      result.current.cancelRecording();
+    });
+    expect(result.current.isRecording).toBe(false);
+    expect(result.current.isProcessing).toBe(false);
+    expect(result.current.error).toBeNull();
+    expect(result.current.audioData).toBeNull();
+  });
+
+  it("falls back to the raw text when the orchestrator reports a timeout", async () => {
+    // [20260908_Fix_BatchReview_M2] T9④: the renderer 60s race is gone —
+    // timeout semantics come from the orchestrator's deadline matrix, which
+    // resolves {success:false, error} instead of the renderer abandoning
+    // the call. The hook falls back to the raw text via the existing
+    // failure path.
+    const log = vi.fn().mockResolvedValue(undefined);
+    const processText = vi.fn().mockResolvedValue({
+      success: false,
+      error: "AI请求超时（150秒），请尝试缩短文本或检查网络",
+    });
+    const saveTranscription = vi
+      .fn()
+      .mockResolvedValue({ success: true, lastInsertRowid: 22 });
+    const updateTranscription = vi.fn().mockResolvedValue({ success: true });
+    const onAIOptimizationComplete = vi.fn();
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "超时原文",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue("auto"),
+      processText: processText as unknown as (
+        text: string,
+        mode: string,
+        timeout?: number,
+      ) => Promise<import("../../src/types/ipc").AIProcessResult>,
+      saveTranscription,
+      updateTranscription,
+      log,
+    });
+
+    const { result } = renderHook(() =>
+      useRecording({ onAIOptimizationComplete }),
+    );
+    await startAndStop(result);
+    // The polish chain arms after a 100ms timeout — wait for it to START
+    // before waiting for completion.
+    await waitFor(() => expect(result.current.isOptimizing).toBe(true));
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+
+    expect(log).toHaveBeenCalledWith(
+      "error",
+      "AI文本优化失败:",
+      expect.objectContaining({ success: false }),
+    );
+    expect(saveTranscription).toHaveBeenCalledTimes(1);
+    const inserted = saveTranscription.mock.calls[0]![0] as Record<
+      string,
+      unknown
+    >;
+    expect(inserted.processed_text).toBeUndefined();
+    expect(inserted.text).toBe("超时原文");
+    // A failed orchestrator call leaves the raw row untouched.
+    expect(updateTranscription).not.toHaveBeenCalled();
+    expect(onAIOptimizationComplete).toHaveBeenCalledTimes(1);
+    expect(onAIOptimizationComplete.mock.calls[0]![0]).toMatchObject({
+      text: "超时原文",
+      enhanced_by_ai: false,
+    });
+    expect(result.current.isOptimizing).toBe(false);
+  });
+
+  // [20260912_Fix_322_AutoUpdateGuard] Ticket #322 review HIGH: the auto
+  // write-back MUST carry the T2 manual-edit guard so a record the user
+  // edited during the polish window is never overwritten.
+  it("passes the skipWhenManuallyEdited guard on the auto write-back", async () => {
+    const updateTranscription = vi
+      .fn()
+      .mockResolvedValue({ success: true, changes: 1 });
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "守卫原文",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue("auto"),
+      processText: vi
+        .fn()
+        .mockResolvedValue({ success: true, text: "守卫润色结果" }),
+      saveTranscription: vi
+        .fn()
+        .mockResolvedValue({ success: true, lastInsertRowid: 30 }),
+      updateTranscription,
+      log: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { result } = renderHook(() => useRecording());
+    await startAndStop(result);
+
+    await waitFor(() => expect(updateTranscription).toHaveBeenCalledTimes(1));
+    expect(updateTranscription).toHaveBeenCalledWith(
+      30,
+      { processed_text: "守卫润色结果", text: "守卫润色结果" },
+      { skipWhenManuallyEdited: true },
+    );
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+  });
+
+  // [20260912_Fix_322_AutoUpdateGuard] A skipped guard outcome (the user's
+  // manual edit won) is a success no-op: the panel must fall back to the
+  // raw text so UI and DB agree, without surfacing an error.
+  it("falls back to the raw text when the write-back is skipped (manually edited)", async () => {
+    const onAIOptimizationComplete = vi.fn();
+    const log = vi.fn().mockResolvedValue(undefined);
+    const updateTranscription = vi.fn().mockResolvedValue({
+      success: true,
+      skipped: true,
+      manually_edited: 1,
+    });
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "被编辑原文",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue("auto"),
+      processText: vi
+        .fn()
+        .mockResolvedValue({ success: true, text: "被编辑润色结果" }),
+      saveTranscription: vi
+        .fn()
+        .mockResolvedValue({ success: true, lastInsertRowid: 31 }),
+      updateTranscription,
+      log,
+    });
+
+    const { result } = renderHook(() =>
+      useRecording({ onAIOptimizationComplete }),
+    );
+    await startAndStop(result);
+
+    await waitFor(() => expect(updateTranscription).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(onAIOptimizationComplete).toHaveBeenCalledTimes(1),
+    );
+    expect(onAIOptimizationComplete.mock.calls[0]![0]).toMatchObject({
+      text: "被编辑原文",
+      enhanced_by_ai: false,
+    });
+    expect(result.current.error).toBeNull();
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+  });
+
+  // [20260912_Fix_322_AutoUpdateGuard] A failed write-back (e.g. the row was
+  // deleted mid-polish) logs and degrades to the raw text — the panel must
+  // not claim an enhancement the DB does not hold.
+  it("falls back to the raw text when the write-back fails", async () => {
+    const onAIOptimizationComplete = vi.fn();
+    const log = vi.fn().mockResolvedValue(undefined);
+    const updateTranscription = vi
+      .fn()
+      .mockResolvedValue({ success: false, error: "转录记录不存在" });
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "写回失败原文",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue("auto"),
+      processText: vi
+        .fn()
+        .mockResolvedValue({ success: true, text: "写回失败润色结果" }),
+      saveTranscription: vi
+        .fn()
+        .mockResolvedValue({ success: true, lastInsertRowid: 32 }),
+      updateTranscription,
+      log,
+    });
+
+    const { result } = renderHook(() =>
+      useRecording({ onAIOptimizationComplete }),
+    );
+    await startAndStop(result);
+
+    await waitFor(() =>
+      expect(log).toHaveBeenCalledWith(
+        "error",
+        "润色结果写回失败:",
+        expect.objectContaining({ success: false }),
+      ),
+    );
+    await waitFor(() =>
+      expect(onAIOptimizationComplete).toHaveBeenCalledTimes(1),
+    );
+    expect(onAIOptimizationComplete.mock.calls[0]![0]).toMatchObject({
+      text: "写回失败原文",
+      enhanced_by_ai: false,
+    });
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+  });
+
+  // [20260912_Refactor_322_InsertUpdateFlow] Without a row id there is
+  // nothing to write back to: the polish is logged as unpersisted, the raw
+  // row stands, and the panel mirrors the DB (raw text).
+  it("skips the write-back and notifies the raw text when the INSERT returns no row id", async () => {
+    const onAIOptimizationComplete = vi.fn();
+    const onSaveComplete = vi.fn();
+    const log = vi.fn().mockResolvedValue(undefined);
+    const updateTranscription = vi.fn().mockResolvedValue({ success: true });
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "无id原文",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue("auto"),
+      processText: vi
+        .fn()
+        .mockResolvedValue({ success: true, text: "无id润色结果" }),
+      saveTranscription: vi.fn().mockResolvedValue({ success: true }),
+      updateTranscription,
+      log,
+    });
+
+    const { result } = renderHook(() =>
+      useRecording({ onAIOptimizationComplete, onSaveComplete }),
+    );
+    await startAndStop(result);
+
+    // The polish chain completes (notify fires) without any persistence of
+    // the polished columns and without an onSaveComplete id.
+    await waitFor(() =>
+      expect(onAIOptimizationComplete).toHaveBeenCalledTimes(1),
+    );
+    expect(onSaveComplete).not.toHaveBeenCalled();
+    expect(updateTranscription).not.toHaveBeenCalled();
+    expect(onAIOptimizationComplete.mock.calls[0]![0]).toMatchObject({
+      text: "无id原文",
+      enhanced_by_ai: false,
+    });
+    expect(result.current.error).toBeNull();
+    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
+  });
+
+  // [20260912_Refactor_322_InsertUpdateFlow] The immediate INSERT surfaces
+  // invoke-level rejections through processAudio's own error path.
+  it("surfaces an error when the immediate INSERT rejects", async () => {
+    const onTranscriptionComplete = vi.fn();
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "拒绝原文",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue("off"),
+      saveTranscription: vi.fn().mockRejectedValue(new Error("db locked")),
+      updateTranscription: vi.fn().mockResolvedValue({ success: true }),
+      log: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { result } = renderHook(() =>
+      useRecording({ onTranscriptionComplete }),
+    );
+    await startAndStop(result);
+
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+    expect(result.current.error).toContain("音频处理失败");
+    expect(result.current.error).toContain("db locked");
+    // The INSERT precedes the result notification — a rejected save means
+    // nothing reached the panel either.
+    expect(onTranscriptionComplete).not.toHaveBeenCalled();
+  });
+
+  // [20260912_Refactor_322_InsertUpdateFlow] Cancel semantic change,
+  // deliberately locked: a completed transcription is persisted even when
+  // the recording is cancelled mid-processing (the old flow showed the text
+  // in the UI but silently dropped it from the DB — the incoherent state
+  // this ticket removes). Cancel only kills the polish chain.
+  it("keeps the immediate INSERT when the recording is cancelled mid-recording", async () => {
+    const saveTranscription = vi
+      .fn()
+      .mockResolvedValue({ success: true, lastInsertRowid: 33 });
+    setElectronAPI({
+      transcribeAudio: vi.fn().mockResolvedValue({
+        success: true,
+        text: "取消仍存原文",
+        confidence: 1,
+        duration: 1,
+      }),
+      getSetting: vi.fn().mockResolvedValue("off"),
+      saveTranscription,
+      updateTranscription: vi.fn().mockResolvedValue({ success: true }),
+      log: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { result } = renderHook(() => useRecording());
+    await act(async () => {
+      await result.current.startRecording();
+    });
+    await act(async () => {
+      result.current.cancelRecording();
+    });
+
+    await waitFor(() => expect(saveTranscription).toHaveBeenCalledTimes(1));
+    expect(result.current.isRecording).toBe(false);
+  });
 });

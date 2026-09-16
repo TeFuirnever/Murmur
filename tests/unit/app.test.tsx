@@ -7,7 +7,20 @@
 import "../setup/react";
 import React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  act,
+  waitFor,
+} from "@testing-library/react";
+
+// [20260905_Fix_246_HotkeyReplaceAtomic] Shared registerHotkey spy — the
+// hotkey-wiring tests below assert against it across the render boundary
+// (the useHotkey mock factory would otherwise mint a fresh vi.fn() per call).
+const hotkeyMocks = vi.hoisted(() => ({
+  registerHotkey: vi.fn<(hotkey: string) => Promise<boolean>>(),
+}));
 
 // --- Mock all hooks App depends on ---
 
@@ -42,7 +55,7 @@ vi.mock("../../src/hooks/useModelStatus", () => ({
 vi.mock("../../src/hooks/useHotkey", () => ({
   useHotkey: () => ({
     hotkey: "Cmd+Shift+Space",
-    registerHotkey: vi.fn().mockResolvedValue(undefined),
+    registerHotkey: hotkeyMocks.registerHotkey.mockResolvedValue(true),
     unregisterHotkey: vi.fn(),
     syncRecordingState: vi.fn(),
   }),
@@ -57,12 +70,6 @@ vi.mock("../../src/hooks/useWindowDrag", () => ({
     handleMouseUp: vi.fn(),
     handleClick: () => true,
   }),
-}));
-
-// Lazy SettingsPage
-vi.mock("../../src/settings", () => ({
-  SettingsPage: () =>
-    React.createElement("div", { "data-testid": "settings-page" }),
 }));
 
 // Mock electronAPI
@@ -81,7 +88,6 @@ beforeEach(() => {
     openSettingsWindow: vi.fn(),
     openHistoryWindow: vi.fn(),
     onHotkeyTriggered: vi.fn(() => () => {}),
-    onToggleDictation: vi.fn(() => () => {}),
     onWindowMaximizeChange: vi.fn(() => () => {}),
     onSettingsUpdate: vi.fn(() => () => {}),
     processText: vi.fn(),
@@ -156,22 +162,66 @@ describe("App component", () => {
     expect(mockElectronAPI.hideWindow).toHaveBeenCalled();
   });
 
-  it("renders SettingsPage when URL has ?page=settings", () => {
-    // Set URL param before render
-    Object.defineProperty(window, "location", {
-      value: {
-        search: "?page=settings",
-        href: "http://localhost/?page=settings",
-      },
-      configurable: true,
-      writable: true,
+  // [20260816_Refactor_DeadChannels] ?page=settings in-app route removed —
+  // the settings window is its own entry in dev and production.
+});
+
+// [20260905_Fix_246_HotkeyReplaceAtomic] The hotkey runtime-change loop is the
+// heart of issue #246: the persisted "hotkey" setting is applied on mount and
+// re-applied when SETTINGS_UPDATE carries key="hotkey". These tests use a
+// shared hoisted registerHotkey spy (the useHotkey mock above returns a fresh
+// vi.fn() per call, which would be unassertable across the render boundary).
+describe("App hotkey setting wiring (#246)", () => {
+  it("applies the persisted hotkey setting on mount", async () => {
+    mockElectronAPI.getSetting!.mockImplementation(async (key: string) =>
+      key === "hotkey" ? "CommandOrControl+Shift+K" : "paste",
+    );
+    render(React.createElement(App));
+
+    await waitFor(() =>
+      expect(hotkeyMocks.registerHotkey).toHaveBeenCalledWith(
+        "CommandOrControl+Shift+K",
+      ),
+    );
+  });
+
+  it("re-applies the hotkey when SETTINGS_UPDATE carries key=hotkey", async () => {
+    render(React.createElement(App));
+    // The mount application is async (getSetting → registerHotkey); let it
+    // land before clearing so only the update path is measured.
+    await waitFor(() =>
+      expect(hotkeyMocks.registerHotkey).toHaveBeenCalledTimes(1),
+    );
+    hotkeyMocks.registerHotkey.mockClear();
+
+    const updateCb = mockElectronAPI.onSettingsUpdate!.mock
+      .calls[0]![0] as (data: { key: string }) => void;
+    await act(async () => {
+      updateCb({ key: "hotkey" });
     });
-    const { container } = render(React.createElement(App));
-    // App checks `page === "settings"` and returns the SettingsPage via lazy.
-    // The mock makes SettingsPage render a div[data-testid=settings-page].
-    // But React.lazy + Suspense may need act/flush. Just verify no crash.
-    expect(container).toBeInTheDocument();
-    // Reset location
-    delete (window as { location?: unknown }).location;
+
+    // The re-apply path re-reads the persisted value (getSetting) and
+    // registers whatever it holds — not a hardcoded combo.
+    expect(mockElectronAPI.getSetting).toHaveBeenCalledWith(
+      "hotkey",
+      expect.any(String),
+    );
+    expect(hotkeyMocks.registerHotkey).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not re-apply the hotkey for unrelated SETTINGS_UPDATE keys", async () => {
+    render(React.createElement(App));
+    await waitFor(() =>
+      expect(hotkeyMocks.registerHotkey).toHaveBeenCalledTimes(1),
+    );
+    hotkeyMocks.registerHotkey.mockClear();
+
+    const updateCb = mockElectronAPI.onSettingsUpdate!.mock
+      .calls[0]![0] as (data: { key: string }) => void;
+    await act(async () => {
+      updateCb({ key: "theme" });
+    });
+
+    expect(hotkeyMocks.registerHotkey).not.toHaveBeenCalled();
   });
 });

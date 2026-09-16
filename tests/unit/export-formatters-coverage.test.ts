@@ -259,4 +259,84 @@ describe("exportFormatters - extended coverage", () => {
       expect(p.system).toContain("润色");
     });
   });
+
+  // [20260816_Test_BranchPush] Remaining uncovered arcs: the duration-present
+  // arms of the segment-less SRT/VTT fallbacks, missing-text formatting across
+  // TXT/MD/DOCX, and smartMergeSrt's boundary splits plus the exact-fit
+  // punctuation remainder.
+  describe("[20260816_Test_BranchPush] branch coverage", () => {
+    it("uses the duration for the end timestamp when no segments exist (SRT)", () => {
+      const out = formatSRT({
+        text: "timed",
+        duration: 65,
+        parsedSegments: [],
+      });
+      expect(out).toContain("00:00:00,000 --> 00:01:05,000");
+      expect(out).toContain("timed");
+    });
+
+    it("uses the duration for the end timestamp when no segments exist (VTT)", () => {
+      const out = formatVTT({
+        text: "timed",
+        duration: 65,
+        parsedSegments: [],
+      });
+      expect(out).toContain("00:00:00.000 --> 00:01:05.000");
+    });
+
+    it("formats TXT without any text field", () => {
+      const out = formatTXT({});
+      expect(out).toContain("转录文本");
+      expect(out).not.toContain("undefined");
+    });
+
+    it("formats MD without any text field, defaulting the date", () => {
+      const out = formatMD({});
+      // date: "<ISO now>" — the created_at || new Date() fallback.
+      expect(out).toMatch(/date: "\d{4}-\d{2}-\d{2}T/);
+    });
+
+    it("formats DOCX without any text field", async () => {
+      const buf = await formatDOCX({});
+      expect(buf).toBeInstanceOf(Buffer);
+      expect(buf.length).toBeGreaterThan(0);
+    });
+
+    it("splits segments whose own duration reached 3000ms", () => {
+      const merged = smartMergeSrt([
+        { start_ms: 0, end_ms: 3500, text: "你" },
+        { start_ms: 3500, end_ms: 5000, text: "好" },
+      ]);
+      // current duration 3500 >= 3000 -> no merge.
+      expect(merged).toHaveLength(2);
+    });
+
+    it("splits when the combined span exceeds 7000ms", () => {
+      const merged = smartMergeSrt([
+        { start_ms: 0, end_ms: 1500, text: "你" },
+        { start_ms: 7000, end_ms: 8000, text: "好" },
+      ]);
+      // seg.end - current.start = 8000 > 7000 -> no merge.
+      expect(merged).toHaveLength(2);
+    });
+
+    it("splits when the combined text exceeds 42 chars", () => {
+      const merged = smartMergeSrt([
+        { start_ms: 0, end_ms: 500, text: "a".repeat(30) },
+        { start_ms: 500, end_ms: 1000, text: "b".repeat(30) },
+      ]);
+      // combinedText 60 > 42 -> no merge.
+      expect(merged).toHaveLength(2);
+    });
+
+    it("skips the trailing-remainder push when punctuation absorbs the tail", () => {
+      // 42 plain chars + a comma at index 42: the break scan finds it,
+      // breakAt becomes 43 (the whole text), and the remaining slice is ""
+      // so the `if (remaining) parts.push(...)` guard takes its false arm.
+      const text = "a".repeat(42) + "，";
+      const merged = smartMergeSrt([{ start_ms: 0, end_ms: 4000, text }]);
+      expect(merged).toHaveLength(1);
+      expect(merged[0]!.text).toBe(text);
+    });
+  });
 });

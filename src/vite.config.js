@@ -30,11 +30,6 @@ export default defineConfig({
       output: {
         manualChunks: {
           vendor: ["react", "react-dom"],
-          ui: [
-            "@radix-ui/react-dialog",
-            "@radix-ui/react-dropdown-menu",
-            "@radix-ui/react-select",
-          ],
           utils: ["clsx", "tailwind-merge", "class-variance-authority"],
         },
       },
@@ -43,17 +38,11 @@ export default defineConfig({
     chunkSizeWarningLimit: 1000,
   },
 
-  // 路径别名
-  resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "."),
-      "@/components": path.resolve(__dirname, "components"),
-      "@/hooks": path.resolve(__dirname, "hooks"),
-      "@/services": path.resolve(__dirname, "services"),
-      "@/utils": path.resolve(__dirname, "utils"),
-      "@/assets": path.resolve(__dirname, "../assets"),
-    },
-  },
+  // [20260815_Refactor_DepsLean] Removed the unused "@/..." alias map (zero
+  // importers in src/), the explicit postcss path that pointed at a
+  // nonexistent ../postcss.config.js — Vite auto-discovers the real
+  // postcss.config.ts at the repo root — and the scss preprocessorOptions
+  // block referencing a src/styles/ directory that does not exist.
 
   // 环境变量配置
   envPrefix: ["VITE_", "ELECTRON_"],
@@ -61,28 +50,11 @@ export default defineConfig({
   // CSS配置
   css: {
     devSourcemap: true,
-    postcss: "../postcss.config.js",
-    preprocessorOptions: {
-      scss: {
-        additionalData: `@import "@/styles/variables.scss";`,
-      },
-    },
   },
 
   // 优化依赖
   optimizeDeps: {
-    include: [
-      "react",
-      "react-dom",
-      "lucide-react",
-      "@radix-ui/react-dialog",
-      "@radix-ui/react-dropdown-menu",
-      "@radix-ui/react-select",
-      "@radix-ui/react-label",
-      "@radix-ui/react-progress",
-      "@radix-ui/react-slot",
-      "@radix-ui/react-tabs",
-    ],
+    include: ["react", "react-dom", "lucide-react", "@radix-ui/react-slot"],
     exclude: ["electron"],
   },
 

@@ -27,6 +27,11 @@
 import { describe, it, expect, vi } from "vitest";
 import fs from "fs";
 import PythonEnvironment from "../../src/helpers/pythonEnvironment";
+
+// [20260817_T1_EmbeddedLayout] Saved for the T0-4 resourcesPath/NODE_ENV
+// stub restore (see that describe block).
+const ORIG_NODE_ENV = process.env.NODE_ENV;
+const ORIG_RESOURCES_PATH = process.resourcesPath;
 import {
   validateAIBaseUrl,
   processTextWithAI,
@@ -68,14 +73,36 @@ describe("Tier 0 fixes", () => {
   });
 
   describe("T0-4: PYTHONUTF8=1 in buildPythonEnvironment", () => {
+    // [20260817_T1_EmbeddedLayout] These tests used to stub the instance's
+    // getEmbeddedPythonPath; env construction now derives from the embedded
+    // ROOT (platform layout), so drive the production branch via a
+    // process.resourcesPath stub instead. Assertions unchanged.
+    beforeEach(() => {
+      process.env.NODE_ENV = "production";
+      Object.defineProperty(process, "resourcesPath", {
+        value: "/nonexistent-resources",
+        configurable: true,
+        writable: true,
+      });
+    });
+
+    afterEach(() => {
+      process.env.NODE_ENV = ORIG_NODE_ENV;
+      Object.defineProperty(process, "resourcesPath", {
+        value: ORIG_RESOURCES_PATH,
+        configurable: true,
+        writable: true,
+      });
+    });
+
     it("sets PYTHONUTF8=1 to prevent GBK/CP936 encoding corruption on Windows", () => {
       const env = new PythonEnvironment({
         info: () => {},
         warn: () => {},
         error: () => {},
       });
-      // Stub embedded python check to avoid filesystem dependency
-      env.getEmbeddedPythonPath = () => "/nonexistent";
+      // Embedded interpreter absent under /nonexistent-resources → the
+      // non-embedded branch must still pin UTF-8.
       const result = env.buildPythonEnvironment();
       expect(result.PYTHONUTF8).toBe("1");
     });
@@ -95,7 +122,6 @@ describe("Tier 0 fixes", () => {
       const origExistsSync = fs.existsSync;
       fs.existsSync = () => true;
       try {
-        env.getEmbeddedPythonPath = () => "/fake/embedded/python/bin/python3";
         const result = env.buildPythonEnvironment();
         expect(result.PYTHONUTF8).toBe("1");
       } finally {

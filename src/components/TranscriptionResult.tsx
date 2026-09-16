@@ -1,4 +1,17 @@
 import * as React from "react";
+// [20260907_Fix_314_PolishSaveToast] Toast surfaces a polish write-back
+// failure; useTranslation routes the warning through i18n.
+import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
+// [20260907_Feat_236_StreamingUi] T9 ①: streaming polish coordinator.
+import { usePolishStream } from "../hooks/usePolishStream";
+// [20260908_Feat_333_PanelIntegration] Post-polish review panels (#333):
+// minimal-edit modes get the diff review; rewrite modes get the whole-text
+// comparison with correction annotation.
+import { DiffReviewPanel } from "./DiffReviewPanel";
+import { RewriteReviewPanel } from "./RewriteReviewPanel";
+// [20260909_Fix_333_Review] Shared minimal-edit mode set.
+import { MINIMAL_EDIT_MODES } from "../helpers/polish-diff";
 import { LoadingDots } from "./ui/loading-dots";
 import ExportPanel from "./ExportPanel";
 import ProcessingPanel from "./ProcessingPanel";
@@ -20,6 +33,13 @@ interface TranscriptionResultProps {
   isOptimizing?: boolean;
   onCopy?: (text: string) => void;
   onAIOptimize?: (text: string) => Promise<string>;
+  // [20260907_Fix_316_PreferReviewProp] When the parent provides its own
+  // optimize channel (e.g. file import's server-side review by record id),
+  // it must take precedence over the ambient processText — otherwise the
+  // injected channel is unreachable in production. Default false keeps the
+  // recording path's mode-selector UX. If the flag is set but the channel
+  // is absent, the ambient processText path is used (graceful degradation).
+  preferOnAIOptimize?: boolean;
 }
 
 function formatTimestamp(ms?: number): string {
@@ -47,7 +67,24 @@ export default function TranscriptionResult({
   isOptimizing,
   onCopy,
   onAIOptimize,
+  preferOnAIOptimize,
 }: TranscriptionResultProps) {
+  // [20260907_Fix_314_PolishSaveToast] i18n for the write-back failure toast.
+  const { t } = useTranslation();
+  // [20260907_Feat_236_StreamingUi] T9 ①: streaming polish coordinator —
+  // owns chunk subscription, incremental delta state and the cancel channel.
+  const polishStream = usePolishStream();
+  // [20260908_Feat_333_PanelIntegration] Pending post-polish review (spec
+  // #193 S4): after a successful polish the accepted text is staged here
+  // with its mode class until the user accepts/reverts in the panel.
+  const [pendingReview, setPendingReview] = React.useState<{
+    modeClass: "minimal-edit" | "rewrite";
+    original: string;
+    revised: string;
+  } | null>(null);
+  // [20260909_Fix_333_Review] Shared set — see polish-diff.ts.
+  const isMinimalEditMode = (modeName: string): boolean =>
+    MINIMAL_EDIT_MODES.has(modeName);
   const [expandedSegment, setExpandedSegment] = React.useState<
     string | number | null
   >(null);
@@ -104,35 +141,158 @@ export default function TranscriptionResult({
 
   const hasSegments = segments && segments.length > 0;
 
-  const displayText = optimizedText || text || "";
+  // [20260907_Feat_236_StreamingUi] T9 ①: the in-flight stream renders in
+  // place of the text (deltas replace it word by word); once finished the
+  // optimized text takes over via optimizedText.
+  const displayText = optimizedText || polishStream.streamText || text || "";
   const displayRawText = rawText && rawText !== displayText ? rawText : null;
   const hasAIResult = displayRawText !== null;
+
+  // [20260906_Feat_TranscriptionUpdate] Spec #193 T1 (ticket #228): after a
+  // successful manual polish of a SAVED record (id present), persist the
+  // polished text into that record (processed_text + text). raw_text always
+  // keeps the original ASR output — enforced by the DB column whitelist, so
+  // the patch cannot touch it. A write-back failure must not erase the
+  // polish result the user is already looking at, so it is logged and
+  // intentionally swallowed here.
+  const persistPolishedText = async (
+    recordId: number,
+    polishedText: string,
+  ): Promise<void> => {
+    if (!window.electronAPI?.updateTranscription) return;
+    try {
+      // [20260907_Fix_314_ReviewFix] The handler wraps every failure (DB
+      // locked, missing record, zero changes, whitelist rejection) in a
+      // RESOLVED {success:false, error} envelope — only invoke-level faults
+      // reject. Both shapes must warn.
+      const result = await window.electronAPI.updateTranscription(recordId, {
+        processed_text: polishedText,
+        text: polishedText,
+      });
+      if (!result?.success) {
+        console.warn(
+          "Failed to persist polished transcription:",
+          result?.error,
+        );
+        toast.warning(
+          t(
+            "transcription.polishSaveFailed",
+            "润色结果保存失败，重启后将显示原文本",
+          ),
+        );
+        return;
+      }
+    } catch (err) {
+      // [20260907_Fix_314_PolishSaveToast] The polished text stays on screen
+      // (do not erase what the user is reading), but a persistence failure
+      // must be visible: after a restart the record reverts to the original.
+      console.warn("Failed to persist polished transcription:", err);
+      toast.warning(
+        t(
+          "transcription.polishSaveFailed",
+          "润色结果保存失败，重启后将显示原文本",
+        ),
+      );
+    }
+  };
+
+  // [20260907_Feat_236_StreamingUi] T9 ①: cancel the in-flight streaming
+  // run; the abort chunk settles the run silently (no error surfaced).
+  const handleCancelPolish = polishStream.cancel;
 
   const handleAIOptimize = async () => {
     if (!text) return;
     setIsOptimizingInternal(true);
     setOptimizeError(null);
     try {
-      if (window.electronAPI?.processText) {
-        const result = (await Promise.race([
-          window.electronAPI.processText(text, currentMode),
-          new Promise((_, reject) =>
-            setTimeout(
-              () => reject(new Error("AI优化超时，已使用原文")),
-              120000,
-            ),
-          ),
-        ])) as { success?: boolean; text?: string };
-        if (result?.success && result?.text) {
-          setOptimizedText(result.text);
+      // [20260906_Feat_TranscriptionUpdate] Both polish paths (direct
+      // processText and the injected onAIOptimize flow) converge here so
+      // the write-back fires exactly once per successful polish.
+      let polishedText: string | null = null;
+      if (preferOnAIOptimize && onAIOptimize) {
+        // [20260907_Fix_316_PreferReviewProp] Parent-declared channel wins
+        // (file import's aiReviewTranscription review-by-id).
+        polishedText = await onAIOptimize(text);
+        setOptimizedText(polishedText);
+        setPendingReview({
+          modeClass: isMinimalEditMode(currentMode)
+            ? "minimal-edit"
+            : "rewrite",
+          original: text,
+          revised: polishedText,
+        });
+      } else if (typeof window.electronAPI?.processText === "function") {
+        // [20260907_Feat_236_StreamingUi] T9 ①: streaming when the chunk
+        // channel exists; timeout semantics live in the orchestrator's
+        // deadline matrix (T8). A user cancel is silent.
+        const api = window.electronAPI;
+        const streamingCapable =
+          typeof api.onPolishChunk === "function" &&
+          typeof api.abortPolish === "function";
+        let result: {
+          success?: boolean;
+          text?: string;
+          error?: string;
+          cancelled?: boolean;
+        };
+        if (streamingCapable) {
+          result = await polishStream.start(api, text, currentMode);
+          if (result.cancelled) {
+            return; // silent user cancel — no error surfaced
+          }
         } else {
-          setOptimizeError("AI处理失败，请重试");
+          result = (await api.processText(text, currentMode)) as {
+            success?: boolean;
+            text?: string;
+            error?: string;
+          };
+        }
+        if (result?.success && result?.text) {
+          polishedText = result.text;
+          setOptimizedText(result.text);
+          setPendingReview({
+            modeClass: isMinimalEditMode(currentMode)
+              ? "minimal-edit"
+              : "rewrite",
+            original: text,
+            revised: polishedText,
+          });
+        } else {
+          // [20260815_Fix_AiEmptyContent] Surface the main-process error
+          // (e.g. max_tokens exhausted by model reasoning) instead of a
+          // generic message that hides the actionable cause.
+          // [20260907_Fix_236_Review] Hook sentinels map to localized text
+          // here (the hook layer carries no user-visible strings).
+          // [20260908_Fix_BatchReview_M4] Machine sentinels map to localized
+          // text; unknown sentinels fall through to the generic message so
+          // raw English never reaches the UI.
+          const machineError = result?.error;
+          const isMachineSentinel =
+            machineError === "STREAM_INVOKE_FAILED" ||
+            machineError === "STREAM_IN_FLIGHT";
+          const localizedError = isMachineSentinel
+            ? t("transcription.polishInvokeFailed", "AI处理失败，请重试")
+            : machineError ||
+              t("transcription.polishFailed", "AI处理失败，请重试");
+          setOptimizeError(localizedError);
         }
       } else if (onAIOptimize) {
         const result = await onAIOptimize(text);
+        polishedText = result;
         setOptimizedText(result);
+        setPendingReview({
+          modeClass: isMinimalEditMode(currentMode)
+            ? "minimal-edit"
+            : "rewrite",
+          original: text,
+          revised: result,
+        });
       } else {
         setOptimizeError("AI功能不可用");
+      }
+      // [20260906_Feat_TranscriptionUpdate] Write-back for saved records.
+      if (polishedText !== null && id != null) {
+        await persistPolishedText(id, polishedText);
       }
     } catch (err) {
       setOptimizeError((err as Error).message || "优化失败");
@@ -200,7 +360,45 @@ export default function TranscriptionResult({
               </button>
             )}
           </div>
-          {showOptimizing ? (
+          {polishStream.isStreaming ? (
+            /* [20260907_Feat_236_StreamingUi] T9 ①: word-by-word rendering
+               with a cancel button; a user cancel is silent. */
+            <div className="space-y-2">
+              <p className="text-sm text-[#1d1d1d] dark:text-[#f5f5f7]/80 whitespace-pre-wrap">
+                {displayText}
+              </p>
+              {/* [20260911_Feat_241_LongTextChunking] T14: block progress
+                  (第几块/共几块 + 已耗时) while the chunked chain runs —
+                  the ticket's cost-transparency note for the super-linear
+                  token spend. */}
+              {polishStream.chunkProgress && (
+                <p
+                  data-testid="polish-chunk-progress"
+                  className="text-xs text-[#86868b]"
+                >
+                  {t(
+                    "transcription.chunkProgress",
+                    "第 {{current}}/{{total}} 块 · 已耗时 {{seconds}} 秒",
+                    {
+                      current: polishStream.chunkProgress.index,
+                      total: polishStream.chunkProgress.count,
+                      seconds: Math.round(
+                        polishStream.chunkProgress.elapsedMs / 1000,
+                      ),
+                    },
+                  )}
+                </p>
+              )}
+              {/* [20260911_Feat_241_LongTextChunking] END */}
+              <button
+                type="button"
+                onClick={handleCancelPolish}
+                className="px-3 py-1.5 text-xs font-medium text-[#ff5f57] hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+              >
+                {t("transcription.cancelPolish", "取消")}
+              </button>
+            </div>
+          ) : showOptimizing ? (
             <div className="flex items-center space-x-2 text-[#0071e3] dark:text-[#2997ff]">
               <LoadingDots />
               <span className="text-sm">AI正在优化文本...</span>
@@ -348,6 +546,64 @@ export default function TranscriptionResult({
                 );
               })}
             </div>
+          )}
+        </div>
+      )}
+
+      {/* [20260908_Feat_333_PanelIntegration] Post-polish review: minimal-edit
+          modes -> diff hunks with per-hunk accept/reject; rewrite modes ->
+          whole-text comparison with correction annotation. Accept writes back
+          through the T1 UPDATE channel; revert restores the original. */}
+      {pendingReview && !showOptimizing && (
+        <div data-testid="polish-review">
+          {pendingReview.modeClass === "minimal-edit" ? (
+            <DiffReviewPanel
+              original={pendingReview.original}
+              revised={pendingReview.revised}
+              onApply={(merged) => {
+                setOptimizedText(merged);
+                if (id != null) {
+                  // [20260909_Fix_333_Review] Route through the hardened
+                  // writer — void-discard regressed #314's toast on failure.
+                  void persistPolishedText(id, merged);
+                }
+                setPendingReview(null);
+              }}
+              onCancel={() => {
+                setPendingReview(null);
+              }}
+            />
+          ) : (
+            <RewriteReviewPanel
+              original={pendingReview.original}
+              rewritten={pendingReview.revised}
+              onAddCorrection={(wrong, right) => {
+                // [20260909_Fix_333_Review] Surface IPC failures, never
+                // discard them silently.
+                window.electronAPI
+                  ?.addVocabCorrection?.(wrong, right)
+                  .catch((error: unknown) => {
+                    console.warn("修正表写入失败:", error);
+                    toast.warning(
+                      t("transcription.vocabSaveFailed", "修正词对保存失败"),
+                    );
+                  });
+              }}
+              onAccept={(finalText) => {
+                setOptimizedText(finalText);
+                if (id != null) {
+                  void persistPolishedText(id, finalText);
+                }
+                setPendingReview(null);
+              }}
+              onRevert={() => {
+                setOptimizedText(null);
+                if (id != null) {
+                  void persistPolishedText(id, pendingReview.original);
+                }
+                setPendingReview(null);
+              }}
+            />
           )}
         </div>
       )}

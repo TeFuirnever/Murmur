@@ -1,0 +1,72 @@
+{
+  "schema_version": "repo-pedant.execution.v1",
+  "mode": "reconcile",
+  "scope": "Murmur",
+  "result": "passed",
+  "checks": [
+    {
+      "id": "inventory",
+      "status": "passed",
+      "evidence": "snapshot 343 files -> all classified (334 verified / 9 hold); runnable_stage=true; history_sources 4 entries; inventory_knowledge.py validate -> valid:true, errors:[] (fixed this run: 9 oversized got size_resolution holds, history_sources was empty)"
+    },
+    {
+      "id": "readback",
+      "status": "passed",
+      "evidence": "grep readback: CHANGELOG 2x 'Spec #299' (Added+Changed); troubleshooting.md:27/117 Python 3.11+ both halves; promotion-article.md:44 + jike-v2ex-post.md:66 Electron 39; follow-ups.md:73 维护者手动项 section; stale rescan over live docs: only ADR-014 (dated investigation record) + README P0Facts change-tag comments remain, both intentional historical context"
+    },
+    {
+      "id": "tests",
+      "status": "passed",
+      "evidence": "pnpm ci:check 11/11 passed on reconcile worktree (incl. test+coverage, dev smoke; security audit non-blocking warning); docs contract test tests/unit/readme-contract.test.ts 5/5; prettier --check on all 6 patched md files clean"
+    },
+    {
+      "id": "links",
+      "status": "passed",
+      "evidence": "CHANGELOG new entries reference real closed issues #300-#304 and merged PRs #308/#309/#310; follow-ups points at real path docs/promotion/screenshots/; docs contract link-integrity green for README.md + README.zh-CN.md"
+    },
+    {
+      "id": "diff",
+      "status": "passed",
+      "evidence": "reconcile commit touches docs only: CHANGELOG.md, docs/troubleshooting.md, docs/promotion-article.md, docs/promotion/jike-v2ex-post.md, docs/follow-ups.md, .azhou/repo-pedant/{inventory,execution}.json — zero src/runtime change"
+    },
+    {
+      "id": "coverage",
+      "status": "passed",
+      "evidence": "ci:check 'test + coverage' gate passed (global 88/83/88/89 baseline + per-glob floors, unchanged by this docs-only reconcile)"
+    }
+  ],
+  "events": [
+    {
+      "stage": "start",
+      "message": "🦊 阿舟 · Repo Pedant 启动｜mode=reconcile｜scope=Murmur"
+    },
+    {
+      "stage": "scope",
+      "message": "🧭 范围锁定｜authority=维护者直接调用($repo-pedant,Spec #299 五票交付收尾)｜projects=1"
+    },
+    {
+      "stage": "inventory",
+      "message": "🗂️ 清单完成｜files=343｜holds=9｜out_of_scope=0"
+    },
+    {
+      "stage": "impact",
+      "message": "🕸️ 影响确认｜surfaces=9｜consumers=6"
+    },
+    {
+      "stage": "sync",
+      "message": "🧹 同步完成｜changed=6"
+    },
+    {
+      "stage": "verify_success",
+      "message": "✅ 验证通过｜checks=inventory,readback,tests,links,diff,coverage",
+      "completed_checks": [
+        "inventory",
+        "readback",
+        "tests",
+        "links",
+        "diff",
+        "coverage"
+      ]
+    }
+  ]
+}

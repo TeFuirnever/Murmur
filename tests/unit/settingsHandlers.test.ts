@@ -37,12 +37,13 @@ function createMockIpcMain(): MockIpcMain {
 
 // [20260726_Tier3_SettingsHandlersMigrate] Stubbed managers surface: only the
 // databaseManager methods + logger the registered handlers exercise.
+// [20260906_Refactor_DeadChannelCleanup] resetSettings dropped — the
+// SETTINGS.RESET handler was removed by ticket #250.
 interface MockManagers {
   databaseManager: {
     getSetting: (key: string, defaultValue?: unknown) => unknown;
     setSetting: (key: string, value: unknown) => boolean;
     getAllSettings: () => Record<string, unknown>;
-    resetSettings: () => boolean;
     syncToFileConfig: () => void;
   };
   logger: { error: (...args: unknown[]) => void };
@@ -67,7 +68,6 @@ describe("settingsHandlers", () => {
           ai_base_url: "https://api.openai.com/v1",
           ai_model: "gpt-3.5-turbo",
         })),
-        resetSettings: vi.fn(() => true),
         syncToFileConfig: vi.fn(),
       },
       logger: { error: vi.fn() },
@@ -82,15 +82,13 @@ describe("settingsHandlers", () => {
     );
   });
 
+  // [20260906_Refactor_DeadChannelCleanup] Ticket #250: the save-setting /
+  // reset-settings registration and delegation tests were removed with the
+  // SETTINGS.SAVE / SETTINGS.RESET handlers (zero renderer callers).
   it("registers all settings handlers", () => {
     expect(ipcMain._handlers["get-setting"]).toBeDefined();
     expect(ipcMain._handlers["set-setting"]).toBeDefined();
     expect(ipcMain._handlers["get-all-settings"]).toBeDefined();
-    expect(ipcMain._handlers["get-settings"]).toBeDefined();
-    expect(ipcMain._handlers["save-setting"]).toBeDefined();
-    expect(ipcMain._handlers["reset-settings"]).toBeDefined();
-    expect(ipcMain._handlers["import-settings"]).toBeDefined();
-    expect(ipcMain._handlers["export-settings"]).toBeDefined();
   });
 
   it("get-setting delegates to databaseManager", () => {
@@ -117,21 +115,139 @@ describe("settingsHandlers", () => {
     expect(result.ai_base_url).toBe("https://api.openai.com/v1");
   });
 
-  it("get-settings (legacy) also masks API key", () => {
-    const result = ipcMain._handlers["get-settings"]!();
-    expect(result.ai_api_key).toBe("****5678");
+  // ======================================================================
+  // [20260906_Spec259_T3] Validation + masking arms (Spec #259 T3, #275).
+  // ======================================================================
+
+  it("set-setting rejects a key outside the allowlist without touching the DB", () => {
+    const result = ipcMain._handlers["set-setting"]!({}, "evil_key", "x") as {
+      success: boolean;
+      error?: string;
+    };
+    expect(result).toEqual({
+      success: false,
+      error: "Invalid setting key or value",
+    });
+    expect(managers.databaseManager.setSetting).not.toHaveBeenCalled();
+    expect(managers.databaseManager.syncToFileConfig).not.toHaveBeenCalled();
   });
 
-  it("save-setting delegates to databaseManager.setSetting", () => {
-    ipcMain._handlers["save-setting"]!({}, "auto_paste", "clipboard_only");
-    expect(managers.databaseManager.setSetting).toHaveBeenCalledWith(
-      "auto_paste",
-      "clipboard_only",
+  it("set-setting pushes language changes to the tray manager", () => {
+    const setLanguage = vi.fn();
+    const trayManagers = {
+      databaseManager: managers.databaseManager,
+      windowManager: { mainWindow: null },
+      trayManager: { setLanguage },
+    };
+    register(
+      ipcMain as unknown as Parameters<typeof register>[0],
+      trayManagers as unknown as Parameters<typeof register>[1],
+    );
+    const result = ipcMain._handlers["set-setting"]!({}, "language", "en");
+    // The handler returns the raw databaseManager.setSetting result.
+    expect(result).toBe(true);
+    expect(setLanguage).toHaveBeenCalledWith("en");
+  });
+
+  it("get-all-settings masks a short API key entirely", () => {
+    managers.databaseManager.getAllSettings = vi.fn(() => ({
+      ai_api_key: "abc",
+    }));
+    const result = ipcMain._handlers["get-all-settings"]!();
+    expect(result.ai_api_key).toBe("****");
+  });
+
+  it("get-all-settings leaves a non-string API key untouched", () => {
+    managers.databaseManager.getAllSettings = vi.fn(() => ({
+      ai_api_key: 12345,
+    }));
+    const result = ipcMain._handlers["get-all-settings"]!();
+    expect(result.ai_api_key).toBe(12345);
+  });
+});
+
+// [20260912_Fix_270_CoverageFloor] Covers the stream-degradation memory
+// handlers (uncovered functions in src/helpers/ipc/** — the per-glob
+// functions floor needs their arms exercised). The streamDegradation
+// module is mocked so the arms are driven deterministically.
+const streamDegradationMocks = vi.hoisted(() => ({
+  list: vi.fn(),
+  reset: vi.fn(),
+}));
+vi.mock("../../src/helpers/streamDegradation", () => ({
+  listStreamDegradations: streamDegradationMocks.list,
+  resetStreamDegradations: streamDegradationMocks.reset,
+}));
+
+describe("stream-degradation memory handlers", () => {
+  // Self-contained harness: the outer describe's ipcMain/managers live in
+  // a sibling scope. Registration mirrors the outer describe's pattern.
+  let ipcMain: MockIpcMain;
+  let managers: MockManagers;
+
+  beforeEach(() => {
+    ipcMain = createMockIpcMain();
+    managers = {
+      databaseManager: {
+        getSetting: vi.fn(() => null),
+        setSetting: vi.fn(() => true),
+        getAllSettings: vi.fn(() => ({})),
+        syncToFileConfig: vi.fn(),
+      },
+      logger: { error: vi.fn() },
+    };
+    streamDegradationMocks.list.mockReset();
+    streamDegradationMocks.reset.mockReset();
+    register(
+      ipcMain as unknown as Parameters<typeof register>[0],
+      managers as unknown as Parameters<typeof register>[1],
     );
   });
 
-  it("reset-settings delegates to databaseManager", () => {
-    ipcMain._handlers["reset-settings"]!();
-    expect(managers.databaseManager.resetSettings).toHaveBeenCalled();
+  function getDegHandler(channel: string): MockHandler | undefined {
+    return ipcMain._handlers[channel];
+  }
+
+  it("LIST answers success with the entries from the memory reader", async () => {
+    streamDegradationMocks.list.mockResolvedValue([
+      { base_url_hash: "h1", base_url: "https://x", failed_at: "t" },
+    ]);
+    const result = (await getDegHandler("stream-degradation-list")?.()) as {
+      success: boolean;
+      entries: unknown[];
+    };
+    expect(result.success).toBe(true);
+    expect(result.entries).toHaveLength(1);
+  });
+
+  it("LIST answers a failure envelope when the memory reader throws", async () => {
+    streamDegradationMocks.list.mockRejectedValue(new Error("db down"));
+    const result = (await getDegHandler("stream-degradation-list")?.()) as {
+      success: boolean;
+      entries: unknown[];
+      error?: string;
+    };
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("db down");
+  });
+
+  it("RESET answers success with the removed count", async () => {
+    streamDegradationMocks.reset.mockResolvedValue(3);
+    const result = (await getDegHandler("stream-degradation-reset")?.()) as {
+      success: boolean;
+      removed: number;
+    };
+    expect(result.success).toBe(true);
+    expect(result.removed).toBe(3);
+  });
+
+  it("RESET answers a failure envelope when the reset throws", async () => {
+    streamDegradationMocks.reset.mockRejectedValue(new Error("reset exploded"));
+    const result = (await getDegHandler("stream-degradation-reset")?.()) as {
+      success: boolean;
+      error?: string;
+    };
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("reset exploded");
   });
 });

@@ -63,7 +63,7 @@ Apache 2.0 协议，欢迎 Star 和 PR。
 
 - 语音识别：阿里 FunASR Paraformer-large（本地推理，不上传）
 - AI 润色：兼容 OpenAI API 的任意模型（DeepSeek / 通义 / 智谱 / Ollama 等 11+ 个）
-- 桌面框架：Electron 36 + React 19
+- 桌面框架：Electron 39 + React 19
 - 数据存储：SQLite（better-sqlite3 + safeStorage 加密）
 
 AI 是可选的——不配 API Key 也能用，只是不做润色。配上本地 Ollama 连 API Key 都不用。
@@ -72,7 +72,7 @@ AI 是可选的——不配 API Key 也能用，只是不做润色。配上本�
 
 - Cmd+Shift+Space 全局热键，说完自动粘贴到光标
 - 音频文件导入转录（wav/mp3/m4a/flac）
-- FTS5 全文搜索 + 导出（TXT/SRT/Markdown/DOCX）
+- 转录历史搜索（实时过滤）+ 导出（TXT/SRT/Markdown/DOCX）
 - TypeScript 严格模式，652 测试，95% 覆盖率
 - 中英双语 UI
 

@@ -80,16 +80,9 @@ describe("DatabaseManager", () => {
     });
   });
 
-  describe("searchTranscriptions", () => {
-    it("finds transcriptions matching query", () => {
-      db.saveTranscription({ text: "hello world" });
-      db.saveTranscription({ text: "goodbye world" });
-      db.saveTranscription({ text: "nothing here" });
-
-      const results = db.searchTranscriptions("world");
-      expect(results).toHaveLength(2);
-    });
-  });
+  // [20260815_Refactor_DeadIpc] searchTranscriptions describe removed with
+  // the dead FTS search pipeline (zero renderer callers; history filters
+  // client-side).
 
   describe("settings CRUD", () => {
     it("set and get a setting", () => {
@@ -122,20 +115,28 @@ describe("DatabaseManager", () => {
       // [20260726_Tier3_DatabaseMigrate] DatabaseManager.db is private, but
       // this test asserts the pragma state set during initialize(). Access
       // via a structural cast through `unknown` (no `any`) exposing only the
-      // `pragma` method used here. File-based temp DB (not :memory:), so WAL
+      // query surface used here. File-based temp DB (not :memory:), so WAL
       // pragma takes effect.
+      // [20260905_Feat_NodeSqlite] pragma reads migrated off
+      // better-sqlite3's .pragma() helper: node:sqlite reads pragmas like any
+      // other query, returning a single row object per PRAGMA statement.
       const rawDb = (
         db as unknown as {
           db: {
-            pragma: (name: string, opts?: { simple?: boolean }) => unknown;
+            prepare: (sql: string) => { get: () => unknown };
           };
         }
       ).db;
-      const mode = rawDb.pragma("journal_mode", { simple: true });
-      expect(mode).toBe("wal");
+      const mode = rawDb.prepare("PRAGMA journal_mode").get() as {
+        journal_mode: string;
+      };
+      expect(mode.journal_mode).toBe("wal");
 
-      const timeout = rawDb.pragma("busy_timeout", { simple: true });
-      expect(timeout).toBe(5000);
+      // the result column of PRAGMA busy_timeout is named "timeout"
+      const timeoutRow = rawDb.prepare("PRAGMA busy_timeout").get() as {
+        timeout: number;
+      };
+      expect(timeoutRow.timeout).toBe(5000);
     });
   });
 
@@ -156,19 +157,6 @@ describe("DatabaseManager", () => {
     });
   });
 
-  describe("backup", () => {
-    it("returns false when db not initialized", () => {
-      const freshDb = new DatabaseManager();
-      const result = freshDb.backup(path.join(tmpDir, "nobackup.db"));
-      expect(result).toBe(false);
-    });
-
-    it("returns true or handles backup on initialized db", () => {
-      db.saveTranscription({ text: "backup test" });
-      const backupPath = path.join(tmpDir, "backup.db");
-      const result = db.backup(backupPath);
-      // better-sqlite3 backup may succeed or fail depending on env
-      expect(typeof result).toBe("boolean");
-    });
-  });
+  // [20260815_Refactor_DeadIpc] backup describe removed with the zero-caller
+  // DatabaseManager.backup method.
 });

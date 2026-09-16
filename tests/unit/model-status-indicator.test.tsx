@@ -303,3 +303,187 @@ describe("[20260731_Test_ModelStatusIndicator] ModelDownloadProgress", () => {
     expect(container).toBeEmptyDOMElement();
   });
 });
+
+// [20260816_Test_BranchPush] Remaining uncovered arcs: the progress-text
+// falsy guards (isDownloading/downloadProgress/isLoading/progress), the
+// checking/need_download/loading icon and tooltip branches, and the
+// ModelDownloadProgress zero-progress + missing per-model rows branches.
+describe("[20260816_Test_BranchPush] model-status-indicator branch coverage", () => {
+  describe("ModelStatusIndicator progress-text guards", () => {
+    it("renders no percentage when downloading without a positive progress", () => {
+      // isDownloading true but downloadProgress 0 -> (progress ?? 0) > 0 fails.
+      render(
+        <ModelStatusIndicator
+          modelStatus={
+            {
+              stage: "downloading",
+              isDownloading: true,
+              downloadProgress: 0,
+            } as never
+          }
+        />,
+      );
+      expect(screen.getByText("正在下载语音模型...")).toBeInTheDocument();
+      expect(screen.queryByText(/\(\d+%\)/)).toBeNull();
+    });
+
+    it("renders no percentage when downloading without isDownloading", () => {
+      render(
+        <ModelStatusIndicator
+          modelStatus={{ stage: "downloading", downloadProgress: 80 } as never}
+        />,
+      );
+      expect(screen.queryByText("(80%)")).toBeNull();
+    });
+
+    it("treats an undefined downloadProgress as zero progress", () => {
+      // The ?? 0 arc: isDownloading true, downloadProgress absent.
+      render(
+        <ModelStatusIndicator
+          modelStatus={{ stage: "downloading", isDownloading: true } as never}
+        />,
+      );
+      expect(screen.queryByText(/\(\d+%\)/)).toBeNull();
+    });
+
+    it("renders no percentage when loading with zero progress", () => {
+      render(
+        <ModelStatusIndicator
+          modelStatus={
+            {
+              stage: "loading",
+              isLoading: true,
+              progress: 0,
+            } as never
+          }
+        />,
+      );
+      expect(screen.getByText("语音模型加载中...")).toBeInTheDocument();
+      expect(screen.queryByText(/\(\d+%\)/)).toBeNull();
+    });
+
+    it("renders no percentage when loading without isLoading", () => {
+      render(
+        <ModelStatusIndicator
+          modelStatus={{ stage: "loading", progress: 77 } as never}
+        />,
+      );
+      expect(screen.queryByText("(77%)")).toBeNull();
+    });
+  });
+
+  describe("ModelStatusIcon stage branches", () => {
+    it("renders the checking icon (spinning loader)", () => {
+      const { container } = render(
+        <ModelStatusIcon
+          modelStatus={{ stage: "checking" } as never}
+          showTooltip={false}
+        />,
+      );
+      expect(container.querySelector(".model-loading")).not.toBeNull();
+      expect(container.querySelector(".animate-spin")).not.toBeNull();
+    });
+
+    it("renders the need_download icon in orange", () => {
+      const { container } = render(
+        <ModelStatusIcon
+          modelStatus={{ stage: "need_download" } as never}
+          showTooltip={false}
+        />,
+      );
+      expect(container.querySelector(".text-orange-500")).not.toBeNull();
+    });
+
+    it("renders the loading icon with the model-loading class", () => {
+      const { container } = render(
+        <ModelStatusIcon
+          modelStatus={{ stage: "loading" } as never}
+          showTooltip={false}
+        />,
+      );
+      expect(container.querySelector(".model-loading")).not.toBeNull();
+      // The loading icon is a Clock, not a spinner.
+      expect(container.querySelector(".animate-spin")).toBeNull();
+    });
+
+    it("renders the checking tooltip text", () => {
+      render(<ModelStatusIcon modelStatus={{ stage: "checking" } as never} />);
+      expect(
+        screen.getByText("🔍 正在检查语音模型状态..."),
+      ).toBeInTheDocument();
+    });
+
+    it("renders the need_download tooltip text", () => {
+      render(
+        <ModelStatusIcon modelStatus={{ stage: "need_download" } as never} />,
+      );
+      expect(
+        screen.getByText("📥 需要下载语音识别模型（约1.1GB）"),
+      ).toBeInTheDocument();
+    });
+
+    it("renders the loading tooltip text", () => {
+      render(<ModelStatusIcon modelStatus={{ stage: "loading" } as never} />);
+      expect(
+        screen.getByText("🎙️ 语音模型加载中，请稍候..."),
+      ).toBeInTheDocument();
+    });
+
+    it("defaults a missing downloadProgress to 0% in the downloading tooltip", () => {
+      render(
+        <ModelStatusIcon modelStatus={{ stage: "downloading" } as never} />,
+      );
+      expect(screen.getByText(/0%/)).toBeInTheDocument();
+    });
+  });
+
+  describe("ModelDownloadProgress branch coverage", () => {
+    it("shows 0% overall progress when downloadProgress is missing", () => {
+      const { container } = render(
+        <ModelDownloadProgress
+          modelStatus={{ stage: "downloading" } as never}
+        />,
+      );
+      expect(screen.getByText("0%")).toBeInTheDocument();
+      const fill = container.querySelector(
+        ".bg-\\[\\#0071e3\\].h-2.rounded-full",
+      ) as HTMLElement | null;
+      expect(fill).not.toBeNull();
+      expect(fill?.style.width).toBe("0%");
+    });
+
+    it("skips per-model rows that are absent from modelProgress", () => {
+      // Only punc has progress data — the asr and vad rows hit the
+      // `if (!mp) return null` branch.
+      render(
+        <ModelDownloadProgress
+          modelStatus={
+            {
+              stage: "downloading",
+              downloadProgress: 30,
+              modelProgress: {
+                punc: { progress: 90, status: "downloading" },
+              },
+            } as never
+          }
+        />,
+      );
+      expect(screen.getByText("标点恢复")).toBeInTheDocument();
+      expect(screen.queryByText("ASR 语音识别")).toBeNull();
+      expect(screen.queryByText("VAD 语音检测")).toBeNull();
+      expect(screen.getByText("90%")).toBeInTheDocument();
+    });
+
+    it("renders no per-model section at all without modelProgress", () => {
+      // modelProgress absent -> models list is empty -> the section is skipped
+      // entirely even though the overall card renders.
+      render(
+        <ModelDownloadProgress
+          modelStatus={{ stage: "downloading", downloadProgress: 20 } as never}
+        />,
+      );
+      expect(screen.getByText("20%")).toBeInTheDocument();
+      expect(screen.queryByText("ASR 语音识别")).toBeNull();
+    });
+  });
+});

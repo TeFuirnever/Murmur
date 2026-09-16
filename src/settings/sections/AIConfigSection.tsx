@@ -16,6 +16,10 @@ import {
 } from "lucide-react";
 import type { AICheckStatusResult } from "../../types/ipc";
 import type { SettingsState, ProviderPreset } from "../useSettings";
+// [20260815_Refactor_ModelListDedup] The <option> list below renders from the
+// single PREDEFINED_MODELS/MODEL_LABELS source of truth in useSettings.ts
+// instead of a second hardcoded copy that could silently drift.
+import { PREDEFINED_MODELS, MODEL_LABELS } from "../useSettings";
 
 interface AIConfigSectionProps {
   settings: SettingsState;
@@ -69,6 +73,35 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
   // [ADR-015] savedFlash: briefly show "✓ 已保存" on the save button after
   // a successful save. Only triggers when saveSettings returns true.
   const [savedFlash, setSavedFlash] = useState(false);
+
+  // [20260907_Feat_233_ListModels] Ticket #233: derive the provider's model
+  // list from ai_base_url and offer it as datalist suggestions on the custom
+  // model input. Debounced (base_url edits fire per keystroke); ANY failure
+  // silently degrades to the manual-input path per the ticket.
+  const [providerModels, setProviderModels] = useState<string[]>([]);
+  const baseUrl = settings.ai_base_url;
+  const apiKey = settings.ai_api_key;
+  useEffect(() => {
+    if (!window.electronAPI?.listAIModels || !baseUrl) {
+      setProviderModels([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      window.electronAPI!.listAIModels!(baseUrl, apiKey)
+        .then((result) => {
+          if (cancelled) return;
+          setProviderModels(result?.success ? (result.models ?? []) : []);
+        })
+        .catch(() => {
+          if (!cancelled) setProviderModels([]);
+        });
+    }, 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [baseUrl, apiKey]);
   // [CodeReview] Track timeout so it can be cleared on unmount to prevent
   // React "state update on unmounted component" warning.
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -109,6 +142,7 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
         </label>
         <button
           type="button"
+          id="ai-optimization-toggle"
           role="switch"
           aria-checked={settings.enable_ai_optimization}
           onClick={() =>
@@ -265,6 +299,11 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
           />
           <button
             type="button"
+            aria-label={
+              showApiKey
+                ? t("settings.ai.hideApiKey", "隐藏 API Key")
+                : t("settings.ai.showApiKey", "显示 API Key")
+            }
             onClick={() => setShowApiKey(!showApiKey)}
             className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#86868b] hover:text-[#1d1d1f] dark:hover:text-[#f5f5f7]"
           >
@@ -321,18 +360,18 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
           </div>
           {!customModel && (
             <select
+              aria-label={t("settings.ai.predefinedModel", "预定义模型")}
               value={settings.ai_model}
               onChange={(e) => onInputChange("ai_model", e.target.value)}
               className="w-full px-3 py-2 text-sm border border-[#d2d2d7] dark:border-[#3a3a3c] rounded-lg focus:ring-2 focus:ring-[#0071e3] focus:border-transparent bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7]"
             >
-              <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-              <option value="gpt-4">GPT-4</option>
-              <option value="gpt-4-turbo">GPT-4 Turbo</option>
-              <option value="gpt-4o">GPT-4o</option>
-              <option value="gpt-4o-mini">GPT-4o Mini</option>
-              <option value="qwen3-30b-a3b-instruct-2507">
-                {t("settings.ai.qwenRecommended", "Qwen3-30B (推荐)")}
-              </option>
+              {PREDEFINED_MODELS.map((model) => (
+                <option key={model} value={model}>
+                  {model.startsWith("qwen")
+                    ? t("settings.ai.qwenRecommended", "Qwen3-30B (推荐)")
+                    : MODEL_LABELS[model]}
+                </option>
+              ))}
             </select>
           )}
           <div className="flex items-center space-x-2">
@@ -356,6 +395,7 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
               type="text"
               value={settings.ai_model}
               onChange={(e) => onInputChange("ai_model", e.target.value)}
+              list="provider-model-list"
               placeholder={t(
                 "settings.ai.modelPlaceholder",
                 "输入自定义模型名称",
@@ -367,6 +407,14 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
         <p className="mt-1 text-xs text-[#86868b]">
           {t("settings.ai.modelDesc", "选择用于文本优化的AI模型")}
         </p>
+        {/* [20260907_Feat_233_ListModels] Provider-derived suggestions; an
+            empty list (derivation failed or unsupported provider) renders as
+            pure manual input, per ticket #233's silent-fallback contract. */}
+        <datalist id="provider-model-list">
+          {providerModels.map((model) => (
+            <option key={model} value={model} />
+          ))}
+        </datalist>
       </div>
 
       {/* AI 参数调节 */}
@@ -406,10 +454,15 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
               {settings.ai_max_tokens}
             </span>
           </div>
+          {/* [20260815_Fix_AiMaxTokensDefault] Range 1024–16384 (was 500–4096):
+              reasoning models count thinking tokens against max_tokens, so
+              the old ceiling starved them; 16384 matches what the 150s
+              request timeout can realistically deliver. Min 1024 keeps every
+              value (incl. default 8192) on the 256-step notch grid. */}
           <input
             type="range"
-            min="500"
-            max="4096"
+            min="1024"
+            max="16384"
             step="256"
             value={settings.ai_max_tokens}
             onChange={(e) =>
@@ -418,8 +471,8 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
             className="w-full h-1.5 bg-[#d2d2d7] dark:bg-[#3a3a3c] rounded-full appearance-none cursor-pointer accent-[#0071e3]"
           />
           <div className="flex justify-between text-[10px] text-[#86868b]">
-            <span>500</span>
-            <span>4096</span>
+            <span>1024</span>
+            <span>16384</span>
           </div>
         </div>
       </div>

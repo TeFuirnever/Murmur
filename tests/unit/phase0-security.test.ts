@@ -38,19 +38,8 @@ describe("Phase 0: Settings import whitelist", () => {
     expect(validateSetting("close_behavior", "hide")).toBe(true);
     expect(validateSetting("window_always_on_top", true)).toBe(true);
     expect(validateSetting("enable_ai_optimization", true)).toBe(true);
-    // [20260729_Feat_EffectsToggle] effects_enabled must be whitelisted or
-    // saves silently fail (validateSetting rejects unknown keys). Regression
-    // guard against accidental removal from ALLOWED_SETTING_KEYS.
-    expect(validateSetting("effects_enabled", true)).toBe(true);
-  });
-
-  // [20260729_Feat_EffectsToggle] Guard against typos in the effects setting
-  // key name — a rename without updating the allowlist would break persistence
-  // with no signal to the user.
-  it("should reject misspelled effects setting key", () => {
-    expect(validateSetting("effects_enable", true)).toBe(false);
-    expect(validateSetting("effect_enabled", true)).toBe(false);
-    expect(validateSetting("effects_enabled_typo", true)).toBe(false);
+    // [20260816_Refactor_RemoveEffects] the effects_enabled whitelist entry
+    // and its typo guards were removed with the visual-effects feature.
   });
 
   it("should reject keys that are too long", () => {
@@ -146,7 +135,9 @@ describe("Phase 0: Ghost dependencies removed from package.json", () => {
     "es-errors",
     "es-object-atoms",
     "es-set-tostringtag",
-    "file-uri-to-path",
+    // [20260816_Fix_WinBindingsHelper] removed from ghost deps: it is now a
+    // deliberate direct production dependency (issue #157 Windows packaging
+    // fix) so electron-builder ships bindings' runtime helper in app.asar.
     "get-intrinsic",
     "math-intrinsics",
     "mime-db",
@@ -158,10 +149,15 @@ describe("Phase 0: Ghost dependencies removed from package.json", () => {
   });
 });
 
-// [20260612_Fix_BindingsPackaging] Ensure native sqlite runtime helper is packaged.
+// [20260612_Fix_BindingsPackaging]→[20260905_Feat_NodeSqlite] The native
+// sqlite runtime helpers are RETIRED with better-sqlite3 (spec #226): sqlite
+// now comes from node:sqlite inside the runtime, so the loader pair must
+// stay OUT of production dependencies (they previously shipped in every
+// installer as the addon's loader).
 describe("Phase 0: Native sqlite runtime dependencies", () => {
-  it("should keep bindings as a direct production dependency", () => {
-    expect(pkg.dependencies).toHaveProperty("bindings");
+  it("keeps the retired native loader pair out of production dependencies", () => {
+    expect(pkg.dependencies).not.toHaveProperty("bindings");
+    expect(pkg.dependencies).not.toHaveProperty("file-uri-to-path");
   });
 });
 // [20260612_Fix_BindingsPackaging] END

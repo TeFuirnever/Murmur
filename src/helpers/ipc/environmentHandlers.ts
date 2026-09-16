@@ -17,10 +17,8 @@ interface FunasrManager {
       funasr_installed?: boolean;
     }
   >;
-  installFunASR(
-    cb: (progress: Record<string, unknown>) => void,
-  ): Promise<unknown>;
-  restartServer(): Promise<unknown>;
+  // [20260822_T12_IdleUnload] Hotkey-down reload pre-trigger (#190).
+  reloadModels(): Promise<unknown>;
   modelsInitialized: boolean;
   serverReady: boolean;
   initializationPromise: Promise<unknown> | null;
@@ -65,19 +63,24 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
     };
   });
 
-  ipcMain.handle(C.FUNASR.INSTALL, async (event) => {
-    return await funasrManager.installFunASR((progress) => {
-      event.sender.send(C.EVENTS.FUNASR_INSTALL_PROGRESS, progress);
-    });
-  });
+  // [20260906_Refactor_DeadChannelCleanup] Ticket #250: the FUNASR.INSTALL
+  // handler (and its install-progress event sender) and the FUNASR.RESTART
+  // handler were removed — zero renderer callers (orphans yellow list).
 
-  ipcMain.handle(C.FUNASR.RESTART, async () => {
+  // [20260822_T12_IdleUnload] Hotkey-down pre-trigger: fire-and-forget —
+  // the renderer never blocks on the reload; the transcription request
+  // that follows waits on the Python models lock instead.
+  ipcMain.handle(C.FUNASR.RELOAD_MODELS, async () => {
     try {
-      logger.info?.("手动重启FunASR服务器");
-      const result = await funasrManager.restartServer();
-      return result;
+      // [T12 review MINOR] The promise can reject (reload timeout / server
+      // died mid-reload) — route it to the logger, not the global
+      // unhandledRejection handler.
+      funasrManager
+        .reloadModels()
+        .catch((e: unknown) => logger.warn?.("模型重载失败", e));
+      return { success: true, message: "模型重载已触发" };
     } catch (error) {
-      logger.error?.("重启FunASR服务器失败", error);
+      logger.error?.("触发模型重载失败", error);
       return { success: false, error: (error as Error).message };
     }
   });

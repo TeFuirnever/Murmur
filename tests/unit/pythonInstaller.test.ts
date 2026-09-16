@@ -793,3 +793,231 @@ describe("PythonInstaller", () => {
     });
   });
 });
+
+// [20260816_Test_BranchPush] Remaining reachable arcs: the missing
+// content-length header, macOS pkg URL selection per arch, the success/error
+// cleanup guards around unlink, yum/pacman without a progress callback, the
+// Windows download-data arc without a callback, and the macOS absolute-path
+// continue loop. Real-download-only branches stay out of scope.
+describe("[20260816_Test_BranchPush] PythonInstaller branch coverage", () => {
+  let installer: InstanceType<typeof PythonInstaller>;
+
+  /** Build a response emitter with explicit headers (default: none). */
+  function makeResponseWithHeaders(
+    statusCode: number,
+    headers: Record<string, string>,
+  ): EventEmitter {
+    const res = new EventEmitter();
+    (res as unknown as { statusCode: number }).statusCode = statusCode;
+    (res as unknown as { headers: Record<string, string> }).headers = headers;
+    (res as unknown as { pipe: () => void }).pipe = () => {};
+    return res;
+  }
+
+  /** Capture the write stream fs.createWriteStream would return. */
+  function captureWriteStream(): EventEmitter & { close: () => void } {
+    const stream = new EventEmitter() as EventEmitter & { close: () => void };
+    stream.close = () => {};
+    vi.spyOn(fs, "createWriteStream").mockReturnValue(
+      stream as unknown as fs.WriteStream,
+    );
+    return stream;
+  }
+
+  /**
+   * Wire a full fake download: https.get one-shot returning a 200 response
+   * with a content-length, plus a captured write stream. Returns the spy on
+   * https.get (for URL assertions) and both emitters.
+   */
+  function setupDownload(): {
+    spy: ReturnType<typeof mockHttpsGetOnce>;
+    response: EventEmitter;
+    stream: EventEmitter & { close: () => void };
+  } {
+    const response = makeResponseWithHeaders(200, { "content-length": "10" });
+    const spy = mockHttpsGetOnce(response, makeRequest());
+    const stream = captureWriteStream();
+    return { spy, response, stream };
+  }
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    setPlatform(ORIG_PLATFORM);
+    setArch(ORIG_ARCH);
+    installer = new PythonInstaller();
+  });
+
+  afterEach(() => {
+    restorePlatform();
+    vi.restoreAllMocks();
+  });
+
+  it("never reports progress when the response lacks content-length", async () => {
+    const response = makeResponseWithHeaders(200, {});
+    mockHttpsGetOnce(response, makeRequest());
+    const stream = captureWriteStream();
+
+    const progressSpy = vi.fn();
+    const promise = installer.downloadFile(
+      "https://example.com/x.bin",
+      "/tmp/branch-push.bin",
+      progressSpy,
+    );
+    await new Promise((r) => setImmediate(r));
+    response.emit("data", Buffer.from("hello"));
+    stream.emit("finish");
+
+    await expect(promise).resolves.toBeUndefined();
+    expect(progressSpy).not.toHaveBeenCalled();
+  });
+
+  it("downloads the macosx10.9 pkg on x64 and macos11 on arm64", async () => {
+    // x64: assert the URL handed to https.get. Explicit because the test
+    // host may itself be arm64.
+    setArch("x64");
+    mockedRunCommand
+      .mockRejectedValueOnce(new Error("no brew"))
+      .mockResolvedValueOnce({ output: "", code: 0 });
+    const x64 = setupDownload();
+    const x64Promise = installer.installPythonMacOS();
+    await new Promise((r) => setImmediate(r));
+    x64.stream.emit("finish");
+    await x64Promise;
+    expect(String(x64.spy.mock.calls[0]?.[0])).toContain("macosx10.9");
+
+    // arm64: same flow, macos11 pkg.
+    vi.restoreAllMocks();
+    vi.resetAllMocks();
+    mockedRunCommand
+      .mockRejectedValueOnce(new Error("no brew"))
+      .mockResolvedValueOnce({ output: "", code: 0 });
+    setArch("arm64");
+    const arm = setupDownload();
+    const armPromise = installer.installPythonMacOS();
+    await new Promise((r) => setImmediate(r));
+    arm.stream.emit("finish");
+    await armPromise;
+    expect(String(arm.spy.mock.calls[0]?.[0])).toContain("macos11");
+  });
+
+  it("cleans up the pkg after a successful official install", async () => {
+    mockedRunCommand
+      .mockRejectedValueOnce(new Error("no brew"))
+      .mockResolvedValueOnce({ output: "", code: 0 });
+    const { stream } = setupDownload();
+    const unlinkSpy = vi.spyOn(fs, "unlink").mockImplementation(() => {});
+
+    const promise = installer.installPythonMacOS();
+    await new Promise((r) => setImmediate(r));
+    stream.emit("finish");
+    const result = await promise;
+
+    expect(result).toEqual({ success: true, method: "official_installer" });
+    expect(unlinkSpy).toHaveBeenCalledWith(
+      path.join(os.tmpdir(), "python-3.11.9.pkg"),
+      expect.any(Function),
+    );
+  });
+
+  it("skips macOs error cleanup when the pkg file never materialized", async () => {
+    mockedRunCommand
+      .mockRejectedValueOnce(new Error("no brew"))
+      .mockRejectedValueOnce(new Error("installer failed"));
+    const { stream } = setupDownload();
+    const unlinkSpy = vi.spyOn(fs, "unlink").mockImplementation(() => {});
+    vi.spyOn(fs, "existsSync").mockReturnValue(false);
+
+    const promise = installer.installPythonMacOS();
+    await new Promise((r) => setImmediate(r));
+    stream.emit("finish");
+
+    await expect(promise).rejects.toThrow("installer failed");
+    expect(unlinkSpy).not.toHaveBeenCalled();
+  });
+
+  it("skips windows error cleanup when the exe file never materialized", async () => {
+    setPlatform("win32");
+    mockedRunCommand
+      .mockResolvedValueOnce({ output: "", code: 0 }) // reg (admin)
+      .mockRejectedValueOnce(new Error("exit 1")); // installer exe
+    const { stream } = setupDownload();
+    const unlinkSpy = vi.spyOn(fs, "unlink").mockImplementation(() => {});
+    vi.spyOn(fs, "existsSync").mockReturnValue(false);
+
+    const promise = installer.installPythonWindows();
+    await new Promise((r) => setImmediate(r));
+    stream.emit("finish");
+
+    await expect(promise).rejects.toThrow("exit 1");
+    expect(unlinkSpy).not.toHaveBeenCalled();
+  });
+
+  it("streams windows download data without a progress callback", async () => {
+    setPlatform("win32");
+    setArch("x64");
+    mockedRunCommand
+      .mockResolvedValueOnce({ output: "", code: 0 }) // reg (admin)
+      .mockResolvedValueOnce({ output: "", code: 0 }); // installer exe
+    const { response, stream } = setupDownload();
+
+    const promise = installer.installPythonWindows();
+    await new Promise((r) => setImmediate(r));
+    // Data flows with NO progress callback installed — the guarded branch.
+    response.emit("data", Buffer.from("exe"));
+    stream.emit("finish");
+
+    const result = await promise;
+    expect(result).toEqual({ success: true, method: "official_installer" });
+  });
+
+  it("falls back to yum without a progress callback", async () => {
+    mockedRunCommand
+      .mockRejectedValueOnce(new Error("no apt"))
+      .mockResolvedValue({ output: "", code: 0 });
+
+    const result = await installer.installPythonLinux();
+
+    expect(result).toEqual({ success: true, method: "yum" });
+  });
+
+  it("falls back to pacman without a progress callback", async () => {
+    mockedRunCommand
+      .mockRejectedValueOnce(new Error("no apt"))
+      .mockRejectedValueOnce(new Error("no yum"))
+      .mockResolvedValue({ output: "", code: 0 });
+
+    const result = await installer.installPythonLinux();
+
+    expect(result).toEqual({ success: true, method: "pacman" });
+  });
+
+  it("continues past a failing macOS absolute path to the next candidate", async () => {
+    setPlatform("darwin");
+    // PATH commands all fail.
+    mockedRunCommand.mockRejectedValueOnce(new Error("x"));
+    mockedRunCommand.mockRejectedValueOnce(new Error("x"));
+    mockedRunCommand.mockRejectedValueOnce(new Error("x"));
+    // First absolute path exists but its --version call fails...
+    mockedRunCommand.mockRejectedValueOnce(new Error("corrupt install"));
+    // ...the second exists and reports a usable Python.
+    mockedRunCommand.mockResolvedValueOnce({
+      output: "Python 3.11.9",
+      code: 0,
+    });
+    const existsSpy = vi
+      .spyOn(fs, "existsSync")
+      .mockImplementation((p: fs.PathLike) => {
+        const s = String(p);
+        return (
+          s === "/usr/local/bin/python3" || s === "/usr/local/bin/python3.11"
+        );
+      });
+
+    const result = await installer.isPythonInstalled();
+
+    expect(result.installed).toBe(true);
+    expect(result.command).toBe("/usr/local/bin/python3.11");
+    expect(result.version).toBe(3.11);
+    existsSpy.mockRestore();
+  });
+});

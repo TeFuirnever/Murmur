@@ -22,6 +22,11 @@ const MIN_TIMEOUT_MS = 300_000; // 5 min — minimum for any file
 const MAX_TIMEOUT_MS = 3_600_000; // 60 min — hard cap
 const TIMEOUT_PER_MB_MS = 6_000; // 6s per MB of audio (RTFx ~10x on CPU)
 
+// [20260822_T12_IdleUnload] Cold Windows reload can reach minutes
+// (Defender scans + HDD); 10 minutes matches Python's per-loader join
+// ceiling and keeps the request alive through progress renewals.
+const RELOAD_COMMAND_TIMEOUT_MS = 600_000;
+
 /** Timeout result for transcription. */
 export interface TranscriptionTimeout {
   ms: number;
@@ -47,6 +52,30 @@ function calculateTranscriptionTimeout(
   const minutes = Math.round(ms / 60_000);
   const label = `文件转录超时（${minutes}分钟）`;
   return { ms, label };
+}
+
+// [20260817_T2_KillTree] Ticket #179 (spec #177 T2): the ONLY way any code
+// path may kill the Python server process. On Windows proc.kill() only kills
+// the direct child, so a wedged server leaks its whole subprocess tree
+// (~1GB RSS per crash). taskkill /T kills the tree, /F forces termination;
+// spawnSync blocks until the tree is dead so callers may respawn right after.
+export function killProcessTree(proc: ChildProcess | null): void {
+  if (!proc) return;
+  try {
+    if (process.platform === "win32" && proc.pid) {
+      // [20260817_T2_KillTreeReview] taskkill exit status 1 ("process not
+      // found") is the expected already-dead case; other non-zero statuses
+      // (e.g. access denied) are also swallowed here — callers respawn right
+      // after, and a surviving tree would be caught by the next ping cycle.
+      spawnSync("taskkill", ["/T", "/F", "/PID", String(proc.pid)], {
+        windowsHide: true,
+      });
+    } else {
+      proc.kill("SIGKILL");
+    }
+  } catch (_e) {
+    /* already dead */
+  }
 }
 
 /** Logger interface (accepts console or LogManager). */
@@ -99,6 +128,9 @@ class FunASRServer {
   private maxRestarts: number;
   private _startupParams: StartupParams | null;
   private _stopping: boolean;
+  // [20260822_T12_IdleUnload] True while an intentional reload_models
+  // command is in flight — suppresses health-monitor crash handling.
+  private _reloadInFlight: boolean;
 
   // [20260724_TS_BigBang_Export] Exposed as a static so external consumers
   // (and tests) can access it via `FunASRServer.calculateTranscriptionTimeout`
@@ -117,6 +149,7 @@ class FunASRServer {
     this.maxRestarts = 3;
     this._startupParams = null;
     this._stopping = false;
+    this._reloadInFlight = false;
   }
 
   private _saveStartupParams(params: StartupParams): void {
@@ -211,7 +244,13 @@ class FunASRServer {
           }
         });
 
+        // [20260817_T2_KillTreeReview] Capture the process identity: a
+        // stale close from a superseded process must not tear down state
+        // belonging to the current one (crash handling removes these
+        // listeners before killing, this guard covers any other stale path).
+        const proc = this.serverProcess;
         this.serverProcess.on("close", (code) => {
+          if (this.serverProcess !== proc) return;
           this.logger.warn &&
             this.logger.warn("FunASR服务器进程退出", { code });
           this._stopHealthMonitor();
@@ -239,7 +278,9 @@ class FunASRServer {
         setTimeout(() => {
           if (!initResponseReceived) {
             this.logger.warn && this.logger.warn("FunASR服务器启动超时");
-            if (this.serverProcess) this.serverProcess.kill();
+            // [20260817_T2_KillTree] Tree kill — bare kill() leaves the
+            // Python child tree alive on Windows.
+            killProcessTree(this.serverProcess);
             reject(new Error("FunASR服务器启动超时(120秒)"));
           }
         }, 120000);
@@ -254,6 +295,14 @@ class FunASRServer {
     this.restartCount = 0;
     this.healthMonitorInterval = setInterval(async () => {
       if (!this.serverProcess || !this.serverReady) return;
+      // [20260822_T12_IdleUnload] Ticket #190: an intentional reload runs
+      // on the Python worker thread and can take minutes on a cold Windows
+      // start — the ping is still answered (read loop stays free), but a
+      // slow queued-ahead file job can stall it past the 5s timeout.
+      // Suppress crash handling for the duration; reloadModels owns the
+      // flag. Intentional reloads never touch restartCount (only
+      // _handleServerCrash increments it).
+      if (this._reloadInFlight) return;
       try {
         const result = (await Promise.race([
           this._sendServerCommand({ action: "ping" }),
@@ -298,6 +347,18 @@ class FunASRServer {
     if (this._startupParams) {
       const { pythonEnv, pythonCmd, serverPath, modelCachePath } =
         this._startupParams;
+      // [20260817_T2_KillTreeReview] A ping-timeout crash means the process
+      // is wedged, not exited — dropping the handle without killing leaks
+      // the entire Python tree (double ~1GB RSS within one crash cycle).
+      // Kill the tree BEFORE respawning. The close listeners are removed
+      // first: the kill's close event arrives asynchronously (after this
+      // function has already respawned), and a flag-based guard can never
+      // cover that window — only removal (plus the identity guard on the
+      // listener) prevents the stale close from re-entering crash handling
+      // and tearing down the fresh process.
+      const oldProc = this.serverProcess;
+      if (oldProc) oldProc.removeAllListeners("close");
+      killProcessTree(oldProc);
       this.serverProcess = null;
       this.serverReady = false;
       try {
@@ -331,7 +392,9 @@ class FunASRServer {
       try {
         await this._sendServerCommand({ action: "exit" });
       } catch (_error) {
-        this.serverProcess.kill();
+        // [20260817_T2_KillTree] Exit command failed (dead/wedged pipe) —
+        // tree kill so Windows does not keep the Python child tree.
+        killProcessTree(this.serverProcess);
       }
       this.messageRouter.detach();
       this.serverProcess = null;
@@ -341,6 +404,11 @@ class FunASRServer {
   }
 
   async gracefulShutdown(): Promise<void> {
+    // [20260817_T2_KillTreeReview] Mark stopping so the close event fired by
+    // the timeout-arm tree kill below cannot trigger a crash-restart while
+    // the app is quitting (which would respawn a Python process that
+    // outlives the app). _stopFunASRServer already does the same.
+    this._stopping = true;
     this._stopHealthMonitor();
     if (!this.serverProcess) return;
     const proc = this.serverProcess;
@@ -351,22 +419,10 @@ class FunASRServer {
     }
     await new Promise((resolve) => {
       const timeout = setTimeout(() => {
-        try {
-          // On Windows, use taskkill to kill the entire process tree.
-          // proc.kill() only kills the direct child, leaving orphan Python
-          // subprocesses. taskkill /T kills the tree; /F forces termination.
-          if (process.platform === "win32" && proc.pid) {
-            // spawnSync blocks until taskkill completes, ensuring the entire
-            // Python process tree is dead before we resolve and exit.
-            spawnSync("taskkill", ["/T", "/F", "/PID", String(proc.pid)], {
-              windowsHide: true,
-            });
-          } else {
-            proc.kill("SIGKILL");
-          }
-        } catch (_e) {
-          /* already dead */
-        }
+        // [20260817_T2_KillTree] Shared tree killer (Windows process-tree
+        // task-kill via blocking spawnSync; SIGKILL elsewhere). See
+        // killProcessTree for rationale.
+        killProcessTree(proc);
         resolve(undefined);
       }, 5000);
       proc.on("close", () => {
@@ -385,6 +441,51 @@ class FunASRServer {
     this.modelsInitialized = false;
     this.initializationPromise = null;
     this.restartCount = 0;
+  }
+
+  // [20260822_T12_IdleUnload] Ticket #190 (spec #177 T12): the two T11
+  // protocol commands with their TS-side envelopes. unload uses the
+  // default timeout (it only frees references — near-instant); reload
+  // gets an explicit LONG envelope because a cold Windows reload can
+  // reach minutes and the 60s default would reject while Python keeps
+  // loading (the result would then be dropped as an unknown request).
+  async unloadModels(): Promise<unknown> {
+    if (!this.serverProcess || !this.serverReady) {
+      return { success: false, error: "FunASR服务器未就绪" };
+    }
+    const result = (await this.messageRouter.sendCommand("unload_models")) as {
+      success?: boolean;
+    };
+    // [T12 review BLOCKER] The TS-side flag drives STATUS → renderer
+    // isReady; without this the unloaded server still reads "ready" and
+    // the hotkey pre-trigger never fires in its core scenario.
+    if (result && result.success) {
+      this.modelsInitialized = false;
+    }
+    return result;
+  }
+
+  async reloadModels(): Promise<unknown> {
+    if (!this.serverProcess || !this.serverReady) {
+      return { success: false, error: "FunASR服务器未就绪" };
+    }
+    this._reloadInFlight = true;
+    try {
+      const result = (await this.messageRouter.sendCommand(
+        "reload_models",
+        {},
+        {
+          timeout: RELOAD_COMMAND_TIMEOUT_MS,
+          timeoutError: "模型重载超时",
+        },
+      )) as { success?: boolean };
+      if (result && result.success) {
+        this.modelsInitialized = true;
+      }
+      return result;
+    } finally {
+      this._reloadInFlight = false;
+    }
   }
 
   async transcribeAudio(

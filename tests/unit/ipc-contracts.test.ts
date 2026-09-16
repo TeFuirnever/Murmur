@@ -50,7 +50,6 @@ describe("ipc-contracts", () => {
 
   it("WINDOW domain has all expected channels", () => {
     expect(C.WINDOW.HIDE).toBe("hide-window");
-    expect(C.WINDOW.SHOW).toBe("show-window");
     expect(C.WINDOW.CLOSE).toBe("close-window");
     expect(C.WINDOW.SET_TOP).toBe("set-always-on-top");
   });
@@ -58,15 +57,16 @@ describe("ipc-contracts", () => {
   it("TRANSCRIPTION domain has all expected channels", () => {
     expect(C.TRANSCRIPTION.AUDIO).toBe("transcribe-audio");
     expect(C.TRANSCRIPTION.SAVE).toBe("save-transcription");
+    // [20260906_Feat_TranscriptionUpdate] Manual polish write-back channel
+    // (spec #193 T1, ticket #228).
+    expect(C.TRANSCRIPTION.UPDATE).toBe("update-transcription");
     expect(C.TRANSCRIPTION.GET_ALL).toBe("get-transcriptions");
     expect(C.TRANSCRIPTION.DELETE).toBe("delete-transcription");
     expect(C.TRANSCRIPTION.CLEAR).toBe("clear-all-transcriptions");
   });
 
   it("EVENTS domain has all expected channels", () => {
-    expect(C.EVENTS.TOGGLE_DICTATION).toBe("toggle-dictation");
     expect(C.EVENTS.HOTKEY_TRIGGERED).toBe("hotkey-triggered");
-    expect(C.EVENTS.F2_DOUBLE_CLICK).toBe("f2-double-click");
     expect(C.EVENTS.MODEL_DOWNLOAD_PROGRESS).toBe("model-download-progress");
     expect(C.EVENTS.FILE_TRANSCRIPTION_PROGRESS).toBe(
       "file-transcription-progress",
@@ -77,7 +77,6 @@ describe("ipc-contracts", () => {
     expect(C.SETTINGS.GET).toBe("get-setting");
     expect(C.SETTINGS.SET).toBe("set-setting");
     expect(C.SETTINGS.GET_ALL).toBe("get-all-settings");
-    expect(C.SETTINGS.RESET).toBe("reset-settings");
   });
 
   it("AI domain has process and check-status channels", () => {

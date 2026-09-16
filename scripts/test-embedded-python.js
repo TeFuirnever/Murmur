@@ -5,7 +5,15 @@ const { spawn } = require("child_process");
 class EmbeddedPythonTester {
   constructor() {
     this.pythonDir = path.join(__dirname, "..", "python");
-    this.pythonPath = path.join(this.pythonDir, "bin", "python3.11");
+    // [20260817_T1_EmbeddedLayout] Platform-aware interpreter path — must
+    // stay in sync with embeddedPythonLayout in src/helpers/pythonEnvironment.ts
+    // and the getters in scripts/prepare-embedded-python.js. The old
+    // bin/python3.11 hardcode made this probe report a missing environment
+    // on Windows, where the packaging layout is python/python.exe.
+    this.pythonPath =
+      process.platform === "win32"
+        ? path.join(this.pythonDir, "python.exe")
+        : path.join(this.pythonDir, "bin", "python3.11");
   }
 
   async runTests() {

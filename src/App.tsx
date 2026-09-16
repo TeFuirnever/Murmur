@@ -3,34 +3,81 @@ import "./index.css";
 import { toast } from "sonner";
 import { LoadingDots } from "./components/ui/loading-dots";
 import { useHotkey } from "./hooks/useHotkey";
+// [20260905_Fix_246_HotkeySettingsUi] Shared default for the persisted
+// recording hotkey (read on mount + SETTINGS_UPDATE re-apply).
+import { DEFAULT_HOTKEY } from "./settings/hotkeyRecorder";
 import { useWindowDrag } from "./hooks/useWindowDrag";
 import { useRecording, determineProcessingMode } from "./hooks/useRecording";
 import { useModelStatus } from "./hooks/useModelStatus";
 import { Settings, History, Minus, Square, X, Maximize2 } from "lucide-react";
-import SettingsPanel from "./components/SettingsPanel";
 import { ModelDownloadProgress } from "./components/ui/model-status-indicator";
 import FileImport from "./components/FileImport";
+import { useFileTranscription } from "./hooks/useFileTranscription";
+import { fileStateToBotState } from "./lib/botFileState";
 import TranscriptionResult from "./components/TranscriptionResult";
 import { SoundWaveIcon } from "./components/SoundWaveIcon";
-import { LoadingIndicator } from "./components/LoadingIndicator";
 import { VoiceWaveIndicator } from "./components/VoiceWaveIndicator";
 import { Tooltip } from "./components/Tooltip";
+import { useTranslation } from "react-i18next";
+// [20260905_Fix_247_I18nMainHistory] TFunction types the translate callback
+// passed to the module-scope stage-text helper.
+import type { TFunction } from "i18next";
+// [20260905_Feat_BloubMascotWiring] bloub bot mascot: engine-driven status
+// avatar in the title bar (spec #224 ticket 3)
+import { BloubBot, type BloubBotRef } from "./components/BloubBot";
+import type { StateId } from "./bot/states";
+import {
+  COLOR_BY_ID,
+  SHAPE_BY_ID,
+  type ColorId,
+  type ShapeId,
+} from "./bot/skins";
+import { EXPRESSION_BY_ID, type ExpressionId } from "./bot/expressions";
 
-// 动态导入设置页面组件
-const SettingsPage = React.lazy(() =>
-  import("./settings").then((module) => ({ default: module.SettingsPage })),
-);
+// [20260816_Refactor_DeadChannels] The in-app lazy SettingsPage route was
+// removed — the settings window is a separate entry (settings.html) in both
+// dev and production now, so nothing renders SettingsPage inside App.
+
+// [20260815_Refactor_StageTextDedup] The modelStatus.stage -> user text
+// decision tree used to be copy-pasted in getMicButtonProps (tooltip) and the
+// status paragraph. This helper carries the branches whose text is identical
+// everywhere; the toast block and the paragraph keep their intentionally
+// different (emoji / long-form) variants.
+// [20260905_Fix_247_I18nMainHistory] User-visible stage text goes through
+// i18n — the translate function is passed in because this helper lives at
+// module scope (issue #247).
+type StageStatusSource = {
+  stage: string;
+  error: string | null;
+  downloadProgress: number;
+};
+
+const getStageStatusText = (
+  status: StageStatusSource,
+  t: TFunction<"translation", undefined>,
+): string => {
+  switch (status.stage) {
+    case "need_download":
+      return t("app.stageNeedDownload", "请先下载AI模型文件");
+    case "downloading":
+      return t("app.stageDownloading", "模型下载中... {{progress}}%", {
+        progress: status.downloadProgress || 0,
+      });
+    case "loading":
+      return t("app.stageLoadingModel", "模型加载中，请稍候...");
+    case "error":
+      return t("app.stageError", "模型错误: {{error}}", {
+        error: status.error ?? "",
+      });
+    default:
+      return t("app.stageNotReady", "模型未就绪，请稍候...");
+  }
+};
 
 export default function App() {
-  // 检查URL参数来决定渲染哪个页面
-  const urlParams = new URLSearchParams(window.location.search);
-  const page = urlParams.get("page");
-
   const [isHovered, setIsHovered] = useState(false);
   const [originalText, setOriginalText] = useState("");
   const [processedText, setProcessedText] = useState("");
-  const [, setShowTextArea] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const [appMode, setAppMode] = useState("recording"); // recording | file-import
   const [savedRecordingId, setSavedRecordingId] = useState<number | null>(null);
   const [recordingDuration, setRecordingDuration] = useState<number>(0);
@@ -39,6 +86,7 @@ export default function App() {
   const { handleMouseDown, handleMouseMove, handleMouseUp, handleClick } =
     useWindowDrag();
   const modelStatus = useModelStatus();
+  const { t, i18n } = useTranslation();
 
   const handleRecordingCompleteRef = useRef<
     ((result: string | Record<string, unknown>) => void) | null
@@ -71,45 +119,112 @@ export default function App() {
   const PASTE_DEBOUNCE_TIME = 1000; // 1秒内相同文本不重复粘贴
 
   // 缓存设置项，避免每次操作都走 IPC
-  const settingsRef = useRef({ auto_paste: "paste", close_behavior: "hide" });
+  const settingsRef = useRef({
+    auto_paste: "paste",
+    close_behavior: "hide",
+    enable_ai_optimization: true,
+  });
+
+  // [20260905_Feat_BloubMascotWiring] title-bar bot mascot (spec #224)
+  const mascotRef = useRef<BloubBotRef>(null);
+  // [20260905_Feat_BloubSettings] catalogue selection from settings; state
+  // (not a ref) so the mascot hot-swaps on onSettingsUpdate
+  const [botAppearance, setBotAppearance] = useState<{
+    shape?: string;
+    color?: string;
+    expression?: string;
+  }>({});
+  // [20260905_Feat_BloubFileLift] file transcription lifted from FileImport so the mascot
+  // can see it (survey gap: the state used to be trapped in the component)
+  const fileTranscription = useFileTranscription();
+
+  // [20260911_Fix_338_DragDropImport] Issue #338: dropping an audio file
+  // anywhere on the main window did nothing — outside the FileDropZone (which
+  // only exists in file-import mode) no renderer code preventDefault()ed
+  // dragover, so Chromium discarded the drop before it reached business
+  // logic (and an unprevented drop can navigate the window to file://).
+  // These window-level handlers make the whole window a drop target that
+  // feeds the SAME pipeline as the dialog import (selectFileFromPath ->
+  // validateAudioFile IPC -> audioPathValidator), then switch to file-import
+  // mode so the result is visible. selectFileFromPath is a stable
+  // useCallback, so the listeners are registered once.
+  const selectDroppedFileFromPath = fileTranscription.selectFileFromPath;
+  useEffect(() => {
+    const handleWindowDragOver = (event: DragEvent) => {
+      // Required: Chromium only dispatches `drop` when dragover's default is
+      // prevented.
+      event.preventDefault();
+    };
+    const handleWindowDrop = (event: DragEvent) => {
+      // FileDropZone consumed this drop already (its handler preventDefaults
+      // during the bubble phase) — never import the same file twice.
+      if (event.defaultPrevented) return;
+      // Block Chromium's default file:// navigation for every drop.
+      event.preventDefault();
+      const droppedFile = event.dataTransfer?.files?.[0];
+      if (!droppedFile) return;
+      const droppedPath =
+        window.electronAPI?.getPathForFile?.(droppedFile) ||
+        (droppedFile as File & { path?: string }).path;
+      if (!droppedPath) return;
+      setAppMode("file-import");
+      void selectDroppedFileFromPath(droppedPath);
+    };
+    window.addEventListener("dragover", handleWindowDragOver);
+    window.addEventListener("drop", handleWindowDrop);
+    return () => {
+      window.removeEventListener("dragover", handleWindowDragOver);
+      window.removeEventListener("drop", handleWindowDrop);
+    };
+  }, [selectDroppedFileFromPath]);
+  // [20260911_Fix_338_DragDropImport] END
 
   // 安全粘贴函数
-  const safePaste = useCallback(async (text: string) => {
-    const now = Date.now();
-    const lastPaste = lastPasteRef.current;
+  const safePaste = useCallback(
+    async (text: string) => {
+      const now = Date.now();
+      const lastPaste = lastPasteRef.current;
 
-    // 防重复粘贴：如果是相同文本且在防抖时间内，则跳过
-    if (
-      lastPaste.text === text &&
-      now - lastPaste.timestamp < PASTE_DEBOUNCE_TIME
-    ) {
-      return;
-    }
-
-    // 更新最后粘贴记录
-    lastPasteRef.current = { text, timestamp: now };
-
-    try {
-      if (window.electronAPI) {
-        const autoPaste = settingsRef.current.auto_paste;
-        if (autoPaste === "clipboard_only") {
-          await window.electronAPI.copyText(text);
-          toast.success("文本已复制到剪贴板");
-        } else {
-          await window.electronAPI.pasteText(text);
-          toast.success("文本已自动粘贴到当前输入框");
-        }
-      } else {
-        await navigator.clipboard.writeText(text);
-        toast.info("文本已复制到剪贴板，请手动粘贴");
+      // 防重复粘贴：如果是相同文本且在防抖时间内，则跳过
+      if (
+        lastPaste.text === text &&
+        now - lastPaste.timestamp < PASTE_DEBOUNCE_TIME
+      ) {
+        return;
       }
-    } catch {
-      toast.error("操作失败", {
-        description:
-          "请检查辅助功能权限。文本已复制到剪贴板 - 请手动使用 Cmd+V 粘贴。",
-      });
-    }
-  }, []);
+
+      // 更新最后粘贴记录
+      lastPasteRef.current = { text, timestamp: now };
+
+      try {
+        if (window.electronAPI) {
+          const autoPaste = settingsRef.current.auto_paste;
+          if (autoPaste === "clipboard_only") {
+            await window.electronAPI.copyText(text);
+            toast.success(t("common.copiedToClipboard", "文本已复制到剪贴板"));
+          } else {
+            await window.electronAPI.pasteText(text);
+            toast.success(
+              t("common.autoPasteDone", "文本已自动粘贴到当前输入框"),
+            );
+          }
+        } else {
+          await navigator.clipboard.writeText(text);
+          toast.info(
+            t("common.copiedManualPaste", "文本已复制到剪贴板，请手动粘贴"),
+          );
+        }
+      } catch {
+        toast.error(t("common.operationFailed", "操作失败"), {
+          description: t(
+            "common.accessibilityPasteHint",
+            "请检查辅助功能权限。文本已复制到剪贴板 - 请手动使用 Cmd+V 粘贴。",
+          ),
+        });
+      }
+    },
+    [t],
+  );
 
   // 处理录音完成（FunASR识别完成）
   const handleRecordingComplete = useCallback(
@@ -121,7 +236,6 @@ export default function App() {
       ) {
         // 立即显示FunASR识别的原始文本
         setOriginalText(transcriptionResult.text as string);
-        setShowTextArea(true);
 
         // 清空之前的处理结果，等待AI优化
         setProcessedText("");
@@ -133,10 +247,21 @@ export default function App() {
 
         // 注意：不在这里保存到数据库，由 useRecording.js 统一处理保存逻辑
 
-        toast.success("🎤 语音识别完成，AI正在优化文本...");
+        toast.success(
+          t(
+            "app.toastRecognizedOptimizing",
+            "🎤 语音识别完成，AI正在优化文本...",
+          ),
+        );
+        // [20260905_Feat_BloubMascotWiring] with optimization disabled this is
+        // the end of the pipeline: celebrate. Otherwise the comet waits for
+        // the optimization-complete handler.
+        if (!settingsRef.current.enable_ai_optimization) {
+          mascotRef.current?.playOnce("comet");
+        }
       }
     },
-    [],
+    [t],
   );
 
   // 处理AI优化完成
@@ -154,16 +279,25 @@ export default function App() {
         // 自动粘贴AI优化后的文本
         await safePaste(optimizedResult.text as string);
 
-        toast.success("🤖 AI文本优化完成并已自动粘贴！");
+        // [20260905_Feat_BloubMascotWiring] end of the transcription pipeline
+        mascotRef.current?.playOnce("comet");
+        toast.success(
+          t("app.toastOptimizeComplete", "🤖 AI文本优化完成并已自动粘贴！"),
+        );
       } else {
         // 如果AI优化失败，则粘贴原始文本
         if (originalText) {
           await safePaste(originalText);
-          toast.info("AI优化失败，已粘贴原始识别文本");
+          toast.info(
+            t(
+              "app.toastOptimizeFailedPasted",
+              "AI优化失败，已粘贴原始识别文本",
+            ),
+          );
         }
       }
     },
-    [safePaste, originalText],
+    [safePaste, originalText, t],
   );
 
   handleRecordingCompleteRef.current = handleRecordingComplete;
@@ -174,78 +308,102 @@ export default function App() {
     try {
       if (window.electronAPI) {
         await window.electronAPI.copyText(text);
-        toast.success("文本已复制到剪贴板");
+        mascotRef.current?.playOnce("wink");
+        toast.success(t("common.copiedToClipboard", "文本已复制到剪贴板"));
       } else {
         await navigator.clipboard.writeText(text);
-        toast.success("文本已复制到剪贴板");
+        mascotRef.current?.playOnce("wink");
+        toast.success(t("common.copiedToClipboard", "文本已复制到剪贴板"));
       }
     } catch (error) {
-      toast.error(`无法复制文本到剪贴板: ${(error as Error).message}`);
+      toast.error(
+        t("app.toastCopyFailed", "无法复制文本到剪贴板: {{error}}", {
+          error: (error as Error).message,
+        }),
+      );
     }
   };
 
-  const handleRecordingAIOptimize = useCallback(async (text: string) => {
-    if (!window.electronAPI?.processText) {
-      throw new Error("AI 优化功能不可用");
-    }
-    const mode = determineProcessingMode(text);
-    const result = await window.electronAPI.processText(text, mode);
-    if (result?.success && result.text) {
-      setProcessedText(result.text);
-      return result.text;
-    }
-    throw new Error(result?.error || "AI 优化失败");
-  }, []);
+  const handleRecordingAIOptimize = useCallback(
+    async (text: string) => {
+      if (!window.electronAPI?.processText) {
+        throw new Error(t("app.aiUnavailable", "AI 优化功能不可用"));
+      }
+      const mode = determineProcessingMode(text);
+      const result = await window.electronAPI.processText(text, mode);
+      if (result?.success && result.text) {
+        setProcessedText(result.text);
+        return result.text;
+      }
+      throw new Error(
+        result?.error || t("app.aiOptimizeFailed", "AI 优化失败"),
+      );
+    },
+    [t],
+  );
 
   const resetRecordingState = useCallback(() => {
     setOriginalText("");
     setProcessedText("");
     setSavedRecordingId(null);
     setRecordingDuration(0);
-    setShowTextArea(false);
   }, []);
 
   // 处理模型下载
   const handleDownloadModels = useCallback(async () => {
     try {
-      toast.info("📥 开始下载模型文件...");
+      toast.info(t("app.toastDownloadStart", "📥 开始下载模型文件..."));
 
       const result = await modelStatus.downloadModels();
       if (result.success) {
-        toast.success("🎉 模型下载完成，正在加载...");
+        toast.success(
+          t("app.toastDownloadComplete", "🎉 模型下载完成，正在加载..."),
+        );
       } else {
-        toast.error(`❌ 模型下载失败: ${result.error}`);
+        toast.error(
+          t("app.toastDownloadFailed", "❌ 模型下载失败: {{error}}", {
+            error: result.error ?? "",
+          }),
+        );
       }
     } catch (error) {
-      toast.error(`❌ 模型下载失败: ${(error as Error).message}`);
+      toast.error(
+        t("app.toastDownloadFailed", "❌ 模型下载失败: {{error}}", {
+          error: (error as Error).message,
+        }),
+      );
     }
-  }, [modelStatus]);
+  }, [modelStatus, t]);
 
   // 切换录音状态
   const toggleRecording = useCallback(() => {
     // 检查模型状态
     if (modelStatus.stage === "need_download") {
-      toast.warning("📥 请先下载AI模型文件");
+      toast.warning(t("app.toastNeedDownload", "📥 请先下载AI模型文件"));
       return;
     }
 
     if (modelStatus.stage === "downloading") {
-      toast.warning("⬇️ 模型正在下载中，请稍候...");
+      toast.warning(t("app.toastDownloading", "⬇️ 模型正在下载中，请稍候..."));
       return;
     }
 
     if (modelStatus.stage === "loading") {
-      toast.warning("🤖 模型正在加载中，请稍候...");
+      toast.warning(t("app.toastLoadingModel", "🤖 模型正在加载中，请稍候..."));
       return;
     }
 
     if (modelStatus.stage === "error") {
-      toast.error(`❌ 模型错误: ${modelStatus.error}`);
+      toast.error(
+        t("app.toastModelError", "❌ 模型错误: {{error}}", {
+          error: modelStatus.error ?? "",
+        }),
+      );
       return;
     }
 
     if (!modelStatus.isReady) {
-      toast.warning("⏳ 模型未就绪，请稍候...");
+      toast.warning(t("app.toastNotReady", "⏳ 模型未就绪，请稍候..."));
       return;
     }
 
@@ -260,25 +418,84 @@ export default function App() {
     isRecordingProcessing,
     startRecording,
     stopRecording,
+    t,
   ]);
 
   // 使用热键Hook，不再使用F2双击功能
   const { hotkey, syncRecordingState, registerHotkey } = useHotkey();
 
-  // 注册传统热键监听
-  useEffect(() => {
-    const initializeHotkey = async () => {
-      try {
-        await registerHotkey("CommandOrControl+Shift+Space");
-      } catch {
+  // [20260905_Fix_246_HotkeySettingsUi] The hotkey comes from the persisted
+  // "hotkey" setting (edited in the settings window's General tab recorder),
+  // not a hardcoded combo — the old toast pointed at an entry that did not
+  // exist. Applied on mount and re-applied whenever SETTINGS_UPDATE carries
+  // a hotkey change; on registration failure the warning stays truthful now
+  // that the settings entry exists.
+  const applyHotkeySetting = useCallback(async () => {
+    if (!window.electronAPI?.getSetting) return;
+    try {
+      const saved = await window.electronAPI.getSetting(
+        "hotkey",
+        DEFAULT_HOTKEY,
+      );
+      const combo =
+        typeof saved === "string" && saved.trim() ? saved : DEFAULT_HOTKEY;
+      const ok = await registerHotkey(combo);
+      if (!ok) {
         toast.warning(
-          "快捷键注册失败，可能被其他应用占用。可在设置中更换快捷键。",
+          t(
+            "app.hotkeyRegisterFailed",
+            "快捷键注册失败，可能被其他应用占用。可在设置中更换快捷键。",
+          ),
         );
       }
-    };
+    } catch (error) {
+      // [20260905_Fix_246_HotkeyReplaceAtomic] A rejected getSetting /
+      // registerHotkey IPC (storage failure, bridge conflict) leaves the
+      // combo unregistered just like a success=false — warn the user the
+      // same way instead of surfacing an unhandled rejection.
+      if (window.electronAPI?.log) {
+        window.electronAPI.log("error", "读取快捷键设置失败:", error);
+      }
+      toast.warning(
+        t(
+          "app.hotkeyRegisterFailed",
+          "快捷键注册失败，可能被其他应用占用。可在设置中更换快捷键。",
+        ),
+      );
+    }
+  }, [registerHotkey, t]);
 
-    initializeHotkey();
-  }, [registerHotkey]);
+  // 注册传统热键监听
+  useEffect(() => {
+    applyHotkeySetting();
+  }, [applyHotkeySetting]);
+
+  // 设置窗口更改热键后即时重新注册
+  useEffect(() => {
+    if (!window.electronAPI?.onSettingsUpdate) return;
+    const unsub = window.electronAPI.onSettingsUpdate((data) => {
+      if (data.key === "hotkey") {
+        applyHotkeySetting();
+      }
+      // [20260905_Fix_249_ReviewMinor] Language switches from the settings
+      // window apply live in this window too. The broadcast carries only the
+      // KEY — the persisted VALUE lives in the settings DB (this window's
+      // localStorage is never written for language), so read it back via IPC.
+      if (data.key === "language") {
+        window.electronAPI
+          ?.getSetting?.("language", "zh-CN")
+          .then((value) => {
+            i18n.changeLanguage(
+              typeof value === "string" && value ? value : "zh-CN",
+            );
+          })
+          .catch(() => {
+            // Broadcast raced app shutdown — nothing to apply.
+          });
+      }
+    });
+    return unsub;
+  }, [applyHotkeySetting, i18n]);
 
   // 处理关闭窗口
   const handleClose = () => {
@@ -313,8 +530,9 @@ export default function App() {
     }
   }, []);
 
-  // 缓存设置项：挂载时加载一次
-  useEffect(() => {
+  // [20260816_Refactor_MinimalApp] Two effects used to duplicate the same
+  // cache-refresh body (mount + settings-update); one helper, two callers.
+  const refreshSettingsCache = () => {
     if (!window.electronAPI?.getSetting) return;
     window.electronAPI.getSetting("auto_paste", "paste").then((v) => {
       settingsRef.current.auto_paste = v as string;
@@ -322,31 +540,45 @@ export default function App() {
     window.electronAPI.getSetting("close_behavior", "hide").then((v) => {
       settingsRef.current.close_behavior = v as string;
     });
+    // [20260905_Feat_BloubMascotWiring] needed to decide when a transcription
+    // is truly "done" (with optimization off, FunASR completion IS the end)
+    window.electronAPI.getSetting("enable_ai_optimization", true).then((v) => {
+      settingsRef.current.enable_ai_optimization = v !== false;
+    });
+    // [20260905_Feat_BloubSettings] mascot catalogue keys (reactive state)
+    window.electronAPI.getSetting("bot_shape", "circle").then((shape) => {
+      setBotAppearance((prev) => ({ ...prev, shape: shape as string }));
+    });
+    window.electronAPI.getSetting("bot_color", "auto").then((color) => {
+      setBotAppearance((prev) => ({ ...prev, color: color as string }));
+    });
+    window.electronAPI
+      .getSetting("bot_expression", "neutral")
+      .then((expression) => {
+        setBotAppearance((prev) => ({
+          ...prev,
+          expression: expression as string,
+        }));
+      });
+  };
+
+  // 缓存设置项：挂载时加载一次
+  useEffect(() => {
+    refreshSettingsCache();
   }, []);
 
   // 设置变更时刷新缓存
   useEffect(() => {
     if (!window.electronAPI?.onSettingsUpdate) return;
-    const unsub = window.electronAPI.onSettingsUpdate(() => {
-      if (!window.electronAPI?.getSetting) return;
-      window.electronAPI.getSetting("auto_paste", "paste").then((v) => {
-        settingsRef.current.auto_paste = v as string;
-      });
-      window.electronAPI.getSetting("close_behavior", "hide").then((v) => {
-        settingsRef.current.close_behavior = v as string;
-      });
-    });
+    const unsub = window.electronAPI.onSettingsUpdate(refreshSettingsCache);
     return unsub;
   }, []);
 
   // 处理打开设置
+  // [20260816_Refactor_DeadChannels] web-modal fallback removed — the app
+  // asserts the preload bridge at startup, so electronAPI always exists.
   const handleOpenSettings = () => {
-    if (window.electronAPI) {
-      window.electronAPI.openSettingsWindow();
-    } else {
-      // Web环境下仍然使用模态框
-      setShowSettings(true);
-    }
+    window.electronAPI?.openSettingsWindow();
   };
 
   // 处理打开历史记录
@@ -359,19 +591,15 @@ export default function App() {
   // 监听全局热键触发事件
   useEffect(() => {
     if (window.electronAPI) {
-      // 监听传统热键触发
+      // [20260815_Refactor_DeadIpc] The legacy toggle-dictation listener was
+      // removed — no code path ever emits that event (hotkeys go through
+      // onHotkeyTriggered above).
       const unsubscribeHotkey = window.electronAPI.onHotkeyTriggered(() => {
-        toggleRecording();
-      });
-
-      // 监听旧的toggle事件（保持兼容性）
-      const unsubscribeToggle = window.electronAPI.onToggleDictation(() => {
         toggleRecording();
       });
 
       return () => {
         if (unsubscribeHotkey) unsubscribeHotkey();
-        if (unsubscribeToggle) unsubscribeToggle();
       };
     }
   }, [toggleRecording, isRecording, isRecordingProcessing]);
@@ -394,6 +622,17 @@ export default function App() {
     }
   }, [recordingError]);
 
+  // [20260905_Feat_BloubFileLift] file transcription completion -> comet egg (once per
+  // transition; the ref tracks the previous state so resets don't re-fire)
+  const prevFileStateRef = useRef(fileTranscription.state);
+  useEffect(() => {
+    const prev = prevFileStateRef.current;
+    prevFileStateRef.current = fileTranscription.state;
+    if (fileTranscription.state === "done" && prev !== "done") {
+      mascotRef.current?.playOnce("comet");
+    }
+  }, [fileTranscription.state]);
+
   // 确定当前麦克风状态
   const getMicState = () => {
     if (isRecording) return "recording";
@@ -405,6 +644,51 @@ export default function App() {
   };
 
   const micState = getMicState();
+
+  // [20260905_Feat_BloubMascotWiring] app state -> bot animation state,
+  // the mapping confirmed on spec #224 (decision ticket #219). Model-stage
+  // states take precedence over mic states: while the model is not ready the
+  // mic cannot run anyway, and download/absence is what the bot should tell.
+  const getBotState = (): StateId => {
+    if (recordingError) return "exclaim";
+    if (!modelStatus.isReady) {
+      switch (modelStatus.stage) {
+        case "downloading":
+          return "orbit";
+        case "loading":
+          return "thinking";
+        case "error":
+          return "alert";
+        case "need_download":
+        case "unloaded":
+          return "sleep";
+        case "ready":
+          break;
+        default:
+          // "checking" and any future stage: inquiring dots
+          return "thinking";
+      }
+    }
+    // [20260905_Feat_BloubFileLift] in file-import mode the file pipeline drives the bot;
+    // null entries (idle/done/cancelled) fall through to the mic mapping
+    if (appMode === "file-import") {
+      const fileBot = fileStateToBotState(fileTranscription.state);
+      if (fileBot) return fileBot;
+    }
+    switch (micState) {
+      case "recording":
+        return "wide";
+      case "processing":
+        return "thinking";
+      case "optimizing":
+        return "orbit";
+      case "hover":
+        return "wide";
+      default:
+        return "idle";
+    }
+  };
+  const botState = getBotState();
 
   // 获取麦克风按钮属性
   const getMicButtonProps = () => {
@@ -418,16 +702,7 @@ export default function App() {
     if (!modelStatus.isReady) {
       return {
         className: `${baseClasses} bg-[#e8e8ed] dark:bg-[#2c2c2e] cursor-not-allowed opacity-50`,
-        tooltip:
-          modelStatus.stage === "need_download"
-            ? "请先下载AI模型文件"
-            : modelStatus.stage === "downloading"
-              ? `模型下载中... ${modelStatus.downloadProgress || 0}%`
-              : modelStatus.stage === "loading"
-                ? "模型加载中，请稍候..."
-                : modelStatus.stage === "error"
-                  ? `模型错误: ${modelStatus.error}`
-                  : "模型未就绪，请稍候...",
+        tooltip: getStageStatusText(modelStatus, t),
         disabled: true,
       };
     }
@@ -436,62 +711,47 @@ export default function App() {
       case "idle":
         return {
           className: `${buttonStyle} cursor-pointer`,
-          tooltip: `按 [${hotkey}] 开始录音`,
+          tooltip: t("app.tooltipStartHotkey", "按 [{{hotkey}}] 开始录音", {
+            hotkey,
+          }),
           disabled: false,
         };
       case "hover":
         return {
           className: `${buttonStyle} scale-105 shadow-2xl cursor-pointer`,
-          tooltip: `按 [${hotkey}] 开始录音`,
+          tooltip: t("app.tooltipStartHotkey", "按 [{{hotkey}}] 开始录音", {
+            hotkey,
+          }),
           disabled: false,
         };
       case "recording":
         return {
           className: `${baseClasses} bg-[#0071e3] hover:bg-[#0077ed] recording-pulse cursor-pointer hover:shadow-2xl transform hover:scale-105`,
-          tooltip: "正在录音...",
+          tooltip: t("app.tooltipRecording", "正在录音..."),
           disabled: false,
         };
       case "processing":
         return {
           className: `${buttonStyle} cursor-not-allowed opacity-70`,
-          tooltip: "正在识别语音...",
+          tooltip: t("app.tooltipRecognizing", "正在识别语音..."),
           disabled: true,
         };
       case "optimizing":
         return {
           className: `${buttonStyle} cursor-not-allowed opacity-70`,
-          tooltip: "AI正在优化文本...",
+          tooltip: t("app.optimizing", "AI正在优化文本..."),
           disabled: true,
         };
       default:
         return {
           className: `${buttonStyle} cursor-pointer`,
-          tooltip: "点击开始录音",
+          tooltip: t("app.tooltipClickToStart", "点击开始录音"),
           disabled: false,
         };
     }
   };
 
   const micProps = getMicButtonProps();
-
-  if (page === "settings") {
-    return (
-      <React.Suspense
-        fallback={
-          <div className="min-h-screen bg-[#f5f5f7] dark:bg-[#1c1c1e] flex items-center justify-center">
-            <div className="flex items-center space-x-3">
-              <LoadingDots />
-              <span className="text-content text-[#1d1d1f]/80 dark:text-[#f5f5f7]/80">
-                加载设置页面...
-              </span>
-            </div>
-          </div>
-        }
-      >
-        <SettingsPage />
-      </React.Suspense>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-[#f5f5f7] dark:bg-[#1c1c1e] p-4 pb-4">
@@ -504,14 +764,42 @@ export default function App() {
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
         >
-          <h1 className="text-3xl font-bold text-[#1d1d1f] dark:text-[#f5f5f7] text-heading">
-            Murmur
-          </h1>
+          {/* [20260905_Feat_BloubMascotWiring] bot mascot, left of the wordmark;
+              non-interactive so it stays inside the window drag region */}
+          <div className="flex items-center gap-2">
+            <BloubBot
+              ref={mascotRef}
+              state={botState}
+              size={44}
+              shape={
+                botAppearance.shape && SHAPE_BY_ID.has(botAppearance.shape)
+                  ? (botAppearance.shape as ShapeId)
+                  : undefined
+              }
+              color={
+                botAppearance.color &&
+                botAppearance.color !== "auto" &&
+                COLOR_BY_ID.has(botAppearance.color)
+                  ? (botAppearance.color as ColorId)
+                  : undefined
+              }
+              expression={
+                botAppearance.expression &&
+                EXPRESSION_BY_ID.has(botAppearance.expression)
+                  ? (botAppearance.expression as ExpressionId)
+                  : undefined
+              }
+              ariaLabel={t("bot.ariaLabel", "Murmur 吉祥物")}
+            />
+            <h1 className="text-3xl font-bold text-[#1d1d1f] dark:text-[#f5f5f7] text-heading">
+              Murmur
+            </h1>
+          </div>
           <div className="flex items-center space-x-2 non-draggable">
-            <Tooltip content="最小化" position="bottom">
+            <Tooltip content={t("app.minimize", "最小化")} position="bottom">
               <button
                 onClick={handleMinimize}
-                aria-label="最小化"
+                aria-label={t("app.minimize", "最小化")}
                 className="p-2 hover:bg-[#e8e8ed] dark:hover:bg-[#3a3a3c] rounded-lg transition-colors"
               >
                 <Minus
@@ -521,12 +809,20 @@ export default function App() {
               </button>
             </Tooltip>
             <Tooltip
-              content={isMaximized ? "还原" : "最大化"}
+              content={
+                isMaximized
+                  ? t("app.restore", "还原")
+                  : t("app.maximize", "最大化")
+              }
               position="bottom"
             >
               <button
                 onClick={handleMaximize}
-                aria-label={isMaximized ? "还原" : "最大化"}
+                aria-label={
+                  isMaximized
+                    ? t("app.restore", "还原")
+                    : t("app.maximize", "最大化")
+                }
                 className="p-2 hover:bg-[#e8e8ed] dark:hover:bg-[#3a3a3c] rounded-lg transition-colors"
               >
                 {isMaximized ? (
@@ -543,10 +839,10 @@ export default function App() {
                 )}
               </button>
             </Tooltip>
-            <Tooltip content="关闭" position="bottom">
+            <Tooltip content={t("app.close", "关闭")} position="bottom">
               <button
                 onClick={handleClose}
-                aria-label="关闭"
+                aria-label={t("app.close", "关闭")}
                 className="p-2 hover:bg-[#ff5f57] rounded-lg transition-colors group"
               >
                 <X
@@ -556,17 +852,19 @@ export default function App() {
               </button>
             </Tooltip>
             <div className="w-px h-5 bg-[#d2d2d7] dark:bg-[#48484a] mx-1" />
-            <Tooltip content="历史记录" position="bottom">
+            <Tooltip content={t("app.history", "历史记录")} position="bottom">
               <button
                 onClick={handleOpenHistory}
+                aria-label={t("app.history", "历史记录")}
                 className="p-3 hover:bg-[#f5f5f7] dark:hover:bg-[#2c2c2e] rounded-xl transition-colors shadow-sm"
               >
                 <History className="w-6 h-6 text-[#1d1d1f]/80 dark:text-[#f5f5f7]/80" />
               </button>
             </Tooltip>
-            <Tooltip content="设置" position="bottom">
+            <Tooltip content={t("app.settings", "设置")} position="bottom">
               <button
                 onClick={handleOpenSettings}
+                aria-label={t("app.settings", "设置")}
                 className="p-3 hover:bg-[#f5f5f7] dark:hover:bg-[#2c2c2e] rounded-xl transition-colors shadow-sm"
               >
                 <Settings className="w-6 h-6 text-[#1d1d1f]/80 dark:text-[#f5f5f7]/80" />
@@ -584,28 +882,28 @@ export default function App() {
                   setAppMode("recording");
                 }
               }}
-              aria-label="实时录音模式"
+              aria-label={t("app.modeRecordingAria", "实时录音模式")}
               role="button"
               className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
                 appMode === "recording"
                   ? "bg-white dark:bg-[#3a3a3c] text-gray-900 dark:text-gray-100 shadow-sm"
                   : isRecording || isRecordingProcessing
                     ? "text-gray-400 dark:text-gray-500 cursor-not-allowed"
-                    : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                    : "text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-300"
               }`}
               disabled={isRecording || isRecordingProcessing}
             >
-              实时录音
+              {t("app.modeRecording", "实时录音")}
             </button>
             <button
               onClick={() => setAppMode("file-import")}
               className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
                 appMode === "file-import"
                   ? "bg-white dark:bg-[#3a3a3c] text-gray-900 dark:text-gray-100 shadow-sm"
-                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                  : "text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-300"
               }`}
             >
-              文件导入
+              {t("app.modeFileImport", "文件导入")}
             </button>
           </div>
         </div>
@@ -637,18 +935,23 @@ export default function App() {
                     }
                   }}
                   onMouseLeave={() => setIsHovered(false)}
-                  aria-label={isRecording ? "停止录音" : "开始录音"}
+                  aria-label={
+                    isRecording
+                      ? t("app.stopRecording", "停止录音")
+                      : t("app.startRecording", "开始录音")
+                  }
                   data-testid="mic-button"
                   tabIndex={0}
                   className={`${micProps.className} non-draggable shadow-lg`}
                   disabled={micProps.disabled}
                 >
-                  {/* 动态内容基于状态 */}
-                  {modelStatus.stage === "downloading" ? (
-                    <LoadingIndicator size={20} />
-                  ) : modelStatus.stage === "loading" ||
-                    !modelStatus.isReady ? (
-                    <LoadingIndicator size={20} />
+                  {/* [20260815_Refactor_LoadingDotsCss] downloading/loading/
+                      not-ready branches previously rendered two identical
+                      LoadingIndicator trees; merged into one LoadingDots. */}
+                  {modelStatus.stage === "downloading" ||
+                  modelStatus.stage === "loading" ||
+                  !modelStatus.isReady ? (
+                    <LoadingDots />
                   ) : micState === "idle" ? (
                     <SoundWaveIcon size={20} isActive={false} />
                   ) : micState === "hover" ? (
@@ -658,7 +961,7 @@ export default function App() {
                   ) : micState === "processing" ? (
                     <VoiceWaveIndicator isListening={true} />
                   ) : micState === "optimizing" ? (
-                    <LoadingIndicator size={20} />
+                    <LoadingDots />
                   ) : null}
 
                   {/* 移除所有状态指示环，保持简洁 */}
@@ -666,32 +969,47 @@ export default function App() {
               </Tooltip>
 
               <p className="mt-4 text-content text-[#1d1d1f]/80 dark:text-[#f5f5f7]/80">
+                {/* [20260815_Refactor_StageTextDedup] need_download/downloading
+                    keep their long-form paragraph variants; the remaining
+                    not-ready stages share getStageStatusText with the
+                    tooltip above. */}
                 {modelStatus.stage === "need_download"
-                  ? "需要下载AI模型文件才能开始使用"
+                  ? t("app.needDownloadHint", "需要下载AI模型文件才能开始使用")
                   : modelStatus.stage === "downloading"
                     ? modelStatus.downloadProgress > 0
-                      ? `正在下载模型文件... ${modelStatus.downloadProgress}%`
-                      : "正在准备下载模型文件..."
-                    : modelStatus.stage === "loading"
-                      ? "模型加载中，请稍候..."
-                      : modelStatus.stage === "error"
-                        ? `模型错误: ${modelStatus.error}`
-                        : !modelStatus.isReady
-                          ? "模型未就绪，请稍候..."
-                          : micState === "recording"
-                            ? "正在录音，再次点击停止"
-                            : micState === "processing"
-                              ? "正在识别语音..."
-                              : micState === "optimizing"
-                                ? "AI正在优化文本，请稍候..."
-                                : `点击麦克风或按 ${hotkey} 开始录音`}
+                      ? t(
+                          "app.downloadingHint",
+                          "正在下载模型文件... {{progress}}%",
+                          { progress: modelStatus.downloadProgress },
+                        )
+                      : t("app.preparingDownload", "正在准备下载模型文件...")
+                    : !modelStatus.isReady
+                      ? getStageStatusText(modelStatus, t)
+                      : micState === "recording"
+                        ? t("app.recordingHint", "正在录音，再次点击停止")
+                        : micState === "processing"
+                          ? t("app.recognizingHint", "正在识别语音...")
+                          : micState === "optimizing"
+                            ? t(
+                                "app.optimizingHint",
+                                "AI正在优化文本，请稍候...",
+                              )
+                            : t(
+                                "app.clickOrHotkeyToStart",
+                                "点击麦克风或按 {{hotkey}} 开始录音",
+                                { hotkey },
+                              )}
               </p>
               {modelStatus.stage === "need_download" && (
                 <div className="mt-3 text-xs text-[#86868b] dark:text-[#98989d] space-y-1">
-                  <p>使用步骤：</p>
-                  <p>① 下载语音识别模型（必需，约1GB）</p>
-                  <p>② 授权麦克风权限</p>
-                  <p>③ 在设置中配置 AI API Key（可选）</p>
+                  <p>{t("app.steps.title", "使用步骤：")}</p>
+                  <p>
+                    {t("app.steps.step1", "① 下载语音识别模型（必需，约1GB）")}
+                  </p>
+                  <p>{t("app.steps.step2", "② 授权麦克风权限")}</p>
+                  <p>
+                    {t("app.steps.step3", "③ 在设置中配置 AI API Key（可选）")}
+                  </p>
                 </div>
               )}
             </div>
@@ -701,7 +1019,7 @@ export default function App() {
               modelStatus.stage === "downloading") && (
               <div className="mb-6">
                 <ModelDownloadProgress
-                  modelStatus={modelStatus as any}
+                  modelStatus={modelStatus}
                   onDownload={handleDownloadModels}
                 />
               </div>
@@ -725,7 +1043,7 @@ export default function App() {
                   onClick={resetRecordingState}
                   className="w-full py-2 px-4 text-sm font-medium text-white bg-[#0071e3] hover:bg-[#0077ed] rounded-lg transition-colors shadow-sm"
                 >
-                  开始新录音
+                  {t("app.startNewRecording", "开始新录音")}
                 </button>
               </div>
             ) : (
@@ -742,17 +1060,22 @@ export default function App() {
               <div className="mb-4 px-3 py-2 bg-[#fff8f0] dark:bg-[#3a2c1c] border border-[#ff9500]/40 rounded-lg flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-[#ff9500] animate-pulse" />
                 <span className="text-xs text-[#c07800] dark:text-[#ff9500]">
-                  录音进行中，录音完成后可切换回实时录音模式
+                  {t(
+                    "app.recordingSwitchHint",
+                    "录音进行中，录音完成后可切换回实时录音模式",
+                  )}
                 </span>
               </div>
             )}
-            <FileImport />
+            {/* [20260905_Feat_BloubFileLift] inject the App-owned controller:
+                mascot visibility + copy wink (P0 fix from ticket 4 review) */}
+            <FileImport
+              transcription={fileTranscription}
+              onCopied={() => mascotRef.current?.playOnce("wink")}
+            />
           </div>
         )}
       </div>
-
-      {/* 设置面板 */}
-      {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
     </div>
   );
 }

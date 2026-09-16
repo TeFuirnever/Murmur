@@ -235,56 +235,9 @@ describe("DatabaseManager - extended coverage", () => {
     });
   });
 
-  describe("getTranscriptionWithSegments", () => {
-    it("returns parsed segments", () => {
-      const r = db.saveTranscription({
-        text: "test",
-        segments: JSON.stringify([{ start_ms: 0, text: "test" }]),
-      });
-      const row = db.getTranscriptionWithSegments(Number(r.lastInsertRowid));
-      expect(row!.parsedSegments).toEqual([{ start_ms: 0, text: "test" }]);
-    });
-
-    it("returns empty array when no segments", () => {
-      const r = db.saveTranscription({ text: "no segs" });
-      const row = db.getTranscriptionWithSegments(Number(r.lastInsertRowid));
-      expect(row!.parsedSegments).toEqual([]);
-    });
-
-    it("handles invalid JSON segments with logger", () => {
-      db.close();
-      const logDb = new DatabaseManager({ warn: vi.fn(), error: vi.fn() });
-      logDb.initialize(tmpDir);
-      const r = logDb.saveTranscription({ text: "bad segs" });
-      dbp(logDb)
-        .db!.prepare("UPDATE transcriptions SET segments = ? WHERE id = ?")
-        .run("not-json", r.lastInsertRowid);
-      const row = logDb.getTranscriptionWithSegments(Number(r.lastInsertRowid));
-      expect(row!.parsedSegments).toEqual([]);
-      logDb.close();
-    });
-
-    it("returns undefined for missing id", () => {
-      expect(db.getTranscriptionWithSegments(99999)).toBeUndefined();
-    });
-
-    it("returns undefined for non-existent row with logger", () => {
-      db.close();
-      const logDb = new DatabaseManager({ warn: vi.fn(), error: vi.fn() });
-      logDb.initialize(tmpDir);
-      expect(logDb.getTranscriptionWithSegments(1)).toBeUndefined();
-      logDb.close();
-    });
-
-    it("returns null on DB error with logger", () => {
-      const log = { warn: vi.fn(), error: vi.fn() };
-      const logDb = new DatabaseManager(log);
-      logDb.initialize(tmpDir);
-      dbp(logDb).db!.close();
-      expect(logDb.getTranscriptionWithSegments(1)).toBeNull();
-      expect(log.error).toHaveBeenCalled();
-    });
-  });
+  // [20260815_Refactor_DeadIpc] getTranscriptionWithSegments describe removed
+  // with the zero-production-caller method (the live path reads rows via
+  // getTranscriptionById and parses segments in transcriptionHandlers).
 
   describe("clearAllTranscriptions", () => {
     it("removes all transcriptions", () => {
@@ -295,55 +248,11 @@ describe("DatabaseManager - extended coverage", () => {
     });
   });
 
-  describe("getTranscriptionStats", () => {
-    it("returns total, today, and week counts", () => {
-      db.saveTranscription({ text: "stat test" });
-      const stats = db.getTranscriptionStats();
-      expect(stats.total).toBe(1);
-      expect(stats.today).toBe(1);
-      expect(stats.week).toBe(1);
-    });
-  });
+  // [20260816_Refactor_DeadChannels] getTranscriptionStats describe removed
+  // with the zero-caller STATS channel.
 
-  describe("searchTranscriptions", () => {
-    it("searches raw_text and processed_text columns", () => {
-      db.saveTranscription({ text: "visible", raw_text: "hidden data" });
-      const results = db.searchTranscriptions("hidden");
-      expect(results).toHaveLength(1);
-    });
-  });
-
-  describe("backup", () => {
-    it("returns false when db is null", () => {
-      db.close();
-      const d = new DatabaseManager();
-      expect(d.backup("/tmp/none.db")).toBe(false);
-    });
-
-    it("starts backup and returns true", async () => {
-      db.saveTranscription({ text: "backup test" });
-      const backupPath = path.join(tmpDir, "backup.db");
-      expect(db.backup(backupPath)).toBe(true);
-      await new Promise((r) => setTimeout(r, 500));
-      expect(fs.existsSync(backupPath)).toBe(true);
-    });
-
-    it("logs error on async backup failure", async () => {
-      const logger = { error: vi.fn(), warn: vi.fn(), info: vi.fn() };
-      const logDb = new DatabaseManager(logger);
-      logDb.initialize(tmpDir);
-      logDb.saveTranscription({ text: "test" });
-      dbp(logDb).db!.backup = (() => {
-        const p = Promise.reject(new Error("test backup error"));
-        p.catch(() => {});
-        return p;
-      }) as unknown as BetterSqliteDbShape["backup"];
-      logDb.backup(path.join(tmpDir, "backup.db"));
-      await new Promise((r) => setTimeout(r, 50));
-      expect(logger.error).toHaveBeenCalled();
-      logDb.close();
-    });
-  });
+  // [20260815_Refactor_DeadIpc] searchTranscriptions + backup describes
+  // removed with the dead FTS pipeline and the zero-caller backup method.
 
   describe("close", () => {
     it("sets db to null after close", () => {

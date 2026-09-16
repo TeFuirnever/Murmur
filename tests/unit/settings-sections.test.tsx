@@ -8,7 +8,7 @@
 import "../setup/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 // [20260729_Test_SettingsSections] Mock react-i18next faithfully. The section
@@ -21,6 +21,7 @@ import userEvent from "@testing-library/user-event";
 // When a key is absent from the locale, fall back to a provided string fallback,
 // otherwise return the key itself. This mirrors how react-i18next behaves.
 import zhCN from "../../src/i18n/locales/zh-CN.json";
+import type { UpdateCheckResult } from "../../src/types/ipc";
 
 // Flatten the nested locale into dot-notation keys for O(1) lookup.
 function flatten(
@@ -103,11 +104,17 @@ function buildSettings(overrides: Partial<SettingsState> = {}): SettingsState {
     ai_temperature: 0.3,
     ai_max_tokens: 2000,
     enable_ai_optimization: true,
+    default_mode: "auto",
     window_always_on_top: false,
     auto_paste: "paste",
     close_behavior: "hide",
     theme: "system",
-    effects_enabled: false,
+    // [20260905_Fix_246_HotkeySettingsUi] new settings key
+    hotkey: "CommandOrControl+Shift+Space",
+    hotwords: "",
+    bot_shape: "circle",
+    bot_color: "auto",
+    bot_expression: "neutral",
     ...overrides,
   };
 }
@@ -495,8 +502,10 @@ describe("[20260729_Test_SettingsSections] AIConfigSection", () => {
       (s) => (s as HTMLInputElement).value === "1500",
     ) as HTMLInputElement;
     expect(maxTokensSlider).toBeDefined();
-    expect(maxTokensSlider).toHaveAttribute("min", "500");
-    expect(maxTokensSlider).toHaveAttribute("max", "4096");
+    // [20260815_Fix_AiMaxTokensDefault] Bounds raised 500–4096 → 1024–16384
+    // (reasoning models need headroom for thinking tokens).
+    expect(maxTokensSlider).toHaveAttribute("min", "1024");
+    expect(maxTokensSlider).toHaveAttribute("max", "16384");
     expect(maxTokensSlider).toHaveAttribute("step", "256");
   });
 
@@ -602,5 +611,72 @@ describe("[20260729_Test_SettingsSections] AIConfigSection", () => {
     // preset, confirming the registration filter worked.
     expect(screen.getByText("推荐")).toBeInTheDocument();
     expect(screen.getByText("获取 Key")).toBeInTheDocument();
+  });
+});
+
+// [20260816_Test_AboutSection] Update-flow buttons drive the injected
+// callbacks (the AboutSection props surface).
+describe("[20260816_Test_AboutSection] AboutSection update flow", () => {
+  const base = {
+    appVersion: "1.2.0",
+    checkingUpdate: false,
+    updateInfo: null,
+    downloadProgress: null,
+    downloadedUpdate: null,
+  };
+
+  it("invokes checkForUpdates from the check button", () => {
+    const checkForUpdates = vi.fn();
+    render(
+      <AboutSection
+        {...(base as unknown as React.ComponentProps<typeof AboutSection>)}
+        checkForUpdates={checkForUpdates}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /检查更新/ }));
+    expect(checkForUpdates).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancels an in-progress download and installs a downloaded one", () => {
+    const cancelUpdateDownload = vi.fn();
+    const installUpdate = vi.fn();
+    (window as unknown as { electronAPI?: unknown }).electronAPI = {
+      cancelUpdateDownload,
+      installUpdate,
+    };
+    render(
+      <AboutSection
+        {...(base as unknown as React.ComponentProps<typeof AboutSection>)}
+        downloadProgress={{ progress: 40, downloaded: 4, total: 10 } as never}
+        downloadedUpdate={
+          { version: "1.3.0", filePath: "/tmp/murmur.dmg" } as never
+        }
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /取消/ }));
+    expect(cancelUpdateDownload).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: /安装/ }));
+    expect(installUpdate).toHaveBeenCalledWith("/tmp/murmur.dmg");
+  });
+
+  it("invokes startDownload when an update is available", () => {
+    const startDownload = vi.fn();
+    render(
+      <AboutSection
+        {...(base as unknown as React.ComponentProps<typeof AboutSection>)}
+        startDownload={startDownload}
+        updateInfo={
+          {
+            hasUpdate: true,
+            currentVersion: "1.2.0",
+            latestVersion: "1.3.0",
+            downloadUrl: "https://example.com/d",
+          } as unknown as UpdateCheckResult
+        }
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /下载|安装/ }));
+    expect(startDownload).toHaveBeenCalledTimes(1);
   });
 });

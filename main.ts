@@ -26,6 +26,22 @@ import LogManager from "./src/helpers/logManager";
 // Initialize log manager
 const logger = new LogManager();
 
+// [20260912_Feat_260_SingleInstance] Ticket #260 (Spec #258 Phase 0): a
+// second app instance must hard-exit here, BEFORE any manager/database/IPC
+// initialization — the defect under fix is double-open contention on the
+// FunASR subprocess and SQLite, so app.quit() alone is not enough (the
+// module top-level init below would still run while quit is in flight).
+// process.exit(1) is safe at this point: nothing has been initialized, so
+// there is nothing for the will-quit cleanup to release.
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  logger.warn("已检测到正在运行的 Murmur 实例，第二实例立即退出", {
+    platform: process.platform,
+  });
+  process.exit(1);
+}
+// [20260912_Feat_260_SingleInstance] END
+
 // Add global error handling
 process.on("uncaughtException", (error: Error & { code?: string }) => {
   logger.error("Uncaught Exception:", error);
@@ -48,6 +64,20 @@ import FunASRManager from "./src/helpers/funasrManager";
 import TrayManager from "./src/helpers/tray";
 import HotkeyManager from "./src/helpers/hotkeyManager";
 import { registerAll as registerIPCHandlers } from "./src/helpers/ipc";
+// [20260912_Feat_265_LocalChannel] Local IPC channel (ticket #265, spec
+// #258): an authenticated unix-socket/named-pipe bridge for CLI/MCP
+// clients. main.ts only starts/stops it — all logic lives in the module.
+import {
+  startLocalChannel,
+  type LocalChannelHandle,
+} from "./src/helpers/localChannel";
+// [20260912_Feat_265_LocalChannel] END
+// [20260912_Feat_268_BridgePolishHistory] Channel polish factory (ticket
+// #268): builds the GUI-identical processPolishText wiring so `murmur
+// polish` runs the same orchestrator as the GUI with the AI key decrypted
+// only inside this process.
+import { createChannelPolishService } from "./src/helpers/ipc/aiHandlers";
+// [20260912_Feat_268_BridgePolishHistory] END
 
 // Set production environment PATH
 function setupProductionPath(): void {
@@ -145,20 +175,31 @@ const funasrManager = new FunASRManager(logger); // Pass logger instance
 const trayManager = new TrayManager(logger);
 const hotkeyManager = new HotkeyManager();
 
+// [20260912_Feat_265_LocalChannel] Handle for the local channel started in
+// startApp; nulled in will-quit after stop(). Null when the channel failed
+// to start (guarded — a channel failure must not block app boot).
+let localChannelHandle: LocalChannelHandle | null = null;
+// [20260912_Feat_265_LocalChannel] END
+
 // Initialize database
 const dataDirectory = environmentManager.ensureDataDirectory();
 databaseManager.initialize(dataDirectory);
 databaseManager.setFileConfigPath(path.join(dataDirectory, "murmur.json"));
 
 // Initialize IPC handlers with all managers
+// [20260912_Fix_272_ReviewCritical] templatesDir is passed explicitly — the
+// handlers no longer carry a lazy require("electron") fallback (it was
+// structurally untestable in unit coverage and made the ipc/** branch floor
+// platform-flaky).
 registerIPCHandlers(ipcMain, {
-  environmentManager,
   databaseManager,
   clipboardManager,
   funasrManager,
   windowManager,
   hotkeyManager,
+  trayManager,
   logger,
+  templatesDir: path.join(app.getPath("userData"), "templates"),
 });
 
 // Main app startup function
@@ -221,10 +262,41 @@ async function startApp(): Promise<void> {
       databaseManager.getSetting("window_always_on_top", true),
     );
     windowManager.setDefaultAlwaysOnTop(alwaysOnTop);
-    await windowManager.createMainWindow();
+    // [20260820_Fix_211_KeychainBootOrder] deferLoad: create the VISIBLE
+    // window without the renderer first. setSafeStorage below may block on
+    // the macOS keychain authorization dialog (every adhoc build identity
+    // change re-prompts on upgrade, issue #211); running it before any
+    // window existed made the app look dead while the dialog waited. With
+    // the window up first, the dialog pops over a visible app, and the
+    // renderer (whose settings reads include the encrypted ai_api_key)
+    // only boots after crypto state has deterministically settled —
+    // setSafeStorage is called unconditionally, even when encryption is
+    // unavailable, so there is never an unresolved middle state.
+    await windowManager.createMainWindow({ deferLoad: true });
     logger.info("主窗口创建成功");
+    console.error("[main:startup] phase=window-created");
   } catch (error) {
     logger.error("创建主窗口时出错:", error);
+  }
+
+  // [20260820_Fix_211_KeychainBootOrder] Crypto injection is isolated in
+  // its own try/catch: a throw here (e.g. a keychain/DB error instead of
+  // the expected block) must NOT skip loadMainWindowContent below, or the
+  // user is stranded on a blank window forever. Encryption simply stays
+  // unavailable and settings fall back to plaintext storage.
+  try {
+    if (safeStorage) {
+      databaseManager.setSafeStorage(safeStorage);
+    }
+  } catch (error) {
+    logger.error("safeStorage初始化失败，跳过加密存储（非致命）:", error);
+  }
+  console.error("[main:startup] phase=crypto-settled");
+
+  try {
+    await windowManager.loadMainWindowContent();
+  } catch (error) {
+    logger.error("加载主窗口内容失败:", error);
   }
 
   // Set up tray
@@ -232,6 +304,45 @@ async function startApp(): Promise<void> {
   trayManager.setWindows(windowManager.mainWindow);
   await trayManager.createTray();
   logger.info("系统托盘设置完成");
+
+  // [20260912_Feat_265_LocalChannel] Start the local IPC channel after all
+  // managers are initialized (ticket #265, spec #258). Guarded: a channel
+  // failure (e.g. endpoint owned by a live instance) must never block app
+  // boot. The module writes the 0600 token file, heals stale unix sockets
+  // and binds the transport — main.ts stays a thin call.
+  try {
+    localChannelHandle = await startLocalChannel({
+      userDataPath: app.getPath("userData"),
+      serviceDeps: {
+        funasrManager,
+        databaseManager,
+        logger,
+        // [20260912_Feat_268_BridgePolishHistory] Channel polish (ticket
+        // #268): the GUI-identical orchestrator wiring; the same userData
+        // templates dir the AI handler resolves lazily. The AI key is
+        // decrypted only inside this process — never across the channel.
+        // [20260912_Fix_268_Review] REAL structural adaptation (review
+        // initially judged it a no-op; tsc proves otherwise): aiHandlers'
+        // local DatabaseManager interface declares ASYNC getSetting (so
+        // legacy test doubles stubbing only getSetting keep compiling),
+        // while the real class is synchronous — the orchestrator awaits the
+        // value either way. Same adaptation registerAll makes for the GUI
+        // handlers; same instance, zero runtime difference.
+        aiPolish: createChannelPolishService({
+          databaseManager: databaseManager as unknown as Parameters<
+            typeof createChannelPolishService
+          >[0]["databaseManager"],
+          logger,
+          templatesDir: path.join(app.getPath("userData"), "templates"),
+        }),
+        // [20260912_Feat_268_BridgePolishHistory] END
+      },
+      logger,
+    });
+  } catch (err) {
+    logger.warn("本地通道启动失败（非致命，不影响应用启动）:", err);
+  }
+  // [20260912_Feat_265_LocalChannel] END
 
   logger.info("应用启动完成");
 }
@@ -289,10 +400,10 @@ app.whenReady().then(async () => {
   // a distinct phase so a future hang pinpoints the failing step.
   console.error("[main:startup] phase=whenReady-fired");
   try {
-    if (safeStorage && safeStorage.isEncryptionAvailable()) {
-      databaseManager.setSafeStorage(safeStorage);
-    }
-    console.error("[main:startup] phase=safeStorage-done");
+    // [20260820_Fix_211_KeychainBootOrder] safeStorage injection moved from
+    // here (pre-startApp) into startApp AFTER window creation — see the
+    // deferLoad comment block there. Keeping the phase canary for the
+    // remaining step so a future hang still pinpoints quickly.
     await startApp();
     console.error("[main:startup] phase=startApp-complete");
   } catch (err) {
@@ -312,20 +423,83 @@ app.whenReady().then(async () => {
 // [20260725_E2E_CiStartupFix] END
 
 app.on("window-all-closed", () => {
+  // [20260911_Fix_339_DockActivate] Lifecycle observability — issue #339 was
+  // undebuggable from app.log because the close/hide/activate path had zero
+  // log lines. macOS intentionally stays alive (tray-resident); other
+  // platforms quit.
+  logger.info("window-all-closed事件", { platform: process.platform });
   if (process.platform !== "darwin") {
     app.quit();
   }
 });
 
-app.on("activate", () => {
+// [20260912_Feat_260_SingleInstance] Shared awaken path for Dock clicks
+// (activate, macOS) and second-instance launches (ticket #260, Spec #258):
+// bring the tray-resident window back, recreating it when destroyed. The
+// second-instance event carries NO payload usable for CLI communication
+// (single direction, no result channel) — window awakening is its only job.
+function showOrCreateMainWindow(): void {
+  logger.info("唤起主窗口", {
+    windowCount: BrowserWindow.getAllWindows().length,
+  });
   if (BrowserWindow.getAllWindows().length === 0) {
-    windowManager.createMainWindow();
+    windowManager
+      .createMainWindow()
+      .then((win) => {
+        if (win) {
+          trayManager.setWindows(win);
+        }
+      })
+      .catch((err: unknown) => {
+        logger.error("唤起重建主窗口失败:", err);
+      });
+  } else {
+    windowManager.showMainWindow();
   }
+}
+
+app.on("second-instance", () => {
+  logger.info("second-instance事件 (二次启动唤起已有实例)");
+  showOrCreateMainWindow();
 });
+// [20260912_Feat_260_SingleInstance] END
+
+// [20260911_Fix_339_DockActivate] Issue #339: macOS Dock click must recover
+// the tray-resident window. Two cases:
+//   1. No windows at all (window was destroyed, e.g. Cmd+W): recreate AND
+//      re-sync the tray's window reference — trayManager captured the
+//      original window once at startup, so without setWindows() every tray
+//      show/click would no-op against the destroyed reference.
+//   2. A HIDDEN main window still exists (the custom close button's default
+//      close_behavior "hide" path): getAllWindows() is non-empty, so the old
+//      recreate-only handler did nothing and the app looked dead in the
+//      Dock. Now the existing window is shown/focused instead.
+app.on("activate", () => {
+  logger.info("activate事件 (Dock点击)");
+  showOrCreateMainWindow();
+});
+// [20260911_Fix_339_DockActivate] END
 
 app.on("will-quit", async (e) => {
+  // [20260911_Fix_339_DockActivate] Log the quit entry so the full
+  // close → quit → cleanup path is traceable in app.log (issue #339).
+  logger.info("will-quit事件，开始清理 (热键/FunASR/数据库)");
+  // [20260911_Fix_339_DockActivate] END
   e.preventDefault();
   globalShortcut.unregisterAll();
+
+  // [20260912_Feat_265_LocalChannel] Release the local channel first:
+  // destroy client sessions and remove the unix socket file so no client
+  // connects to a dying app (ticket #265 will-quit cleanup).
+  try {
+    if (localChannelHandle) {
+      await localChannelHandle.stop();
+      localChannelHandle = null;
+    }
+  } catch (err) {
+    logger.error("Error stopping local channel:", err);
+  }
+  // [20260912_Feat_265_LocalChannel] END
 
   try {
     const shutdownPromise = funasrManager.gracefulShutdown();
@@ -346,9 +520,10 @@ app.on("will-quit", async (e) => {
   app.exit();
 });
 
-// Export managers for use by other modules
+// [20260816_Refactor_MinimalEnvironment] environmentManager removed from
+// the export block and the handlers bag — zero consumers (kept as a local
+// for .env loading + ensureDataDirectory).
 export {
-  environmentManager,
   windowManager,
   databaseManager,
   clipboardManager,

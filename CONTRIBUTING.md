@@ -6,12 +6,23 @@
 
 ### 必要条件
 
-- **Node.js** 18+（推荐 22 LTS）
+<!-- [20260907_Spec299_P0Facts] Env requirements synced with package.json
+     engines (node >=22.5) and pyproject.toml requires-python (>=3.11) after
+     the README audit: 18+/3.8+ contradicted README and failed contributor
+     setup at `uv sync`. -->
+<!-- [20260907_Spec299_P0Facts] END -->
+
+- **Node.js** 22.5+（与 `package.json` engines 一致）
 - **pnpm** 9+（`npm install -g pnpm`）
-- **Python** 3.8+（推荐 3.11）
+- **Python** 3.11+（与 `pyproject.toml` 的 requires-python 一致）
 - **ffmpeg**（音频格式转换，macOS: `brew install ffmpeg`）
 - **Git**
 - macOS / Windows / Linux
+
+> [20260817_T4_CiMatrix] `pnpm ci:check` 的 stage1 包含 `test:python:unit`
+> （`tests/python/` 的 stdlib unittest + numpy 冒烟），因此本机跑完整门禁
+> 需要可用的 Python 与 numpy + soundfile（嵌入式环境或系统 Python 均可;
+> CI 侧由 workflow 的 setup-python 步骤提供）。
 
 ### 搭建步骤
 
@@ -31,21 +42,22 @@ pnpm dev
 
 ### 常用命令
 
-| 命令                               | 说明                                |
-| ---------------------------------- | ----------------------------------- |
-| `pnpm dev`                         | 启动开发模式（Electron + Vite HMR） |
-| `pnpm test`                        | 运行所有测试                        |
-| `pnpm test:watch`                  | 监听模式运行测试                    |
-| `pnpm test:coverage`               | 运行测试并生成覆盖率报告            |
-| `pnpm test:e2e`                    | 运行端到端测试（Playwright）        |
-| `pnpm lint`                        | ESLint 代码检查                     |
-| `pnpm format:check`                | 检查代码格式（Prettier）            |
-| `pnpm format`                      | 自动格式化代码                      |
-| `pnpm license:check`               | 检查依赖许可证（拦截 GPL/AGPL）     |
-| `pnpm ci:check`                    | 本地运行所有 CI 门禁                |
-| `pnpm ci:fix`                      | 自动修复 CI 问题                    |
-| `pnpm run build`                   | 构建生产版本                        |
-| `pnpm run prepare:python:embedded` | 准备嵌入式 Python 环境              |
+| 命令                               | 说明                                                                |
+| ---------------------------------- | ------------------------------------------------------------------- |
+| `pnpm dev`                         | 启动开发模式（Electron + Vite HMR）                                 |
+| `pnpm test`                        | 运行所有测试                                                        |
+| `pnpm test:watch`                  | 监听模式运行测试                                                    |
+| `pnpm test:coverage`               | 运行测试并生成覆盖率报告                                            |
+| `pnpm test:e2e`                    | 运行端到端测试（Playwright）                                        |
+| `pnpm test:asr`                    | 开发机专用：golden_set 语料真实 ASR 回归（字错率阈值红绿，不进 CI） |
+| `pnpm lint`                        | ESLint 代码检查                                                     |
+| `pnpm format:check`                | 检查代码格式（Prettier）                                            |
+| `pnpm format`                      | 自动格式化代码                                                      |
+| `pnpm license:check`               | 检查依赖许可证（拦截 GPL/AGPL）                                     |
+| `pnpm ci:check`                    | 本地运行所有 CI 门禁                                                |
+| `pnpm ci:fix`                      | 自动修复 CI 问题                                                    |
+| `pnpm run build`                   | 构建生产版本                                                        |
+| `pnpm run prepare:python:embedded` | 准备嵌入式 Python 环境                                              |
 
 ## 项目结构
 
@@ -90,7 +102,7 @@ chore: 升级 Electron 到 v36
 
 - 测试框架：Vitest
 - 位置：`tests/unit/`
-- 覆盖率阈值：statements 97%、branches 90%、functions 100%、lines 98%
+- 覆盖率阈值：statements 88%、branches 83%、functions 88%、lines 89%（与 `vitest.config.ts` 一致，由契约测试看护漂移）
 - 修改代码后运行 `pnpm test` 确保不引入回归
 - 提交前运行 `pnpm ci:check` 确保所有门禁通过
 
@@ -120,28 +132,38 @@ chore: 升级 Electron 到 v36
 4. **Security audit** — `pnpm audit --audit-level moderate`（非阻塞）
 5. **License compliance** — `pnpm license:check`（拦截 GPL/AGPL）
 6. **Dependency review** — PR 中自动审查新增依赖（high 级别阻断）
-7. **Test + coverage** — `pnpm test -- --coverage`（覆盖率阈值：全 src/ 统计，statements 44% / branches 37% / functions 42% / lines 44%；后端 helpers 层独立 95%+）
+7. **Test + coverage** — `pnpm test -- --coverage`（覆盖率阈值：全 src/ 统计，2026-09-07 随六组模块插桩重定基线为 statements 88% / branches 83% / functions 88% / lines 89%（原 96/92/94/96 不可达，棘轮路线见 vitest.config.ts thresholds 注释与 coverage-meta.test.ts），2026-09-06 起以 2200+ 用例维持；Windows 腿全量跑测并输出覆盖率报告但不设阈值——平台分支两侧百分比不可比，见 `tests/unit/platform-arms.test.ts` 头注）
 8. **Build main** — `pnpm run build:main`
 9. **Build preload** — `pnpm run build:preload`
 10. **Build renderer** — `pnpm run build:renderer`
-11. **Effects chunk isolation** — `node scripts/check-effects-isolation.js`（验证 ogl/motion 没泄漏到 entry chunk）
-12. **E2E tests** — `pnpm test:e2e`（非阻塞，验证中）
+11. <!-- [20260816_Refactor_RemoveEffects] gate removed with the effects feature -->
+12. **E2E boot health（阻塞）** — `pnpm test:e2e:boot`（Spec #266 T01 起为合并门禁：失败阻塞 merge；全量 `pnpm test:e2e` 仍在 boot-health 连续 2–3 个 PR 双腿全绿后才会摘除非阻塞开关）
+
+### Release Gates（Build Installers 流水线，tag `v*` 触发）
+
+打包产物在发布前必须通过以下门禁（2026-08-16 v1.3.2 前后陆续引入，此前流水线产出的安装包全部不可用）：
+
+1. **SQLite gate**（[20260905_Feat_NodeSqlite] 引擎已换 node:sqlite，spec #226）— 打包前必须在 Electron 运行时（`ELECTRON_RUN_AS_NODE`）下用 `node:sqlite` 真实打开内存库（历史：better-sqlite3 时代拦截系统 Node ABI 二进制，v1.3.0 macOS 事故；引擎内置后无 ABI 可错，门禁保留为打包前真实开库验证）
+2. **Preload presence gate** — `dist-preload/preload.js` 不存在则拒绝打包（electron-builder files 通配会静默跳过缺失文件，v1.3.1 及更早全部缺 preload）
+3. **Python packaging gate** — 嵌入式 Python 环境准备是硬性步骤（actions/cache 缓存环境本体，准备失败即中止打包，取代旧版 Windows `continue-on-error`——正是它让 v1.2.0–v1.3.2 的 Windows 包静默缺 Python 环境而构建保持全绿，spec #177 B-0 / issues #176 #196）；打包前必须用该环境真实 import numpy/soundfile/funasr
+4. **Packaged boot smoke（mac）** — 挂载刚构建的 DMG、真实启动 app，轮询断言启动日志含"主窗口创建成功/应用启动完成/注册成功/Python链路自检通过"（热键注册来自渲染进程 IPC 证明 preload 桥；Python 自检是独立 spawn 嵌入式解释器跑 `import funasr`，证明解释器解析 + 依赖栈整体可用），且无致命模式（`NODE_MODULE_VERSION` / `Uncaught Exception` / `Unhandled Rejection` / preload 失败 / Python自检失败）
+5. **Packaged boot smoke（win）** — 静默安装（`/S`）刚构建的 EXE 后同样断言
+6. **Packaged boot-health probes（mac/win，Spec #266 T11）** — 以已安装产物为启动目标运行 boot-health 探针套件（preload 桥/麦克风按钮/mascot/CSP/6s 退出），打包态 asar 布局对 dev 模式 e2e 不可见
+7. <!-- [20260911_Gate_MacSignature] issue #337：v1.5.0 dmg 无资源密封被 Gatekeeper 判"已损坏" -->**macOS signature gate（mac）** — DMG 构建后对 `dist/**/Murmur.app` 执行 `codesign --verify --deep --strict`，密封损坏即中止发布；有效 ad-hoc 密封可通过（无需证书），根治需维护者在 CI secrets 配置 Developer ID（`CSC_LINK` 等）并开启公证<!-- [20260911_Gate_MacSignature] END -->
+
+经验教训：**构建全绿 ≠ 产物可用**。发布流水线的验收对象是"安装后的 app"，不是"dist/ 里有文件"。
 
 ### 本地门禁
 
 提交前在本地运行完整检查（和 CI 一致）：
 
 ```bash
-pnpm ci:check          # 完整门禁（format + lint + typecheck + test + coverage + build + isolation）
+pnpm ci:check          # 完整门禁（format + lint + typecheck + test + coverage + build + dev smoke）
 pnpm ci:check --e2e    # 含 e2e（慢）
 pnpm lint && pnpm test # 快速迭代
 ```
 
-**覆盖率回归路线图**：全 src/ 覆盖率当前 46%（statements），后端 helpers 层 95%+。缺口在前端 React 组件（需要 jsdom + RTL）。
-
-- v1.1.0 目标：55%（加 App.tsx + settings 测试）
-- v1.2.0 目标：70%（加 history.tsx + hooks 测试）
-- v1.3.0 目标：80%+（全组件覆盖，对齐业界标准）
+**覆盖率现状**：全 src/ 覆盖率约 95% statements（2026-09-13，含 MCP/CLI 套件后总用例 2700+）。实时数值以 `pnpm exec vitest run --coverage` 输出为准；阈值见上方与 `vitest.config.ts`。
 
 ## 架构概览
 
@@ -179,7 +201,7 @@ FunASR 以 Python 子进程方式运行，生命周期由 `FunASRManager`（`src
 
 ### 数据库 Schema
 
-使用 SQLite（`better-sqlite3`），数据库文件位于 `src/helpers/database.js` 管理：
+使用 SQLite（`node:sqlite`，spec #226 迁移自 better-sqlite3），数据库文件位于 `src/helpers/database.ts` 管理：
 
 **transcriptions 表**：
 | 字段 | 类型 | 说明 |

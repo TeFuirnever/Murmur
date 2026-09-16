@@ -1,17 +1,21 @@
 // [20260724_TS_BigBang_ModelHandlers] Migrated from .js to .ts (ADR-010).
 import * as C from "../ipc-contracts";
+// [20260912_Refactor_261_TranscriptionService] Ticket #261 (spec #258
+// Phase 0): the MODELS.CHECK engine-status probe moved into
+// checkEngineStatusService (src/helpers/services/transcriptionService.ts)
+// so it is callable without a renderer/window/sender. The handler stays a
+// thin shell that forwards its funasrManager via the deps bag.
+import { checkEngineStatusService } from "../services/transcriptionService";
 
 interface FunasrManager {
   checkModelFiles(): Promise<
     { models_downloaded: boolean } & Record<string, unknown>
   >;
-  getDownloadProgress(): Promise<unknown>;
   downloadModels(
     cb: (progress: Record<string, unknown>) => void,
   ): Promise<unknown>;
-  checkStatus(): Promise<
-    { models_downloaded: boolean } & Record<string, unknown>
-  >;
+  // [20260816_Refactor_DeadChannels] checkStatus removed from this interface:
+  // its only consumer was the deleted MODELS.CURRENT placeholder handler.
 }
 
 interface Managers {
@@ -22,11 +26,9 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
   const { funasrManager } = managers;
 
   ipcMain.handle(C.MODELS.CHECK, async () => {
-    return await funasrManager.checkModelFiles();
-  });
-
-  ipcMain.handle(C.MODELS.PROGRESS, async () => {
-    return await funasrManager.getDownloadProgress();
+    // [20260912_Refactor_261_TranscriptionService] Thin shell delegating to
+    // the extracted service function (pure pass-through to checkModelFiles).
+    return await checkEngineStatusService({ funasrManager });
   });
 
   ipcMain.handle(C.MODELS.DOWNLOAD, async (event) => {
@@ -35,54 +37,8 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
     });
   });
 
-  ipcMain.handle(C.MODELS.DOWNLOAD_MODEL, async (event, _modelName: string) => {
-    return await funasrManager.downloadModels((progress) => {
-      event.sender.send(C.EVENTS.MODEL_DOWNLOAD_PROGRESS, progress);
-    });
-  });
-
-  ipcMain.handle(C.MODELS.AVAILABLE, () => {
-    return {
-      models: [
-        {
-          name: "paraformer-large",
-          displayName: "Paraformer Large (ASR)",
-          type: "asr",
-          size: "840MB",
-          description: "大型中文语音识别模型",
-        },
-        {
-          name: "fsmn-vad",
-          displayName: "FSMN VAD",
-          type: "vad",
-          size: "1.6MB",
-          description: "语音活动检测模型",
-        },
-        {
-          name: "ct-transformer-punc",
-          displayName: "CT Transformer (标点)",
-          type: "punc",
-          size: "278MB",
-          description: "标点符号恢复模型",
-        },
-      ],
-    };
-  });
-
-  ipcMain.handle(C.MODELS.CURRENT, async () => {
-    const status = await funasrManager.checkStatus();
-    return {
-      model: "paraformer-large",
-      status: status.models_downloaded ? "ready" : "not_downloaded",
-      details: status,
-    };
-  });
-
-  ipcMain.handle(C.MODELS.SWITCH, (_event, _modelName: string) => {
-    return {
-      success: false,
-      error: "FunASR使用固定模型组合，暂不支持切换单个模型",
-    };
-  });
+  // [20260816_Refactor_DeadChannels] The DOWNLOAD_MODEL duplicate entry and
+  // the AVAILABLE/CURRENT/SWITCH placeholder handlers (hardcoded responses,
+  // zero renderer callers) were removed with their contract constants.
 }
 // [20260724_TS_BigBang_ModelHandlers] END

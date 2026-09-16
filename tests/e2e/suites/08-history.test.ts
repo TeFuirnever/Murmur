@@ -23,14 +23,18 @@ test.describe("Suite 8: History Management", () => {
   });
 
   test("8.1 — getTranscriptions returns array", async () => {
+    // [20260820_E2E_GetTranscriptionsSignatureFix] preload contract is
+    // positional (limit: number, offset: number) — an options object
+    // reaches better-sqlite3 and throws RangeError. 8.2 is the correct
+    // reference call.
     const result = await window.evaluate(() =>
-      window.electronAPI.getTranscriptions({ limit: 10, offset: 0 }),
+      window.electronAPI.getTranscriptions(10, 0),
     );
     expect(result).toBeDefined();
     expect(Array.isArray(result.transcriptions || result)).toBe(true);
   });
 
-  test("8.2 — Search transcriptions via IPC", async () => {
+  test("8.2 — History search finds the record (client-side filter)", async () => {
     // First save a test transcription
     await window.evaluate(() =>
       window.electronAPI.saveTranscription({
@@ -42,14 +46,26 @@ test.describe("Suite 8: History Management", () => {
       }),
     );
 
-    // Search for it
-    const results = await window.evaluate(() =>
-      window.electronAPI.searchTranscriptions("人工智能"),
+    // [20260815_Refactor_DeadIpc] searchTranscriptions IPC removed (the
+    // history page filters client-side). Mirror that behavior: fetch the
+    // recent records and filter by the query in the page.
+    const results = await window.evaluate(
+      (query) =>
+        Promise.resolve(window.electronAPI.getTranscriptions(100, 0)).then(
+          (rows) => {
+            const items = rows.transcriptions || rows || [];
+            return items.filter(
+              (item) =>
+                (item.text || "").includes(query) ||
+                (item.processed_text || "").includes(query),
+            );
+          },
+        ),
+      "人工智能",
     );
     expect(results).toBeDefined();
-    const items = results.transcriptions || results;
-    expect(items.length).toBeGreaterThanOrEqual(1);
-    const text = items[0].text || items[0].raw_text;
+    expect(results.length).toBeGreaterThanOrEqual(1);
+    const text = results[0].text || results[0].raw_text;
     expect(text).toContain("人工智能");
   });
 
@@ -66,7 +82,13 @@ test.describe("Suite 8: History Management", () => {
     );
 
     expect(saved).toBeDefined();
-    const id = saved.id || saved;
+    // [20260820_E2E_SaveContractFix] TRANSCRIPTION.SAVE returns
+    // {success, lastInsertRowid, changes} — the new row's id is
+    // lastInsertRowid, not .id.
+    const id = saved.lastInsertRowid;
+    // [20260816_Refactor_DeadChannels] Assert the id shape up front so the
+    // delete+verify block below can never be silently skipped.
+    expect(typeof id).toBe("number");
 
     // Delete it
     if (typeof id === "number") {
@@ -76,11 +98,14 @@ test.describe("Suite 8: History Management", () => {
       );
 
       // Verify it's gone
-      const result = await window.evaluate(
-        (getDeleteId) => window.electronAPI.getTranscription(getDeleteId),
-        id,
+      // [20260816_Refactor_DeadChannels] getTranscription (single-record)
+      // was removed; verify via the list endpoint like the UI does.
+      const remaining = await window.evaluate(() =>
+        window.electronAPI.getTranscriptions(100, 0),
       );
-      expect(result).toBeNull();
+      const items = remaining.transcriptions || remaining || [];
+      const ids = items.map((item: { id?: number }) => item.id);
+      expect(ids).not.toContain(id);
     }
   });
 });

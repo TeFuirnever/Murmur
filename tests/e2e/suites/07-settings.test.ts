@@ -2,7 +2,7 @@
  * Suite 7: Settings Persistence E2E Tests
  *
  * Tests settings CRUD, theme persistence, AI provider presets.
- * Uses resetSettings in afterEach for isolation.
+ * Uses setSetting restoration in afterAll for isolation.
  */
 import { test, expect } from "@playwright/test";
 import {
@@ -19,8 +19,13 @@ test.describe("Suite 7: Settings Persistence", () => {
   });
 
   test.afterAll(async () => {
-    // Clean up settings
-    await window.evaluate(() => window.electronAPI.resetSettings());
+    // Clean up settings.
+    // [20260906_Refactor_DeadChannelCleanup] Ticket #250 removed the
+    // zero-renderer-caller resetSettings binding; isolation now restores the
+    // keys this suite wrote ("theme") to the DEFAULT_SETTINGS value.
+    await window.evaluate(() =>
+      window.electronAPI.setSetting("theme", "system"),
+    );
     await closeElectronApp(electronApp);
   });
 
@@ -54,31 +59,6 @@ test.describe("Suite 7: Settings Persistence", () => {
     expect(providerNames).toContain("deepseek");
   });
 
-  test("7.4 — Export and import settings roundtrip", async () => {
-    // Set a unique value
-    await window.evaluate(() =>
-      window.electronAPI.setSetting("theme", "light"),
-    );
-
-    // Export
-    const exported = await window.evaluate(() =>
-      window.electronAPI.exportSettings(),
-    );
-    expect(exported).toBeDefined();
-
-    // Change the value
-    await window.evaluate(() => window.electronAPI.setSetting("theme", "dark"));
-
-    // Import back
-    await window.evaluate(
-      (s) => window.electronAPI.importSettings(s),
-      exported,
-    );
-
-    // Verify original value restored
-    const value = await window.evaluate(() =>
-      window.electronAPI.getSetting("theme"),
-    );
-    expect(value).toBe("light");
-  });
+  // [20260816_Refactor_DeadChannels] The settings import/export e2e test was
+  // removed with its zero-UI-entry IPC channels.
 });

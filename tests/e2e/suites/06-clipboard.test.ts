@@ -24,15 +24,13 @@ test.describe("Suite 6: Clipboard & Auto-Paste", () => {
   test("6.1 — Copy text to clipboard and read back", async () => {
     const testText = "E2E clipboard test " + Date.now();
 
-    // Write to clipboard
-    await window.evaluate(
-      (t) => window.electronAPI.writeClipboard(t),
-      testText,
-    );
+    // [20260815_Refactor_DeadIpc] The writeClipboard/readClipboard IPC pair
+    // was removed (zero renderer callers). Copy through the live copyText
+    // channel and verify the real system clipboard from the main process.
+    await window.evaluate((t) => window.electronAPI.copyText(t), testText);
 
-    // Read back from clipboard
-    const result = await window.evaluate(() =>
-      window.electronAPI.readClipboard(),
+    const result = await electronApp.evaluate(({ clipboard }) =>
+      clipboard.readText(),
     );
     expect(result).toBe(testText);
   });
@@ -55,15 +53,17 @@ test.describe("Suite 6: Clipboard & Auto-Paste", () => {
   });
 
   test("6.3 — pasteText IPC call succeeds", async () => {
-    // pasteText may fail in test environment (no active text field)
-    // but the IPC call itself should not throw
+    // CLIPBOARD.PASTE resolves {success:true} on the happy path. On macOS
+    // this requires the runner to have granted the app accessibility
+    // permission — without it pasteText throws and the handler answers
+    // {success:false}, failing this test.
     const result = await window.evaluate(() =>
       window.electronAPI.pasteText("test paste").catch((e) => ({
         error: e.message,
       })),
     );
-    // Result is either void (success) or an error object
-    // The important thing is the IPC channel exists and responds
-    expect(result).toBeDefined();
+    // [20260820_E2E_PasteContractFix] CLIPBOARD.PASTE now returns
+    // {success:true} on resolve — same contract as CLIPBOARD.COPY.
+    expect(result).toEqual({ success: true });
   });
 });

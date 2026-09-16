@@ -13,22 +13,19 @@ jobs:
   test:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v4
         with:
           version: 11
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: pnpm
 
       - name: Install dependencies
         run: pnpm install
-
-      - name: Rebuild native modules for system Node
-        run: pnpm rebuild better-sqlite3
 
       - name: Build main bundle
         run: pnpm run build:main
@@ -47,48 +44,227 @@ jobs:
         continue-on-error: true
 
       - name: Test with coverage
-        run: pnpm test -- --coverage
+        # [20260905_Fix_CoverageForwarding] pnpm 11 forwards `--` literally
+        run: pnpm run test:coverage
 
   build-mac:
     needs: test
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v4
         with:
           version: 11
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: pnpm
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
 
       - name: Install dependencies
         run: pnpm install
 
-      - name: Rebuild native modules for Electron
-        run: npx electron-builder install-app-deps
-
+      # [20260905_Feat_NodeSqlite] The forced @electron/rebuild step and the
+      # native-addon ABI gate are obsolete: better-sqlite3 was replaced by
+      # node:sqlite (spec #226), which ships inside both Node and Electron,
+      # so there is no native binary to rebuild or mis-ABI. The gate is NOT
+      # downgraded — packaging still requires a real database open under the
+      # bundled Electron runtime, now via the built-in module.
+      - name: Verify sqlite opens under Electron (packaging gate)
+        run: |
+          ELECTRON_RUN_AS_NODE=1 npx electron -e "const {DatabaseSync}=require('node:sqlite'); new DatabaseSync(':memory:').prepare('select 1 as ok').get(); console.log('sqlite gate passed')"
+      # [20260905_Feat_NodeSqlite] END
+      # [20260818_T3_PythonPackagingGate] Ticket #184: cache the embedded
+      # Python env (torch/funasr wheels are the slow, disk-hungry part) and
+      # HARD-gate the package on it. This combo replaces the old
+      # continue-on-error on the Windows job, which let installers ship
+      # without a Python env while the build stayed green (spec #177 B-0).
+      - name: Cache embedded Python
+        id: cache-python
+        uses: actions/cache@v4
+        with:
+          path: python
+          key: embedded-python-${{ runner.os }}-${{ hashFiles('scripts/prepare-embedded-python.js') }}
       - name: Prepare embedded Python
+        if: steps.cache-python.outputs.cache-hit != 'true'
         run: pnpm run prepare:python:embedded
+
+      # [20260818_T3_PythonPackagingGate] Gate: the env that will ship inside
+      # the installer must actually import the transcription stack (numpy
+      # feeds the DSP path, soundfile the audio decode, funasr the models).
+      # A 0-byte or pip-metadata-polluted env fails HERE, not in users' hands.
+      - name: Verify embedded Python deps (packaging gate)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # [20260818_T3_PythonPackagingGate] Git Bash on windows-latest
+          # reports uname as MINGW*_NT-**, NOT "Windows_NT" — match on _NT.
+          if uname -s | grep -q "_NT"; then PY=python/python.exe; else PY=python/bin/python3.11; fi
+          test -f "$PY" || { echo "::error::embedded interpreter missing: $PY"; exit 1; }
+          "$PY" -c "import numpy, soundfile, funasr" || { echo "::error::embedded python dependency import failed (if this persists across runs, the python/ cache entry may be corrupt — run: gh cache delete embedded-python-\${{ runner.os }}-\$(git hash-object scripts/prepare-embedded-python.js))"; exit 1; }
+          echo "embedded python deps gate passed"
 
       - name: Build main bundle
         run: pnpm run build:main
+
+      # [20260816_Fix_PackagedPreload] The build jobs never ran build:preload,
+      # so every installer this workflow ever produced (v1.0.0 → v1.3.1) shipped
+      # without dist-preload/preload.js — the packaged app boots, then the
+      # renderer shows "Electron API 不可用 / preload 脚本加载失败" and no feature
+      # works. main.ts loads the preload from app.getAppPath()/dist-preload.
+      - name: Build preload bundle
+        run: pnpm run build:preload
+
+      # [20260816_Fix_PackagedPreload] Gate: refuse to package unless the
+      # preload bundle exists (electron-builder's files glob silently skips
+      # missing entries, which is how this shipped broken for so long).
+      - name: Verify preload bundle exists (packaging gate)
+        run: test -f dist-preload/preload.js
+      # [20260816_Fix_PackagedPreload] END
 
       - name: Build renderer
         run: pnpm run build:renderer
 
       - name: Build macOS DMG
-        run: pnpm electron-builder --mac --publish never
+        # [20260912_Fix_MacPackagingEMFILE] electron-builder unpacks the
+        # embedded-python tree (torch ships tens of thousands of headers)
+        # with one open fd per file; the default 256 soft limit on macOS
+        # runners made the DMG step die with EMFILE 2/2 in run 34631944103
+        # and again in 34636557974 where `ulimit -n 65536 || true` silently
+        # failed (soft > hard is rejected; || true swallowed it). Set soft
+        # to the runner's hard limit (capped at 65536), fall back to 10240,
+        # and LOG the effective value so the next failure is diagnosable.
+        run: |
+          HARD=$(ulimit -Hn)
+          echo "fd hard limit: $HARD, soft before: $(ulimit -Sn)"
+          if [ "$HARD" = "unlimited" ]; then TARGET=65536; elif [ "$HARD" -gt 65536 ]; then TARGET=65536; else TARGET=$HARD; fi
+          ulimit -n "$TARGET" || ulimit -n 10240 || true
+          echo "fd soft limit effective: $(ulimit -Sn)"
+          pnpm electron-builder --mac --publish never
+        # [20260912_Fix_MacPackagingEMFILE] END
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # [20260911_Gate_MacSignature] Issue #337: with CSC_IDENTITY_AUTO_DISCOVERY=false
+      # and no Developer ID in the keychain, electron-builder skipped signing
+      # entirely, so the shipped .app kept Electron's linker ad-hoc signature
+      # with NO resource seal ("code has no resources but signature indicates
+      # they must be present"). On Apple Silicon a quarantined app in that
+      # state is rejected by Gatekeeper as "已损坏 / damaged" — right-click →
+      # Open cannot bypass it. Two-part fix:
+      #   1) package.json build.mac.identity="-" forces electron-builder's
+      #      ad-hoc signing pass (full @electron/osx-sign deep sign with a
+      #      real resource seal). The hardenedRuntime warning this triggers is
+      #      covered: entitlements.mac.plist already carries
+      #      com.apple.security.cs.disable-library-validation. Once a
+      #      Developer ID cert (CSC_LINK) is configured in secrets, replace
+      #      "-" with the cert name and add notarization.
+      #   2) This gate: codesign --verify --deep --strict fails the build on a
+      #      broken/missing seal but PASSES a valid ad-hoc seal (ad-hoc needs
+      #      no certificate), so releases stay green until a Developer ID is
+      #      configured, while the #337 broken-seal state can never ship again.
+      - name: Verify packaged app signature (packaging gate)
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP=$(find dist -maxdepth 2 -name "*.app" -print -quit)
+          test -n "$APP" || { echo "::error::no .app found under dist/"; exit 1; }
+          echo "verifying signature of: $APP"
+          codesign --verify --deep --strict --verbose=2 "$APP" || {
+            echo "::error::packaged app signature invalid (broken seal). See issue #337 — the dmg would install as 'damaged' on Apple Silicon."
+            exit 1
+          }
+          codesign -dv "$APP" 2>&1 | grep -E "Signature|Sealed" || true
+          echo "macOS signature gate passed"
+      # [20260911_Gate_MacSignature] END
+      # [20260816_Gate_PackagedBootSmoke] Install the DMG we just built and
+      # boot the real app. Asserts on the boot log: window created, startup
+      # complete, and the renderer→preload→IPC bridge alive (hotkey
+      # registration is sent BY the renderer, so it can only appear when the
+      # preload works). This is the gate that would have caught both the
+      # node-ABI sqlite binary (v1.3.0 mac) and the missing preload script
+      # (all releases ≤ v1.3.1) — "build green" is not "artifact works".
+      - name: Smoke test packaged app (boot + preload bridge)
+        run: |
+          set -euo pipefail
+          DMG=$(ls dist/*.dmg | head -1)
+          hdiutil attach "$DMG" -nobrowse -quiet
+          VOL=$(ls /Volumes | grep -i murmur | head -1)
+          rm -rf /tmp/murmur-smoke && mkdir -p /tmp/murmur-smoke
+          cp -R "/Volumes/$VOL/Murmur.app" /tmp/murmur-smoke/
+          hdiutil detach "/Volumes/$VOL" -quiet || true
+          rm -f "$HOME/Library/Application Support/Murmur/logs/app.log"
+          # [20260905_Fix_150SmokeColdCache] Warm the embedded python's page
+          # cache before booting the app. On a cache-hit run the unpacked
+          # environment is freshly extracted (cold disk): `import funasr`
+          # pulls several hundred MB of torch through the filesystem and on
+          # the runner exceeded the whole 180s smoke window — twice, while
+          # the same import took ~5s when warm. Warming is not a gate
+          # relaxation: every milestone assertion below still applies, the
+          # self-check still has to genuinely pass on top of a warm cache.
+          /tmp/murmur-smoke/Murmur.app/Contents/Resources/app.asar.unpacked/python/bin/python3.11 -c "import funasr" || true
+          /tmp/murmur-smoke/Murmur.app/Contents/MacOS/Murmur > /tmp/murmur-smoke/stdout.log 2>&1 &
+          APP_PID=$!
+          LOG="$HOME/Library/Application Support/Murmur/logs/app.log"
+          # [20260818_T3_PythonSelfCheckMilestone] Poll for milestones instead
+          # of a fixed sleep: the python self-check spawns `import funasr`
+          # (cold torch load) which can exceed a fixed 60s window on a cold
+          # runner disk. Poll up to 360s, break as soon as all are present.
+          # Review fixup: a missing app.log must count as NOT present — the
+          # first draft broke out after one 5s tick when the log had not been
+          # created yet, shrinking the old 60s grace window to 5s.
+          MILESTONES=("主窗口创建成功" "应用启动完成" "注册成功" "Python链路自检通过")
+          ALL_PRESENT=1
+          for _ in $(seq 1 72); do
+            sleep 5
+            ALL_PRESENT=1
+            if [ ! -f "$LOG" ]; then
+              ALL_PRESENT=0
+            else
+              for milestone in "${MILESTONES[@]}"; do
+                grep -q "$milestone" "$LOG" || ALL_PRESENT=0
+              done
+            fi
+            [ "$ALL_PRESENT" = "1" ] && break
+          done
+          test -f "$LOG" || { echo "::error::app.log never appeared"; cat /tmp/murmur-smoke/stdout.log | tail -20; exit 1; }
+          if [ "$ALL_PRESENT" != "1" ]; then
+            echo "::error::boot milestones incomplete after 360s"
+            for milestone in "${MILESTONES[@]}"; do
+              grep -q "$milestone" "$LOG" || echo "missing: $milestone"
+            done
+            tail -20 "$LOG"; exit 1
+          fi
+          # [20260820_Gate_UnhandledRejection] A suppress_stdout race on main
+          # killed the FunASR server after model init while the main process
+          # logged "Unhandled Rejection" — a pattern the fatal list ignored,
+          # so a broken build could still pass this smoke. Unhandled main
+          # rejections are never acceptable in a packaged app.
+          if grep -qE "NODE_MODULE_VERSION|Uncaught Exception|Unhandled Rejection|preload 脚本加载失败|Python链路自检失败" "$LOG"; then
+            echo "::error::fatal errors in packaged app boot log"
+            grep -E "NODE_MODULE_VERSION|Uncaught Exception|Unhandled Rejection|preload|Python链路自检失败" "$LOG" | head -5
+            exit 1
+          fi
+          kill "$APP_PID" 2>/dev/null || true
+          sleep 3
+          pkill -f "murmur-smoke/Murmur.app" 2>/dev/null || true
+          echo "packaged app smoke passed: boot milestones + preload bridge verified"
+      # [20260816_Gate_PackagedBootSmoke] END
+      # [20260906_Test_PackagedBootHealth] Spec #266 T11 (#288): run the full
+      # boot-health probes (preload bridge surface, mic button, mascot,
+      # CSP, 6s quit) against the INSTALLED app copied by the smoke step
+      # above — packaged asar layout is invisible to the dev-mode e2e job.
+      # DB isolation rides on MURMUR_DB_PATH=:memory: (electron-launch).
+      - name: Boot-health e2e probes against packaged app (mac)
+        run: pnpm exec playwright test tests/e2e/suites/00-boot-health.test.ts
+        env:
+          MURMUR_PACKAGED_EXECUTABLE: /tmp/murmur-smoke/Murmur.app/Contents/MacOS/Murmur
       - name: Generate SHA256 checksums
         run: |
           cd dist
@@ -108,18 +284,18 @@ jobs:
     needs: test
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v4
         with:
           version: 11
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: pnpm
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
 
@@ -136,19 +312,67 @@ jobs:
       - name: Install dependencies (skip postinstall)
         run: pnpm install --ignore-scripts
 
-      - name: Rebuild native modules for Electron
-        run: npx @electron/rebuild
+      # [20260905_Feat_NodeSqlite] no native module to rebuild (node:sqlite
+      # is built in; spec #226) — the pnpm-on-Windows workaround above keeps
+      # guarding the install path itself.
       # [20260802_Fix_WinCiPnpmPostinstall] END
 
-      # [20260802_Fix_WinEmbeddedPython] prepare-embedded-python.js now
-      # supports Windows (-pc-windows-msvc-shared). Keep continue-on-error
-      # because torch/funasr pip install may exceed CI time/disk limits.
+      # [20260905_Feat_NodeSqlite] Same gate as build-mac, engine-swapped:
+      # prove sqlite opens a database under the bundled Electron before
+      # packaging. This job installs with --ignore-scripts, so electron's own
+      # postinstall never extracted its binary — run it here first.
+      - name: Verify sqlite opens under Electron (packaging gate)
+        shell: bash
+        run: |
+          node node_modules/electron/install.js
+          ELECTRON_RUN_AS_NODE=1 npx electron -e "const {DatabaseSync}=require('node:sqlite'); new DatabaseSync(':memory:').prepare('select 1 as ok').get(); console.log('sqlite gate passed')"
+      # [20260905_Feat_NodeSqlite] END
+      # [20260818_T3_PythonPackagingGate] Ticket #184: the old
+      # continue-on-error here (torch/funasr pip may exceed CI time/disk)
+      # shipped v1.2.0-v1.3.2 Windows installers whose Python env was
+      # silently missing while builds stayed green (spec #177 B-0). Now:
+      # cache the env (kills the time/disk pressure that motivated the
+      # soft-fail), prepare is a hard step, and the import gate below must
+      # pass before packaging. If the env cannot be produced, the build
+      # fails — a package without Python cannot transcribe at all.
+      - name: Cache embedded Python
+        id: cache-python
+        uses: actions/cache@v4
+        with:
+          path: python
+          key: embedded-python-${{ runner.os }}-${{ hashFiles('scripts/prepare-embedded-python.js') }}
       - name: Prepare embedded Python
+        if: steps.cache-python.outputs.cache-hit != 'true'
         run: pnpm run prepare:python:embedded
-        continue-on-error: true
+
+      # [20260818_T3_PythonPackagingGate] Gate: interpreter present AND the
+      # full transcription stack imports (numpy/soundfile/funasr) before we
+      # are allowed to package. Platform layout mirrors the runtime's
+      # embeddedPythonLayout (win32: python/python.exe).
+      - name: Verify embedded Python deps (packaging gate)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # [20260818_T3_PythonPackagingGate] Git Bash on windows-latest
+          # reports uname as MINGW*_NT-**, NOT "Windows_NT" — match on _NT.
+          if uname -s | grep -q "_NT"; then PY=python/python.exe; else PY=python/bin/python3.11; fi
+          test -f "$PY" || { echo "::error::embedded interpreter missing: $PY"; exit 1; }
+          "$PY" -c "import numpy, soundfile, funasr" || { echo "::error::embedded python dependency import failed (if this persists across runs, the python/ cache entry may be corrupt — run: gh cache delete embedded-python-\${{ runner.os }}-\$(git hash-object scripts/prepare-embedded-python.js))"; exit 1; }
+          echo "embedded python deps gate passed"
 
       - name: Build main bundle
         run: pnpm run build:main
+
+      # [20260816_Fix_PackagedPreload] Same as build-mac: the preload bundle
+      # must be built and present before packaging, or the installed app
+      # shows "Electron API 不可用" and nothing works.
+      - name: Build preload bundle
+        run: pnpm run build:preload
+
+      - name: Verify preload bundle exists (packaging gate)
+        shell: bash
+        run: test -f dist-preload/preload.js
+      # [20260816_Fix_PackagedPreload] END
 
       - name: Build renderer
         run: pnpm run build:renderer
@@ -159,6 +383,84 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: false
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # [20260816_Gate_PackagedBootSmoke] Windows counterpart of the mac
+      # smoke: silently install the EXE we just built (/S, per-user install
+      # to %LOCALAPPDATA%\Programs\murmur), launch it, and assert the same
+      # boot-log milestones (window created, startup complete, renderer IPC
+      # via hotkey registration) plus absence of fatal boot errors. Would
+      # have caught the v1.2.0 file-uri-to-path crash (#157) before release.
+      - name: Smoke test packaged installer (boot + preload bridge)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # [20260816_Gate_PackagedBootSmoke] electron-builder's NSIS artifact
+          # name varies across versions (spaces vs dots); discover the exe
+          # instead of assuming, and print the dist listing for diagnostics.
+          $exes = @(Get-ChildItem -Path dist -Filter *.exe -File -Recurse)
+          Write-Host "exe files under dist/: $($exes.FullName -join ', ')"
+          if ($exes.Count -eq 0) {
+            Get-ChildItem -Path dist -Recurse -Depth 1 | ForEach-Object { Write-Host "dist entry: $($_.FullName)" }
+            throw "no exe found under dist/"
+          }
+          $installer = ($exes | Where-Object { $_.Name -like '*etup*' } | Select-Object -First 1).FullName
+          if (-not $installer) { $installer = $exes[0].FullName }
+          Write-Host "Installing $installer silently"
+          Start-Process -FilePath $installer -ArgumentList '/S' -Wait
+          $appExe = Join-Path $env:LOCALAPPDATA 'Programs\murmur\Murmur.exe'
+          if (-not (Test-Path $appExe)) { throw "installed app not found at $appExe" }
+          $logDir = Join-Path $env:APPDATA 'Murmur\logs'
+          Remove-Item (Join-Path $logDir 'app.log') -ErrorAction SilentlyContinue
+          # [20260905_Fix_150SmokeColdCache] Warm the embedded python page
+          # cache (parity with the mac smoke): a cache-hit unpack is cold on
+          # disk and `import funasr` pulls several hundred MB of torch.
+          # Milestone assertions below still apply in full.
+          $warmPy = Join-Path $env:LOCALAPPDATA 'Programs\murmur\resources\app.asar.unpacked\python\python.exe'
+          if (Test-Path $warmPy) { & $warmPy -c "import funasr" 2>$null }
+          Start-Process -FilePath $appExe
+          $log = Join-Path $logDir 'app.log'
+          # [20260818_T3_PythonSelfCheckMilestone] Poll for milestones
+          # instead of a fixed sleep — cold `import funasr` (torch) can
+          # outrun a fixed window. Poll up to 360s, break when all present.
+          $milestones = @('主窗口创建成功','应用启动完成','注册成功','Python链路自检通过')
+          $missing = @($milestones)
+          $allPresent = $false
+          for ($i = 0; $i -lt 72; $i++) {
+            Start-Sleep -Seconds 5
+            if (Test-Path $log) {
+              $content = Get-Content $log -Raw -Encoding UTF8
+              $missing = @($milestones | Where-Object { $content -notlike "*$_*" })
+              if ($missing.Count -eq 0) { $allPresent = $true; break }
+            }
+          }
+          if (-not (Test-Path $log)) { throw "app.log not found at $log" }
+          if (-not $allPresent) {
+            Write-Host "missing milestones: $($missing -join ', ')"
+            Get-Content $log -Tail 20
+            throw "boot milestones incomplete after 360s"
+          }
+          # Review fixup: re-read so fatal patterns written AFTER the
+          # break-early snapshot are still caught (parity with mac's live
+          # grep).
+          $content = Get-Content $log -Raw -Encoding UTF8
+          # [20260820_Gate_UnhandledRejection] Windows counterpart of the mac
+          # fatal-list hardening: gate on "Unhandled Rejection" too.
+          foreach ($fatal in @('NODE_MODULE_VERSION','Uncaught Exception','Unhandled Rejection','preload 脚本加载失败','Python链路自检失败')) {
+            if ($content -like "*$fatal*") { throw "fatal error in packaged boot log: $fatal" }
+          }
+          if (-not (Get-Process -Name 'Murmur' -ErrorAction SilentlyContinue)) { throw 'Murmur process is not running' }
+          Stop-Process -Name 'Murmur' -Force -ErrorAction SilentlyContinue
+          Write-Host 'packaged installer smoke passed: boot milestones + preload bridge verified'
+      # [20260816_Gate_PackagedBootSmoke] END
+      # [20260906_Test_PackagedBootHealth] Spec #266 T11 (#288): Windows
+      # counterpart — boot-health probes against the NSIS-installed exe.
+      # Stop the smoke's leftover process first so the probes boot a fresh
+      # instance with isolated DB.
+      - name: Boot-health e2e probes against packaged app (win)
+        shell: pwsh
+        run: |
+          Stop-Process -Name 'Murmur' -Force -ErrorAction SilentlyContinue
+          $env:MURMUR_PACKAGED_EXECUTABLE = Join-Path $env:LOCALAPPDATA 'Programs\murmur\Murmur.exe'
+          pnpm exec playwright test tests/e2e/suites/00-boot-health.test.ts
       - name: Generate SHA256 checksums
         shell: pwsh
         run: |

@@ -16,6 +16,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { register } from "../../src/helpers/ipc/windowHandlers";
 
+// [20260906_Spec259_T3] Electron mock for the CLOSE_APP handler (app.quit).
+// windowHandlers imports only `app` from electron, so this is additive and
+// does not affect the existing window-stub tests.
+vi.mock("electron", () => ({
+  app: { quit: vi.fn() },
+}));
+
 // [20260726_Tier3_WindowHandlersMigrate] Handler shape: ipcMain.handle
 // registers `(event, ...args) => result` callbacks. Tests invoke them with
 // varied args and read result properties (true/false/{success}), so the
@@ -73,9 +80,7 @@ interface MockWindowManager {
   setDefaultAlwaysOnTop: MockFn;
   showHistoryWindow: MockFn;
   closeHistoryWindow: MockFn;
-  hideHistoryWindow: MockFn;
   showSettingsWindow: MockFn;
-  closeSettingsWindow: MockFn;
   hideSettingsWindow: MockFn;
   restoreMainWindow: MockFn;
   // [20260726_Tier3_WindowHandlersMigrate] Mutated per-test by the macOS
@@ -124,9 +129,7 @@ describe("windowHandlers", () => {
         setDefaultAlwaysOnTop: vi.fn(),
         showHistoryWindow: vi.fn(),
         closeHistoryWindow: vi.fn(),
-        hideHistoryWindow: vi.fn(),
         showSettingsWindow: vi.fn(),
-        closeSettingsWindow: vi.fn(),
         hideSettingsWindow: vi.fn(),
         restoreMainWindow: vi.fn(),
       },
@@ -140,11 +143,13 @@ describe("windowHandlers", () => {
     );
   });
 
+  // [20260906_Refactor_DeadChannelCleanup] Ticket #250: the show-window /
+  // is-window-maximized / hide-history-window handler tests were removed with
+  // their zero-renderer-caller handlers.
   it("registers all window handlers", () => {
     const channels = Object.keys(ipcMain._handlers);
     expect(channels.length).toBeGreaterThanOrEqual(7);
     expect(ipcMain._handlers["hide-window"]).toBeDefined();
-    expect(ipcMain._handlers["show-window"]).toBeDefined();
     expect(ipcMain._handlers["close-window"]).toBeDefined();
   });
 
@@ -152,13 +157,6 @@ describe("windowHandlers", () => {
     // [20260726_Tier3_WindowHandlersMigrate] Non-null after toBeDefined.
     const result = ipcMain._handlers["hide-window"]!();
     expect(managers.windowManager.mainWindow.hide).toHaveBeenCalled();
-    expect(result).toBe(true);
-  });
-
-  it("show-window shows and focuses the main window", () => {
-    const result = ipcMain._handlers["show-window"]!();
-    expect(managers.windowManager.mainWindow.show).toHaveBeenCalled();
-    expect(managers.windowManager.mainWindow.focus).toHaveBeenCalled();
     expect(result).toBe(true);
   });
 
@@ -209,55 +207,6 @@ describe("windowHandlers", () => {
     expect(win.maximize).toHaveBeenCalled();
   });
 
-  it("is-window-maximized returns maximize state via isMaximized()", () => {
-    managers.windowManager.mainWindow.isMaximized.mockReturnValue(true);
-    expect(ipcMain._handlers["is-window-maximized"]!()).toBe(true);
-
-    managers.windowManager.mainWindow.isMaximized.mockReturnValue(false);
-    expect(ipcMain._handlers["is-window-maximized"]!()).toBe(false);
-  });
-
-  // [Windows Compat] IS_MAX must reflect _preMaximizeBounds state, because
-  // win.isMaximized() always returns false for transparent windows on Windows.
-  // If this test fails, the IS_MAX handler still calls isMaximized() directly.
-  it("is-window-maximized returns true when _preMaximizeBounds is set (Windows transparent compat)", () => {
-    const win = managers.windowManager.mainWindow;
-    win.webContents = { send: vi.fn() };
-    // Simulate Windows transparent window: isMaximized() always returns false
-    win.isMaximized.mockReturnValue(false);
-
-    // First click: maximize via handler (sets _preMaximizeBounds)
-    ipcMain._handlers["maximize-window"]!();
-
-    // IS_MAX should return true despite isMaximized() being false
-    expect(ipcMain._handlers["is-window-maximized"]!()).toBe(true);
-
-    // Second click: restore (clears _preMaximizeBounds)
-    ipcMain._handlers["maximize-window"]!();
-
-    // IS_MAX should now return false
-    expect(ipcMain._handlers["is-window-maximized"]!()).toBe(false);
-  });
-
-  // [macOS Compat] Regression: OS-initiated unmaximize must clear _preMaximizeBounds
-  // so IS_MAX does not return a stale true on macOS.
-  it("is-window-maximized returns false after OS-initiated unmaximize clears _preMaximizeBounds", () => {
-    const win = managers.windowManager.mainWindow;
-    win.webContents = { send: vi.fn() };
-    win.isMaximized.mockReturnValue(false);
-
-    // Maximize via button (sets _preMaximizeBounds)
-    ipcMain._handlers["maximize-window"]!();
-    expect(ipcMain._handlers["is-window-maximized"]!()).toBe(true);
-
-    // Simulate OS-initiated unmaximize (e.g. user drags window away on macOS)
-    // windowManager's unmaximize handler clears _preMaximizeBounds
-    managers.windowManager._preMaximizeBounds = null;
-
-    // IS_MAX should now return false (falls back to isMaximized() = false)
-    expect(ipcMain._handlers["is-window-maximized"]!()).toBe(false);
-  });
-
   it("close-window closes the main window", () => {
     const result = ipcMain._handlers["close-window"]!();
     expect(managers.windowManager.mainWindow.close).toHaveBeenCalled();
@@ -284,9 +233,82 @@ describe("windowHandlers", () => {
     expect(managers.windowManager.restoreMainWindow).toHaveBeenCalled();
   });
 
-  it("hide-history-window calls restoreMainWindow", () => {
-    ipcMain._handlers["hide-history-window"]!();
-    expect(managers.windowManager.hideHistoryWindow).toHaveBeenCalled();
-    expect(managers.windowManager.restoreMainWindow).toHaveBeenCalled();
+  // ======================================================================
+  // [20260906_Spec259_T3] Null-mainWindow guard arms + the remaining
+  // window-lifecycle handlers (Spec #259 T3, #275).
+  // ======================================================================
+
+  // Every mainWindow-guarded handler must stay a no-op returning true when
+  // the window is gone (null) — the renderer-side hide/minimize/close paths
+  // race window teardown during shutdown.
+  describe("null-mainWindow guard arms", () => {
+    function reregisterWithoutMainWindow(): void {
+      managers.windowManager.mainWindow = null as unknown as MockWindow;
+      register(
+        ipcMain as unknown as Parameters<typeof register>[0],
+        managers as unknown as Parameters<typeof register>[1],
+      );
+    }
+
+    it("hide-window returns true without touching a null window", () => {
+      reregisterWithoutMainWindow();
+      const result = ipcMain._handlers["hide-window"]!();
+      expect(result).toBe(true);
+    });
+
+    it("minimize-window returns true without touching a null window", () => {
+      reregisterWithoutMainWindow();
+      const result = ipcMain._handlers["minimize-window"]!();
+      expect(result).toBe(true);
+    });
+
+    it("maximize-window returns true without touching a null window", () => {
+      reregisterWithoutMainWindow();
+      const result = ipcMain._handlers["maximize-window"]!();
+      expect(result).toBe(true);
+    });
+
+    it("close-window returns true without touching a null window", () => {
+      reregisterWithoutMainWindow();
+      const result = ipcMain._handlers["close-window"]!();
+      expect(result).toBe(true);
+    });
+
+    it("set-always-on-top still applies the default with a null main window", () => {
+      reregisterWithoutMainWindow();
+      const result = ipcMain._handlers["set-always-on-top"]!({}, false) as {
+        success: boolean;
+      };
+      expect(result).toEqual({ success: true });
+      expect(managers.windowManager.setDefaultAlwaysOnTop).toHaveBeenCalledWith(
+        false,
+      );
+    });
+  });
+
+  describe("remaining window lifecycle handlers", () => {
+    it("open-history-window delegates to showHistoryWindow", () => {
+      const result = ipcMain._handlers["open-history-window"]!();
+      expect(managers.windowManager.showHistoryWindow).toHaveBeenCalled();
+      expect(result).toBe(true);
+    });
+
+    it("close-history-window delegates to closeHistoryWindow", () => {
+      const result = ipcMain._handlers["close-history-window"]!();
+      expect(managers.windowManager.closeHistoryWindow).toHaveBeenCalled();
+      expect(result).toBe(true);
+    });
+
+    it("open-settings-window delegates to showSettingsWindow", () => {
+      const result = ipcMain._handlers["open-settings-window"]!();
+      expect(managers.windowManager.showSettingsWindow).toHaveBeenCalled();
+      expect(result).toBe(true);
+    });
+
+    it("close-app quits the application", async () => {
+      const { app } = await import("electron");
+      ipcMain._handlers["close-app"]!();
+      expect(vi.mocked(app.quit)).toHaveBeenCalledTimes(1);
+    });
   });
 });

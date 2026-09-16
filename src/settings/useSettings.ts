@@ -10,6 +10,12 @@ import type {
   UpdateProgressData,
   UpdateCompleteData,
 } from "../types/ipc";
+// [20260905_Fix_246_HotkeySettingsUi] Single renderer-side default for the
+// recording hotkey setting (issue #246: the setting existed in storage and
+// the allowlist but nothing read or wrote it).
+import { DEFAULT_HOTKEY } from "./hotkeyRecorder";
+
+export { DEFAULT_HOTKEY };
 
 export interface SettingsState {
   ai_api_key: string;
@@ -18,14 +24,31 @@ export interface SettingsState {
   ai_temperature: number;
   ai_max_tokens: number;
   enable_ai_optimization: boolean;
+  // [20260905_Fix_249_DefaultModeUi] Default AI processing mode the recording
+  // and file-transcription pipelines apply automatically (issue #249: the
+  // read side honored it but nothing could write it). One of "auto" (pick by
+  // text length), "off", or a built-in/template mode name.
+  default_mode: string;
   window_always_on_top: boolean;
   auto_paste: string;
   close_behavior: string;
   theme: string;
-  // [20260729_Feat_EffectsToggle] Visual-effects toggle (History window).
-  // Defaults to false — effects are opt-in to protect low-end machines where
-  // WebGL falls back to SwiftShader (software rendering, high CPU).
-  effects_enabled: boolean;
+  // [20260905_Fix_246_HotkeySettingsUi] Global recording hotkey as an
+  // Electron accelerator string ("CommandOrControl+Shift+Space"). Edited in
+  // the settings window's General tab recorder; the main window re-registers
+  // on SETTINGS_UPDATE.
+  hotkey: string;
+  // [20260820_T14_Hotwords] Hotword list, one entry per line; sanitized at
+  // the save and injection boundaries (src/helpers/hotwords.ts).
+  hotwords: string;
+  // [20260905_Feat_BloubSettings] bot mascot catalogue keys (spec #224
+  // ticket 5, decision #220). Values: ShapeId / "auto"|ColorId /
+  // ExpressionId, stored as strings like every other setting.
+  bot_shape: string;
+  bot_color: string;
+  bot_expression: string;
+  // [20260816_Refactor_RemoveEffects] effects_enabled was removed with the
+  // visual-effects feature (ogl/motion deps deleted the same day).
 }
 
 // [20260712_Fix_ProviderPresetType] Use the canonical AIProviderPreset
@@ -50,22 +73,51 @@ export const PREDEFINED_MODELS = [
 
 export const DEFAULT_MODEL = "gpt-3.5-turbo";
 
+// [20260815_Refactor_ModelListDedup] Display labels for PREDEFINED_MODELS.
+// AIConfigSection used to hardcode the same models a second time as <option>
+// tags — two copies that silently drift. The qwen3 entry is localized at the
+// usage site (settings.ai.qwenRecommended), so its label here is a fallback.
+export const MODEL_LABELS: Record<string, string> = {
+  "gpt-3.5-turbo": "GPT-3.5 Turbo",
+  "gpt-4": "GPT-4",
+  "gpt-4-turbo": "GPT-4 Turbo",
+  "gpt-4o": "GPT-4o",
+  "gpt-4o-mini": "GPT-4o Mini",
+  "qwen3-30b-a3b-instruct-2507": "Qwen3-30B",
+};
+
 export function isMaskedKey(key: string): boolean {
   return key.startsWith("****");
 }
 
-const DEFAULT_SETTINGS: SettingsState = {
+// [20260905_Fix_246_HotkeySettingsUi] Exported so tests can pin the settings
+// contract (defaults shape) without reaching into module internals.
+export const DEFAULT_SETTINGS: SettingsState = {
   ai_api_key: "",
   ai_base_url: "https://api.openai.com/v1",
-  ai_model: "gpt-3.5-turbo",
+  ai_model: DEFAULT_MODEL,
   ai_temperature: 0.3,
-  ai_max_tokens: 2000,
+  // [20260815_Fix_AiMaxTokensDefault] 8192 (was 2000): reasoning models count
+  // thinking tokens against max_tokens; 2000 let reasoning alone exhaust the
+  // budget and return empty content (see 20260815_Fix_AiEmptyContent).
+  ai_max_tokens: 8192,
   enable_ai_optimization: true,
+  // [20260905_Fix_249_DefaultModeUi] Read-side vocabulary: "auto" delegates
+  // to determineProcessingMode (length-based optimize/optimize_long).
+  default_mode: "auto",
   window_always_on_top: true,
   auto_paste: "paste",
   close_behavior: "hide",
   theme: "system",
-  effects_enabled: false,
+  // [20260905_Fix_246_HotkeySettingsUi] Exported for the settings contract
+  // test and the General-section recorder default.
+  hotkey: DEFAULT_HOTKEY,
+  hotwords: "",
+  // [20260905_Feat_BloubSettings] faithful-replica defaults; "auto" colour
+  // means theme-aware (light -> ink, dark -> cream) at the mascot
+  bot_shape: "circle",
+  bot_color: "auto",
+  bot_expression: "neutral",
 };
 
 export function applyTheme(theme: string): void {
@@ -123,15 +175,44 @@ export function useSettings() {
           ai_temperature:
             parseFloat(allSettings.ai_temperature as string) || 0.3,
           ai_max_tokens:
-            parseInt(allSettings.ai_max_tokens as string, 10) || 2000,
+            parseInt(allSettings.ai_max_tokens as string, 10) || 8192,
           enable_ai_optimization: allSettings.enable_ai_optimization !== false,
+          // [20260905_Fix_249_DefaultModeUi] MIGRATE, don't blindly default:
+          // when default_mode was never written, derive it from the legacy
+          // enable_ai_optimization boolean (same migration the read side in
+          // useRecording/useFileTranscription applies). A blind "auto" here
+          // would auto-persist "auto" on any settings save and silently
+          // re-enable AI for users who turned it off.
+          default_mode:
+            typeof allSettings.default_mode === "string" &&
+            allSettings.default_mode
+              ? allSettings.default_mode
+              : allSettings.enable_ai_optimization === false
+                ? "off"
+                : "auto",
           window_always_on_top: allSettings.window_always_on_top !== false,
           auto_paste: (allSettings.auto_paste || "paste") as string,
           close_behavior: (allSettings.close_behavior || "hide") as string,
           theme: (allSettings.theme || "system") as string,
-          // [20260729_Feat_EffectsToggle] Explicit === true so existing users
-          // (who have no effects_enabled row yet) default to off.
-          effects_enabled: allSettings.effects_enabled === true,
+          // [20260905_Fix_246_HotkeySettingsUi] Hotkey accelerator; falls
+          // back to the historical default when absent or non-string.
+          hotkey:
+            typeof allSettings.hotkey === "string" && allSettings.hotkey
+              ? allSettings.hotkey
+              : DEFAULT_HOTKEY,
+          // [20260820_T14_Hotwords] Stored raw (multi-line, save boundary
+          // = allowlist + generic length cap); FULL sanitization happens
+          // once, at the injection boundary (src/helpers/hotwords.ts).
+          hotwords:
+            typeof allSettings.hotwords === "string"
+              ? allSettings.hotwords
+              : "",
+          // [20260905_Feat_BloubSettings] bot mascot catalogue keys; stored
+          // values are validated at the mascot boundary (unknown ids fall
+          // back to the defaults there)
+          bot_shape: (allSettings.bot_shape || "circle") as string,
+          bot_color: (allSettings.bot_color || "auto") as string,
+          bot_expression: (allSettings.bot_expression || "neutral") as string,
         };
         setSettings((prev) => ({ ...prev, ...loadedSettings }));
         applyTheme(loadedSettings.theme);
@@ -153,6 +234,12 @@ export function useSettings() {
   // --- 保存设置 ---
   // [ADR-015] Returns boolean so callers can show inline success feedback
   // (savedFlash) only on actual success, not on the catch path.
+  // [20260815_Refactor_SaveSettingsLoop] The 11 hand-listed setSetting calls
+  // (each with a per-key comment) became a loop over the settings object:
+  // handleInputChange already auto-persists every change, so this bulk save
+  // only exists as the explicit Save-button reconciliation pass — a loop
+  // keeps future settings keys included automatically instead of needing a
+  // mandatory new line (the old effects_enabled reviewer finding).
   const saveSettings = useCallback(async (): Promise<boolean> => {
     try {
       setSaving(true);
@@ -163,43 +250,14 @@ export function useSettings() {
             settings.ai_api_key,
           );
         }
-        await window.electronAPI.setSetting(
-          "ai_base_url",
-          settings.ai_base_url,
-        );
-        await window.electronAPI.setSetting("ai_model", settings.ai_model);
-        await window.electronAPI.setSetting(
-          "ai_temperature",
-          settings.ai_temperature,
-        );
-        await window.electronAPI.setSetting(
-          "ai_max_tokens",
-          settings.ai_max_tokens,
-        );
-        await window.electronAPI.setSetting(
-          "enable_ai_optimization",
-          settings.enable_ai_optimization,
-        );
-        await window.electronAPI.setSetting(
-          "window_always_on_top",
-          settings.window_always_on_top,
-        );
-        await window.electronAPI.setSetting("auto_paste", settings.auto_paste);
-        await window.electronAPI.setSetting(
-          "close_behavior",
-          settings.close_behavior,
-        );
-        await window.electronAPI.setSetting("theme", settings.theme);
+        for (const key of Object.keys(settings)) {
+          if (key === "ai_api_key") continue;
+          await window.electronAPI.setSetting(
+            key,
+            settings[key as keyof SettingsState],
+          );
+        }
         applyTheme(settings.theme);
-        // [20260729_Feat_EffectsToggle] Persist the effects toggle. This line
-        // is mandatory — saveSettings hardcodes each key individually, so
-        // omitting it silently drops the setting on save (UI shows "saved"
-        // but the DB never receives the value). See reviewer M3 finding.
-        await window.electronAPI.setSetting(
-          "effects_enabled",
-          settings.effects_enabled,
-        );
-
         toast.success(t("settings.saveSuccess", "设置已保存"));
         return true;
       }
@@ -221,6 +279,43 @@ export function useSettings() {
   // settings (effects_enabled, theme, auto_paste, close_behavior) were stuck
   // in React state and lost when the settings window was destroyed (Alt+F4).
   const handleInputChange = useCallback((key: string, value: unknown) => {
+    // [20260905_Fix_249_ReviewMajor] enable_ai_optimization and default_mode
+    // are two views of one knob. They used to diverge when the AI Config
+    // toggle was flipped after load: saveSettings then persisted the stale
+    // derived "auto" alongside the boolean, and the read-side migration
+    // (which only runs when default_mode is null) never saw it — the toggle
+    // showed off while AI kept running. Sync both directions here so the
+    // auto-persist and the save loop always stay consistent.
+    if (key === "enable_ai_optimization") {
+      const enabled = value !== false;
+      setSettings((prev) => ({
+        ...prev,
+        enable_ai_optimization: enabled,
+        default_mode: enabled
+          ? prev.default_mode === "off"
+            ? "auto"
+            : prev.default_mode
+          : "off",
+      }));
+      if (window.electronAPI?.setSetting) {
+        window.electronAPI.setSetting(key, enabled);
+        window.electronAPI.setSetting("default_mode", enabled ? "auto" : "off");
+      }
+      return;
+    }
+    if (key === "default_mode") {
+      const mode = typeof value === "string" ? value : "auto";
+      setSettings((prev) => ({
+        ...prev,
+        default_mode: mode,
+        enable_ai_optimization: mode !== "off",
+      }));
+      if (window.electronAPI?.setSetting) {
+        window.electronAPI.setSetting(key, mode);
+        window.electronAPI.setSetting("enable_ai_optimization", mode !== "off");
+      }
+      return;
+    }
     setSettings((prev) => ({ ...prev, [key]: value }));
     if (window.electronAPI?.setSetting) {
       window.electronAPI.setSetting(key, value);
@@ -312,7 +407,7 @@ export function useSettings() {
           ai_api_key: settings.ai_api_key.trim(),
           ai_base_url:
             settings.ai_base_url.trim() || "https://api.openai.com/v1",
-          ai_model: settings.ai_model.trim() || "gpt-3.5-turbo",
+          ai_model: settings.ai_model.trim() || DEFAULT_MODEL,
         };
 
         const result = await window.electronAPI.checkAIStatus(testConfig);

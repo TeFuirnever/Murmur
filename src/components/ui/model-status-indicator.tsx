@@ -18,7 +18,11 @@ interface ModelStatus {
   isLoading?: boolean;
   downloadProgress?: number;
   progress?: number;
-  error?: string;
+  // [20260815_Refactor_StageTextDedup] Widened from `string` to
+  // `string | null` so the useModelStatus hook's ModelStatus (whose error is
+  // `string | null`) is structurally assignable — removes the `as any` cast
+  // at the App.tsx call site.
+  error?: string | null;
   modelProgress?: Record<string, ModelProgress>;
 }
 

@@ -292,24 +292,44 @@ describe("FunASRServer _startFunASRServer — spawn lifecycle", () => {
   });
 
   it("rejects on 120s startup timeout (timeout kills process → close fires)", async () => {
+    // [20260817_T4_CiMatrix] This test's semantics ("kill() → close fires
+    // → races the timeout reject") are the SIGKILL arm. On real Windows the
+    // timeout goes through killProcessTree's taskkill arm, which this
+    // suite's inert spawnSync mock does not simulate — force the posix arm
+    // here; the win32 arm is covered by funasrServer-killtree.test.ts.
+    const ORIG_PLATFORM = process.platform;
+    Object.defineProperty(process, "platform", {
+      value: "darwin",
+      configurable: true,
+      writable: true,
+    });
     vi.useFakeTimers();
-    const { child } = createFakeChild();
-    mockSpawnChild = child;
+    try {
+      const { child } = createFakeChild();
+      mockSpawnChild = child;
 
-    const s = srv(server);
-    const promise = s._startFunASRServer(
-      {},
-      "python3",
-      serverScript,
-      "/tmp/models",
-    );
+      const s = srv(server);
+      const promise = s._startFunASRServer(
+        {},
+        "python3",
+        serverScript,
+        "/tmp/models",
+      );
 
-    // No stdout output — simulate timeout. The timeout callback calls kill(),
-    // which emits 'close', which races with the timeout reject. Either
-    // "超时" or "异常退出" is acceptable — both indicate init never completed.
-    vi.advanceTimersByTime(121000);
+      // No stdout output — simulate timeout. The timeout callback calls kill(),
+      // which emits 'close', which races with the timeout reject. Either
+      // "超时" or "异常退出" is acceptable — both indicate init never completed.
+      vi.advanceTimersByTime(121000);
 
-    await expect(promise).rejects.toThrow();
-    expect(child.killed).toBe(true);
+      await expect(promise).rejects.toThrow();
+      expect(child.killed).toBe(true);
+    } finally {
+      Object.defineProperty(process, "platform", {
+        value: ORIG_PLATFORM,
+        configurable: true,
+        writable: true,
+      });
+      vi.useRealTimers();
+    }
   });
 });

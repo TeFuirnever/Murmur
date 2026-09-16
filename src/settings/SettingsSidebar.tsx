@@ -1,8 +1,16 @@
 import type React from "react";
-import { Settings, Shield, Bot, Info } from "lucide-react";
+import { Settings, Shield, Bot, Info, Sparkles, FileText } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-export type SettingsSection = "general" | "permissions" | "ai" | "about";
+// [20260905_Feat_BloubSettings] "bot" section added (spec #224 ticket 5)
+// [20260912_Feat_242_TemplateSystem] "templates" section added (spec #193 T15)
+export type SettingsSection =
+  | "general"
+  | "bot"
+  | "permissions"
+  | "ai"
+  | "templates"
+  | "about";
 
 interface SettingsSidebarProps {
   activeSection: SettingsSection;
@@ -15,8 +23,12 @@ const SECTIONS: {
   labelKey: string;
 }[] = [
   { id: "general", icon: Settings, labelKey: "settings.sidebar.general" },
+  // [20260905_Feat_BloubSettings] bot mascot section
+  { id: "bot", icon: Sparkles, labelKey: "settings.sidebar.bot" },
   { id: "permissions", icon: Shield, labelKey: "settings.sidebar.permissions" },
   { id: "ai", icon: Bot, labelKey: "settings.sidebar.ai" },
+  // [20260912_Feat_242_TemplateSystem] template editor section
+  { id: "templates", icon: FileText, labelKey: "settings.sidebar.templates" },
   { id: "about", icon: Info, labelKey: "settings.sidebar.about" },
 ];
 
@@ -25,8 +37,10 @@ const SECTIONS: {
 // Chinese remains in this file.
 const sectionLabelFallbacks: Record<SettingsSection, string> = {
   general: "General",
+  bot: "Bot", // [20260905_Feat_BloubSettings]
   permissions: "Permissions",
   ai: "AI Config",
+  templates: "Templates", // [20260912_Feat_242_TemplateSystem]
   about: "About",
 };
 
@@ -41,12 +55,12 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
       className="w-[180px] flex-shrink-0 border-r border-[#d2d2d7] dark:border-[#3a3a3c] py-3 px-2"
       aria-label={t("settings.title", "Settings")}
     >
-      <ul className="space-y-0.5" role="list">
+      <ul className="space-y-0.5" role="tablist" aria-orientation="vertical">
         {SECTIONS.map(({ id, icon: Icon, labelKey }) => {
           const isActive = activeSection === id;
           const label = t(labelKey, sectionLabelFallbacks[id]);
           return (
-            <li key={id}>
+            <li key={id} role="presentation">
               <button
                 type="button"
                 role="tab"
@@ -54,7 +68,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
                 onClick={() => onSectionChange(id)}
                 className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors text-left ${
                   isActive
-                    ? "bg-[#0071e3]/10 text-[#0071e3] font-medium"
+                    ? "bg-[#0071e3]/10 text-[#005bb8] font-medium"
                     : "text-[#1d1d1f]/70 dark:text-[#f5f5f7]/70 hover:bg-[#f5f5f7] dark:hover:bg-[#2c2c2e]"
                 }`}
               >

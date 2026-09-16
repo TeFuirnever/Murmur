@@ -11,6 +11,10 @@ interface ModelProgressEntry {
 interface ModelStatus {
   isLoading: boolean;
   isReady: boolean;
+  // [T12 review BLOCKER] True when the server PROCESS is alive but its
+  // models are freed (idle-unload) — a recordable state; the hotkey
+  // pre-trigger covers the reload window.
+  isUnloaded: boolean;
   isDownloading: boolean;
   modelsDownloaded: boolean;
   error: string | null;
@@ -21,13 +25,13 @@ interface ModelStatus {
   modelProgress: Record<string, ModelProgressEntry>;
 }
 
+// [20260815_Refactor_DeadIpc] Context surface trimmed to what consumers
+// actually use: the derived status fields plus downloadModels. The old
+// getDownloadProgress (dead pull chain — progress arrives via the
+// MODEL_DOWNLOAD_PROGRESS push event) and the provider-internal
+// checkModelStatus/checkModelFiles were removed from the exposed value.
 interface ModelStatusContextValue extends ModelStatus {
-  checkModelStatus: () => Promise<void>;
   downloadModels: () => Promise<OperationResult>;
-  getDownloadProgress: () => Promise<
-    import("../types/ipc").DownloadProgress | { success: boolean }
-  >;
-  checkModelFiles: () => Promise<import("../types/ipc").ModelCheckResult>;
 }
 
 const ModelStatusContext = React.createContext<ModelStatusContextValue | null>(
@@ -47,6 +51,7 @@ export function ModelStatusProvider({
   const [modelStatus, setModelStatus] = React.useState<ModelStatus>({
     isLoading: true,
     isReady: false,
+    isUnloaded: false,
     isDownloading: false,
     modelsDownloaded: false,
     error: null,
@@ -131,6 +136,7 @@ export function ModelStatusProvider({
           ...prev,
           isLoading: false,
           isReady: false,
+          isUnloaded: false,
           modelsDownloaded: false,
           missingModels,
           error: null,
@@ -142,6 +148,7 @@ export function ModelStatusProvider({
           ...prev,
           isLoading: false,
           isReady: true,
+          isUnloaded: false,
           modelsDownloaded: true,
           missingModels: [],
           error: null,
@@ -153,17 +160,33 @@ export function ModelStatusProvider({
           ...prev,
           isLoading: true,
           isReady: false,
+          isUnloaded: false,
           modelsDownloaded: true,
           missingModels: [],
           error: null,
           progress: 50,
           stage: "loading",
         }));
+      } else if (serverStatus.server_ready === true) {
+        // [T12 review BLOCKER] Process alive + models freed = idle-unloaded:
+        // recordable, hotkey pre-trigger covers the reload. Not an error.
+        setModelStatus((prev) => ({
+          ...prev,
+          isLoading: false,
+          isReady: false,
+          isUnloaded: true,
+          modelsDownloaded: true,
+          missingModels: [],
+          error: null,
+          progress: 0,
+          stage: "unloaded",
+        }));
       } else {
         setModelStatus((prev) => ({
           ...prev,
           isLoading: false,
           isReady: false,
+          isUnloaded: false,
           modelsDownloaded: true,
           missingModels: [],
           error: serverStatus.error || "服务器未就绪",
@@ -213,23 +236,15 @@ export function ModelStatusProvider({
           isLoading: true,
         }));
 
-        try {
-          console.log("模型下载完成，重启FunASR服务器...");
-          await window.electronAPI.restartFunasrServer();
-          console.log("FunASR服务器重启完成");
-
-          setTimeout(() => {
-            checkModelStatus();
-          }, 3000);
-        } catch (restartError) {
-          console.error("重启FunASR服务器失败:", restartError);
-          setModelStatus((prev) => ({
-            ...prev,
-            isLoading: false,
-            error: "重启服务器失败: " + (restartError as Error).message,
-            stage: "error",
-          }));
-        }
+        // [20260905_Fix_216_DownloadRecovery] The server restart after a
+        // successful download is now owned by the MAIN process
+        // (funasrManager.downloadModels fires restartServer itself). The
+        // renderer-side restart here raced it into a double full-model
+        // load (review MAJOR); the status poll below picks up the server
+        // state once the main-process restart settles.
+        setTimeout(() => {
+          checkModelStatus();
+        }, 3000);
 
         return { success: true };
       } else {
@@ -248,19 +263,6 @@ export function ModelStatusProvider({
     }
   }, [checkModelStatus]);
 
-  const getDownloadProgress = React.useCallback(async () => {
-    try {
-      if (window.electronAPI) {
-        const progress = await window.electronAPI.getDownloadProgress();
-        return progress;
-      }
-      return { success: false };
-    } catch (error) {
-      console.error("获取下载进度失败:", error);
-      return { success: false };
-    }
-  }, []);
-
   React.useEffect(() => {
     if (isSettingsPage()) {
       console.log("设置页面，跳过模型状态检查");
@@ -270,14 +272,16 @@ export function ModelStatusProvider({
   }, [checkModelStatus]);
 
   React.useEffect(() => {
-    if (isSettingsPage() || modelStatus.isReady || modelStatus.isDownloading) {
+    if (modelStatus.isReady || modelStatus.isDownloading) {
       return;
     }
 
+    // [20260815_Refactor_DeadIpc] The interval callback used to re-check the
+    // same isReady/isDownloading conditions already guarded by this effect's
+    // dependency array — the deps re-create the interval on change, so the
+    // inner re-check was unreachable-in-practice redundancy.
     const interval = setInterval(() => {
-      if (!modelStatus.isReady && !modelStatus.isDownloading) {
-        checkModelStatus();
-      }
+      checkModelStatus();
     }, 3000);
 
     return () => clearInterval(interval);
@@ -328,33 +332,9 @@ export function ModelStatusProvider({
     }
   }, []);
 
-  React.useEffect(() => {
-    if (window.electronAPI && window.electronAPI.onProcessingUpdate) {
-      const unsubscribe = window.electronAPI.onProcessingUpdate(
-        // [20260725_CodeReview_S1] Same narrowing as onModelDownloadProgress:
-        // narrow once via the d.ts-declared shape (inline in electronAPI.d.ts
-        // until Tier 2.3 finalize extracts it to types/ipc.ts).
-        (event, data) => {
-          const d = (data ?? event) as {
-            type?: string;
-            isLoading?: boolean;
-            isReady?: boolean;
-            progress?: number;
-          };
-          if (d.type === "model_initialization") {
-            setModelStatus((prev) => ({
-              ...prev,
-              isLoading: d.isLoading ?? prev.isLoading,
-              isReady: d.isReady ?? prev.isReady,
-              progress: d.progress || prev.progress,
-              stage: d.isReady ? "ready" : "loading",
-            }));
-          }
-        },
-      );
-      return unsubscribe;
-    }
-  }, []);
+  // [20260906_Refactor_DeadChannelCleanup] Ticket #250: the processing-update
+  // push-event subscription was removed with the channel — the
+  // model_initialization push had no live producer.
 
   React.useEffect(() => {
     if (isSettingsPage()) return;
@@ -367,10 +347,7 @@ export function ModelStatusProvider({
 
   const value = {
     ...modelStatus,
-    checkModelStatus,
     downloadModels,
-    getDownloadProgress,
-    checkModelFiles,
   };
 
   return (

@@ -208,7 +208,7 @@ Repository: https://github.com/eslint/eslint
 Publisher: Nicholas C. Zakas
 
 ---
-file-uri-to-path@2.0.0
+file-uri-to-path@1.0.0
 License: MIT
 Repository: https://github.com/TooTallNate/file-uri-to-path
 Publisher: Nathan Rajlich

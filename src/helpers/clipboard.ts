@@ -1,8 +1,10 @@
 // [20260724_TS_BigBang_Clipboard] Migrated from .js to .ts (ADR-010).
 // `module.exports = ClipboardManager` (class) became `export default
-// ClipboardManager`. The conditional `require("osascript")` inside a
-// try/catch is INTENTIONALLY kept as require() — `import` is hoisted and
-// would lose the error handling (special case 1).
+// ClipboardManager`.
+// [20260815_Refactor_DeadClipboardCode] Removed the never-read `this.osascript`
+// field (the npm package "osascript" was require()d here but every real
+// AppleScript call already spawns the osascript CLI binary), plus the
+// zero-caller methods enableMacOSAccessibility / insertTextDirectly.
 import { clipboard } from "electron";
 import { spawn } from "child_process";
 
@@ -16,27 +18,10 @@ interface Logger {
 
 class ClipboardManager {
   private logger: Logger | null;
-  private osascript: unknown;
 
   constructor(logger: Logger | null) {
     // 初始化剪贴板管理器
     this.logger = logger;
-    this.osascript = null;
-
-    // 尝试加载 osascript 模块（仅在 macOS 上）
-    if (process.platform === "darwin") {
-      try {
-        // KEEP as require() — import is hoisted and would lose the
-        // try/catch error handling for the optional osascript dependency.
-        this.osascript = require("osascript");
-        this.safeLog("✅ osascript 模块加载成功");
-      } catch (error) {
-        this.safeLog(
-          "⚠️ osascript 模块加载失败，将使用备用方法",
-          (error as Error).message,
-        );
-      }
-    }
   }
 
   // 安全日志方法 - 使用logManager记录
@@ -51,55 +36,6 @@ class ClipboardManager {
         }
       }
     }
-  }
-
-  // 简化的 macOS accessibility 检查
-  async enableMacOSAccessibility(): Promise<boolean> {
-    if (process.platform !== "darwin") return true;
-
-    try {
-      this.safeLog("🔧 检查 macOS accessibility 权限");
-
-      // 简化为基本的权限检查，不设置复杂的AXManualAccessibility
-      const script = `
-        tell application "System Events"
-          set frontApp to name of first application process whose frontmost is true
-          return frontApp
-        end tell
-      `;
-
-      const testProcess = spawn("osascript", ["-e", script]);
-
-      return new Promise((resolve) => {
-        testProcess.on("close", (code) => {
-          if (code === 0) {
-            this.safeLog("✅ macOS accessibility 权限正常");
-            resolve(true);
-          } else {
-            this.safeLog("⚠️ macOS accessibility 权限不足");
-            resolve(false);
-          }
-        });
-
-        testProcess.on("error", () => {
-          this.safeLog("❌ accessibility 权限检查失败");
-          resolve(false);
-        });
-      });
-    } catch (error) {
-      this.safeLog(
-        "❌ 检查 macOS accessibility 时出错:",
-        (error as Error).message,
-      );
-      return false;
-    }
-  }
-
-  // 简化的文本插入方法 - 直接使用标准粘贴方式
-  async insertTextDirectly(text: string): Promise<unknown> {
-    // 简化实现，直接使用标准的粘贴方法
-    this.safeLog("🎯 使用标准粘贴方式插入文本");
-    return await this.pasteText(text);
   }
 
   async pasteText(text: string): Promise<unknown> {
@@ -423,26 +359,9 @@ class ClipboardManager {
       throw error;
     }
   }
-
-  /** 从剪贴板读取文本 */
-  async readClipboard(): Promise<string> {
-    try {
-      const text = clipboard.readText();
-      return text || "";
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  /** 将文本写入剪贴板 */
-  async writeClipboard(text: string): Promise<{ success: boolean }> {
-    try {
-      clipboard.writeText(text);
-      return { success: true };
-    } catch (error) {
-      throw error;
-    }
-  }
+  // [20260815_Refactor_DeadIpc] readClipboard/writeClipboard removed with
+  // their zero-renderer-caller IPC channels (copyText above covers writes;
+  // the main process reads the clipboard directly where needed).
 }
 
 export default ClipboardManager;

@@ -83,14 +83,18 @@ Path: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/preload.ts`
 - **Window:** `hideWindow`, `showWindow`, `minimizeWindow`, `maximizeWindow`, `isWindowMaximized`, `closeWindow`, `closeApp`, `setAlwaysOnTop(bool)`, `onWindowMaximizeChange(cb)`, `openHistoryWindow`, `closeHistoryWindow`, `hideHistoryWindow`, `openSettingsWindow`, `closeSettingsWindow`, `hideSettingsWindow`.
 - **Dictation event:** `onToggleDictation(cb)`.
 - **FunASR:** `transcribeAudio(data)`, `checkFunASRStatus()`, `installFunASR()`, `restartFunasrServer()`.
-- **Models:** `checkModelFiles()`, `getDownloadProgress()`, `downloadModels()`, `downloadModel(name)`, `getAvailableModels()`, `getCurrentModel()`, `switchModel(name)`, `onModelDownloadProgress(cb)`.
+- **Models:** `checkModelFiles()`, `downloadModels()`, `onModelDownloadProgress(cb)`. <!-- [20260816_Refactor_DeadChannels] API surface synced after the lean pass (9b7ed60). -->
+
 - **AI:** `processText(text, mode, timeout?)`, `checkAIStatus(testConfig?)`, `getAIModes()`, `getAIProviderPresets()`, `detectLocalModels()`.
-- **Clipboard:** `pasteText(text)`, `copyText(text)`, `readClipboard()`, `writeClipboard(text)`.
-- **Transcription DB:** `saveTranscription(data)`, `getTranscriptions(limit, offset)`, `getTranscription(id)`, `searchTranscriptions(query, limit)`, `getTranscriptionStats()`, `deleteTranscription(id)`, `clearAllTranscriptions()`, `diarizeAudio(id)`.
+- **Clipboard:** `pasteText(text)`, `copyText(text)`. <!-- [20260816_Refactor_DeadChannels] API surface synced after the lean pass (9b7ed60). -->
+
+- **Transcription DB:** `saveTranscription(data)`, `getTranscriptions(limit, offset)`, `deleteTranscription(id)`, `clearAllTranscriptions()`, `diarizeAudio(id)`. <!-- [20260816_Refactor_DeadChannels] API surface synced after the lean pass (9b7ed60). -->
+
 - **File transcription:** `importAudioFile()`, `validateAudioFile(path)`, `transcribeFile(path, options)`, `cancelFileTranscription()`, `onFileTranscriptionProgress(cb)`.
 - **Export / AI review:** `exportTranscription(id, format, options)`, `exportTranscriptions(format)`, `aiReviewTranscription(id, template)`.
-- **Settings:** `getSettings()` (legacy), `getAllSettings()`, `getSetting(key, default?)`, `setSetting(key, value)`, `saveSetting(key, value)`, `resetSettings()`, `importSettings()`, `exportSettings()`, `onSettingsUpdate(cb)`.
-- **Hotkey:** `registerHotkey(hotkey)`, `unregisterHotkey(hotkey)`, `getCurrentHotkey()`, `registerF2Hotkey()`, `unregisterF2Hotkey()`, `setRecordingState(bool)`, `getRecordingState()`, `onF2DoubleClick(cb)`, `onHotkeyTriggered(cb)`.
+- **Settings:** `getAllSettings()`, `getSetting(key, default?)`, `setSetting(key, value)`, `saveSetting(key, value)`, `resetSettings()`, `onSettingsUpdate(cb)`. <!-- [20260816_Refactor_DeadChannels] API surface synced after the lean pass (9b7ed60). -->
+
+- **Hotkey:** `registerHotkey(hotkey)`, `unregisterHotkey(hotkey)`, `getCurrentHotkey()`, `setRecordingState(bool)`, `getRecordingState()`, `onHotkeyTriggered(cb)`. (F2 surface removed in the 2026-08-16 minimalism pass — renderer only uses the classic hotkey flow.)
 - **System:** `getSystemInfo()`, `checkPermissions()`, `requestPermissions()`, `testAccessibilityPermission()`, `openSystemPermissions()`, `getAppVersion()`, `openExternal(url)`, `log(level, message)`.
 - **Update:** `checkForUpdates()`, `downloadUpdate(info)`, `cancelUpdateDownload()`, `installUpdate(filePath)`, `onUpdateDownloadProgress(cb)`, `onUpdateDownloadComplete(cb)`, `onUpdateDownloadError(cb)`.
 - **Events:** `onTranscriptionUpdate(cb)`, `onProcessingUpdate(cb)`, `onError(cb)`.
@@ -147,11 +151,12 @@ Path: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/src/helpers/windowManager.ts`
 
 Path: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/src/helpers/database.ts`
 
-**What it does:** SQLite via `better-sqlite3`. Creates `transcriptions` and `settings` tables, an FTS5 virtual table (`transcriptions_fts`, trigram tokenizer) with insert/delete/update triggers, and indexes. Runs schema migrations (`source_type`, `source_file_path`, `segments` columns) and settings migration (encrypt plaintext `ai_api_key` on first safeStorage availability). Encryption: `_encryptedKeys` Set (currently `ai_api_key`); `_encryptValue`/`_decryptValue` wrap `safeStorage.encryptString`/`decryptString` with base64 + `{_enc}` JSON envelope. FTS search falls back to LIKE for queries <3 chars or if FTS5 unavailable. File-config cache (`murmur.json`) for `FILE_CONFIGURABLE_KEYS` (set by `setFileConfigPath`); `getSetting` falls back to file config when DB has no row. WAL journal mode, `busy_timeout=5000`, integrity check on init. `backup()` async. Env override `MURMUR_DB_PATH` (supports `:memory:` for tests).
+**What it does:** SQLite via `better-sqlite3`. Creates `transcriptions` and `settings` tables and indexes. (The FTS5 virtual table and its sync triggers were removed in the 2026-08 lean pass — search is client-side.) Runs schema migrations (`source_type`, `source_file_path`, `segments` columns) and settings migration (encrypt plaintext `ai_api_key` on first safeStorage availability). Encryption: `_encryptedKeys` Set (currently `ai_api_key`); `_encryptValue`/`_decryptValue` wrap `safeStorage.encryptString`/`decryptString` with base64 + `{_enc}` JSON envelope. File-config cache (`murmur.json`) for `FILE_CONFIGURABLE_KEYS` (set by `setFileConfigPath`); `getSetting` falls back to file config when DB has no row. WAL journal mode, `busy_timeout=5000`, integrity check on init. `backup()` async. Env override `MURMUR_DB_PATH` (supports `:memory:` for tests).
 
 **Dependencies:** `better-sqlite3` (native, must be electron-rebuilt), `path`, `fs`, `fileConfig` (`loadFileConfig`, `saveFileConfig`, `FILE_CONFIGURABLE_KEYS`). Optional `safeStorage` injected via `setSafeStorage`.
 
-**Public interface:** `initialize(dir)`, `setSafeStorage(ss)`, `setFileConfigPath(p)`, `createTables()`, `saveTranscription(data)`, `getTranscriptions(limit, offset)`, `getTranscriptionById(id)`, `getTranscriptionWithSegments(id)`, `deleteTranscription(id)`, `clearAllTranscriptions()`, `searchTranscriptions(query, limit)`, `getTranscriptionStats()`, `setSetting(key, value)`, `getSetting(key, default?)`, `getAllSettings()`, `resetSettings()`, `syncToFileConfig()`, `backup(path)`, `close()`. `TranscriptionRecord` interface exported.
+**Public interface:** `initialize(dir)`, `setSafeStorage(ss)`, `setFileConfigPath(p)`, `createTables()`, `saveTranscription(data)`, `getTranscriptions(limit, offset)`, `getTranscriptionById(id)`, `deleteTranscription(id)`, `clearAllTranscriptions()`, `setSetting(key, value)`, `getSetting(key, default?)`, `getAllSettings()`, `resetSettings()`, `syncToFileConfig()`, `close()`. <!-- [20260816_Refactor_DeadChannels] API surface synced after the lean pass (9b7ed60). -->
+`TranscriptionRecord` interface exported.
 
 **Testing seam:** **Best-unit-tested manager.** `MURMUR_DB_PATH=:memory:` enables in-memory SQLite without Electron. `tests/unit/database.test.js`, `database-fts.test.js`, `database-coverage.test.js`. SafeStorage can be mocked with a plain `{encryptString, decryptString, isEncryptionAvailable}` stub. No Electron dependency in the class itself.
 
@@ -174,7 +179,7 @@ Path: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/src/helpers/clipboard.ts`
 
 **Dependencies:** `electron` (clipboard), `child_process.spawn`, optional `osascript` package (macOS).
 
-**Public interface:** `pasteText(text)`, `copyText(text)`, `readClipboard()`, `writeClipboard(text)`, `enableMacOSAccessibility()`, `insertTextDirectly(text)`, `checkAccessibilityPermissions()`, `showAccessibilityDialog(err)`, `openSystemSettings()`, `safeLog(msg, data?)`.
+**Public interface:** `pasteText(text)`, `copyText(text)`, `checkAccessibilityPermissions()`, `showAccessibilityDialog(err)`, `openSystemSettings()`, `safeLog(msg, data?)`.
 
 **Testing seam:** Excluded from coverage — Electron `clipboard` + `spawn` + osascript dependency. E2E `06-clipboard` covers paste. The `safeLog` and platform branches could be unit-tested by mocking `clipboard` and `spawn`, but the class is coverage-excluded.
 
@@ -216,22 +221,21 @@ Path: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/src/helpers/tray.ts`
 
 Path: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/src/helpers/hotkeyManager.ts`
 
-**What it does:** Wraps `electron.globalShortcut`. Two modes: (1) traditional hotkey (`registerHotkey(hotkey, cb)`) with 200ms debounce per hotkey; (2) F2 double-click (`registerF2DoubleClick(cb)`) — registers F2, tracks click timestamps within 500ms window, fires callback with `{action: start|stop, currentState}` based on `isRecording`. Tracks `registeredHotkeys` Map, `lastHotkeyTrigger` Map for debounce. `setRecordingState`/`getRecordingState` for external sync.
+**What it does:** Wraps `electron.globalShortcut`. Traditional hotkey registration (`registerHotkey(hotkey, cb)`) with 200ms debounce per hotkey; tracks `registeredHotkeys` and `lastHotkeyTrigger` Maps. `setRecordingState`/`getRecordingState` for external sync. (F2 surface removed in the 2026-08-16 minimalism pass — renderer only uses the classic hotkey flow.)
 
 **Dependencies:** `electron` (globalShortcut).
 
-**Public interface:** `registerF2DoubleClick(cb)`, `handleF2Click()`, `handleF2DoubleClick()`, `registerHotkey(hotkey, cb)`, `unregisterHotkey(hotkey)`, `unregisterAllHotkeys()`, `getRegisteredHotkeys()`, `isHotkeyRegistered(hotkey)`, `setRecordingState(bool)`, `getRecordingState()`.
+**Public interface:** `registerHotkey(hotkey, cb)`, `unregisterHotkey(hotkey)`, `unregisterAllHotkeys()`, `getRegisteredHotkeys()`, `isHotkeyRegistered(hotkey)`, `setRecordingState(bool)`, `getRecordingState()`.
 
-**Testing seam:** Coverage-excluded (`globalShortcut` needs Electron). But the **debounce and double-click timing logic is pure** and could be extracted/tested. Currently not unit-tested. E2E `04-hotkey` covers F2 flow.
+**Testing seam:** Coverage-excluded (`globalShortcut` needs Electron). The debounce logic is pure and could be extracted/tested. E2E `04-hotkey` covers the hotkey flow.
 
 **Testing challenges:**
 
 - `globalShortcut.register` needs a real OS window manager; can't register system-wide hotkeys in headless CI.
-- F2 double-click timing (500ms window) is timing-sensitive.
 - Hotkey collisions with other apps.
 - Debounce correctness hard to assert without real triggers.
 
-**Critical paths:** F2 double-click detection, recording-state toggling, unregister on will-quit (done in main.ts), per-sender dedup (in `hotkeyHandlers`).
+**Critical paths:** recording-state toggling, unregister on will-quit (done in main.ts).
 
 ---
 
@@ -286,11 +290,11 @@ Path: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/src/helpers/funasrServer.ts`
 
 Path: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/src/helpers/modelManager.ts`
 
-**What it does:** Manages three FunASR models (asr paraformer-large 840MB required, vad fsmn 1.6MB required, punc ct-transformer 278MB optional). `getModelCachePath()` — searches candidates: dev `app.getAppPath()/models`, `userData/models`, `~/.cache/modelscope/hub/models`; picks first with a `damo` subdir or expected model files; else `findDamoRoot` recursive search (depth 5); fallback creates `userData/models`. `checkModelFiles()` — 2s global cache (`globalModelCheckCache`); for each model checks existence + `_verifyModel` (directory: has `model.pt`/`pytorch_model.bin`/`configuration.json`/`config.yaml`; file: size ≥ 90% expected). `getDownloadProgress()` — sums actual vs expected sizes. `downloadModels(cb, pythonCmd)` — skips if already downloaded; spawns `python download_models.py --output <cachePath>`, parses JSON stdout lines (`{stage, percentage, success, error}`), 10min timeout, calls progress callback. `clearCache()`.
+**What it does:** Manages three FunASR models (asr paraformer-large 840MB required, vad fsmn 1.6MB required, punc ct-transformer 278MB optional). `getModelCachePath()` — searches candidates: dev `app.getAppPath()/models`, `userData/models`, `~/.cache/modelscope/hub/models`; picks first with a `damo` subdir or expected model files; else `findDamoRoot` recursive search (depth 5); fallback creates `userData/models`. `checkModelFiles()` — 2s global cache (`globalModelCheckCache`); for each model checks existence + `_verifyModel` (directory: has `model.pt`/`pytorch_model.bin`/`configuration.json`/`config.yaml`; file: size ≥ 90% expected). `downloadModels(cb, pythonCmd)` — skips if already downloaded; spawns `python download_models.py --output <cachePath>`, parses JSON stdout lines (`{stage, percentage, success, error}`), 10min timeout, calls progress callback. `clearCache()`.
 
 **Dependencies:** `fs`, `path`, `child_process.spawn`, `os`, lazy `require("electron")` (app.getPath/app.getAppPath).
 
-**Public interface:** `findDamoRoot(dir, depth, maxDepth)`, `getModelCachePath()`, `checkModelFiles()`, `_verifyModel(file, config)`, `getDownloadProgress()`, `getDownloadScriptPath()`, `downloadModels(cb, pythonCmd)`, `clearCache()`. Property `modelConfigs`, `modelsDownloaded`.
+**Public interface:** `findDamoRoot(dir, depth, maxDepth)`, `getModelCachePath()`, `checkModelFiles()`, `_verifyModel(file, config)`, `getDownloadScriptPath()`, `downloadModels(cb, pythonCmd)`, `clearCache()`. Property `modelConfigs`, `modelsDownloaded`.
 
 **Testing seam:** Coverage-excluded. `tests/unit/modelManager-shape.test.js` (shape), `tests/unit/model-download-guards.test.js`. `findDamoRoot`, `_verifyModel`, and path logic are pure-ish (fs only) and could be unit-tested with temp dirs. `downloadModels` needs spawn mock.
 
@@ -402,11 +406,11 @@ Path: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/src/helpers/logManager.ts`
 
 Path: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/src/helpers/environment.ts`
 
-**What it does:** Loads `.env` from `process.cwd()` (lazy `require("dotenv")`). Provides typed config getters reading `process.env` with defaults: `getAIConfig` (placeholder — real config via settings), `getAudioConfig` (16000/1/wav), `getFunASRConfig`, `getAppConfig` (hotkey default `CommandOrControl+Shift+Space`), `getDatabaseConfig`, `getProxyConfig`, `getPerformanceConfig`. Platform `getDataDirectory()` (macOS `~/Library/Application Support/Murmur`, Windows `%APPDATA%\Murmur`, Linux `~/.config/Murmur`). `ensureDataDirectory`/`getLogDirectory`/`getCacheDirectory`/`getModelsDirectory` create dirs. `validateEnvironment()` (Node 18+ check). `exportConfig()` aggregates all. `getSystemInfo()` (os module).
+**What it does:** Loads `.env` from `process.cwd()` via a minimal built-in parser (dotenv dependency removed in the 2026-08 lean pass; shell env wins over file values). Platform `getDataDirectory()` (macOS `~/Library/Application Support/Murmur`, Windows `%APPDATA%\Murmur`, Linux `~/.config/Murmur`) + `ensureDataDirectory()` creates it. (The seven typed config getters, `getSystemInfo`, `validateEnvironment`, `exportConfig`, and the per-purpose directory helpers were removed in the 2026-08-16 minimalism pass — zero callers; logManager has its own getSystemInfo/getLogDirectory.)
 
-**Dependencies:** `path`, `fs`, `os`, lazy `require("dotenv")`. **No direct electron dependency** (uses `process.env`/`os`).
+**Dependencies:** `path`, `fs`, `os`. **No direct electron dependency** (uses `process.env`/`os`).
 
-**Public interface:** all getters above + `loadEnvironmentVariables()`, `isDevelopment()`, `isProduction()`, `validateEnvironment()`, `exportConfig()`.
+**Public interface:** `loadEnvironmentVariables()`, `getDataDirectory()`, `ensureDataDirectory()`.
 
 **Testing seam:** Coverage-excluded but **fully unit-testable** — no Electron, only `os`/`fs`/`process.env`. Set env vars + temp dirs. Platform branching testable by stubbing `process.platform`.
 
@@ -554,9 +558,9 @@ Path: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/src/helpers/ipc/hotkeyHandler
 
 Path: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/src/helpers/ipc/clipboardHandlers.ts`
 
-**Channels registered:** `CLIPBOARD.COPY`, `PASTE`, `READ`, `WRITE`.
+**Channels registered:** `CLIPBOARD.COPY`, `PASTE`.
 
-**What it does:** Thin wrappers around `clipboardManager.copyText/pasteText/readClipboard/writeClipboard` with try/catch → `{success:false, error}`.
+**What it does:** Thin wrappers around `clipboardManager.copyText/pasteText`; both channels resolve `{success:true}` on success and, via try/catch, `{success:false, error}` on failure. `pasteText` itself resolves void — the handler synthesizes the success envelope (2026-08-20) so COPY and PASTE share one contract. (READ/WRITE wrappers removed in the 2026-08 lean pass.)
 
 **Dependencies:** `ipc-contracts`. `ClipboardManager`, `Logger`.
 
@@ -596,7 +600,7 @@ Path: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/src/helpers/ipc/modelHandlers
 
 **Channels registered:** `MODELS.CHECK`, `PROGRESS`, `DOWNLOAD`, `DOWNLOAD_MODEL`, `AVAILABLE`, `CURRENT`, `SWITCH`.
 
-**What it does:** Delegates to `funasrManager.checkModelFiles/getDownloadProgress/downloadModels/checkStatus`. `DOWNLOAD`/`DOWNLOAD_MODEL` send `MODEL_DOWNLOAD_PROGRESS` events. `AVAILABLE` returns hardcoded 3-model list. `SWITCH` returns not-supported error (fixed model combo).
+**What it does:** Delegates to `funasrManager.checkModelFiles/downloadModels`. `DOWNLOAD` sends `MODEL_DOWNLOAD_PROGRESS` events. (PROGRESS/AVAILABLE/CURRENT/SWITCH/DOWNLOAD_MODEL placeholder channels removed in the 2026-08 lean pass.)
 
 **Dependencies:** `ipc-contracts`. `FunasrManager`.
 
@@ -820,10 +824,10 @@ Path: `/Users/guanxueliang/Desktop/oh-my-ai/Murmur/src/helpers/detectLocalModels
 ### 6.1 Structure
 
 - `src/main.tsx` — React 19 entry. `ErrorBoundary` class component, `initializeApp()` (theme apply from setting + system listener, drag/drop prevention, contextmenu prevention in prod, global error handlers → `electronAPI.log`), `assertElectronAPI()` guard (renders fallback if preload missing), mounts `ModelStatusProvider > App + Toaster`.
-- `src/App.tsx` — main UI (27KB). URL `?page=settings` routes to lazy `SettingsPage`. Recording mode / file-import mode toggle. Uses hooks: `useHotkey`, `useWindowDrag`, `useRecording` (with `determineProcessingMode`), `useModelStatus`. Caches settings in `settingsRef`. Paste debounce (1s same-text).
+- `src/App.tsx` — main UI (27KB). Recording mode / file-import mode toggle. Uses hooks: `useHotkey`, `useWindowDrag`, `useRecording` (with `determineProcessingMode`), `useModelStatus`. Caches settings in `settingsRef`. Paste debounce (1s same-text). (The `?page=settings` lazy route and the web-modal SettingsPanel fallback were removed in the 2026-08-16 minimalism pass — the settings window is its own entry in dev and production.)
 - `src/history.tsx`, `src/settings.tsx` — separate window entry points (history.html, settings.html). `SettingsSidebar`, `useSettings`, sections: `AIConfigSection`, `AboutSection`, `GeneralSection`, `PermissionsSection`.
 - `src/hooks/` — `useRecording`, `useHotkey`, `useFileTranscription`, `useWindowDrag`, `usePermissions`, `useModelStatus`.
-- `src/components/` — UI components (SettingsPanel, FileImport, TranscriptionResult, VoiceWaveIndicator, ExportPanel, etc.) + `ui/` shadcn primitives (button, card, tabs, input, dialog, etc.).
+- `src/components/` — UI components (FileImport, TranscriptionResult, VoiceWaveIndicator, ExportPanel, etc.) + `ui/` primitives (button, loading-dots, model-status-indicator, permission-card, sonner). (SettingsPanel, the dead shadcn card/input/label/tabs/status-light/history-modal set, and the LoadingIndicator duplicate were removed in the 2026-08 lean passes.)
 - `src/i18n/` — i18next localization.
 - `src/bootstrap/assertElectronAPI.ts` — runtime preload assertion.
 - `src/types/ipc.ts` — shared IPC type definitions.
