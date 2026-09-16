@@ -17,9 +17,7 @@ interface WindowManager {
   setDefaultAlwaysOnTop(enabled: boolean): void;
   showHistoryWindow(): void;
   closeHistoryWindow(): void;
-  hideHistoryWindow(): void;
   showSettingsWindow(): void;
-  closeSettingsWindow(): void;
   hideSettingsWindow(): void;
   restoreMainWindow(): void;
 }
@@ -34,16 +32,6 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
   ipcMain.handle(C.WINDOW.HIDE, () => {
     if (windowManager.mainWindow) {
       windowManager.mainWindow.hide();
-    }
-    return true;
-  });
-
-  ipcMain.handle(C.WINDOW.SHOW, () => {
-    if (windowManager.mainWindow) {
-      windowManager.mainWindow.show();
-      // [ADR-015] focus() is required — show() alone does not bring the
-      // window to the foreground on Windows.
-      windowManager.mainWindow.focus();
     }
     return true;
   });
@@ -73,16 +61,6 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
   });
   // [20260602_Fix_MaximizeToggle] END
 
-  ipcMain.handle(C.WINDOW.IS_MAX, () => {
-    if (windowManager.mainWindow) {
-      return (
-        !!windowManager._preMaximizeBounds ||
-        windowManager.mainWindow.isMaximized()
-      );
-    }
-    return false;
-  });
-
   ipcMain.handle(C.WINDOW.CLOSE, () => {
     if (windowManager.mainWindow) {
       windowManager.mainWindow.close();
@@ -110,20 +88,12 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
     return true;
   });
 
-  ipcMain.handle(C.WINDOW.HIDE_HISTORY, () => {
-    windowManager.hideHistoryWindow();
-    // [ADR-015] Restore focus to main window after hiding history
-    windowManager.restoreMainWindow();
-    return true;
-  });
+  // [20260906_Refactor_DeadChannelCleanup] Ticket #250: the WINDOW.SHOW,
+  // WINDOW.IS_MAX, WINDOW.HIDE_HISTORY and WINDOW.CLOSE_SETTINGS handlers
+  // were removed — zero renderer callers (orphans yellow list).
 
   ipcMain.handle(C.WINDOW.OPEN_SETTINGS, () => {
     windowManager.showSettingsWindow();
-    return true;
-  });
-
-  ipcMain.handle(C.WINDOW.CLOSE_SETTINGS, () => {
-    windowManager.closeSettingsWindow();
     return true;
   });
 

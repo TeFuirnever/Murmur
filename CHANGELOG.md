@@ -7,6 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-09-11
+
+### Added
+
+- **测试度量收口**（Spec #259，#273–#276）：六组模块（modelManager、ipc/\*\*、windowManager、updateManager、logManager、pythonEnvironment）纳入覆盖率插桩，per-glob 分支地板按首测值设防并随补齐抬升至 92；全局阈值重定基线 88/83/88/89；Python 套件接入 coverage.py（`test:python:unit` 携带 --fail-under=43 门禁）。
+- **润色编排器**（Spec #193 T3，#230）：`runPolishOrchestrator` 统一 AI PROCESS 与 AI_REVIEW 两入口（AI_REVIEW 移除自带 prompt 绕过），作为代际失效/流式/分块的唯一收敛点。
+
+- **五级测试体系补全**（Spec #266，issues #277–#297）：按单元/集成/契约/E2E/验收五级补齐测试网。新增真实浏览器旅程 E2E（文件导入→转录→取消、热词持久化→说话人分离、检查更新→下载进度→SHA256 失败分支）、axe 无障碍门禁（真实窗口扫描，发现并修复 7 处真实缺陷）、托盘/热键/剪贴板管理器行为单测、平台臂同机对测（win/darwin 双语义同机断言）、覆盖率门禁 meta 钉、settings 四处同步规则 meta-test、磁盘满/DB busy 传播回归、导出内容读回断言（srt 时间轴 + docx 正文）。
+- **ASR 回归 harness**（`pnpm test:asr`，开发机专用）：以仓库自带 golden_set 语料驱动真实 FunASR server，按字错率阈值红绿；当前基线 6/6 通过、CER 0.0%。
+- **打包态 boot-health 探针**（发布流水线 mac/win）：以已安装产物为启动目标运行完整探针套件。
+- **QA 文档**：发版人工验收清单、LLM 供应商兼容走查单、探索性测试 charter（多显示器/读屏/浸泡）。
+- **文档契约测试**（Spec #299 T1–T3，#300–#302）：钉住 README 事实声明——Electron/Node 版本与 package.json 一致、站内链接与资源路径落盘可解析（外链/纯锚点除外）、中英标题序列 1:1（fence 感知 + 配平钉，只读渲染内容）；漂移即 CI 红。
+
+### Fixed
+
+- **macOS 模型已下载却反复提示未下载/状态横跳**（#336，PR #345）：显式 `--damo-root`（空的 userData/models）短路了布局探测，且 modelscope ≥1.19 的实际落盘布局（`~/.cache/modelscope/models/damo--<repo>/snapshots/<rev>`）与所有候选不匹配——Python 门禁与 Node 检查各看各的。现双侧解析一致：显式 root 有内容时优先，为空时回退 modelscope 缓存并支持 hub 新布局（shard 感知，钉住 v2.0.4 修订优先）。
+- **macOS 点关闭按钮后卡死 Dock、无法再次打开**（#339，PR #345）：`app.on("activate")` 只在窗口数为 0 时重建，被隐藏的窗口仍计数 → Dock 点击无响应。现 activate 正确显示隐藏窗口，零窗口时重建并重新同步托盘引用（修复窗口销毁后托盘静默失效的次生 bug）；关闭/激活/退出全链路补日志。
+- **macOS 文件拖放导入无反应**（#338，PR #345）：主窗口无 `dragover preventDefault` 导致 Chromium 丢弃 drop；且 `FileDropZone` 读取的 `File.path` 在 Electron ≥32 已移除。现 preload 暴露 `webUtils.getPathForFile`，窗口级拖放监听复用与按钮导入同一条校验管线。
+- **macOS 首次安装报「已损坏，无法打开」**（#337，PR #345）：CI 关闭证书自动发现且无 `identity` → electron-builder 完全跳过签名，产物密封破损。现以 `identity: "-"` 启用完整 ad-hoc 深度签名（有效密封，仅需 `xattr -cr` 绕行，无需重签）；release CI 新增 `codesign --verify --deep --strict` 产物门禁（release gate #7），破损密封无法再流出；README/troubleshooting 补「已损坏」场景绕行说明。Developer ID 签名 + 公证仍需配置 Apple 证书 CI secrets。
+- **手动润色不再丢失**（Spec #193 T1/T2，#228 #229）：新增全库首个 UPDATE 写回通道（列白名单防注入）与 `manually_edited` 编辑保护列（无损迁移），历史窗新增内联编辑入口；被编辑记录自动跳过后续自动润色。
+
+- **导出全部丢失分段时间轴**：export-all 向格式化器传原始行（segments 为 JSON 字符串）而格式化器读解析后的字段——历史记录"导出全部"的 srt/vtt 从未包含时间轴，已按单条导出口径逐行解析。
+- **7 处无障碍缺陷**（axe 扫描发现并修复）：主窗标题栏历史/设置图标按钮无 accessible name、设置窗模型下拉/语言下拉/两个开关无名称、侧栏 tab 缺 tablist 结构，及 7 处小字号描述文本对比度不足（#86868b → #6e6e73）。
+- **托盘菜单硬编码中文**：接入 i18n 并随语言设置实时重建菜单。
+
+### Changed
+
+- **AI 润色代际失效 + 取消 + 钳制**（Spec #193 T7，#234）：编排器支持 per-scope 代际失效（过期响应丢弃）、AbortController 取消（CANCELLED 静默结算）与输出钳制（请求侧 4096 下限 + 2M 字符响应守卫）。
+- **清理 20 个渲染层孤儿 IPC 通道**（#250，依据 #252 实测黄名单）：契约/preload/类型声明/handler/限流表全链路删除，契约面净减约 500 行；orphans 测试升级为净零网（新增无调用者通道直接 CI 红）。
+- **CI e2e 获得门禁权**（#277）：boot-health 探针失败即阻塞合并（此前 52 条 E2E 全部 continue-on-error 从未拦截过回归）；dev smoke 升级为主进程启动里程碑心跳（#251），主进程崩溃不再被端口探活漏过。
+- **退役 phase3/phase5 文本断言套件**：分别被真实更新旅程 E2E 与 axe 扫描替代。
+- **README 修缮**（Spec #299 五票，#300–#304，PR #308–#310）：修正审计确认的 6 处事实错误（Electron 39、FTS5 已删→客户端过滤、Python 3.11+、GPU 实为 CUDA > CPU（MPS 因 float64 有意跳过）、macOS 听写非开源、测试数行改不漂移口径）；单文件双语拆分为 README.md（英）+ README.zh-CN.md（中）+ 顶部互切；首屏嵌入真机截图、链接 FAQ/Troubleshooting/SECURITY；对比表 ⭐ 自评改可验证属性（Whisper Desktop 标注 Windows only）并补 release 徽章；CONTRIBUTING 与 promo 文档同步（Node 22.5+/Python 3.11+/Electron 39）。
+
+## [1.5.0] - 2026-09-05
+
+### Fixed
+
+- **Windows 下载模型后仍提示"模型未下载"、进度条始终 0%**（issues #216 #212）：三个叠加缺陷。其一，新版 modelscope（≥1.19）的下载落盘路径多一层 `models` 目录，服务端的磁盘检查只认旧布局——模型下载 100% 成功后服务端仍判定缺失。其二，服务端进程固定使用启动时解析的模型根路径，下载完成后无人通知它。其三，下载脚本整个传输期不输出进度，且主进程读取的进度字段名与脚本实际发送的不一致——界面从 0% 永远不动，触发"下载→超时→重试"循环。修复：目录解析兼容新旧布局；下载成功后自动以正确路径重启服务端；下载进度改为真实字节级百分比并按文件大小节流刷新；下载器改用纯文件下载（不再白白在内存中构建整个模型）。
+- **macOS 升级后首次启动可能"点了图标没反应"**（issue #211）：每次构建的签名身份变化会让 macOS 在启动时弹出钥匙串授权对话框，而旧代码在窗口创建之前同步执行该检查——对话框弹在一个不可见的应用上（锁屏时则无限期隐形挂起）。现在应用窗口先创建，对话框弹在可见窗口之上；点「始终允许」后界面随即加载。若误点「拒绝」应用仍可用，但已保存的 AI API Key 需在设置中重新录入。
+
+### Added
+
+- **数据库引擎迁移到 node:sqlite(根治 ABI 状态机)**(spec #226):`better-sqlite3`(dependencies 中唯一的原生插件)被 Node ≥22.5 / Electron 39 内置的 `node:sqlite` 取代。历史上所有"测试后 dev 起不来 / dev 后测试红 / v1.3.0 打包崩"的事故共享同一根因——磁盘上一份 `better_sqlite3.node` 要在系统 Node 与 Electron 两个 ABI 间人工翻面,且翻面工具会静默跳过。引擎内置后该类问题结构性消失:`predev`/`pretest`/`postinstall` 的 rebuild 链与 `scripts/check-native-abi.js` 删除,发版门禁的 native ABI 门等价改写为 node:sqlite 真实开库门(不降级)。行为不变:同 schema、同 WAL、同 safeStorage 加密语义;1661 用例零 ABI 翻面全绿。注意:Node 22.5+ 成为运行与构建的硬要求。
+
+- **bloub 吉祥物**:标题栏新增会动的 Bot 头像(spec #224,决策过程见 wayfinder 总图 #217)。移植自 [bloub](https://github.com/jeremy-prt/bloub)(MIT,`src/bot/` 引擎零框架、纯时间函数,测量常数逐帧取自参考视频、零漂移校验)。吉祥物按应用状态变形:待机呼吸、录音睁眼、识别思考点、润色/模型下载/文件转写旋环、错误分级惊叹号;复制成功眨眼、转写完成彗星;指针停留窗内时眼神缓慢轮换六枚零滚轮心情、离窗即回设置表情(#227)。设置窗新增「Bot」区,可自选 8 形状/12 颜色(默认跟随明暗主题)/16 表情。设置键 `bot_shape`/`bot_color`/`bot_expression`。注意:本特性与已移除的旧视觉特效系统(ogl/motion)无关,不依赖也不重启该栈。
+
+## [1.4.0] - 2026-08-20
+
+### Fixed
+
+- **v1.3.2 的 Windows 与 macOS 安装包均无法下载模型、无法转写**（issues #176 #196，spec #177 B-0）：两个独立打包缺陷。Windows：运行时在所有平台都按 macOS 布局（`python/bin/python3.11`）查找嵌入式 Python，而 Windows 包内的实际布局是 `python/python.exe`——路径永远对不上，应用始终报"嵌入式Python环境不可用"。macOS：Python 二进制位于 `app.asar` 归档内部，应用能"看到"但操作系统无法执行归档内的二进制，FunASR 服务器进程永远起不来（报"FunASR服务器未就绪"）。修复（PR #178）：运行时按平台解析正确布局，生产环境改从 `app.asar.unpacked` 真实文件路径加载。同时硬化构建流水线（PR #184）：嵌入式 Python 环境准备从 Windows 侧的静默容错（`continue-on-error`，正是它让 v1.2.0–v1.3.2 的 Windows 包静默缺 Python 而构建全绿）改为双平台硬性步骤并配缓存，打包前必须用该环境真实 import numpy/soundfile/funasr，打包后在 CI 真实安装启动 mac DMG 与 Windows EXE 并验证 Python 链路。**请 v1.3.2 及更早版本的用户升级本版本。**
+- **模型加载成功后 FunASR 服务器进程崩溃**（PR #207）：三个模型加载器在并行线程中各自使用 `suppress_stdout()`（临时把 stdout 指向 devnull，防止 FunASR 库的非 JSON 输出污染协议通道），但其保存/恢复是无锁的按线程操作——多线程同时在抑制窗口内时，交错恢复会让 `sys.stdout` 指向一个已被其他线程关闭的 devnull，模型全部加载成功后的协议输出随即抛 `ValueError: I/O operation on closed file`，服务器进程退出（用户表现为转写时报"FunASR服务器未就绪"，重启 3 次耗尽）。该竞态自并行加载引入（2025-09）起潜伏，仅在磁盘上已有模型的机器上触发，CI runner 无模型故从未拦截。修复为锁 + 引用计数的全局抑制，模型加载并行度不变；双平台打包启动冒烟的致命模式列表同时加入 `Unhandled Rejection`。
+
+### Added
+
+- **热词支持**（PR #199 #200，spec #177 T13-T15）：设置 → 通用 → 热词，每行一个（上限 200 行、每行 32 字），识别时自动注入，提升同事姓名、产品名等生僻专名的命中率（实测：张含月→张晗玥）。若热词导致识别失败会自动去除热词重试并提示检查配置。配套将默认 ASR 模型切换为支持热词的 SeACo-Paraformer（见下）。
+- **空闲自动卸载模型 + 快捷键预热**（PR #201 #202，spec #177 T11-T12）：转写结束后约 5 分钟无活动自动卸载模型释放内存（约 2GB 级）；下次按下录音快捷键时自动在后台重载，等待期间界面明确显示模型未就绪而非静默失败。
+
+### Changed
+
+- **默认 ASR 模型切换为 SeACo-Paraformer**（PR #200）：热词能力版 Paraformer-large（`speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch`，约 950MB），标准测试集零识别回归；本地已有旧模型而未下载新模型时自动回退旧模型，不会静默触发大体积下载。
+- **音频预处理提升困难场景识别**（PR #194，spec #177 T6-T7）：转写前自动做 80Hz 高通滤波（抑制低频嗡嗡声/风噪）与分段响度归一化（近静音直通、峰值限幅保护），麦克风录音与文件导入两条路径均生效。
+- **转写文本清洗**（PR #194，spec #177 T9-T10）：折叠 ASR 幻觉式的连续重复字符（≥6 连续折叠至 3）与连续重复短语（≥3 次折叠），带标点边界保护与数字豁免（电话号、长数字串不折叠）；清洗前的原文完整保留在记录的 raw_text 字段中。
+- **推理线程自适应与并行加载**（PR #194 #198，spec #177 T8）：推理线程数按逻辑核数自适应（`min(max(1, 核数-2), 8)`）——多核机器转写更快，小核机器为界面留出余量不再卡顿；ASR/VAD/标点三个模型并行加载，启动显著加快。
+- **进程清理与双平台 CI**（PR #194，spec #177 T2 T4）：退出时统一按进程树终止 Python 子进程（Windows `taskkill /T /F`），不再残留孤儿进程；CI 升级为 Windows + macOS 双平台矩阵运行全部测试。
+
 ## [1.3.2] - 2026-08-16
 
 ### Fixed

@@ -8,6 +8,7 @@
 // `.mock.calls` is read via a vi.Mock cast. Template reference:
 // phase4-i18n.test.ts (commit d52f2e0).
 import { describe, it, expect, vi } from "vitest";
+import type { Mock } from "vitest";
 import fs from "fs";
 import path from "path";
 
@@ -28,6 +29,17 @@ type AiHandlersModule = typeof import("../../src/helpers/ipc/aiHandlers");
 // all tests, so per-test isolation via resetModules was never needed here.
 // The require shim (_tsresolve.setup) was only needed to load .ts source.
 import * as aiHandlersNS from "../../src/helpers/ipc/aiHandlers";
+import { INJECTION_GUARD } from "../../src/helpers/aiPrompts";
+
+// [20260906_Refactor_PolishOrchestrator] Spec #193 T3 (ticket #230): the
+// SECOND polish entry is the file-import review handler registered by
+// transcriptionHandlers on C.TRANSCRIPTION.AI_REVIEW. It is characterized
+// end-to-end below with the REAL processTextWithAI wired in (only fetch is
+// mocked), so its prompt chain and provider payload are pinned exactly as
+// production sends them — independent of the injected-mock harness used in
+// transcriptionHandlers.test.ts.
+import * as transcriptionHandlersNS from "../../src/helpers/ipc/transcriptionHandlers";
+import * as C from "../../src/helpers/ipc-contracts";
 
 // [20260726_Tier3_AiHandlersMigrate] Fetch mock return: the source only reads
 // ok/status/statusText/json()/text(), so this is the narrowest shape that
@@ -105,6 +117,8 @@ describe("aiHandlers", () => {
   const processTextWithAI = aiHandlers.processTextWithAI;
   const checkAIStatus = aiHandlers.checkAIStatus;
   const getAIModes = aiHandlers.getAIModes;
+  // [20260906_Spec259_T3] Exported URL validator exercised directly below.
+  const validateAIBaseUrl = aiHandlers.validateAIBaseUrl;
 
   describe("register", () => {
     it("registers process-text and check-ai-status handlers", () => {
@@ -442,5 +456,2685 @@ describe("aiHandlers", () => {
         expect(mode.label).toBeTruthy();
       }
     });
+  });
+
+  // ======================================================================
+  // [20260906_Spec259_T3] URL-validation, fetch edge and error-mapping
+  // arms (Spec #259 T3, #275).
+  // ======================================================================
+  describe("validateAIBaseUrl", () => {
+    it("accepts a public https endpoint", () => {
+      expect(validateAIBaseUrl("https://api.openai.com/v1")).toBe(true);
+    });
+
+    it("rejects http when localhost is not allowed", () => {
+      expect(validateAIBaseUrl("http://api.openai.com/v1")).toBe(false);
+    });
+
+    it("accepts http for an allowed localhost endpoint", () => {
+      expect(
+        validateAIBaseUrl("http://localhost:1234/v1", {
+          allowLocalhost: true,
+        }),
+      ).toBe(true);
+    });
+
+    it("accepts https for an allowed localhost endpoint", () => {
+      expect(
+        validateAIBaseUrl("https://localhost:1234/v1", {
+          allowLocalhost: true,
+        }),
+      ).toBe(true);
+    });
+
+    it.each([
+      "https://localhost/v1",
+      "https://sub.localhost/v1",
+      "https://0.0.0.0/v1",
+      "https://[::1]/v1",
+      "https://127.0.0.1/v1",
+    ])("rejects loopback host %s", (baseUrl) => {
+      expect(validateAIBaseUrl(baseUrl)).toBe(false);
+    });
+
+    it.each([
+      "https://10.1.2.3/v1",
+      "https://192.168.0.5/v1",
+      "https://172.16.0.1/v1",
+      "https://172.31.255.255/v1",
+      "https://169.254.9.9/v1",
+    ])("rejects private-network host %s", (baseUrl) => {
+      expect(validateAIBaseUrl(baseUrl)).toBe(false);
+    });
+
+    it("accepts a host that only looks like the 172 range", () => {
+      expect(validateAIBaseUrl("https://172.15.0.1/v1")).toBe(true);
+      expect(validateAIBaseUrl("https://172.32.0.1/v1")).toBe(true);
+    });
+
+    it("rejects a URL with an empty hostname", () => {
+      expect(validateAIBaseUrl("https://#")).toBe(false);
+    });
+
+    it("rejects unparseable input", () => {
+      expect(validateAIBaseUrl("not a url")).toBe(false);
+    });
+  });
+
+  describe("processTextWithAI — request and error-mapping arms", () => {
+    it("falls back to the default base URL when the setting is empty", async () => {
+      const db = setupDb({ ai_base_url: "" });
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      mockFetch({ choices: [{ message: { content: "ok" } }] });
+
+      const result = await processTextWithAI("t", "optimize", db, logger);
+      expect(result.success).toBe(true);
+      const fetchMock = global.fetch as unknown as FetchMock;
+      expect(fetchMock.mock.calls[0]![0]).toBe(
+        "https://api.openai.com/v1/chat/completions",
+      );
+    });
+
+    it("uses caller-supplied system/user prompts verbatim", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      mockFetch({ choices: [{ message: { content: "ok" } }] });
+
+      await processTextWithAI("t", "optimize", db, logger, {
+        systemPrompt: "SYS",
+        userPrompt: "USR",
+      });
+      const fetchMock = global.fetch as unknown as FetchMock;
+      const body = JSON.parse(
+        (fetchMock.mock.calls[0]![1] as { body: string }).body,
+      );
+      expect(body.messages[0].content).toBe("SYS");
+      expect(body.messages[1].content).toBe("USR");
+    });
+
+    it("maps a timed-out request to the TIMEOUT message", async () => {
+      vi.useFakeTimers();
+      try {
+        const db = setupDb();
+        const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+        // A fetch that never resolves but rejects when its abort signal
+        // fires — lets the real AbortController timer run out.
+        global.fetch = vi.fn(
+          (_input: unknown, init?: { signal?: AbortSignal }) =>
+            new Promise<FetchResponseStub>((_resolve, reject) => {
+              init?.signal?.addEventListener("abort", () => {
+                const err = new Error("The operation was aborted");
+                err.name = "AbortError";
+                reject(err);
+              });
+            }),
+        ) as unknown as typeof global.fetch;
+
+        const pending = processTextWithAI("t", "optimize", db, logger);
+        await vi.advanceTimersByTimeAsync(150_000);
+        const result = await pending;
+        expect(result.success).toBe(false);
+        expect(result.error).toContain("超时");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("surfaces a generic fetch failure message", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      global.fetch = vi.fn(async () => {
+        throw new Error("socket boom");
+      }) as unknown as typeof global.fetch;
+
+      const result = await processTextWithAI("t", "optimize", db, logger);
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("socket boom");
+    });
+
+    it("maps an ENOTFOUND failure to the network hint", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      global.fetch = vi.fn(async () => {
+        throw Object.assign(new Error("getaddrinfo failed"), {
+          code: "ENOTFOUND",
+        });
+      }) as unknown as typeof global.fetch;
+
+      const result = await processTextWithAI("t", "optimize", db, logger);
+      expect(result.error).toBe("无法连接到AI服务器，请检查网络");
+    });
+
+    it("logs and forwards a non-JSON error body", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      global.fetch = vi.fn(async () => ({
+        ok: false,
+        status: 500,
+        statusText: "Internal Server Error",
+        text: async () => "<html>oops</html>",
+      })) as unknown as typeof global.fetch;
+
+      const result = await processTextWithAI("t", "optimize", db, logger);
+      expect(result.success).toBe(false);
+      expect(logger.warn).toHaveBeenCalledWith(
+        "AI错误响应非JSON格式:",
+        expect.any(String),
+      );
+      expect(String(result.error)).toContain("<html>oops</html>");
+    });
+
+    it("falls back to the status code when the error body has no message", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      mockFetchError(500, { error: null });
+
+      const result = await processTextWithAI("t", "optimize", db, logger);
+      expect(result.success).toBe(false);
+      expect(String(result.error)).toContain("AI服务请求失败 (500)");
+    });
+
+    it("tolerates an empty non-JSON error body (falls back to statusText)", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      global.fetch = vi.fn(async () => ({
+        ok: false,
+        status: 503,
+        statusText: "Service Unavailable",
+        text: async () => "",
+      })) as unknown as typeof global.fetch;
+
+      const result = await processTextWithAI("t", "optimize", db, logger);
+      expect(result.success).toBe(false);
+      expect(String(result.error)).toContain("Service Unavailable");
+    });
+
+    it("reports empty content without a token cap as retryable", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      mockFetch({ choices: [{ message: {} }] });
+
+      const result = await processTextWithAI("t", "optimize", db, logger);
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("AI返回了空内容，请重试或更换模型");
+    });
+
+    it("reports the token cap when usage alone proves it", async () => {
+      const db = setupDb({ ai_max_tokens: 2000 });
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      mockFetch({
+        choices: [{ message: { content: "  " }, finish_reason: "stop" }],
+        usage: { completion_tokens: 2000 },
+      });
+
+      const result = await processTextWithAI("t", "optimize", db, logger);
+      expect(result.success).toBe(false);
+      expect(String(result.error)).toContain("max_tokens");
+    });
+  });
+
+  describe("checkAIStatus — config and error-mapping arms", () => {
+    it("uses a temporary test config when provided", async () => {
+      const db = { getSetting: vi.fn(async () => null) };
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      mockFetch({
+        choices: [{ message: { content: "测试成功" } }],
+        usage: { total_tokens: 5 },
+      });
+
+      const result = await checkAIStatus(
+        {
+          ai_api_key: "temp-key",
+          ai_base_url: "https://temp.example.com/v1",
+          ai_model: "temp-model",
+        },
+        db,
+        logger,
+      );
+      expect(result.available).toBe(true);
+      expect(result.model).toBe("temp-model");
+      expect(result.status).toBe("connected");
+      // The saved config must not have been read.
+      expect(db.getSetting).not.toHaveBeenCalled();
+    });
+
+    it("defaults missing temp-config fields to the OpenAI presets", async () => {
+      const db = { getSetting: vi.fn(async () => null) };
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      mockFetch({ choices: [{ message: { content: "测试成功" } }] });
+
+      const result = await checkAIStatus(
+        { ai_api_key: "temp-key" },
+        db,
+        logger,
+      );
+      expect(result.available).toBe(true);
+      expect(result.model).toBe("gpt-3.5-turbo");
+      const fetchMock = global.fetch as unknown as FetchMock;
+      expect(fetchMock.mock.calls[0]![0]).toBe(
+        "https://api.openai.com/v1/chat/completions",
+      );
+    });
+
+    it("maps an HTTP 403 to the permission message", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      mockFetchError(403, { error: { message: "Forbidden" } });
+
+      const result = await checkAIStatus(null, db, logger);
+      expect(result.available).toBe(false);
+      expect(result.error).toBe("API密钥权限不足");
+    });
+
+    it("falls back to the HTTP status when the body has no message", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      mockFetchError(502, { error: null });
+
+      const result = await checkAIStatus(null, db, logger);
+      expect(result.available).toBe(false);
+      expect(String(result.error)).toContain("HTTP 502");
+      expect(result.details).toContain("HTTP 502");
+    });
+
+    it("maps an AbortError to the timeout message", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      global.fetch = vi.fn(async () => {
+        const err = new Error("The operation was aborted");
+        err.name = "AbortError";
+        throw err;
+      }) as unknown as typeof global.fetch;
+
+      const result = await checkAIStatus(null, db, logger);
+      expect(result.available).toBe(false);
+      expect(result.error).toBe("请求超时，请检查网络连接");
+    });
+
+    it.each([
+      [
+        "getaddrinfo ENOTFOUND api.example.com",
+        "无法连接到AI服务器，请检查网络和Base URL",
+      ],
+      [
+        "connect ECONNREFUSED 1.2.3.4:443",
+        "连接被拒绝，请检查Base URL是否正确",
+      ],
+      ["socket timeout waiting for response", "请求超时，请检查网络连接"],
+      ["upstream replied 401 to probe", "API密钥无效"],
+      ["upstream replied 403 to probe", "API密钥权限不足"],
+      ["upstream replied 429 to probe", "API调用频率超限"],
+    ])("maps %s to %s", async (message, expected) => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      global.fetch = vi.fn(async () => {
+        throw new Error(message);
+      }) as unknown as typeof global.fetch;
+
+      const result = await checkAIStatus(null, db, logger);
+      expect(result.available).toBe(false);
+      expect(result.error).toBe(expected);
+    });
+
+    it("reports connected with an empty reply when content is absent", async () => {
+      const db = setupDb();
+      const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+      mockFetch({ choices: [{ message: {} }], usage: { total_tokens: 1 } });
+
+      const result = await checkAIStatus(null, db, logger);
+      expect(result.available).toBe(true);
+      expect(result.response).toBe("");
+    });
+  });
+
+  describe("register — handler invocation (Spec #259 T3)", () => {
+    // Handler shape for invocation asserts: unknown args, unknown result.
+    type AsyncMockHandler = (...args: unknown[]) => unknown;
+
+    // UNREACHABLE ARM (documented per Spec #259 T3): the
+    // managers.templatesDir fallback at aiHandlers.ts L578-585 (lazy
+    // require("electron") → app.getPath) cannot resolve in the test
+    // environment — vi.mock does not intercept CJS require, the real
+    // electron package exports a binary path string outside Electron, so
+    // register() without templatesDir always throws there. The handlers
+    // below therefore pass templatesDir explicitly.
+    function createCapturingIpcMain() {
+      const handlers: Record<string, AsyncMockHandler | undefined> = {};
+      const ipcMain = {
+        handle: vi.fn((channel: string, fn: AsyncMockHandler) => {
+          handlers[channel] = fn;
+        }),
+      };
+      return { handlers, ipcMain };
+    }
+
+    function createManagers() {
+      return {
+        databaseManager: setupDb(),
+        logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
+        templatesDir: "/tmp/test-templates",
+      } as unknown as Parameters<typeof register>[1];
+    }
+
+    it("serves the info handlers through the registered channels", async () => {
+      const { handlers, ipcMain } = createCapturingIpcMain();
+      register(
+        ipcMain as unknown as Parameters<typeof register>[0],
+        createManagers(),
+      );
+
+      // GET_MODES through the explicit templatesDir.
+      const modes = (await handlers["get-ai-modes"]!()) as Array<{
+        name: string;
+      }>;
+      expect(modes.length).toBeGreaterThanOrEqual(6);
+
+      // GET_PROVIDER_PRESETS passthrough.
+      const presets = (await handlers[
+        "get-ai-provider-presets"
+      ]!()) as unknown[];
+      expect(Array.isArray(presets)).toBe(true);
+
+      // DETECT_LOCAL_MODELS — probes localhost; offline yields an array.
+      const detected = (await handlers["detect-local-models"]!()) as unknown[];
+      expect(Array.isArray(detected)).toBe(true);
+    });
+
+    it("PROCESS applies the default mode and the template cache", async () => {
+      const { handlers, ipcMain } = createCapturingIpcMain();
+      register(
+        ipcMain as unknown as Parameters<typeof register>[0],
+        createManagers(),
+      );
+      mockFetch({ choices: [{ message: { content: "ok" } }] });
+
+      const first = (await handlers["process-text"]!({}, "raw")) as {
+        success: boolean;
+      };
+      // Second call inside the template-cache TTL exercises the hit path.
+      const second = (await handlers["process-text"]!({}, "raw")) as {
+        success: boolean;
+      };
+      expect(first.success).toBe(true);
+      expect(second.success).toBe(true);
+
+      const fetchMock = global.fetch as unknown as FetchMock;
+      expect(fetchMock.mock.calls.length).toBe(2);
+      const body = JSON.parse(
+        (fetchMock.mock.calls[0]![1] as { body: string }).body,
+      );
+      expect(body.model).toBe("gpt-3.5-turbo");
+    });
+
+    it("CHECK_STATUS handler defaults to the saved config", async () => {
+      const { handlers, ipcMain } = createCapturingIpcMain();
+      register(
+        ipcMain as unknown as Parameters<typeof register>[0],
+        createManagers(),
+      );
+      mockFetch({
+        choices: [{ message: { content: "测试成功" } }],
+        usage: { total_tokens: 5 },
+      });
+
+      const result = (await handlers["check-ai-status"]!()) as {
+        available: boolean;
+        model?: string;
+      };
+      expect(result.available).toBe(true);
+      expect(result.model).toBe("gpt-3.5-turbo");
+    });
+  });
+
+  // ======================================================================
+  // [20260906_Refactor_PolishOrchestrator] Characterization tests (Spec #193
+  // T3, ticket #230): lock the CURRENT behavior of BOTH polish entries before
+  // extracting runPolishOrchestrator. These are characterization, not TDD-red:
+  // they must pass against the pre-refactor code and stay untouched after.
+  // ======================================================================
+  describe("polish entries — characterization (Spec #193 T3)", () => {
+    // Handle-capturing ipcMain mock (same pattern as the Spec #259 T3 block).
+    type AsyncMockHandler = (...args: unknown[]) => unknown;
+
+    // [20260906_Refactor_PolishOrchestrator] The never-parameter signature is
+    // the assignability trick that lets BOTH handler modules' register
+    // functions (aiHandlers and transcriptionHandlers) be passed without
+    // restating their manager shapes; the invocation itself casts through
+    // unknown, mirroring the register call sites elsewhere in this file.
+    function captureHandlers(
+      registerFn: (ipcMain: never, managers: never) => void,
+      managers: unknown,
+    ): Record<string, AsyncMockHandler | undefined> {
+      const handlers: Record<string, AsyncMockHandler | undefined> = {};
+      const ipcMain = {
+        handle: vi.fn((channel: string, fn: AsyncMockHandler) => {
+          handlers[channel] = fn;
+        }),
+      };
+      (registerFn as unknown as (ipc: unknown, managers: unknown) => void)(
+        ipcMain,
+        managers,
+      );
+      return handlers;
+    }
+
+    // DB with the standard AI settings plus the transcription-row readers
+    // the AI_REVIEW handler needs (getTranscriptionById is synchronous in
+    // the transcriptionHandlers DatabaseManager contract).
+    function createPolishDb(row: unknown): {
+      getSetting: (key: string) => Promise<unknown>;
+      getTranscriptionById: (id: number) => unknown;
+      saveTranscription: (...args: unknown[]) => unknown;
+    } {
+      const settings: Record<string, string | number> = {
+        ai_api_key: "test-key",
+        ai_base_url: "https://api.openai.com/v1",
+        ai_model: "gpt-3.5-turbo",
+        ai_temperature: 0.3,
+        ai_max_tokens: 2000,
+      };
+      return {
+        getSetting: vi.fn(async (key: string) => settings[key] ?? null),
+        getTranscriptionById: vi.fn(() => row),
+        saveTranscription: vi.fn(),
+      };
+    }
+
+    function readRequestBody(): Record<string, unknown> {
+      const fetchMock = global.fetch as unknown as FetchMock;
+      return JSON.parse(
+        (fetchMock.mock.calls[0]![1] as { body: string }).body,
+      ) as Record<string, unknown>;
+    }
+
+    it("PROCESS happy path: builds the mode prompt, calls the provider, maps success", async () => {
+      const handlers = captureHandlers(register, {
+        databaseManager: createPolishDb(null),
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        templatesDir: "/tmp/test-templates",
+      });
+      mockFetch({
+        choices: [{ message: { content: "  润色结果  " } }],
+        usage: { total_tokens: 7 },
+      });
+
+      const result = (await handlers[C.AI.PROCESS]!(
+        {},
+        "原始文本",
+        "optimize",
+      )) as {
+        success: boolean;
+        text?: string;
+        usage?: unknown;
+        model?: string;
+      };
+
+      // Success mapping: trimmed text + usage + resolved model, no error key.
+      expect(result).toEqual({
+        success: true,
+        text: "润色结果",
+        usage: { total_tokens: 7 },
+        model: "gpt-3.5-turbo",
+      });
+
+      // Provider payload: URL, auth, method and the full chat-completion body.
+      const fetchMock = global.fetch as unknown as FetchMock;
+      expect(fetchMock.mock.calls[0]![0]).toBe(
+        "https://api.openai.com/v1/chat/completions",
+      );
+      const init = fetchMock.mock.calls[0]![1] as {
+        method: string;
+        headers: Record<string, string>;
+      };
+      expect(init.method).toBe("POST");
+      expect(init.headers.Authorization).toBe("Bearer test-key");
+      expect(readRequestBody()).toEqual({
+        model: "gpt-3.5-turbo",
+        messages: [
+          {
+            role: "system",
+            content: expect.stringContaining("语音转录文本润色助手"),
+          },
+          { role: "user", content: "<transcript>\n原始文本\n</transcript>" },
+        ],
+        temperature: 0.3,
+        // [20260907_Fix_312_WireClampEntry] optimize is a minimal-edit mode:
+        // the entry now wires clampOutputTokens, so the short input lands on
+        // the 4096 floor instead of the raw 2000 user cap.
+        max_tokens: aiHandlersNS.POLISH_CLAMP_MIN_TOKENS,
+        stream: false,
+      });
+    });
+
+    // ---- [20260907_Fix_312_WireClampEntry] PROCESS entry clamp activation ----
+
+    it("wires clampOutputTokens for minimal-edit modes at the IPC entry", async () => {
+      // Issue #312: the orchestrator's budget clamp only binds when the
+      // caller passes clampOutputTokens — the PROCESS entry never did, so
+      // the minimal-edit clamp (2026-08-15 empty-content fix) never bound on
+      // a live path. Through the IPC handler, optimize at 2000×2=4000 must
+      // hit the 4096 floor.
+      const handlers = captureHandlers(register, {
+        databaseManager: createPolishDb(null),
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        templatesDir: "/tmp/test-templates",
+      });
+      mockFetch({ choices: [{ message: { content: "润色完成" } }] });
+
+      await handlers[C.AI.PROCESS]!({}, "字".repeat(2000), "optimize");
+
+      expect(readRequestBody().max_tokens).toBe(
+        aiHandlersNS.POLISH_CLAMP_MIN_TOKENS,
+      );
+    });
+
+    it("keeps rewrite-class modes unclamped at the IPC entry", async () => {
+      const handlers = captureHandlers(register, {
+        databaseManager: createPolishDb(null),
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        templatesDir: "/tmp/test-templates",
+      });
+      mockFetch({ choices: [{ message: { content: "摘要完成" } }] });
+
+      await handlers[C.AI.PROCESS]!({}, "字".repeat(2000), "summarize");
+
+      // summarize is rewrite-class: the user cap binds, no clamp floor.
+      expect(readRequestBody().max_tokens).toBe(2000);
+    });
+
+    it("PROCESS prefers a custom template from templatesDir over built-in modes", async () => {
+      const dir = path.join(process.cwd(), "test-polish-templates-temp");
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(
+        path.join(dir, "meeting.md"),
+        '---\nname: meeting\nlabel: 会议纪要\nuser_template: "整理：{text}"\n---\n你是会议纪要助手。',
+      );
+      try {
+        const handlers = captureHandlers(register, {
+          databaseManager: createPolishDb(null),
+          logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+          templatesDir: dir,
+        });
+        mockFetch({ choices: [{ message: { content: "纪要" } }] });
+
+        const result = (await handlers[C.AI.PROCESS]!(
+          {},
+          "正文",
+          "meeting",
+        )) as { success: boolean };
+
+        expect(result.success).toBe(true);
+        const body = readRequestBody();
+        expect(body.messages).toEqual([
+          { role: "system", content: "你是会议纪要助手。" },
+          // [20260907_Fix_315_TemplateTrustBoundary] template user body
+          // carries the appended injection guard (issue #315).
+          {
+            role: "user",
+            content: `整理：正文\n${INJECTION_GUARD}`,
+          },
+        ]);
+      } finally {
+        fs.rmSync(dir, { recursive: true });
+      }
+    });
+
+    it("PROCESS maps a provider HTTP error body to the normalized failure", async () => {
+      const handlers = captureHandlers(register, {
+        databaseManager: createPolishDb(null),
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        templatesDir: "/tmp/test-templates",
+      });
+      mockFetchError(401, { error: { message: "Invalid API key" } });
+
+      const result = (await handlers[C.AI.PROCESS]!({}, "t", "optimize")) as {
+        success: boolean;
+        error?: string;
+      };
+      expect(result).toEqual({ success: false, error: "Invalid API key" });
+    });
+
+    it("PROCESS blocks an unconfigured non-local call before reaching the provider", async () => {
+      const db = {
+        getSetting: vi.fn(async () => null),
+      };
+      const handlers = captureHandlers(register, {
+        databaseManager: db,
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        templatesDir: "/tmp/test-templates",
+      });
+      mockFetch({ choices: [{ message: { content: "x" } }] });
+
+      const result = (await handlers[C.AI.PROCESS]!({}, "t", "optimize")) as {
+        success: boolean;
+        error?: string;
+      };
+      expect(result).toEqual({
+        success: false,
+        error: "请先在设置页面配置AI API密钥",
+      });
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it("AI_REVIEW professional fallback: built-in professional prompt, reviewText mapping, never persisted", async () => {
+      const db = createPolishDb({ id: 42, text: "评审原文" });
+      const logger = {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+        debug: vi.fn(),
+      };
+      mockFetch({
+        choices: [{ message: { content: "评审结果" } }],
+        usage: { total_tokens: 3 },
+      });
+
+      // Wire the transcription AI_REVIEW handler to the REAL processTextWithAI
+      // — the exact production wiring from src/helpers/ipc/index.ts.
+      const handlers = captureHandlers(transcriptionHandlersNS.register, {
+        funasrManager: {},
+        databaseManager: db,
+        logger,
+        processTextWithAI: aiHandlers.processTextWithAI,
+      });
+
+      // Empty template → the handler must fall back to "professional".
+      const result = (await handlers[C.TRANSCRIPTION.AI_REVIEW]!(
+        {},
+        42,
+        "",
+      )) as Record<string, unknown>;
+
+      // Return-only: mapped to reviewText, exactly these keys.
+      expect(result).toEqual({ success: true, reviewText: "评审结果" });
+      // Never persisted to the DB.
+      expect(db.saveTranscription).not.toHaveBeenCalled();
+
+      // The prompt chain must produce the BUILT-IN professional template for
+      // the row text (built outside the entry, sent as system+user messages).
+      const body = readRequestBody();
+      expect(body.model).toBe("gpt-3.5-turbo");
+      expect(body.stream).toBe(false);
+      expect(body.messages).toEqual([
+        {
+          role: "system",
+          content: expect.stringContaining("专业评价文稿撰写专家"),
+        },
+        { role: "user", content: "<transcript>\n评审原文\n</transcript>" },
+      ]);
+    });
+
+    it("AI_REVIEW passes an explicit template through to prompt resolution", async () => {
+      const db = createPolishDb({ id: 42, text: "评审原文" });
+      const logger = {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+        debug: vi.fn(),
+      };
+      mockFetch({ choices: [{ message: { content: "摘要结果" } }] });
+
+      const handlers = captureHandlers(transcriptionHandlersNS.register, {
+        funasrManager: {},
+        databaseManager: db,
+        logger,
+        processTextWithAI: aiHandlers.processTextWithAI,
+      });
+
+      const result = (await handlers[C.TRANSCRIPTION.AI_REVIEW]!(
+        {},
+        42,
+        "summarize",
+      )) as Record<string, unknown>;
+
+      expect(result).toEqual({ success: true, reviewText: "摘要结果" });
+      const body = readRequestBody();
+      expect(body.messages).toEqual([
+        { role: "system", content: expect.stringContaining("文本摘要助手") },
+        { role: "user", content: "<transcript>\n评审原文\n</transcript>" },
+      ]);
+    });
+
+    it("AI_REVIEW passes provider failures through unchanged", async () => {
+      const db = createPolishDb({ id: 42, text: "评审原文" });
+      const logger = {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+        debug: vi.fn(),
+      };
+      mockFetchError(401, { error: { message: "Invalid API key" } });
+
+      const handlers = captureHandlers(transcriptionHandlersNS.register, {
+        funasrManager: {},
+        databaseManager: db,
+        logger,
+        processTextWithAI: aiHandlers.processTextWithAI,
+      });
+
+      const result = (await handlers[C.TRANSCRIPTION.AI_REVIEW]!(
+        {},
+        42,
+        "professional",
+      )) as Record<string, unknown>;
+      expect(result).toEqual({ success: false, error: "Invalid API key" });
+      expect(db.saveTranscription).not.toHaveBeenCalled();
+    });
+
+    it("AI_REVIEW returns the not-found failure before touching the provider", async () => {
+      const db = createPolishDb(null);
+      const logger = {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+        debug: vi.fn(),
+      };
+      mockFetch({ choices: [{ message: { content: "x" } }] });
+
+      const handlers = captureHandlers(transcriptionHandlersNS.register, {
+        funasrManager: {},
+        databaseManager: db,
+        logger,
+        processTextWithAI: aiHandlers.processTextWithAI,
+      });
+
+      const result = (await handlers[C.TRANSCRIPTION.AI_REVIEW]!(
+        {},
+        999,
+        "",
+      )) as Record<string, unknown>;
+      expect(result).toEqual({ success: false, error: "转录记录不存在" });
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+  });
+
+  // [20260906_Feat_OrchestratorGenCancel] Spec #193 T7 (ticket #234): the
+  // orchestrator gains generation invalidation (double-fire: only the newest
+  // request lands), cancel semantics (AbortController through the provider
+  // fetch, silent cancel outcome) and output clamping (minimal-edit budget
+  // clamp with the 4096 floor + absolute response char guard). All three
+  // activate through PolishRequest options; omitted options keep the legacy
+  // behavior pinned by the suites above — those must stay green unedited.
+  describe("polish orchestrator — generation, cancel, clamping (Spec #193 T7)", () => {
+    const runPolishOrchestrator = aiHandlersNS.runPolishOrchestrator;
+
+    function loggerOf(): { info: Mock; warn: Mock; error: Mock } {
+      return { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    }
+
+    // Fetch stub whose responses are settled by hand: each provider call
+    // registers a resolver in call order. With honorAbort the stub rejects
+    // like real fetch when the run's signal is (or becomes) aborted — the
+    // same never-resolving pattern the timeout test above uses.
+    function mockDeferredFetch(options: { honorAbort: boolean }): {
+      resolvers: Array<(response: FetchResponseStub) => void>;
+      inits: Array<{ signal?: AbortSignal }>;
+    } {
+      const resolvers: Array<(response: FetchResponseStub) => void> = [];
+      const inits: Array<{ signal?: AbortSignal }> = [];
+      global.fetch = vi.fn(
+        (_input: unknown, init?: { signal?: AbortSignal }) =>
+          new Promise<FetchResponseStub>((resolve, reject) => {
+            inits.push({ signal: init?.signal });
+            const abortError = () => {
+              const err = new Error("The operation was aborted");
+              err.name = "AbortError";
+              reject(err);
+            };
+            if (options.honorAbort) {
+              if (init?.signal?.aborted) {
+                abortError();
+                return;
+              }
+              init?.signal?.addEventListener("abort", abortError, {
+                once: true,
+              });
+            }
+            resolvers.push(resolve);
+          }),
+      ) as unknown as typeof global.fetch;
+      return { resolvers, inits };
+    }
+
+    function okResponse(content: string): FetchResponseStub {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          choices: [{ message: { content } }],
+          usage: { total_tokens: 1 },
+        }),
+      };
+    }
+
+    // ---- 代际失效 (generation invalidation) --------------------------------
+
+    it("generation: a newer run in the same scope supersedes the older one, which never reaches the provider", async () => {
+      const db = setupDb();
+      const logger = loggerOf();
+      const { resolvers } = mockDeferredFetch({ honorAbort: true });
+
+      const older = runPolishOrchestrator(
+        { databaseManager: db, logger },
+        { text: "旧文本", mode: "optimize", generationScope: "transcript-1" },
+      );
+      const newer = runPolishOrchestrator(
+        { databaseManager: db, logger },
+        { text: "新文本", mode: "optimize", generationScope: "transcript-1" },
+      );
+
+      const olderResult = await older;
+      // Generation-lost outcome: observable via the result shape, no text.
+      expect(olderResult.success).toBe(false);
+      expect(olderResult.code).toBe("SUPERSEDED");
+      expect(olderResult.text).toBeUndefined();
+
+      // The stale run was short-circuited before the provider call; only the
+      // newer run may talk to the provider.
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+
+      resolvers[0]!(okResponse("最新结果"));
+      const newerResult = await newer;
+      expect(newerResult.success).toBe(true);
+      expect(newerResult.text).toBe("最新结果");
+    });
+
+    it("generation: a stale run's late provider response is discarded, never mapped or allowed to overwrite the newer result", async () => {
+      const db = setupDb();
+      const logger = loggerOf();
+      // Abort-ignoring provider: the stale response still "arrives" after the
+      // newer request started — the orchestrator must discard it on its own.
+      const { resolvers } = mockDeferredFetch({ honorAbort: false });
+
+      const older = runPolishOrchestrator(
+        { databaseManager: db, logger },
+        { text: "旧文本", mode: "optimize", generationScope: "transcript-2" },
+      );
+      // Let the older run reach the provider first.
+      await vi.waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+
+      const newer = runPolishOrchestrator(
+        { databaseManager: db, logger },
+        { text: "新文本", mode: "optimize", generationScope: "transcript-2" },
+      );
+      await vi.waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+
+      let staleJsonRead = false;
+      resolvers[0]!({
+        ok: true,
+        status: 200,
+        json: async () => {
+          staleJsonRead = true;
+          return { choices: [{ message: { content: "过期结果" } }] };
+        },
+      });
+      const olderResult = await older;
+      expect(olderResult.success).toBe(false);
+      expect(olderResult.code).toBe("SUPERSEDED");
+      expect(olderResult.text).toBeUndefined();
+      // The stale provider response body was never even read/mapped.
+      expect(staleJsonRead).toBe(false);
+
+      resolvers[1]!(okResponse("最新结果"));
+      const newerResult = await newer;
+      expect(newerResult.success).toBe(true);
+      expect(newerResult.text).toBe("最新结果");
+    });
+
+    it("generation: different scopes do not invalidate each other", async () => {
+      const db = setupDb();
+      const logger = loggerOf();
+      mockFetch({ choices: [{ message: { content: "各自生效" } }] });
+
+      const [first, second] = await Promise.all([
+        runPolishOrchestrator(
+          { databaseManager: db, logger },
+          { text: "甲", mode: "optimize", generationScope: "scope-a" },
+        ),
+        runPolishOrchestrator(
+          { databaseManager: db, logger },
+          { text: "乙", mode: "optimize", generationScope: "scope-b" },
+        ),
+      ]);
+      expect(first.success).toBe(true);
+      expect(second.success).toBe(true);
+    });
+
+    // ---- 取消语义 (cancel semantics) ---------------------------------------
+
+    it("cancel: aborting the caller signal terminates the in-flight fetch and settles silently with the cancel outcome", async () => {
+      const db = setupDb();
+      const logger = loggerOf();
+      const controller = new AbortController();
+      const { resolvers, inits } = mockDeferredFetch({ honorAbort: true });
+
+      const pending = runPolishOrchestrator(
+        { databaseManager: db, logger },
+        { text: "长文本", mode: "optimize", signal: controller.signal },
+      );
+      await vi.waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+
+      controller.abort();
+      const result = await pending;
+
+      // Cancel-shaped outcome, not the TIMEOUT mapping and no mapped text.
+      expect(result.success).toBe(false);
+      expect(result.code).toBe("CANCELLED");
+      expect(result.text).toBeUndefined();
+      expect(String(result.error)).not.toContain("超时");
+      // The upstream fetch observed the abort (request terminated).
+      expect(inits[0]!.signal!.aborted).toBe(true);
+      // Even if a response body "arrives" after the abort, the run stays
+      // settled with the cancel outcome — it is never mapped.
+      resolvers[0]?.(okResponse("迟到内容"));
+      const settled = await pending;
+      expect(settled.code).toBe("CANCELLED");
+      expect(settled.text).toBeUndefined();
+      // Silent cancel: no error log, so no error toast can be driven from it.
+      expect(logger.error).not.toHaveBeenCalled();
+    });
+
+    it("cancel: an already-aborted signal settles before touching the provider", async () => {
+      const db = setupDb();
+      const logger = loggerOf();
+      const controller = new AbortController();
+      controller.abort();
+      mockDeferredFetch({ honorAbort: true });
+
+      const result = await runPolishOrchestrator(
+        { databaseManager: db, logger },
+        { text: "长文本", mode: "optimize", signal: controller.signal },
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe("CANCELLED");
+      expect(global.fetch).not.toHaveBeenCalled();
+      expect(logger.error).not.toHaveBeenCalled();
+    });
+
+    it("cancel via the processTextWithAI adapter: T7 options flow through the positional-args contract", async () => {
+      const controller = new AbortController();
+      controller.abort();
+      mockDeferredFetch({ honorAbort: true });
+
+      const result = await processTextWithAI(
+        "t",
+        "optimize",
+        setupDb(),
+        loggerOf(),
+        { signal: controller.signal },
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.code).toBe("CANCELLED");
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    // ---- 输出钳制 (output clamping) -----------------------------------------
+
+    it("clamp budget: floor 4096 wins when input×factor is small (reasoning-budget guard)", async () => {
+      const db = setupDb({ ai_max_tokens: 2000 });
+      mockFetch({ choices: [{ message: { content: "润色完成" } }] });
+
+      const result = await runPolishOrchestrator(
+        { databaseManager: db, logger: loggerOf() },
+        {
+          text: "字".repeat(2000), // 2000 × 2 = 4000, below the floor
+          mode: "optimize",
+          clampOutputTokens: true,
+        },
+      );
+
+      expect(result.success).toBe(true);
+      const body = JSON.parse(
+        (
+          (global.fetch as unknown as FetchMock).mock.calls[0]![1] as {
+            body: string;
+          }
+        ).body,
+      ) as { max_tokens: number };
+      expect(body.max_tokens).toBe(aiHandlersNS.POLISH_CLAMP_MIN_TOKENS);
+    });
+
+    it("clamp budget: input×factor binds above the floor", async () => {
+      const db = setupDb({ ai_max_tokens: 8192 });
+      mockFetch({ choices: [{ message: { content: "润色完成" } }] });
+
+      await runPolishOrchestrator(
+        { databaseManager: db, logger: loggerOf() },
+        {
+          text: "字".repeat(2049), // 2049 × 2 = 4098, just above the floor
+          mode: "optimize",
+          clampOutputTokens: true,
+        },
+      );
+
+      const body = JSON.parse(
+        (
+          (global.fetch as unknown as FetchMock).mock.calls[0]![1] as {
+            body: string;
+          }
+        ).body,
+      ) as { max_tokens: number };
+      expect(body.max_tokens).toBe(4098);
+    });
+
+    it("clamp budget: the user-configured cap still binds when input×factor exceeds it", async () => {
+      const db = setupDb({ ai_max_tokens: 6000 });
+      mockFetch({ choices: [{ message: { content: "润色完成" } }] });
+
+      await runPolishOrchestrator(
+        { databaseManager: db, logger: loggerOf() },
+        {
+          text: "字".repeat(5000), // 5000 × 2 = 10000 > 6000
+          mode: "optimize_long",
+          clampOutputTokens: true,
+        },
+      );
+
+      const body = JSON.parse(
+        (
+          (global.fetch as unknown as FetchMock).mock.calls[0]![1] as {
+            body: string;
+          }
+        ).body,
+      ) as { max_tokens: number };
+      expect(body.max_tokens).toBe(6000);
+    });
+
+    it("clamp budget: rewrite-class modes are never clamped", async () => {
+      const db = setupDb({ ai_max_tokens: 2000 });
+      mockFetch({ choices: [{ message: { content: "摘要" } }] });
+
+      await runPolishOrchestrator(
+        { databaseManager: db, logger: loggerOf() },
+        {
+          text: "字".repeat(5000),
+          mode: "summarize",
+          clampOutputTokens: true,
+        },
+      );
+
+      const body = JSON.parse(
+        (
+          (global.fetch as unknown as FetchMock).mock.calls[0]![1] as {
+            body: string;
+          }
+        ).body,
+      ) as { max_tokens: number };
+      expect(body.max_tokens).toBe(2000);
+    });
+
+    it("clamp budget: omitted option keeps the user max_tokens verbatim (legacy behavior)", async () => {
+      const db = setupDb({ ai_max_tokens: 2000 });
+      mockFetch({ choices: [{ message: { content: "润色完成" } }] });
+
+      await runPolishOrchestrator(
+        { databaseManager: db, logger: loggerOf() },
+        { text: "字".repeat(5000), mode: "optimize" },
+      );
+
+      const body = JSON.parse(
+        (
+          (global.fetch as unknown as FetchMock).mock.calls[0]![1] as {
+            body: string;
+          }
+        ).body,
+      ) as { max_tokens: number };
+      expect(body.max_tokens).toBe(2000);
+    });
+
+    it("output guard: provider text beyond the absolute char cap is truncated before mapping", async () => {
+      const cap = aiHandlersNS.POLISH_OUTPUT_MAX_CHARS;
+      mockFetch({ choices: [{ message: { content: "x".repeat(cap + 1) } }] });
+
+      const result = await runPolishOrchestrator(
+        { databaseManager: setupDb(), logger: loggerOf() },
+        { text: "t", mode: "optimize" },
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.text).toHaveLength(cap);
+    });
+
+    it("output guard: provider text exactly at the cap passes through untouched", async () => {
+      const cap = aiHandlersNS.POLISH_OUTPUT_MAX_CHARS;
+      mockFetch({ choices: [{ message: { content: "y".repeat(cap) } }] });
+
+      const result = await runPolishOrchestrator(
+        { databaseManager: setupDb(), logger: loggerOf() },
+        { text: "t", mode: "optimize" },
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.text).toHaveLength(cap);
+    });
+  });
+});
+// [20260907_Feat_235_StreamPipeline] T8 abort channel + total timeout:
+// POLISH_ABORT ownership (sender check), unknown_request, and the
+// STREAM_TOTAL_TIMEOUT leg of the deadline matrix. Self-contained harness:
+// the fetch stub's SSE reader PENDS forever (and rejects when the fetch
+// init signal fires), so the run stays in flight until aborted or timed
+// out.
+describe("[20260907_Feat_235_StreamPipeline] POLISH_ABORT / total timeout", () => {
+  let registeredHandlers: Record<string, (...args: unknown[]) => unknown>;
+  let sendBySender: Map<number, ReturnType<typeof vi.fn>>;
+
+  beforeEach(() => {
+    sendBySender = new Map([
+      [1, vi.fn()],
+      [2, vi.fn()],
+    ]);
+  });
+
+  function senderEvent(id: number) {
+    return {
+      sender: {
+        id,
+        isDestroyed: vi.fn(() => false),
+        send: sendBySender.get(id) ?? vi.fn(),
+      },
+    };
+  }
+
+  function setup() {
+    registeredHandlers = {};
+    const ipcMain = {
+      handle: vi.fn((channel: string, fn: (...args: unknown[]) => unknown) => {
+        registeredHandlers[channel] = fn;
+      }),
+    };
+    const db = {
+      getSetting: vi.fn(async (key: string) =>
+        key === "ai_base_url"
+          ? "https://api.example.com/v1"
+          : key === "ai_api_key"
+            ? "sk"
+            : key === "ai_model"
+              ? "gpt-x"
+              : null,
+      ),
+    };
+    const register = aiHandlersNS.register;
+    register(
+      ipcMain as never,
+      {
+        databaseManager: db,
+        funasrManager: null,
+        processTextWithAI: vi.fn(),
+        windowManager: { mainWindow: null },
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        templatesDir: "/tmp/test-templates",
+      } as never,
+    );
+    return import("../../src/helpers/ipc-contracts");
+  }
+
+  // SSE body whose read() pends until the FETCH signal aborts, then rejects.
+  function sseResponsePending(initSignal?: AbortSignal): unknown {
+    return {
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": "text/event-stream" }),
+      body: {
+        getReader: () => ({
+          read: () =>
+            new Promise((_resolve, reject) => {
+              const onAbort = () =>
+                reject(new DOMException("aborted", "AbortError"));
+              if (initSignal?.aborted) onAbort();
+              else
+                initSignal?.addEventListener("abort", onAbort, { once: true });
+            }),
+        }),
+      },
+    } as unknown;
+  }
+
+  it("abort via POLISH_ABORT cancels the in-flight run and emits abort chunk", async () => {
+    const C = await setup();
+    // PROCESS from sender 1, streaming with requestId r1.
+    // [20260907_Feat_235_StreamPipeline] SSE stub bound to THIS test only.
+    const prevFetch = global.fetch;
+    global.fetch = vi.fn(
+      async (_url: unknown, init?: { signal?: AbortSignal }) =>
+        sseResponsePending(init?.signal),
+    ) as unknown as typeof fetch;
+    void prevFetch;
+    const processPromise = registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      "原文",
+      "optimize",
+      10_000,
+      "r1",
+    ) as Promise<unknown>;
+
+    // POLISH_ABORT from the SAME sender: ownership passes → controller aborts
+    // → the mocked SSE read rejects → CANCELLED result.
+    const abortResult = (await registeredHandlers[C.AI.POLISH_ABORT]!(
+      senderEvent(1),
+      "r1",
+    )) as { success: boolean };
+    expect(abortResult).toEqual({ success: true });
+
+    const result = (await processPromise) as {
+      success: boolean;
+      code?: string;
+      error?: string;
+    };
+    expect(result.success).toBe(false);
+    expect(result.code).toBe("CANCELLED");
+  });
+
+  it(
+    "ignores cross-sender POLISH_ABORT (ownership check)",
+    { timeout: 10_000 },
+    async () => {
+      const C = await setup();
+      const prevFetch = global.fetch;
+      global.fetch = vi.fn(
+        async (_url: unknown, init?: { signal?: AbortSignal }) =>
+          sseResponsePending(init?.signal),
+      ) as unknown as typeof fetch;
+      const processPromise = registeredHandlers[C.AI.PROCESS]!(
+        senderEvent(1),
+        "原文",
+        "optimize",
+        300, // tiny total: the run settles even if the abort was ignored
+        "r2",
+      ) as Promise<unknown>;
+
+      // Sender 999 is not the owner: forbidden, the run keeps streaming
+      // and settles via its own total deadline.
+      const abortResult = (await registeredHandlers[C.AI.POLISH_ABORT]!(
+        senderEvent(999),
+        "r2",
+      )) as { success: boolean; reason?: string };
+      expect(abortResult).toMatchObject({
+        success: false,
+        reason: "forbidden",
+      });
+
+      global.fetch = prevFetch;
+      const settled = (await processPromise) as { success: boolean };
+      expect(settled).toMatchObject({ success: false });
+    },
+  );
+
+  it("returns unknown_request for a never-registered requestId", async () => {
+    const C = await setup();
+    const result = (await registeredHandlers[C.AI.POLISH_ABORT]!(
+      senderEvent(1),
+      "ghost",
+    )) as { success: boolean; reason?: string };
+    expect(result).toMatchObject({ success: false, reason: "unknown_request" });
+  });
+
+  it("enforces the total-duration deadline on the body consumption", async () => {
+    const C = await setup();
+    // [20260907_Feat_235_StreamPipeline] SSE stub bound to THIS test only.
+    const prevFetch = global.fetch;
+    global.fetch = vi.fn(
+      async (_url: unknown, init?: { signal?: AbortSignal }) =>
+        sseResponsePending(init?.signal),
+    ) as unknown as typeof fetch;
+    void prevFetch;
+    global.fetch = prevFetch;
+    const result = (await registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      "原文",
+      "optimize",
+      120, // tiny total → the STREAM_TOTAL_TIMEOUT leg fires
+      "r-total",
+    )) as { success: boolean; error?: string };
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("总时长超时");
+  });
+});
+
+// [20260908_Fix_BatchReview_M1] Non-streaming body reads are raced against
+// the total budget: a gateway that sends headers then stalls the body must
+// resolve with a TIMEOUT-classified error instead of hanging the invoke.
+describe("[20260908_Fix_BatchReview_M1] non-streaming body deadline", () => {
+  it("resolves with a timeout error when the JSON body stalls after headers", async () => {
+    const db = {
+      getSetting: vi.fn(async (key: string) =>
+        key === "ai_base_url"
+          ? "https://api.example.com/v1"
+          : key === "ai_api_key"
+            ? "sk"
+            : key === "ai_model"
+              ? "gpt-x"
+              : null,
+      ),
+    };
+    const handlers: Record<string, (...args: unknown[]) => unknown> = {};
+    const ipcMain = {
+      handle: vi.fn((channel: string, fn: (...args: unknown[]) => unknown) => {
+        handlers[channel] = fn;
+      }),
+    };
+    aiHandlersNS.register(
+      ipcMain as never,
+      {
+        databaseManager: db,
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        templatesDir: "/tmp/test-templates",
+      } as never,
+    );
+    const prevFetch = global.fetch;
+    global.fetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": "application/json" }),
+      // Body never settles — headers arrived, then the stall.
+      json: () => new Promise(() => {}),
+    })) as unknown as typeof fetch;
+
+    const result = (await handlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      "原文",
+      "optimize",
+      120, // tiny total budget
+    )) as { success: boolean; error?: string; code?: string };
+
+    global.fetch = prevFetch;
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("AI请求超时");
+  }, 10_000);
+});
+
+// Hoisted minimal sender for this describe (the file's existing harnesses
+// bind sender shapes locally per describe).
+function senderEvent(id: number): { sender: { id: number } } {
+  return { sender: { id } };
+}
+
+// [20260908_Feat_333_VocabInjection] End-to-end injection: the orchestrator
+// resolves the corrections table, filters by occurrence, and the directive
+// rides INSIDE the transcript envelope. No match / read failure → no
+// directive (polish never fails on the optional table).
+describe("[20260908_Feat_333_VocabInjection] corrections injection", () => {
+  function makeDb(entries: Array<{ wrong: string; right: string }>) {
+    return {
+      getSetting: vi.fn(async (key: string) =>
+        key === "ai_base_url"
+          ? "https://api.example.com/v1"
+          : key === "ai_api_key"
+            ? "sk"
+            : key === "ai_model"
+              ? "gpt-x"
+              : null,
+      ),
+      listVocabCorrections: vi.fn(() => entries),
+    };
+  }
+  function makeDbNoVocab() {
+    return {
+      getSetting: vi.fn(async (key: string) =>
+        key === "ai_base_url"
+          ? "https://api.example.com/v1"
+          : key === "ai_api_key"
+            ? "sk"
+            : key === "ai_model"
+              ? "gpt-x"
+              : null,
+      ),
+    };
+  }
+  function captureBody(): Record<string, unknown> {
+    const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
+    return JSON.parse(
+      (fetchMock.mock.calls[0]![1] as { body: string }).body,
+    ) as Record<string, unknown>;
+  }
+  // [20260908_Feat_333_VocabInjection] handlers map values are possibly
+  // undefined under noUncheckedIndexedAccess — non-null helper.
+  const processHandler = (
+    map: Record<string, (...args: unknown[]) => unknown>,
+  ): ((...args: unknown[]) => Promise<unknown>) =>
+    map[C.AI.PROCESS]! as (...args: unknown[]) => Promise<unknown>;
+  function messagesOf(body: Record<string, unknown>): string {
+    return (body.messages as Array<{ role: string; content: string }>)
+      .map((m) => m.content)
+      .join("\n---\n");
+  }
+
+  it("injects matching corrections inside the transcript envelope", async () => {
+    const handlers: Record<string, (...args: unknown[]) => unknown> = {};
+    const ipcMain = {
+      handle: vi.fn((channel: string, fn: (...args: unknown[]) => unknown) => {
+        handlers[channel] = fn;
+      }),
+    };
+    const prevFetch = global.fetch;
+    global.fetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": "application/json" }),
+      json: async () => ({
+        choices: [{ message: { content: "润色结果" }, finish_reason: "stop" }],
+      }),
+    })) as unknown as typeof fetch;
+    const db = makeDb([
+      { wrong: "会义室", right: "会议室" },
+      { wrong: "不出现的词", right: "某词" },
+    ]);
+    aiHandlersNS.register(
+      ipcMain as never,
+      {
+        databaseManager: db,
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        templatesDir: "/tmp/test-templates",
+      } as never,
+    );
+
+    await processHandler(handlers)(
+      { sender: { id: 1 } },
+      "我们明天在会义室开会",
+      "optimize",
+    );
+    // Capture BEFORE restoring the real fetch.
+    const userMsg = messagesOf(captureBody());
+    global.fetch = prevFetch;
+    expect(userMsg).toContain("会义室");
+    expect(userMsg).toContain("会议室");
+    expect(userMsg).not.toContain("不出现的词");
+    // Inside the envelope: directive appears BEFORE the close tag.
+    const closeIdx = userMsg.indexOf("</transcript>");
+    const dirIdx = userMsg.indexOf("修正表");
+    expect(closeIdx).toBeGreaterThan(-1);
+    expect(dirIdx).toBeGreaterThan(-1);
+    expect(dirIdx).toBeLessThan(closeIdx);
+  });
+
+  it("no matching corrections → no directive in the prompt", async () => {
+    const handlers: Record<string, (...args: unknown[]) => unknown> = {};
+    const ipcMain = {
+      handle: vi.fn((channel: string, fn: (...args: unknown[]) => unknown) => {
+        handlers[channel] = fn;
+      }),
+    };
+    const prevFetch = global.fetch;
+    global.fetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": "application/json" }),
+      json: async () => ({
+        choices: [{ message: { content: "润色结果" }, finish_reason: "stop" }],
+      }),
+    })) as unknown as typeof fetch;
+    aiHandlersNS.register(
+      ipcMain as never,
+      {
+        databaseManager: makeDb([{ wrong: "无关词", right: "x" }]),
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        templatesDir: "/tmp/test-templates",
+      } as never,
+    );
+
+    await processHandler(handlers)(
+      { sender: { id: 1 } },
+      "完全无关的文本",
+      "optimize",
+    );
+    const noMatchMsg = messagesOf(captureBody());
+    global.fetch = prevFetch;
+    expect(noMatchMsg).not.toContain("修正表");
+  });
+
+  it("missing vocab surface on the manager → polish proceeds without injection", async () => {
+    const handlers: Record<string, (...args: unknown[]) => unknown> = {};
+    const ipcMain = {
+      handle: vi.fn((channel: string, fn: (...args: unknown[]) => unknown) => {
+        handlers[channel] = fn;
+      }),
+    };
+    const prevFetch = global.fetch;
+    global.fetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": "application/json" }),
+      json: async () => ({
+        choices: [{ message: { content: "润色结果" }, finish_reason: "stop" }],
+      }),
+    })) as unknown as typeof fetch;
+    aiHandlersNS.register(
+      ipcMain as never,
+      {
+        databaseManager: makeDbNoVocab(),
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        templatesDir: "/tmp/test-templates",
+      } as never,
+    );
+
+    const result = (await processHandler(handlers)(
+      { sender: { id: 1 } },
+      "普通文本",
+      "optimize",
+    )) as { success: boolean };
+    const noVocabMsg = messagesOf(captureBody());
+    global.fetch = prevFetch;
+    expect(result.success).toBe(true);
+    expect(noVocabMsg).not.toContain("修正表");
+  });
+});
+
+// [20260909_Fix_333_Review] Custom-arm directive placement + $&-safe replacer.
+describe("[20260909_Fix_333_Review] injection placement regressions", () => {
+  it("custom-template arm injects the directive INSIDE the envelope", async () => {
+    const handlers: Record<string, (...args: unknown[]) => unknown> = {};
+    const ipcMain = {
+      handle: vi.fn((channel: string, fn: (...args: unknown[]) => unknown) => {
+        handlers[channel] = fn;
+      }),
+    };
+    const prevFetch = global.fetch;
+    global.fetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": "application/json" }),
+      json: async () => ({
+        choices: [{ message: { content: "润色结果" }, finish_reason: "stop" }],
+      }),
+    })) as unknown as typeof fetch;
+    const db = {
+      getSetting: vi.fn(async (key: string) =>
+        key === "ai_base_url"
+          ? "https://api.example.com/v1"
+          : key === "ai_api_key"
+            ? "sk"
+            : key === "ai_model"
+              ? "gpt-x"
+              : null,
+      ),
+      listVocabCorrections: vi.fn(() => [{ wrong: "会义室", right: "会议室" }]),
+    };
+    aiHandlersNS.register(
+      ipcMain as never,
+      {
+        databaseManager: db,
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        templatesDir: "/tmp/tpl-333",
+      } as never,
+    );
+
+    // Stub a custom template via the templatesDir cache: register() reads
+    // the dir; simplest reliable route is monkeypatching getCachedTemplates
+    // behavior via fs — instead exercise buildPrompt directly for placement
+    // (the orchestrator wiring is covered above).
+    global.fetch = prevFetch;
+    const { buildPrompt } = await import("../../src/helpers/aiPrompts");
+    const result = buildPrompt("custom-with-envelope", "我们在会义室开会", {
+      customTemplates: [
+        {
+          name: "custom-with-envelope",
+          label: "模板",
+          system: "系统",
+          user: "整理：<transcript>\n{text}\n</transcript>",
+        },
+      ],
+      vocabCorrections: [{ wrong: "会义室", right: "会议室" }],
+    });
+    const closeIdx = result.user.lastIndexOf("</transcript>");
+    const dirIdx = result.user.indexOf("修正表");
+    expect(closeIdx).toBeGreaterThan(-1);
+    expect(dirIdx).toBeGreaterThan(-1);
+    expect(dirIdx).toBeLessThan(closeIdx);
+  });
+
+  it("built-in arm directive survives $&-family sequences in vocab terms", async () => {
+    const { buildPrompt } = await import("../../src/helpers/aiPrompts");
+    const result = buildPrompt("optimize", "文本", {
+      vocabCorrections: [{ wrong: "X", right: "cost is $& total" }],
+    });
+    // The $& must appear literally — no expansion into the matched close tag.
+    expect(result.user).toContain("cost is $& total");
+    expect(result.user.match(/<\/transcript>/g)).toHaveLength(1);
+  });
+});
+
+// [20260910_Feat_237_StreamDegradation] Spec #193 T10 (ticket #237):
+// degradation detection + memory at the orchestrator level. Fetch is
+// mocked three ways (healthy SSE / non-SSE 200 / immediate 4xx); the
+// databaseManager mock is a Map-backed settings store so the memory
+// module's real key/normalization logic runs unmodified. Self-contained
+// harness mirroring the T8 describe above (sender-scoped chunk capture).
+describe("[20260910_Feat_237_StreamDegradation] T10 degradation + memory", () => {
+  let registeredHandlers: Record<string, (...args: unknown[]) => unknown>;
+  let sendBySender: Map<number, ReturnType<typeof vi.fn>>;
+
+  beforeEach(() => {
+    sendBySender = new Map([[1, vi.fn()]]);
+  });
+
+  function senderEvent(id: number) {
+    return {
+      sender: {
+        id,
+        isDestroyed: vi.fn(() => false),
+        send: sendBySender.get(id) ?? vi.fn(),
+      },
+    };
+  }
+
+  function chunksFor(id: number): Array<{ type: string; reason?: string }> {
+    return sendBySender
+      .get(id)!
+      .mock.calls.map((call) => call[1] as { type: string; reason?: string });
+  }
+
+  function setupDbMock(baseUrl: string) {
+    const store = new Map<string, unknown>([
+      ["ai_api_key", "sk"],
+      ["ai_base_url", baseUrl],
+      ["ai_model", "gpt-x"],
+    ]);
+    return {
+      getSetting: vi.fn(async (key: string) => store.get(key) ?? null),
+      setSetting: vi.fn((key: string, value: unknown) => {
+        store.set(key, value);
+      }),
+      getAllSettings: vi.fn(() => Object.fromEntries(store)),
+      listVocabCorrections: vi.fn(() => []),
+    };
+  }
+
+  function setup(baseUrl = "https://api.example.com/v1") {
+    registeredHandlers = {};
+    const ipcMain = {
+      handle: vi.fn((channel: string, fn: (...args: unknown[]) => unknown) => {
+        registeredHandlers[channel] = fn;
+      }),
+    };
+    const db = setupDbMock(baseUrl);
+    aiHandlersNS.register(
+      ipcMain as never,
+      {
+        databaseManager: db,
+        funasrManager: null,
+        processTextWithAI: vi.fn(),
+        windowManager: { mainWindow: null },
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        templatesDir: "/tmp/test-templates",
+      } as never,
+    );
+    return db;
+  }
+
+  // Response stubs — narrowest shape the pipeline reads.
+  function jsonOk(content: string) {
+    return {
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": "application/json" }),
+      json: async () => ({ choices: [{ message: { content } }] }),
+      text: async () => JSON.stringify({ choices: [{ message: { content } }] }),
+    };
+  }
+
+  function httpError(status: number) {
+    return {
+      ok: false,
+      status,
+      statusText: `HTTP ${status}`,
+      text: async () => "gateway error",
+    };
+  }
+
+  function sseOk(content: string) {
+    const frames = [
+      `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`,
+      "data: [DONE]\n\n",
+    ].map((frame) => new TextEncoder().encode(frame));
+    let index = 0;
+    return {
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": "text/event-stream" }),
+      body: {
+        getReader: () => ({
+          read: async () =>
+            index < frames.length
+              ? { done: false, value: frames[index++] }
+              : { done: true, value: undefined },
+        }),
+      },
+    };
+  }
+
+  function pendingUntilAbort(initSignal?: AbortSignal): Promise<never> {
+    return new Promise((_resolve, reject) => {
+      const onAbort = () => reject(new DOMException("aborted", "AbortError"));
+      if (initSignal?.aborted) onAbort();
+      else initSignal?.addEventListener("abort", onAbort, { once: true });
+    });
+  }
+
+  /** Parsed JSON body of the Nth mocked fetch call. */
+  function requestBodyOf(
+    fetchMock: FetchMock,
+    index: number,
+  ): { stream?: boolean } {
+    const init = fetchMock.mock.calls[index]![1] as { body: string };
+    return JSON.parse(init.body) as { stream?: boolean };
+  }
+
+  function degradationWrites(db: ReturnType<typeof setupDbMock>) {
+    return db.setSetting.mock.calls.filter((call) =>
+      String(call[0]).startsWith("stream_degraded."),
+    );
+  }
+
+  it("healthy SSE streams deltas and writes NO memory", async () => {
+    const db = setup();
+    global.fetch = vi.fn(async () => sseOk("流式结果")) as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const result = (await registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      "原文",
+      "optimize",
+      10_000,
+      "sd-sse",
+    )) as { success: boolean; text?: string };
+
+    expect(result).toMatchObject({ success: true, text: "流式结果" });
+    const types = chunksFor(1).map((c) => c.type);
+    expect(types).toContain("delta");
+    expect(types).toContain("finish");
+    expect(types).not.toContain("degraded");
+    expect(degradationWrites(db)).toHaveLength(0);
+  });
+
+  it("non-SSE 200 degrades to the JSON path, notifies UI, remembers", async () => {
+    const db = setup();
+    global.fetch = vi.fn(async () => jsonOk("降级结果")) as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const result = (await registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      "原文",
+      "optimize",
+      10_000,
+      "sd-nonsse",
+    )) as { success: boolean; text?: string };
+
+    expect(result).toMatchObject({ success: true, text: "降级结果" });
+    expect(chunksFor(1)).toContainEqual(
+      expect.objectContaining({ type: "degraded", reason: "non_sse_response" }),
+    );
+    expect(degradationWrites(db)).toHaveLength(1);
+  });
+
+  it("immediate 4xx on a streaming request retries once non-streaming", async () => {
+    const db = setup();
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(async () => httpError(400))
+      .mockImplementationOnce(async () =>
+        jsonOk("重试成功"),
+      ) as unknown as FetchMock;
+    global.fetch = fetchMock as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const result = (await registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      "原文",
+      "optimize",
+      10_000,
+      "sd-4xx",
+    )) as { success: boolean; text?: string };
+
+    expect(result).toMatchObject({ success: true, text: "重试成功" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // First attempt streamed, the retry did not.
+    expect(requestBodyOf(fetchMock, 0).stream).toBe(true);
+    expect(requestBodyOf(fetchMock, 1).stream).toBe(false);
+    expect(chunksFor(1)).toContainEqual(
+      expect.objectContaining({ type: "degraded", reason: "http_4xx" }),
+    );
+    expect(degradationWrites(db)).toHaveLength(1);
+  });
+
+  it("a REMEMBERED gateway skips streaming entirely (single non-stream fetch)", async () => {
+    const db = setup();
+    const { rememberStreamDegradation } =
+      await import("../../src/helpers/streamDegradation");
+    await rememberStreamDegradation(db, "https://api.example.com/v1");
+    const fetchMock = vi.fn(async () =>
+      jsonOk("直连结果"),
+    ) as unknown as FetchMock;
+    global.fetch = fetchMock as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const result = (await registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      "原文",
+      "optimize",
+      10_000,
+      "sd-remembered",
+    )) as { success: boolean; text?: string };
+
+    expect(result).toMatchObject({ success: true, text: "直连结果" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(requestBodyOf(fetchMock, 0).stream).toBe(false);
+    expect(chunksFor(1)).toContainEqual(
+      expect.objectContaining({ type: "degraded", reason: "remembered" }),
+    );
+  });
+
+  it("local gateways are retried but NEVER remembered", async () => {
+    const db = setup("http://127.0.0.1:8317/v1");
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(async () => httpError(400))
+      .mockImplementationOnce(async () =>
+        jsonOk("本地结果"),
+      ) as unknown as FetchMock;
+    global.fetch = fetchMock as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const result = (await registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      "原文",
+      "optimize",
+      10_000,
+      "sd-local",
+    )) as { success: boolean; text?: string };
+
+    expect(result).toMatchObject({ success: true, text: "本地结果" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(degradationWrites(db)).toHaveLength(0);
+  });
+
+  it("the degradation retry is cancellable via POLISH_ABORT", async () => {
+    setup();
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(async () => httpError(400))
+      .mockImplementationOnce(
+        (_url: unknown, init?: { signal?: AbortSignal }) =>
+          pendingUntilAbort(init?.signal),
+      ) as unknown as FetchMock;
+    global.fetch = fetchMock as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const processPromise = registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      "原文",
+      "optimize",
+      10_000,
+      "sd-cancel",
+    ) as Promise<unknown>;
+
+    // Wait until the retry fetch is in flight, then abort as the owner.
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const abortResult = (await registeredHandlers[C.AI.POLISH_ABORT]!(
+      senderEvent(1),
+      "sd-cancel",
+    )) as { success: boolean };
+    expect(abortResult).toEqual({ success: true });
+
+    const result = (await processPromise) as {
+      success: boolean;
+      code?: string;
+    };
+    expect(result.success).toBe(false);
+    expect(result.code).toBe("CANCELLED");
+    // Pin SINGLE emission: one abort chunk per cancelled run, never two
+    // (settleAside vs consumePolishStream double-notify guard).
+    expect(chunksFor(1).filter((c) => c.type === "abort")).toHaveLength(1);
+  });
+
+  // [20260910_Feat_237_ReviewFixes] Review MINOR #1: auth/quota 4xx statuses
+  // fail identically without streaming — retrying them doubles pressure on
+  // an already-limiting gateway and could memorialize a transient failure.
+  it("401/429 are NOT retried and never remembered", async () => {
+    for (const status of [401, 403, 429]) {
+      const db = setup();
+      const fetchMock = vi.fn(async () =>
+        httpError(status),
+      ) as unknown as FetchMock;
+      global.fetch = fetchMock as never;
+      const C = await import("../../src/helpers/ipc-contracts");
+
+      const result = (await registeredHandlers[C.AI.PROCESS]!(
+        senderEvent(1),
+        "原文",
+        "optimize",
+        10_000,
+        `sd-no-retry-${status}`,
+      )) as { success: boolean };
+
+      expect(result.success).toBe(false);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(degradationWrites(db)).toHaveLength(0);
+    }
+  });
+
+  // [20260910_Feat_237_ReviewFixes] Review MINOR #3: failure halves.
+  it("a FAILED retry surfaces the error and writes no memory", async () => {
+    const db = setup();
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(async () => httpError(400))
+      .mockImplementationOnce(async () =>
+        httpError(500),
+      ) as unknown as FetchMock;
+    global.fetch = fetchMock as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const result = (await registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      "原文",
+      "optimize",
+      10_000,
+      "sd-retry-fail",
+    )) as { success: boolean };
+
+    expect(result.success).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(degradationWrites(db)).toHaveLength(0);
+  });
+
+  it("a degraded fallback with EMPTY content writes no memory", async () => {
+    const db = setup();
+    global.fetch = vi.fn(async () => jsonOk("")) as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const result = (await registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      "原文",
+      "optimize",
+      10_000,
+      "sd-empty",
+    )) as { success: boolean };
+
+    expect(result.success).toBe(false);
+    expect(degradationWrites(db)).toHaveLength(0);
+  });
+
+  it("a memory-WRITE failure never fails the polish in hand", async () => {
+    const db = setup();
+    db.setSetting.mockImplementation(() => {
+      throw new Error("disk full");
+    });
+    global.fetch = vi.fn(async () => jsonOk("照样成功")) as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const result = (await registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      "原文",
+      "optimize",
+      10_000,
+      "sd-write-fail",
+    )) as { success: boolean; text?: string };
+
+    expect(result).toMatchObject({ success: true, text: "照样成功" });
+  });
+  // [20260910_Feat_237_ReviewFixes] END
+});
+
+// [20260911_Feat_241_LongTextChunking] Spec #193 T14 (ticket #241):
+// long-text chunked polish at the orchestrator level. Text fixtures are
+// sized against the real POLISH_CHUNK_MAX_CHARS so the split counts are
+// deterministic; fetch answers per chunk by inspecting the request body.
+describe("[20260911_Feat_241_LongTextChunking] T14 chunked polish", () => {
+  let registeredHandlers: Record<string, (...args: unknown[]) => unknown>;
+  let sendBySender: Map<number, ReturnType<typeof vi.fn>>;
+
+  beforeEach(() => {
+    sendBySender = new Map([[1, vi.fn()]]);
+  });
+
+  function senderEvent(id: number) {
+    return {
+      sender: {
+        id,
+        isDestroyed: vi.fn(() => false),
+        send: sendBySender.get(id) ?? vi.fn(),
+      },
+    };
+  }
+
+  function chunksFor(id: number): Array<{
+    type: string;
+    chunkIndex?: number;
+    chunkCount?: number;
+    elapsedMs?: number;
+  }> {
+    return sendBySender.get(id)!.mock.calls.map((call) => call[1]);
+  }
+
+  function setup() {
+    registeredHandlers = {};
+    const ipcMain = {
+      handle: vi.fn((channel: string, fn: (...args: unknown[]) => unknown) => {
+        registeredHandlers[channel] = fn;
+      }),
+    };
+    const db = {
+      getSetting: vi.fn(async (key: string) =>
+        key === "ai_base_url"
+          ? "https://api.example.com/v1"
+          : key === "ai_api_key"
+            ? "sk"
+            : key === "ai_model"
+              ? "gpt-x"
+              : null,
+      ),
+      listVocabCorrections: vi.fn(() => []),
+    };
+    aiHandlersNS.register(
+      ipcMain as never,
+      {
+        databaseManager: db,
+        funasrManager: null,
+        processTextWithAI: vi.fn(),
+        windowManager: { mainWindow: null },
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        templatesDir: "/tmp/test-templates",
+      } as never,
+    );
+  }
+
+  // Six ~1500-char paragraphs → 3 equal chunks at the 4000-char budget
+  // (p1+p2 | p3+p4 | p5+p6, split on paragraph boundaries).
+  function longText(): { text: string; markers: string[] } {
+    const markers = ["甲块", "乙块", "丙块", "丁块", "戊块", "己块"];
+    const paragraphs = markers.map(
+      (m, i) => `${m}段落${i}。${"展开细节。".repeat(300)}`,
+    );
+    return { text: paragraphs.join("\n\n"), markers };
+  }
+
+  /** fetch stub: answers each chunk with a marker-derived output. */
+  function chunkWiseFetch(outputFor: (body: string) => string) {
+    return vi.fn(async (_url: unknown, init?: { body?: string }) => {
+      const content = outputFor(init?.body ?? "");
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers({ "content-type": "application/json" }),
+        json: async () => ({ choices: [{ message: { content } }] }),
+        text: async () => "",
+      };
+    }) as unknown as FetchMock;
+  }
+
+  it("accumulate chain: N fetches, 只增不减 constraint present from chunk 2, cumulative golden", async () => {
+    setup();
+    const { text } = longText();
+    let call = 0;
+    // [20260911_Fix_241_Review] The mock mirrors the REAL provider contract
+    // the 只增不减 constraint creates: each chunk's output is CUMULATIVE
+    // (contains every previous point). The final text is the last output —
+    // joining all outputs would duplicate content N-fold.
+    const fetchMock = chunkWiseFetch(() => {
+      call += 1;
+      return "输出一。输出二。输出三。".slice(0, call * 4);
+    });
+    global.fetch = fetchMock as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const result = (await registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      text,
+      "optimize",
+      60_000,
+      "ck-acc",
+    )) as { success: boolean; text?: string };
+
+    expect(result.success).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    // Golden: final = the last (cumulative) output; 首末句都在其中。
+    expect(result.text).toBe("输出一。输出二。输出三。");
+    // From chunk 2 on, the prompt carries the accumulation constraint AND
+    // the previous output as context.
+    const secondBody = JSON.parse(
+      (fetchMock.mock.calls[1]![1] as { body: string }).body,
+    );
+    const secondUser = secondBody.messages[1].content as string;
+    expect(secondUser).toContain("只增不减");
+    expect(secondUser).toContain("输出一。");
+    // First chunk carries no chain constraint.
+    const firstBody = JSON.parse(
+      (fetchMock.mock.calls[0]![1] as { body: string }).body,
+    );
+    expect(firstBody.messages[1].content).not.toContain("只增不减");
+    // Progress chunks: 第 i/3 块 + elapsed time, monotonic.
+    const progress = chunksFor(1).filter((c) => c.type === "progress");
+    expect(progress.map((p) => [p.chunkIndex, p.chunkCount])).toEqual([
+      [1, 3],
+      [2, 3],
+      [3, 3],
+    ]);
+    for (const p of progress) expect(p.elapsedMs).toBeGreaterThanOrEqual(0);
+  });
+
+  // [20260911_Fix_241_Review] MAJOR #2: with the token clamp active
+  // (minimal-edit modes via the PROCESS entry), the per-chunk budget must
+  // grow with the CUMULATIVE input (chunk + accumulated context) — else the
+  // provider truncates the accumulated points mid-chain.
+  it("accumulate chain grows the token budget along the chain (clamp on)", async () => {
+    setup();
+    const { text } = longText();
+    let call = 0;
+    const fetchMock = chunkWiseFetch(() => {
+      call += 1;
+      return "输出一。输出二。输出三。".slice(0, call * 4);
+    });
+    global.fetch = fetchMock as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const result = (await registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      text,
+      "optimize", // minimal-edit mode → clampOutputTokens active at this entry
+      60_000,
+      "ck-clamp",
+    )) as { success: boolean };
+
+    expect(result.success).toBe(true);
+    const budgets = fetchMock.mock.calls.map(
+      (c) => JSON.parse((c[1] as { body: string }).body).max_tokens as number,
+    );
+    expect(budgets).toHaveLength(3);
+    expect(budgets[1]!).toBeGreaterThan(budgets[0]!);
+    expect(budgets[2]!).toBeGreaterThan(budgets[1]!);
+  });
+
+  it("map-reduce: summarize chunks then merge once", async () => {
+    setup();
+    const { text } = longText();
+    let call = 0;
+    const fetchMock = chunkWiseFetch(() =>
+      call++ < 3 ? `分块摘要${call}` : "合并终稿",
+    );
+    global.fetch = fetchMock as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const result = (await registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      text,
+      "summarize",
+      60_000,
+      "ck-mr",
+    )) as { success: boolean; text?: string };
+
+    expect(result.success).toBe(true);
+    expect(result.text).toBe("合并终稿");
+    // 3 chunk summaries + 1 merge call.
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    const mergeBody = JSON.parse(
+      (fetchMock.mock.calls[3]![1] as { body: string }).body,
+    );
+    const mergeUser = mergeBody.messages[1].content as string;
+    expect(mergeUser).toContain("合并");
+    expect(mergeUser).toContain("分块摘要1");
+    expect(mergeUser).toContain("分块摘要3");
+    // Chunk prompts carry NO accumulation constraint.
+    const chunkBody = JSON.parse(
+      (fetchMock.mock.calls[1]![1] as { body: string }).body,
+    );
+    expect(chunkBody.messages[1].content).not.toContain("只增不减");
+  });
+
+  it("short text takes the single-shot path untouched (直通不回归)", async () => {
+    setup();
+    const fetchMock = chunkWiseFetch(() => "单次输出");
+    global.fetch = fetchMock as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const result = (await registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      "短文本",
+      "optimize",
+      60_000,
+      "ck-short",
+    )) as { success: boolean; text?: string };
+
+    expect(result).toMatchObject({ success: true, text: "单次输出" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(chunksFor(1).filter((c) => c.chunkIndex !== undefined)).toHaveLength(
+      0,
+    );
+  });
+
+  it("cancel between chunks settles the run and never sends later chunks", async () => {
+    setup();
+    const { text } = longText();
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(async () => ({
+        ok: true,
+        status: 200,
+        headers: new Headers({ "content-type": "application/json" }),
+        json: async () => ({ choices: [{ message: { content: "输出一。" } }] }),
+        text: async () => "",
+      }))
+      .mockImplementationOnce(
+        (_url: unknown, init?: { signal?: AbortSignal }) =>
+          new Promise((_resolve, reject) => {
+            const onAbort = () =>
+              reject(new DOMException("aborted", "AbortError"));
+            if (init?.signal?.aborted) onAbort();
+            else
+              init?.signal?.addEventListener("abort", onAbort, { once: true });
+          }),
+      ) as unknown as FetchMock;
+    global.fetch = fetchMock as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const processPromise = registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      text,
+      "optimize",
+      60_000,
+      "ck-cancel",
+    ) as Promise<unknown>;
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await registeredHandlers[C.AI.POLISH_ABORT]!(senderEvent(1), "ck-cancel");
+
+    const result = (await processPromise) as {
+      success: boolean;
+      code?: string;
+    };
+    expect(result.success).toBe(false);
+    expect(result.code).toBe("CANCELLED");
+    // Chunk 3 was never sent.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(chunksFor(1).filter((c) => c.type === "abort")).toHaveLength(1);
+  });
+
+  it("a chunk failure aborts the chain and surfaces the error", async () => {
+    setup();
+    const { text } = longText();
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(async () => ({
+        ok: true,
+        status: 200,
+        headers: new Headers({ "content-type": "application/json" }),
+        json: async () => ({ choices: [{ message: { content: "输出一。" } }] }),
+        text: async () => "",
+      }))
+      .mockImplementationOnce(async () => ({
+        ok: false,
+        status: 500,
+        statusText: "HTTP 500",
+        text: async () => "boom",
+      })) as unknown as FetchMock;
+    global.fetch = fetchMock as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const result = (await registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      text,
+      "optimize",
+      60_000,
+      "ck-fail",
+    )) as { success: boolean };
+
+    expect(result.success).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  // [20260911_Fix_241_Review] MINOR #5 failure halves for map-reduce.
+  it("merge-call failure surfaces the error after all chunks succeed", async () => {
+    setup();
+    const { text } = longText();
+    let call = 0;
+    const fetchMock = vi.fn(async () => {
+      call += 1;
+      if (call <= 3) {
+        return {
+          ok: true,
+          status: 200,
+          headers: new Headers({ "content-type": "application/json" }),
+          json: async () => ({
+            choices: [{ message: { content: `分块摘要${call}` } }],
+          }),
+          text: async (): Promise<string> => "",
+        };
+      }
+      return {
+        ok: false,
+        status: 500,
+        statusText: "HTTP 500",
+        text: async (): Promise<string> => "merge boom",
+      };
+    }) as unknown as FetchMock;
+    global.fetch = fetchMock as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const result = (await registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      text,
+      "summarize",
+      60_000,
+      "ck-merge-fail",
+    )) as { success: boolean };
+
+    expect(result.success).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  // [20260911_Fix_241_Review2] Retitled: the abort lands DURING the
+  // in-flight merge call (the deterministic timing point), not before it.
+  it("cancel during the in-flight merge call settles the whole chain", async () => {
+    setup();
+    const { text } = longText();
+    let call = 0;
+    const fetchMock = vi.fn(
+      async (_url: unknown, init?: { signal?: AbortSignal }) => {
+        call += 1;
+        if (call <= 3) {
+          return {
+            ok: true,
+            status: 200,
+            headers: new Headers({ "content-type": "application/json" }),
+            json: async () => ({
+              choices: [{ message: { content: `分块摘要${call}` } }],
+            }),
+            text: async () => "",
+          };
+        }
+        // The merge call pends until aborted — it must never resolve.
+        return new Promise((_resolve, reject) => {
+          const onAbort = () =>
+            reject(new DOMException("aborted", "AbortError"));
+          if (init?.signal?.aborted) onAbort();
+          else init?.signal?.addEventListener("abort", onAbort, { once: true });
+        });
+      },
+    ) as unknown as FetchMock;
+    global.fetch = fetchMock as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const processPromise = registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      text,
+      "summarize",
+      60_000,
+      "ck-merge-cancel",
+    ) as Promise<unknown>;
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    await registeredHandlers[C.AI.POLISH_ABORT]!(
+      senderEvent(1),
+      "ck-merge-cancel",
+    );
+
+    const result = (await processPromise) as {
+      success: boolean;
+      code?: string;
+    };
+    expect(result.success).toBe(false);
+    expect(result.code).toBe("CANCELLED");
+    // Exactly 4 calls: 3 chunks + the in-flight merge; nothing further.
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  it("oversized merge input reduces in ROUNDS before the final merge", async () => {
+    setup();
+    // 12 paragraphs → 6 chunks; each summary is 1500 chars so the first
+    // merge join (~9010) exceeds the budget and must split into groups.
+    const markers = Array.from({ length: 12 }, (_, i) => `段${i}`);
+    const paragraphs = markers.map(
+      (m) => `${m}内容。${"展开细节。".repeat(300)}`,
+    );
+    const text = paragraphs.join("\n\n");
+    let call = 0;
+    const fetchMock = chunkWiseFetch(() => {
+      call += 1;
+      if (call <= 6) return `摘要${call}。${"填".repeat(1490)}`;
+      if (call <= 9) return `合并轮次二${call}。`; // grouped merges
+      return "终稿";
+    });
+    global.fetch = fetchMock as never;
+    const C = await import("../../src/helpers/ipc-contracts");
+
+    const result = (await registeredHandlers[C.AI.PROCESS]!(
+      senderEvent(1),
+      text,
+      "summarize",
+      60_000,
+      "ck-rounds",
+    )) as { success: boolean; text?: string };
+
+    expect(result.success).toBe(true);
+    expect(result.text).toBe("终稿");
+    // 6 chunk summaries + 3 grouped merges + 1 final merge.
+    expect(fetchMock).toHaveBeenCalledTimes(10);
+    // Every merge call carries the merge constraint.
+    for (let i = 6; i < 10; i++) {
+      const body = JSON.parse(
+        (fetchMock.mock.calls[i]![1] as { body: string }).body,
+      );
+      expect(body.messages[1].content).toContain("合并约束");
+    }
+    // [20260911_Fix_241_Review2] Progress never shows index > count, across
+    // every map phase tick and every reduce round.
+    for (const p of chunksFor(1).filter((c) => c.type === "progress")) {
+      expect(p.chunkIndex).toBeLessThanOrEqual(p.chunkCount!);
+    }
+  });
+  // [20260911_Fix_241_Review] END
+});
+
+// [20260912_Sec_319_SsrfHardening] Ticket #319: the PROCESS fetch follows
+// redirects ONLY through the shared per-hop gate (fetchWithGuardedRedirects).
+// Redirects are scripted with REAL Response objects — Node's Response
+// constructor accepts 3xx statuses and a Location header, and the gate reads
+// `status` + `headers.get("location")`, exactly what undici returns for
+// `redirect: "manual"` (verified: no opaqueredirect filtering).
+describe("[20260912_Sec_319_SsrfHardening] PROCESS-path redirect gating", () => {
+  const processTextWithAI = aiHandlersNS.processTextWithAI;
+  const logger = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
+
+  function mockScriptedFetch(
+    script: (url: string) => FetchResponseStub,
+  ): FetchMock {
+    const fn = vi.fn(async (input: unknown) =>
+      script(String(input)),
+    ) as unknown as FetchMock;
+    global.fetch = fn as unknown as typeof global.fetch;
+    return fn;
+  }
+
+  const BASE_URL = "https://api.openai.com/v1/chat/completions";
+
+  it("blocks a redirect to an intranet target and never re-dispatches", async () => {
+    const fetchMock = mockScriptedFetch(
+      () =>
+        new Response(null, {
+          status: 302,
+          headers: { Location: "https://10.0.0.1/v1/chat/completions" },
+        }),
+    );
+    const result = await processTextWithAI(
+      "原始文本",
+      "optimize",
+      setupDb(),
+      logger,
+    );
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("重定向目标被安全策略拒绝");
+    // The blocked HOST is surfaced, not the full target URL.
+    expect(result.error).toContain("10.0.0.1");
+    expect(result.error).not.toContain("https://");
+    // The follow-up request to the blocked target never happened.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("follows a same-origin redirect chain and keeps Authorization", async () => {
+    const fetchMock = mockScriptedFetch((url) => {
+      if (url === BASE_URL) {
+        return new Response(null, {
+          status: 302,
+          headers: { Location: `${BASE_URL}?hop=1` },
+        });
+      }
+      if (url === `${BASE_URL}?hop=1`) {
+        return new Response(null, {
+          status: 302,
+          headers: { Location: `${BASE_URL}?hop=2` },
+        });
+      }
+      return new Response(
+        JSON.stringify({ choices: [{ message: { content: "优化后文本" } }] }),
+        { status: 200 },
+      );
+    });
+    const result = await processTextWithAI(
+      "原始文本",
+      "optimize",
+      setupDb(),
+      logger,
+    );
+    expect(result.success).toBe(true);
+    expect(result.text).toBe("优化后文本");
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    // Both hops stayed on the request's origin: Authorization preserved.
+    for (const callIndex of [1, 2]) {
+      const init = fetchMock.mock.calls[callIndex]![1] as {
+        headers: HeadersInit;
+      };
+      expect(new Headers(init.headers).get("authorization")).toBe(
+        "Bearer test-key",
+      );
+    }
+  });
+
+  it("drops Authorization on a cross-origin redirect hop", async () => {
+    const fetchMock = mockScriptedFetch((url) => {
+      if (url === BASE_URL) {
+        return new Response(null, {
+          status: 302,
+          headers: {
+            Location: "https://mirror.example.com/v1/chat/completions",
+          },
+        });
+      }
+      return new Response(
+        JSON.stringify({ choices: [{ message: { content: "镜像文本" } }] }),
+        { status: 200 },
+      );
+    });
+    const result = await processTextWithAI(
+      "原始文本",
+      "optimize",
+      setupDb(),
+      logger,
+    );
+    expect(result.success).toBe(true);
+    expect(result.text).toBe("镜像文本");
+    // Hop 1 carries the credential; hop 2 crossed origins — it must not.
+    const firstInit = fetchMock.mock.calls[0]![1] as { headers: HeadersInit };
+    expect(new Headers(firstInit.headers).get("authorization")).toBe(
+      "Bearer test-key",
+    );
+    const secondInit = fetchMock.mock.calls[1]![1] as { headers: HeadersInit };
+    expect(new Headers(secondInit.headers).get("authorization")).toBeNull();
+  });
+
+  it("blocks the 4th redirect hop with 重定向次数超限", async () => {
+    const fetchMock = mockScriptedFetch((url) => {
+      const hop = Number(new URL(url).searchParams.get("hop") ?? "0");
+      return new Response(null, {
+        status: 302,
+        headers: { Location: `${BASE_URL}?hop=${hop + 1}` },
+      });
+    });
+    const result = await processTextWithAI(
+      "原始文本",
+      "optimize",
+      setupDb(),
+      logger,
+    );
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("重定向次数超限");
+    // Initial request + exactly 3 followed hops; the 4th redirect is blocked.
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+});
+
+// [20260912_Sec_319_SsrfHardening] Covers the ELECTRON_USER_DATA arc of the
+// templatesDir resolution (bag → env → lazy require). Keep the AI handler
+// registration working when the managers bag carries no templatesDir and
+// the env var supplies the user-data root instead.
+describe("templatesDir bag-only resolution", () => {
+  // [20260912_Fix_272_ReviewCritical] Registration works with no
+  // templatesDir in the bag (headless embedder): GET_MODES answers with
+  // built-ins only because no custom templates dir is configured.
+  it("registers the AI handlers when the bag omits templatesDir", async () => {
+    const ipcMain = { handle: vi.fn() };
+    const register = aiHandlersNS.register;
+    register(
+      ipcMain as never,
+      {
+        databaseManager: { getSetting: vi.fn(async () => null) },
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      } as never,
+    );
+    expect(ipcMain.handle).toHaveBeenCalledWith(
+      "process-text",
+      expect.any(Function),
+    );
+  });
+});
+
+// [20260912_Fix_319_CoverageLift] Covers the vocab-read catch arc inside the
+// polish path (listVocabCorrections throwing → warn + polish proceeds with
+// empty corrections). Self-contained: builds its own managers bag and fetch
+// mock shaped like the locked PROCESS happy-path tests above.
+describe("polish vocab-read failure arm (coverage lift #319)", () => {
+  it("logs the vocab failure and still completes the polish", async () => {
+    const ipcMain = { handle: vi.fn() };
+    const register = aiHandlersNS.register;
+    register(
+      ipcMain as never,
+      {
+        databaseManager: {
+          getSetting: vi.fn(async (key: string) =>
+            key === "ai_base_url"
+              ? "https://api.example.com/v1"
+              : key === "ai_api_key"
+                ? "sk"
+                : key === "ai_model"
+                  ? "gpt-x"
+                  : null,
+          ),
+          listVocabCorrections: vi.fn(() => {
+            throw new Error("vocab table locked");
+          }),
+        },
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      } as never,
+    );
+
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({ choices: [{ message: { content: "ok" } }] }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    const processHandler = ipcMain.handle.mock.calls.find(
+      (call: unknown[]) => call[0] === "process-text",
+    )?.[1] as (event: unknown, text: string, mode: string) => Promise<unknown>;
+    expect(processHandler).toBeTypeOf("function");
+    const result = (await processHandler(
+      { sender: { id: 1 } },
+      "词汇注入失败也润色",
+      "optimize",
+    )) as Record<string, unknown>;
+    expect(result).toMatchObject({ success: true });
   });
 });

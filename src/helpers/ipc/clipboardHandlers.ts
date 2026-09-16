@@ -33,7 +33,11 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
 
   ipcMain.handle(C.CLIPBOARD.PASTE, async (_event, text: string) => {
     try {
-      return await clipboardManager.pasteText(text);
+      // [20260820_E2E_PasteContractFix] clipboardManager.pasteText resolves
+      // void on success; return the same {success:true} envelope COPY uses
+      // so both clipboard channels share one contract.
+      await clipboardManager.pasteText(text);
+      return { success: true };
     } catch (error) {
       logger.error?.("粘贴文本失败:", error);
       return { success: false, error: (error as Error).message };

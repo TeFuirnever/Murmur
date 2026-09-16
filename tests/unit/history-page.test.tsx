@@ -27,6 +27,76 @@ vi.mock("../../src/bootstrap/assertElectronAPI.js", () => ({
   assertElectronAPI: vi.fn(() => true),
 }));
 
+// [20260905_Fix_247_I18nMainHistory] src/history.tsx now imports ./i18n and
+// translates through react-i18next. Under jsdom the real i18n instance would
+// boot at navigator.language ("en-US"), breaking the zh assertions below —
+// resolve t() against the shipped zh-CN locale (flattened) instead, the same
+// pattern as settings-page.test.tsx.
+import zhCN from "../../src/i18n/locales/zh-CN.json";
+
+function flatten(
+  obj: Record<string, unknown>,
+  prefix = "",
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    const key = prefix ? `${prefix}.${k}` : k;
+    if (v !== null && typeof v === "object") {
+      Object.assign(out, flatten(v as Record<string, unknown>, key));
+    } else {
+      out[key] = String(v);
+    }
+  }
+  return out;
+}
+const LOCALE = flatten(zhCN as Record<string, unknown>);
+
+// [20260905_Fix_249_ReviewMinor] Hoisted BEFORE the vi.mock below — the
+// mock factory and mockI18n reference it, and TS/ESLint reject use-before-
+// declaration when the const sits after the mock block.
+const historyI18nMocks = vi.hoisted(() => ({
+  changeLanguage: vi.fn<(lng: string) => void>(),
+}));
+
+// Stable identity across renders — the real useTranslation returns a
+// referentially stable t; a per-render t would rebuild hooks that depend
+// on it (loadTranscriptions) and re-trigger their mount effects forever.
+const translate = (
+  key: string,
+  fallbackOrOpts?: string | Record<string, unknown>,
+  opts?: Record<string, unknown>,
+): string => {
+  const template =
+    LOCALE[key] ?? (typeof fallbackOrOpts === "string" ? fallbackOrOpts : key);
+  const vars =
+    opts ??
+    (typeof fallbackOrOpts === "object" && fallbackOrOpts !== null
+      ? fallbackOrOpts
+      : undefined);
+  if (!vars) return template;
+  return template.replace(/{{(\w+)}}/g, (_m, name: string) =>
+    vars[name] === undefined ? `{{${name}}}` : String(vars[name]),
+  );
+};
+
+// [20260905_Fix_249_ReviewMinor] Stable i18n identity — a per-render
+// literal would re-run every effect that depends on [i18n] and override
+// the listener capture in this mock (hotkey/language effects re-register).
+const mockI18n = {
+  language: "zh-CN",
+  changeLanguage: historyI18nMocks.changeLanguage,
+};
+
+vi.mock("react-i18next", () => ({
+  // src/history.tsx imports ./i18n, which calls i18n.use(initReactI18next) —
+  // the mock must provide the plugin symbol too.
+  initReactI18next: { type: "3rdParty", init: () => undefined },
+  useTranslation: () => ({
+    t: translate,
+    i18n: mockI18n,
+  }),
+}));
+
 type TestWindow = Omit<Window, "electronAPI"> & {
   electronAPI?: {
     getTranscriptions: (
@@ -34,8 +104,15 @@ type TestWindow = Omit<Window, "electronAPI"> & {
       offset: number,
     ) => Promise<Array<Record<string, unknown>>>;
     deleteTranscription: (id: number) => Promise<unknown>;
+    // [20260906_Feat_ManualEditProtection] History-window inline edit saves
+    // through the TRANSCRIPTION.UPDATE write-back channel.
+    updateTranscription: (
+      id: number,
+      patch: Record<string, unknown>,
+    ) => Promise<unknown>;
     copyText: (text: string) => Promise<unknown>;
-    exportTranscriptions: (format: string) => void;
+    exportTranscriptions: (format: string) => Promise<unknown>;
+    clearAllTranscriptions: () => Promise<unknown>;
     getAllSettings: () => Promise<Record<string, unknown>>;
     closeHistoryWindow: () => void;
   };
@@ -56,25 +133,32 @@ const makeRecord = (
 });
 
 const apiMocks = {
+  onSettingsUpdate: vi.fn(() => () => {}),
   getTranscriptions: vi.fn(),
   deleteTranscription: vi.fn(),
+  updateTranscription: vi.fn(),
   copyText: vi.fn(),
   exportTranscriptions: vi.fn(),
+  clearAllTranscriptions: vi.fn(),
   closeHistoryWindow: vi.fn(),
 };
 
-async function mountHistory() {
+async function mountHistory(apiOverrides: Record<string, unknown> = {}) {
   // Fresh module graph per test so the mount guard re-runs.
   vi.resetModules();
   document.body.innerHTML = '<div id="history-root"></div>';
   (globalThis.window as unknown as TestWindow).electronAPI = {
     getTranscriptions: apiMocks.getTranscriptions,
     deleteTranscription: apiMocks.deleteTranscription,
+    updateTranscription: apiMocks.updateTranscription,
     copyText: apiMocks.copyText,
     exportTranscriptions: apiMocks.exportTranscriptions,
+    clearAllTranscriptions: apiMocks.clearAllTranscriptions,
     closeHistoryWindow: apiMocks.closeHistoryWindow,
+    onSettingsUpdate: apiMocks.onSettingsUpdate,
     getAllSettings: vi.fn().mockResolvedValue({}),
-  } as TestWindow["electronAPI"];
+    ...apiOverrides,
+  } as unknown as TestWindow["electronAPI"];
   await import("../../src/history");
   await waitFor(() => {
     expect(screen.getByText("Murmur - 转录历史")).toBeInTheDocument();
@@ -85,6 +169,35 @@ describe("[20260816_Test_HistoryPage] history window entry", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     apiMocks.getTranscriptions.mockResolvedValue([]);
+  });
+
+  it("shows the loading indicator while records are being fetched", async () => {
+    // [20260905_Fix_249_ReviewCoverage] The loading branch arm.
+    let release!: (v: unknown) => void;
+    apiMocks.getTranscriptions.mockReturnValue(
+      new Promise((resolve) => {
+        release = resolve;
+      }),
+    );
+    await mountHistory();
+    await waitFor(() => {
+      expect(screen.getByText("加载中...")).toBeInTheDocument();
+    });
+    release([]);
+  });
+
+  it("does not render when the history-root container is missing", async () => {
+    // [20260905_Fix_249_ReviewCoverage] The mount guard's container-missing
+    // arm: nothing renders, nothing throws.
+    document.body.innerHTML = "";
+    (globalThis.window as unknown as TestWindow).electronAPI = {
+      getTranscriptions: apiMocks.getTranscriptions,
+    } as unknown as TestWindow["electronAPI"];
+    vi.resetModules();
+    await import("../../src/history");
+    await waitFor(() => {
+      expect(document.body.querySelector("#history-root")).toBeNull();
+    });
   });
 
   it("mounts the page and shows the empty state when no records exist", async () => {
@@ -192,11 +305,308 @@ describe("[20260816_Test_HistoryPage] history window entry", () => {
     errSpy.mockRestore();
   });
 
+  // [20260906_Feat_ManualEditProtection] Spec #193 T2 (ticket #229): the
+  // history window's inline edit is the minimal edit-save entry. Saving must
+  // route through the TRANSCRIPTION.UPDATE channel with manually_edited set
+  // so the end-of-recording auto-polish can never overwrite the edit.
+  it("saves an inline edit through the UPDATE channel with the flag set", async () => {
+    apiMocks.getTranscriptions.mockResolvedValue([
+      makeRecord(7, "原始最终文本", { processed_text: "原始润色" }),
+    ]);
+    apiMocks.updateTranscription.mockResolvedValue({
+      success: true,
+      text: "用户改过的文本",
+      processed_text: "用户改过的文本",
+      manually_edited: 1,
+    });
+    await mountHistory();
+    await screen.findByText("原始最终文本");
+
+    fireEvent.click(screen.getByTitle("编辑记录"));
+
+    const textarea = await screen.findByTestId("edit-textarea");
+    fireEvent.change(textarea, { target: { value: "用户改过的文本" } });
+    fireEvent.click(screen.getByTestId("edit-save"));
+
+    await waitFor(() => {
+      expect(apiMocks.updateTranscription).toHaveBeenCalledWith(7, {
+        text: "用户改过的文本",
+        processed_text: "用户改过的文本",
+        manually_edited: true,
+      });
+    });
+    // The list reflects the saved edit without refetching.
+    // [20260913_Fix_197_AiLabelBaseline] A manual edit is NOT an AI change —
+    // text === processed_text after the save, so the AI优化 card is hidden
+    // under the new text-comparison baseline (one card, no AI label).
+    expect(await screen.findAllByText("用户改过的文本")).toHaveLength(1);
+    expect(screen.queryByText("原始最终文本")).not.toBeInTheDocument();
+    expect(screen.queryByText("AI优化:")).not.toBeInTheDocument();
+    const { toast } = await import("sonner");
+    expect(toast.success).toHaveBeenCalledWith("记录已更新");
+  });
+
+  // [20260913_Fix_197_AiLabelBaseline] The AI-participation label compares
+  // processed_text against TEXT (the displayed transcription), not raw_text:
+  // legacy records with empty raw_text but a cleaner-only change used to
+  // show a misleading "AI优化" label with no AI involved.
+  it("hides the AI优化 label when processed_text equals the displayed text", async () => {
+    apiMocks.getTranscriptions.mockResolvedValue([
+      // Cleaner changed the ASR text (raw_text empty, processed_text ===
+      // text): no AI ran — the record must render one card, no AI label.
+      makeRecord(11, "清洗后的文本", {
+        processed_text: "清洗后的文本",
+        raw_text: null,
+      }),
+      // Raw differs from text (cleaner-only change, no processed_text):
+      // also no AI label — the raw-recognition card covers it.
+      makeRecord(12, "清洗后的文本", {
+        raw_text: "原始含语气词文本",
+      }),
+    ]);
+    await mountHistory();
+    expect((await screen.findAllByText("清洗后的文本")).length).toBeGreaterThan(
+      0,
+    );
+    expect(screen.queryByText("AI优化:")).not.toBeInTheDocument();
+  });
+
+  it("shows the AI优化 label only when processed_text differs from the displayed text", async () => {
+    apiMocks.getTranscriptions.mockResolvedValue([
+      makeRecord(13, "原始识别文本", {
+        processed_text: "AI 润色后的文本",
+        raw_text: "原始识别文本",
+      }),
+    ]);
+    await mountHistory();
+    await screen.findByText("AI 润色后的文本");
+    expect(screen.getByText("AI优化:")).toBeInTheDocument();
+    expect(screen.getByText("AI 润色后的文本")).toBeInTheDocument();
+  });
+
+  it("cancels the inline editor without touching the bridge", async () => {
+    apiMocks.getTranscriptions.mockResolvedValue([makeRecord(3, "不修改")]);
+    await mountHistory();
+    await screen.findByText("不修改");
+
+    fireEvent.click(screen.getByTitle("编辑记录"));
+    fireEvent.change(await screen.findByTestId("edit-textarea"), {
+      target: { value: "草稿改动" },
+    });
+    fireEvent.click(screen.getByTestId("edit-cancel"));
+
+    expect(apiMocks.updateTranscription).not.toHaveBeenCalled();
+    expect(screen.getByText("不修改")).toBeInTheDocument();
+    expect(screen.queryByTestId("edit-textarea")).not.toBeInTheDocument();
+  });
+
+  it("keeps the editor open and toasts failure when the update rejects", async () => {
+    apiMocks.getTranscriptions.mockResolvedValue([makeRecord(5, "待编辑")]);
+    apiMocks.updateTranscription.mockResolvedValue({
+      success: false,
+      error: "更新失败",
+    });
+    const { toast } = await import("sonner");
+    await mountHistory();
+    await screen.findByText("待编辑");
+
+    fireEvent.click(screen.getByTitle("编辑记录"));
+    fireEvent.change(await screen.findByTestId("edit-textarea"), {
+      target: { value: "未落库的改动" },
+    });
+    fireEvent.click(screen.getByTestId("edit-save"));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith("更新记录失败");
+    });
+    // The edit did not land: the record keeps its original text and the
+    // editor stays open so the user's typing is not lost.
+    expect(screen.getByTestId("edit-textarea")).toBeInTheDocument();
+  });
+
+  it("does not call the bridge when the edited text is blank", async () => {
+    apiMocks.getTranscriptions.mockResolvedValue([makeRecord(9, "有内容")]);
+    await mountHistory();
+    await screen.findByText("有内容");
+
+    fireEvent.click(screen.getByTitle("编辑记录"));
+    fireEvent.change(await screen.findByTestId("edit-textarea"), {
+      target: { value: "   " },
+    });
+    fireEvent.click(screen.getByTestId("edit-save"));
+
+    expect(apiMocks.updateTranscription).not.toHaveBeenCalled();
+  });
+
   it("exports all records as txt when the export button is clicked", async () => {
     apiMocks.getTranscriptions.mockResolvedValue([makeRecord(1, "x")]);
     await mountHistory();
     fireEvent.click(await screen.findByText("导出全部"));
     expect(apiMocks.exportTranscriptions).toHaveBeenCalledWith("txt");
+  });
+
+  // [20260905_Fix_248_HistoryClearExport] Issue #248: the export button was
+  // hardcoded to txt (the handler already supports txt/srt/vtt/md/docx) and
+  // there was no clear-all entry (the CLEAR IPC chain was fully in place).
+  it("exports with the format chosen in the format selector", async () => {
+    apiMocks.getTranscriptions.mockResolvedValue([makeRecord(1, "x")]);
+    apiMocks.exportTranscriptions.mockResolvedValue({
+      success: true,
+      path: "/tmp/out.md",
+    });
+    await mountHistory();
+    fireEvent.change(await screen.findByTestId("export-format"), {
+      target: { value: "md" },
+    });
+    fireEvent.click(screen.getByTestId("export-all"));
+    await waitFor(() => {
+      expect(apiMocks.exportTranscriptions).toHaveBeenCalledWith("md");
+    });
+  });
+
+  it("clears all records after confirmation and reloads the list", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    try {
+      apiMocks.getTranscriptions.mockResolvedValue([makeRecord(1, "x")]);
+      // Real handler contract after the #248 review fix: the CLEAR handler
+      // wraps the SQLite RunResult into { success: true, changes }.
+      apiMocks.clearAllTranscriptions.mockResolvedValue({
+        success: true,
+        changes: 1,
+      });
+      await mountHistory();
+      await screen.findByText("x");
+
+      fireEvent.click(screen.getByTestId("clear-all"));
+
+      await waitFor(() => {
+        expect(apiMocks.clearAllTranscriptions).toHaveBeenCalledTimes(1);
+      });
+      // The list reloads after the wipe — the empty state shows.
+      await waitFor(() => {
+        expect(screen.getByText("暂无转录历史")).toBeInTheDocument();
+      });
+      expect(screen.getByText("共 0 条记录")).toBeInTheDocument();
+    } finally {
+      confirmSpy.mockRestore();
+    }
+  });
+
+  it("keeps the records when the clear confirmation is dismissed", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    try {
+      apiMocks.getTranscriptions.mockResolvedValue([makeRecord(1, "x")]);
+      await mountHistory();
+      await screen.findByText("x");
+
+      fireEvent.click(screen.getByTestId("clear-all"));
+
+      expect(apiMocks.clearAllTranscriptions).not.toHaveBeenCalled();
+      expect(screen.getByText("x")).toBeInTheDocument();
+    } finally {
+      confirmSpy.mockRestore();
+    }
+  });
+
+  it("returns silently when the bridge is absent for export and clear", async () => {
+    // [20260905_Fix_249_CoveragePush] The no-bridge early returns: without
+    // electronAPI both actions are no-ops (no crash, no toast possible).
+    apiMocks.getTranscriptions.mockResolvedValue([makeRecord(1, "x")]);
+    await mountHistory();
+    // [20260906_Test_Deflake] Wait for the seeded record to actually render
+    // before stripping the bridge — on a slow win runner the async fetch
+    // could still be pending, and the synchronous asserts below would see
+    // an empty list (CI flake, run 34099230134).
+    await screen.findByText("x");
+    (globalThis.window as unknown as TestWindow).electronAPI = undefined;
+    fireEvent.click(await screen.findByTestId("export-all"));
+    fireEvent.click(screen.getByTestId("clear-all"));
+    // No IPC, no throw — the records are still rendered.
+    expect(screen.getByText("x")).toBeInTheDocument();
+  });
+
+  it("toasts failure when the export IPC rejects", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    apiMocks.getTranscriptions.mockResolvedValue([makeRecord(1, "x")]);
+    apiMocks.exportTranscriptions.mockRejectedValue(new Error("disk full"));
+    await mountHistory();
+    fireEvent.click(await screen.findByTestId("export-all"));
+    const { toast } = await import("sonner");
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith("导出失败");
+    });
+    errSpy.mockRestore();
+  });
+
+  it("stays silent when the export save dialog is cancelled", async () => {
+    apiMocks.getTranscriptions.mockResolvedValue([makeRecord(1, "x")]);
+    apiMocks.exportTranscriptions.mockResolvedValue({
+      success: false,
+      canceled: true,
+    });
+    await mountHistory();
+    fireEvent.click(await screen.findByTestId("export-all"));
+    await waitFor(() => {
+      expect(apiMocks.exportTranscriptions).toHaveBeenCalledWith("txt");
+    });
+    const { toast } = await import("sonner");
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("toasts failure when the clear IPC reports unsuccessful", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    try {
+      apiMocks.getTranscriptions.mockResolvedValue([makeRecord(1, "x")]);
+      apiMocks.clearAllTranscriptions.mockResolvedValue({
+        success: false,
+        error: "db locked",
+      });
+      await mountHistory();
+      await screen.findByText("x");
+
+      fireEvent.click(screen.getByTestId("clear-all"));
+
+      const { toast } = await import("sonner");
+      await waitFor(() => {
+        expect(toast.error).toHaveBeenCalledWith("清空失败");
+      });
+      // The list is NOT reset when the wipe failed.
+      expect(screen.getByText("x")).toBeInTheDocument();
+    } finally {
+      confirmSpy.mockRestore();
+    }
+  });
+
+  it("applies a language change broadcast to the history window via the DB value", async () => {
+    // [20260905_Fix_249_ReviewMinor] The broadcast carries only {key}; the
+    // value is read back through getSetting.
+    const getSetting = vi.fn(async (key: string) =>
+      key === "language" ? "en" : null,
+    );
+    await mountHistory({ getSetting });
+    const unsub = apiMocks.onSettingsUpdate as unknown as ReturnType<
+      typeof vi.fn
+    >;
+    const cb = unsub.mock.calls[0]?.[0] as
+      | ((d: { key: string }) => void)
+      | undefined;
+    cb?.({ key: "language" });
+    await waitFor(() => {
+      expect(historyI18nMocks.changeLanguage).toHaveBeenCalledWith("en");
+    });
+  });
+
+  it("applies the persisted language on mount", async () => {
+    // [20260905_Fix_247_LanguageOnMount] A freshly opened window boots with
+    // the navigator language; the persisted choice must win.
+    const getSetting = vi.fn(async (key: string) =>
+      key === "language" ? "en" : null,
+    );
+    await mountHistory({ getSetting });
+    await waitFor(() => {
+      expect(historyI18nMocks.changeLanguage).toHaveBeenCalledWith("en");
+    });
   });
 
   it("closes the window via the header button", async () => {
@@ -298,7 +708,25 @@ describe("[20260816_Test_BranchPush] history branch matrix", () => {
     expect(screen.getByText("原始文本")).toBeInTheDocument();
   });
 
-  it("hides the AI-optimized card when it matches the raw text", async () => {
+  // [20260913_Fix_197_AiLabelBaseline] was "matches the raw text" — the
+  // accepted baseline change compares processed_text against the DISPLAYED
+  // text: a polish that differs from the displayed transcription shows the
+  // AI card even when it equals the raw ASR output; equal-to-display hides.
+  it("hides the AI-optimized card when it matches the displayed text", async () => {
+    apiMocks.getTranscriptions.mockResolvedValue([
+      makeRecord(1, "相同内容", {
+        raw_text: "相同内容",
+        processed_text: "相同内容",
+      }),
+    ]);
+    await mountHistory();
+    expect(await screen.findByText("相同内容")).toBeInTheDocument();
+    expect(screen.queryByText("AI优化:")).not.toBeInTheDocument();
+    // raw === text → the raw-recognition card hides as well.
+    expect(screen.queryByText("原始识别:")).not.toBeInTheDocument();
+  });
+
+  it("shows the AI-optimized card when it differs from the displayed text", async () => {
     apiMocks.getTranscriptions.mockResolvedValue([
       makeRecord(1, "相同最终", {
         raw_text: "相同内容",
@@ -307,7 +735,12 @@ describe("[20260816_Test_BranchPush] history branch matrix", () => {
     ]);
     await mountHistory();
     expect(await screen.findByText("相同最终")).toBeInTheDocument();
-    expect(screen.queryByText("AI优化:")).not.toBeInTheDocument();
+    // processed ("相同内容") ≠ displayed text ("相同最终") → the AI card
+    // shows; the raw-recognition card is hidden (processed === raw).
+    expect(screen.getByText("AI优化:")).toBeInTheDocument();
+    expect(screen.getAllByText("相同内容").length).toBeGreaterThan(0);
+    // raw ("相同内容") ≠ displayed text ("相同最终") → the raw-recognition
+    // card shows as well (that is its purpose).
     expect(screen.getByText("原始识别:")).toBeInTheDocument();
   });
 
@@ -333,8 +766,13 @@ describe("[20260816_Test_BranchPush] history branch matrix", () => {
   it("copies through navigator.clipboard when the bridge disappears", async () => {
     apiMocks.getTranscriptions.mockResolvedValue([makeRecord(1, "无桥复制")]);
     await mountHistory();
+    // Wait for the record before dropping the bridge: the mount effect's
+    // loadTranscriptions bails without electronAPI, and React passive effects
+    // can flush after mountHistory's header check — deleting the bridge too
+    // early leaves the list empty and this test races (seen on macos CI).
+    expect(await screen.findByText("无桥复制")).toBeInTheDocument();
     delete (globalThis.window as unknown as TestWindow).electronAPI;
-    fireEvent.click(await screen.findByTitle("复制文本"));
+    fireEvent.click(screen.getByTitle("复制文本"));
     await waitFor(() => {
       expect(clipboardStub.writeText).toHaveBeenCalledWith("无桥复制");
     });
@@ -356,8 +794,11 @@ describe("[20260816_Test_BranchPush] history branch matrix", () => {
   it("skips deletion when the bridge is absent", async () => {
     apiMocks.getTranscriptions.mockResolvedValue([makeRecord(5, "待删除无桥")]);
     await mountHistory();
+    // Same race as the clipboard test above: the button only exists once the
+    // load effect has run, so await the record before removing the bridge.
+    expect(await screen.findByText("待删除无桥")).toBeInTheDocument();
     delete (globalThis.window as unknown as TestWindow).electronAPI;
-    fireEvent.click(await screen.findByTitle("删除记录"));
+    fireEvent.click(screen.getByTitle("删除记录"));
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(apiMocks.deleteTranscription).not.toHaveBeenCalled();
     expect(screen.getByText("待删除无桥")).toBeInTheDocument();

@@ -40,11 +40,14 @@ describe("AI Prompt few-shot examples (ADR-012 Issue #4c)", () => {
     });
   });
 
-  describe("optimize mode (should NOT have few-shot — it's a cleanup mode)", () => {
-    it("optimize prompt does not contain example section", () => {
+  // [20260906_Feat_PromptEngineering] Superseded by T4 (#231): optimize now
+  // carries a few-shot section (heading 少样本示例) — the old "no examples"
+  // pin guarded a pre-T4 design decision and is retired. The section's
+  // presence and shape are pinned in tests/unit/aiPrompts-prompt-engineering.test.ts.
+  describe("optimize mode few-shot (added by T4)", () => {
+    it("optimize prompt contains the few-shot section", () => {
       const result = buildPrompt("optimize", "测试文本");
-      // Optimize mode is a cleanup mode, not a creative rewrite mode
-      expect(result.system).not.toMatch(/##\s*示例/);
+      expect(result.system).toContain("少样本示例");
     });
   });
 

@@ -9,7 +9,7 @@ import {
   launchElectronApp,
   closeElectronApp,
 } from "../helpers/electron-launch";
-import { mockIpcHandler } from "../helpers/ipc-mock";
+import { mockIpcHandler, mockModelReady } from "../helpers/ipc-mock";
 
 test.describe("Suite 3: Real-time Recording Flow", () => {
   let electronApp;
@@ -18,12 +18,11 @@ test.describe("Suite 3: Real-time Recording Flow", () => {
   test.beforeAll(async () => {
     ({ app: electronApp, window } = await launchElectronApp());
 
-    // Mock model to ready state so recording is enabled
-    await mockIpcHandler(electronApp, "check-model-files", {
-      stage: "ready",
-      isReady: true,
-      downloadProgress: 100,
-    });
+    // Mock model to ready state so recording is enabled.
+    // [20260820_E2E_ModelReadyPayloadFix] "ready" is derived by
+    // useModelStatus from MODELS.CHECK + FUNASR.STATUS payloads — mock
+    // both channels (see mockModelReady in ipc-mock.ts).
+    await mockModelReady(electronApp);
 
     await window.reload();
     await window.waitForLoadState("domcontentloaded");
@@ -36,26 +35,37 @@ test.describe("Suite 3: Real-time Recording Flow", () => {
   test("3.1 — Click mic button starts recording", async () => {
     const micButton = window.locator('[data-testid="mic-button"]');
 
-    // Wait for model to be ready
+    // Wait for model to be ready (mic enabled), then click to start
     await expect(micButton).toBeAttached();
-
-    // Click to start recording
+    await expect
+      .poll(async () => await micButton.getAttribute("disabled"), {
+        timeout: 10_000,
+      })
+      .toBeNull();
     await micButton.click();
 
-    // aria-label should change to "停止录音"
-    const ariaLabel = await micButton.getAttribute("aria-label");
-    expect(ariaLabel).toBe("停止录音");
+    // aria-label should change to "停止录音" (start is async: getUserMedia)
+    await expect
+      .poll(async () => await micButton.getAttribute("aria-label"), {
+        timeout: 10_000,
+      })
+      .toBe("停止录音");
   });
 
   test("3.2 — Click mic button stops recording", async () => {
     const micButton = window.locator('[data-testid="mic-button"]');
 
-    // Click again to stop recording
-    await micButton.click();
+    // Click again to stop recording. force: the recording state applies a
+    // continuous recording-pulse animation that keeps the element "unstable"
+    // for Playwright's actionability check.
+    await micButton.click({ force: true });
 
     // aria-label should change back to "开始录音"
-    const ariaLabel = await micButton.getAttribute("aria-label");
-    expect(ariaLabel).toBe("开始录音");
+    await expect
+      .poll(async () => await micButton.getAttribute("aria-label"), {
+        timeout: 10_000,
+      })
+      .toBe("开始录音");
   });
 
   test("3.3 — Transcription result via IPC mock", async () => {

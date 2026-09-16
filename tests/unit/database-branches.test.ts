@@ -3,7 +3,7 @@
 // suites: non-string values on an encrypted key, a NULL stored value, the
 // schema-migration string-shape guard, text falling back to raw_text, the
 // file-config cache fallback in getSetting, and _migrateSchema's
-// column-already-present skip. Uses the real better-sqlite3 driver.
+// column-already-present skip. Uses the real node:sqlite driver (spec #226).
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import path from "path";
 import fs from "fs";
