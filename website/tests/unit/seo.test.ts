@@ -92,7 +92,7 @@ describe("SEO meta tags", () => {
       it("has canonical URL", () => {
         expect(html).toMatch(
           new RegExp(
-            `<link[^>]*rel="canonical"[^>]*href="[^"]*${page.url.replace("/", "\\/")}"`,
+            `<link[^>]*rel="canonical"[^>]*href="[^"]*${page.url.replace("/", "\\/")}\\/?"`,
           ),
         );
       });

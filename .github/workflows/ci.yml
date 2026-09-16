@@ -5,6 +5,12 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # [20260916_Fix_373_CiDispatch] Workflow_dispatch added as the workaround
+  # channel while GitHub's push/pull_request event delivery for this repo is
+  # stalled (runs stopped being created at 2026-09-16T08:49Z; dispatch
+  # events still work). Validate a branch via:
+  #   gh workflow run ci.yml --ref <branch>
+  workflow_dispatch:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
