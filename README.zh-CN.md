@@ -46,16 +46,17 @@
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![Stars](https://img.shields.io/github/stars/TeFuirnever/Murmur?style=social)](https://github.com/TeFuirnever/Murmur)
 
-<!-- [20260907_Spec299_EmbedMedia] T4（Spec #299）：将归档的小红书模式真机截图（真实应用界面：转写 → AI 润色 → 小红书文案）
-     嵌入 Hero 区——审计发现零嵌入媒体低于同类底线（5/5 基准项目首屏有图）。
-     替换原 [20260731_README_RewriteHero] 的 demo GIF TODO 占位；录制 GIF
-     仍为维护者后续事项。截图摄于 2026-07-20，早于 Fox rebrand（7/29），
-     后续推广使用前建议重截。 -->
+<!-- [20260916_README_AzhouHero] README 改版：首屏主图换成阿舟品牌封面
+     （assets/azhou/readme-hero-v1，1280x720），经 azhou-covers 工作流生产并通过
+     四维护理复核——承诺标题 + 真实润色截图 + 狐狸品牌锚点；中文门脸用 cover-a，
+     被替换的真机截图移至新增的「产品截图」一节（与 README.md 保持标题结构 1:1，
+     tests/unit/readme-contract.test.ts 会校验）。原 Spec #299 注释保留在下方
+     作为出处。 -->
 <!-- [20260907_Spec299_EmbedMedia] END -->
 
-<img src="docs/promotion/screenshots/screenshot-xhs-mode.jpg" width="640" alt="Murmur 界面——口述原文经 AI 润色一键转为小红书风格文案" />
+<img src="assets/azhou/readme-hero-v1/candidates/cover-a.png" width="720" alt="Murmur 品牌主图：手绘声波线收尾变成一行干净文字与光标，旁贴 AI 润色成稿的真实界面截图，右侧为阿舟狐狸" />
 
-📦 [产品截图存档](docs/promotion/screenshots/) · macOS 界面 / AI 小红书模式 / Windows bug 故事
+🦊 阿舟品牌封面 · 生产档案 [cover-bundle.json](assets/azhou/readme-hero-v1/cover-bundle.json) · [产品截图存档](docs/promotion/screenshots/)
 
 </div>
 
@@ -97,6 +98,19 @@
 | `Cmd+Shift+Space` 即录 | OpenAI/DeepSeek/通义/智谱/本地 Ollama | SQLite + 搜索 + 导出 | 中文/English |
 
 > 🤖 **会动的 Bot 吉祥物**:标题栏的小家伙会随应用状态变形——录音时睁大眼、识别时冒思考点、转写完成放彗星。引擎移植自 [bloub](https://github.com/jeremy-prt/bloub)(MIT),动画常数逐帧测量、零漂移复刻;在 设置 → Bot 可自选形状/颜色/表情。
+
+## 🖼 产品截图
+
+<!-- [20260916_README_AzhouHero] 真机截图从首屏移至此处，首屏主图换成阿舟品牌封面；
+     两张真实截图仍然点开即见。 -->
+
+AI 润色链路（口述原文 → 小红书风格成稿）：
+
+<img src="docs/promotion/screenshots/screenshot-xhs-mode.jpg" width="640" alt="Murmur 界面——口述原文经 AI 润色一键转为小红书风格文案" />
+
+macOS 应用界面：
+
+<img src="docs/promotion/screenshots/screenshot-macos.jpg" width="640" alt="Murmur macOS 应用界面" />
 
 ## 🚀 安装
 
@@ -200,6 +214,20 @@ pnpm ci:check     # 本地运行所有 CI 门禁
 | AI 优化  | 11+ OpenAI 兼容模型 + 自定义 Prompt 模板              |
 | 数据存储 | SQLite (node:sqlite, safeStorage 加密)                |
 
+## 📚 文档导航
+
+<!-- [20260916_README_DocsHub] 业界通行做法——README 是门脸，FAQ/故障排除/贡献指南/
+     安全策略/更新日志只藏在「参与贡献」一段里容易被漏掉；一张表让各类读者
+     一眼找到入口。 -->
+
+| 文档                                | 内容                         |
+| ----------------------------------- | ---------------------------- |
+| [常见问题](docs/faq.md)             | 使用中的常见疑问             |
+| [故障排除](docs/troubleshooting.md) | 安装、启动、音频问题         |
+| [CONTRIBUTING.md](CONTRIBUTING.md)  | 开发环境、代码规范、提交流程 |
+| [安全策略](SECURITY.md)             | 如何私密报告安全漏洞         |
+| [CHANGELOG.md](CHANGELOG.md)        | 完整发布历史                 |
+
 ## 📋 路线图
 
 **已完成：**
@@ -240,6 +268,19 @@ pnpm ci:check     # 本地运行所有 CI 门禁
 PRs welcome! 见 [CONTRIBUTING.md](CONTRIBUTING.md) 了解开发环境搭建、代码规范和提交流程。
 
 **帮助与社区**：常见问题 → [FAQ](docs/faq.md) · 故障排除 → [故障排除指南](docs/troubleshooting.md) · 安全漏洞 → [安全策略](SECURITY.md)（安全报告请勿提交公开 issue）。
+
+## 💬 社区交流
+
+<!-- [20260916_README_Community] 补上此前缺失的社区入口：微信社区二维码资产早已在
+     assets/ 中，但 README 里没有任何地方能发现它。 -->
+
+<div align="center">
+
+<img src="assets/wechat-community-qrcode.png" width="160" alt="Murmur 微信社区二维码" />
+
+**扫码加入微信社区** —— 提问、反馈、第一时间获取更新动态。
+
+</div>
 
 ## 📊 项目状态
 

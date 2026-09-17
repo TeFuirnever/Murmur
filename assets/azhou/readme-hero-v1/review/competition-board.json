@@ -1,0 +1,26 @@
+{
+  "schema_version": "AzhouCoverCompetitionBoard.v1",
+  "board": {
+    "path": "review/competition-board.png",
+    "sha256": "fe2fc896ae9644e8d9f7848406ba1f5fafb98c29e04b28b93ebbc7b3437cd404"
+  },
+  "widths": [120, 240, 360],
+  "order": [
+    {
+      "label": "A",
+      "variant_id": "cover-a",
+      "asset_sha256": "fe1c2b75cb8ce0917b02255de4bae5ae9c61a89f3590bd91f2385ad9e972170a"
+    },
+    {
+      "label": "B",
+      "variant_id": "cover-b",
+      "asset_sha256": "e2d0e0528d473a6a78b6009818ac28d385f0154b0a91e7b75b326f95157f06ad"
+    },
+    {
+      "label": "C",
+      "variant_id": "cover-c",
+      "asset_sha256": "828a3b2fe249a489f3dcac692a3d506cc4ed22047ea49705a08d0415d42888d5"
+    }
+  ],
+  "captured_at": "2026-09-08"
+}

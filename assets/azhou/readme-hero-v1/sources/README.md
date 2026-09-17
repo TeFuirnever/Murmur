@@ -48,19 +48,17 @@ English · [简体中文](./README.zh-CN.md)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 [![Stars](https://img.shields.io/github/stars/TeFuirnever/Murmur?style=social)](https://github.com/TeFuirnever/Murmur)
 
-<!-- [20260916_README_AzhouHero] README refresh: the hero now leads with the
-     Azhou-brand cover (assets/azhou/readme-hero-v1, 1280x720) produced and
-     review-passed under the azhou-covers workflow — promise headline + real
-     AI-polish screenshot + fox brand anchor. The EN front door uses the
-     approved English copy variant cover-a-en; the raw screenshot it replaces
-     moves to the new Screenshots section (heading parity with
-     README.zh-CN.md preserved for tests/unit/readme-contract.test.ts). The
-     archived Spec #299 media comment is kept below for provenance. -->
+<!-- [20260907_Spec299_EmbedMedia] T4 (Spec #299): embedded the archived XHS-mode screenshot (real app UI: transcript → AI polish → Xiaohongshu post) as the hero visual — the audit found zero embedded
+     media was below the peer floor (5/5 benchmark projects render an image
+     in the first screenful). Replaces the [20260731_README_RewriteHero]
+     demo-GIF TODO placeholder; recording the GIF remains a maintainer
+     follow-up. Screenshots taken 2026-07-20 predate the Fox rebrand (7/29)
+     — re-capture before promoting them further. -->
 <!-- [20260907_Spec299_EmbedMedia] END -->
 
-<img src="assets/azhou/readme-hero-v1/candidates/cover-a-en.png" width="720" alt="Murmur brand hero — a hand-drawn sound wave turns into clean text at the cursor, next to a real screenshot of the AI-polished result, with the Azhou fox on the right" />
+<img src="docs/promotion/screenshots/screenshot-xhs-mode.jpg" width="640" alt="Murmur app: a raw transcript is polished into a Xiaohongshu-style post through the AI polish pipeline" />
 
-🦊 Brand cover by [Azhou](assets/azhou/readme-hero-v1/cover-bundle.json) · [Screenshot archive](docs/promotion/screenshots/)
+📦 [Screenshot archive](docs/promotion/screenshots/) · macOS UI / AI Xiaohongshu mode / Windows bug story
 
 </div>
 
@@ -105,20 +103,6 @@ English · [简体中文](./README.zh-CN.md)
 
 > 🤖 **Meet the animated Bot mascot** — the little fellow in the title bar morphs with app state: eyes wide open while recording, thinking dots while recognizing, a comet when a transcription finishes. The engine is ported from [bloub](https://github.com/jeremy-prt/bloub) (MIT) with frame-by-frame measured animation constants, replicated with zero drift. Pick its shape / color / expression under Settings → Bot.
 
-## 🖼 Screenshots
-
-<!-- [20260916_README_AzhouHero] Real product UI moved here from the hero so the
-     first screen leads with the brand cover; both real screenshots stay one
-     click away. -->
-
-AI polish pipeline (transcript → Xiaohongshu-style post):
-
-<img src="docs/promotion/screenshots/screenshot-xhs-mode.jpg" width="640" alt="Murmur app: a raw transcript is polished into a Xiaohongshu-style post through the AI polish pipeline" />
-
-macOS app UI:
-
-<img src="docs/promotion/screenshots/screenshot-macos.jpg" width="640" alt="Murmur macOS app UI" />
-
 ## 🚀 Install
 
 <!-- [20260803_InstallHonesty] Homebrew/Winget are planned (see docs/homebrew, docs/winget)
@@ -138,9 +122,6 @@ Download the latest build from [Releases](https://github.com/TeFuirnever/Murmur/
 > **First install notes**
 >
 > - **macOS**: if macOS reports "cannot verify the developer", right-click the app → **Open**
-> <!-- [20260911_Fix_DamagedAppWorkaround] Issue #337: the v1.5.0 dmg shipped with a broken ad-hoc seal, which Gatekeeper reports as "damaged" — a DIFFERENT scenario from "unverified developer"; right-click → Open does not bypass it. -->
-> - **macOS**: if macOS says the app "is damaged and can't be opened" (v1.5.0 ships with a broken signature seal), run in Terminal: `xattr -cr /Applications/Murmur.app && codesign --force --deep --sign - /Applications/Murmur.app` — details in [Troubleshooting](docs/troubleshooting.md)
-> <!-- [20260911_Fix_DamagedAppWorkaround] END -->
 > - **Windows**: if SmartScreen blocks the installer, click **More info** → **Run anyway**
 
 ## ⚡ Quick Start
@@ -221,21 +202,6 @@ pnpm ci:check     # run all CI gates locally
 | AI       | 11+ OpenAI-compatible models + custom prompt templates |
 | Storage  | SQLite (node:sqlite, safeStorage encryption)           |
 
-## 📚 Documentation
-
-<!-- [20260916_README_DocsHub] Best-practice "docs hub" section: the README is the
-     front door, but FAQ/Troubleshooting/CONTRIBUTING/SECURITY/CHANGELOG were
-     only reachable from the Contributing paragraph — easy to miss. One
-     glanceable table routes every reader. -->
-
-| Document                                   | What it covers                          |
-| ------------------------------------------ | --------------------------------------- |
-| [FAQ](docs/faq.md)                         | Common questions                        |
-| [Troubleshooting](docs/troubleshooting.md) | Install, launch, and audio issues       |
-| [CONTRIBUTING.md](CONTRIBUTING.md)         | Dev setup, code standards, PR process   |
-| [Security Policy](SECURITY.md)             | How to report vulnerabilities privately |
-| [CHANGELOG.md](CHANGELOG.md)               | Full release history                    |
-
 ## 📋 Roadmap
 
 **Done:**
@@ -276,20 +242,6 @@ See [docs/follow-ups.md](docs/follow-ups.md) (open items) and [CHANGELOG.md](CHA
 PRs welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, code standards, and the PR process.
 
 **Help & community**: questions → [FAQ](docs/faq.md) · troubleshooting → [Troubleshooting](docs/troubleshooting.md) · security issues → [Security Policy](SECURITY.md) (please report vulnerabilities privately, not as public issues).
-
-## 💬 Community
-
-<!-- [20260916_README_Community] Adds the missing community surface: the WeChat
-     community QR asset already shipped in assets/ but was unreachable from
-     the READMEs. -->
-
-<div align="center">
-
-<img src="assets/wechat-community-qrcode.png" width="160" alt="Murmur WeChat community QR code" />
-
-**Scan to join the WeChat community** — questions, feedback, and release news.
-
-</div>
 
 ## 📊 Project Status
 

@@ -1,0 +1,53 @@
+{
+  "schema_version": "AzhouCoverAgentVisualReview.v1",
+  "variant_id": "cover-a-en",
+  "asset_sha256": "8ed3e7d87afb94177efafbe2648618a32e387e98a309d41e9d807ab0b5c22a0c",
+  "thumbnails": {
+    "120": {
+      "path": "review/cover-a-en/thumbnail-120.png",
+      "sha256": "d079f52a945f375746fdd96245bff61561bc1da0505f49aa460c8863fa607b93"
+    },
+    "240": {
+      "path": "review/cover-a-en/thumbnail-240.png",
+      "sha256": "9d6ae1665637f199cf1585d6dfedf174b9b8ad161492c4219c8f4993476b7680"
+    },
+    "360": {
+      "path": "review/cover-a-en/thumbnail-360.png",
+      "sha256": "d3268d4bad29fd5ba771393f349d51810aeea7e0a8379776689f99634bf1eb82"
+    }
+  },
+  "safe_area_overlay": {
+    "path": "review/cover-a-en/safe-area-overlay.png",
+    "sha256": "7848b6ebcbc89d01f0a2a272f0e952b4e55c37e6a32a26f66b4057cf9a6eb5f5"
+  },
+  "contrast": {
+    "primary-title": "#6F3810 on #FEF9EB",
+    "ratio": 8.4,
+    "minimum": 4.5,
+    "pass": true
+  },
+  "dimensions": {
+    "stop": {
+      "pass": true,
+      "evidence": "120px 首先看到狐狸与左侧声波线加深色截图块，与 cover-a 同构图，明暗对比成立"
+    },
+    "understand": {
+      "pass": true,
+      "evidence": "240px 可读英文标题 \"Speak. It's usable text.\" 与副标，能复述 speak-to-usable-text"
+    },
+    "believe": {
+      "pass": true,
+      "evidence": "360px 可辨认右侧真实界面截图标注 \"Real UI: AI-polished output\"，无夸大措辞"
+    },
+    "continue": {
+      "pass": true,
+      "evidence": "README Quick Start 三步与首屏承诺一致"
+    }
+  },
+  "recall": {
+    "promise": "speak and get usable text",
+    "visual_anchor": "sound wave turning into text plus real polished-output screenshot",
+    "expected_payoff": "Quick Start reproduces the same result"
+  },
+  "note": "代理复核，不代替真实人工选择；cover-a-en 为已批准 cover-a 的英文文案变体（同概念/同证据/同构图）；真实平台预览回执待推送后补记"
+}

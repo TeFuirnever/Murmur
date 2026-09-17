@@ -1,0 +1,80 @@
+{
+  "cover": {
+    "content_id": "murmur-readme-hero-v1",
+    "platform": "github",
+    "profile": {
+      "canvas": {
+        "aspect_ratio": "16:9",
+        "height": 720,
+        "width": 1280
+      },
+      "profile_id": "github_readme_image_16_9",
+      "source": "authority/v1.9/platform-profiles/github/github-readme-image.v1.json",
+      "source_sha256": "a371d4776ebb93e27740437c725218485d02d986551a57c4f9dfb31701c5a7f3",
+      "status": "active"
+    },
+    "surface": "readme_image"
+  },
+  "creative_brief": {
+    "audience": "在 macOS 或 Windows 上写文档、做纪要、发内容的中文桌面用户与开发者",
+    "consumption_bridge": "README 首屏给出定位与对比表，Quick Start 三步即可当场验证热键听写",
+    "headline": "系统听写到「转出来」为止",
+    "mechanism": "contrast",
+    "proof_boundary": "真实截图可证明转写与 AI 润色链路存在且可用；不证明识别准确率数值或所有场景的润色质量",
+    "proof_signal": "同一真实截图内的转写卡片与成稿卡片",
+    "reader_problem": "打字慢、录音要回放整理、转写出来的原文还要自己删口头禅改成能发的稿子",
+    "risk_note": "只比较转写后处理一个变量，不暗示识别率差异",
+    "source_refs": ["source-readme", "source-screenshot"],
+    "stakes": "继续把会议和灵感耗在回放与二次整理上；用云端工具则语音数据离开本机",
+    "story": {
+      "character_action": null,
+      "character_role": "absent",
+      "dramatic_relation": "两段同一来源的文字",
+      "headline_visual_relation": "complementary",
+      "mode": "single-axis-contrast",
+      "story_object": "-",
+      "thumbnail_read": "原料与成稿的单轴落差|先看到左乱右净，再读标题"
+    },
+    "tension": "预期语音工具只给原始转写稿，事实是同一段声音可以直接给到润色后的成稿",
+    "visual_anchor": "左右单轴对照：同一段声音的原始转写（带口语杂质）与润色成稿两格真实截图"
+  },
+  "downstream_requirements": [
+    "Record this dispatch as a hash-bound input in the sibling skill's composition source.",
+    "Use editable text layers for the public title; do not repair Chinese text on a PNG.",
+    "For a supplemental pose, retain its exact pixels at transform none and construct every prop as a separate owned or deterministic layer.",
+    "A downstream PASS plus real platform preview and a human decision remain required; this dispatch cannot approve, publish, or promote an asset."
+  ],
+  "pose_policy": {
+    "image_gen_reference": true,
+    "pose_id": "canonical_front",
+    "role": "default_brand_anchor",
+    "selection": "default_only"
+  },
+  "production_route": {
+    "proof_source_refs": ["source-screenshot"],
+    "route": "evidence",
+    "skill": "azhou-evidence-cards"
+  },
+  "schema_version": "AzhouCoverProductionDispatch.v1",
+  "status": "HOLD_FOR_DOWNSTREAM_PRODUCTION",
+  "variant": {
+    "attention": {
+      "cover_type": "conceptual",
+      "detail_destination": "readme-body",
+      "font_role": "clean",
+      "headline": "系统听写到「转出来」为止",
+      "mood": "balanced",
+      "selection_mode": "explicit",
+      "subtitle": "Murmur 多走一步：润色 · 纪要 · 成稿",
+      "tags": [],
+      "text_level": "title-subtitle",
+      "text_rich_reason": null,
+      "visual_anchor": "左右单轴对照：同一段声音的原始转写（带口语杂质）与润色成稿两格真实截图"
+    },
+    "concept_id": "concept-contrast",
+    "concept_sha256": "9e99db4a8fe07a1b9fe93efdac46059cbc039105e41ad801a5f4d39187448930",
+    "id": "cover-b",
+    "layout_preset": "contrast",
+    "public_title": "Murmur：不止转写，还有成稿"
+  }
+}

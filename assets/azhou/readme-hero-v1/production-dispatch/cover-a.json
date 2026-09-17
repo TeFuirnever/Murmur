@@ -1,0 +1,80 @@
+{
+  "cover": {
+    "content_id": "murmur-readme-hero-v1",
+    "platform": "github",
+    "profile": {
+      "canvas": {
+        "aspect_ratio": "16:9",
+        "height": 720,
+        "width": 1280
+      },
+      "profile_id": "github_readme_image_16_9",
+      "source": "authority/v1.9/platform-profiles/github/github-readme-image.v1.json",
+      "source_sha256": "a371d4776ebb93e27740437c725218485d02d986551a57c4f9dfb31701c5a7f3",
+      "status": "active"
+    },
+    "surface": "readme_image"
+  },
+  "creative_brief": {
+    "audience": "在 macOS 或 Windows 上写文档、做纪要、发内容的中文桌面用户与开发者",
+    "consumption_bridge": "README 首屏给出定位与对比表，Quick Start 三步即可当场验证热键听写",
+    "headline": "说出口，就是能用的文字",
+    "mechanism": "outcome",
+    "proof_boundary": "真实截图可证明转写与 AI 润色链路存在且可用；不证明识别准确率数值或所有场景的润色质量",
+    "proof_signal": "真实截图中的小红书风格润色成稿卡片",
+    "reader_problem": "打字慢、录音要回放整理、转写出来的原文还要自己删口头禅改成能发的稿子",
+    "risk_note": "不能把润色质量暗示为百分之百",
+    "source_refs": ["source-readme", "source-screenshot"],
+    "stakes": "继续把会议和灵感耗在回放与二次整理上；用云端工具则语音数据离开本机",
+    "story": {
+      "character_action": null,
+      "character_role": "brand-anchor",
+      "dramatic_relation": "一段声波线与一行文字",
+      "headline_visual_relation": "complementary",
+      "mode": "object-metaphor",
+      "story_object": "-",
+      "thumbnail_read": "声波末端变形为干净文字|先看到声波变文字，再读标题"
+    },
+    "tension": "预期语音工具只给原始转写稿，事实是同一段声音可以直接给到润色后的成稿",
+    "visual_anchor": "一段手绘声波线收尾处直接变成一行干净文字与光标，旁贴真实润色成稿截图"
+  },
+  "downstream_requirements": [
+    "Record this dispatch as a hash-bound input in the sibling skill's composition source.",
+    "Use editable text layers for the public title; do not repair Chinese text on a PNG.",
+    "For a supplemental pose, retain its exact pixels at transform none and construct every prop as a separate owned or deterministic layer.",
+    "A downstream PASS plus real platform preview and a human decision remain required; this dispatch cannot approve, publish, or promote an asset."
+  ],
+  "pose_policy": {
+    "image_gen_reference": true,
+    "pose_id": "canonical_front",
+    "role": "default_brand_anchor",
+    "selection": "default_only"
+  },
+  "production_route": {
+    "proof_source_refs": ["source-screenshot"],
+    "route": "evidence",
+    "skill": "azhou-evidence-cards"
+  },
+  "schema_version": "AzhouCoverProductionDispatch.v1",
+  "status": "HOLD_FOR_DOWNSTREAM_PRODUCTION",
+  "variant": {
+    "attention": {
+      "cover_type": "metaphor",
+      "detail_destination": "readme-body",
+      "font_role": "clean",
+      "headline": "说出口，就是能用的文字",
+      "mood": "balanced",
+      "selection_mode": "explicit",
+      "subtitle": "Local speech-to-text · AI polish · fully on-device",
+      "tags": [],
+      "text_level": "title-subtitle",
+      "text_rich_reason": null,
+      "visual_anchor": "一段手绘声波线收尾处直接变成一行干净文字与光标，旁贴真实润色成稿截图"
+    },
+    "concept_id": "concept-outcome",
+    "concept_sha256": "a1551c3242196c426cd6a38351f672447dc01818af2ec0c65cd58f62b1370231",
+    "id": "cover-a",
+    "layout_preset": "promise-first",
+    "public_title": "Murmur：说出口，就是能用的文字"
+  }
+}
