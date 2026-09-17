@@ -160,8 +160,11 @@ def preprocess_audio_file(in_path, out_path=None):
     except Exception:
         try:
             os.unlink(out_path)
-        except OSError:
-            pass
+        except OSError as cleanup_error:
+            # [20260913_Fix_197_UnlinkDebug] #197 #7: temp-cleanup failures
+            # are best-effort, but they must not be fully silent — a debug
+            # line keeps the disk-full / permission case diagnosable.
+            logger.debug("temp cleanup failed for %s: %s", out_path, cleanup_error)
         raise
     logger.info(
         "preprocessed %s -> %s (sr=%d, samples=%d)",
