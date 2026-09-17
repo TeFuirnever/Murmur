@@ -1,0 +1,53 @@
+{
+  "schema_version": "AzhouCoverAgentVisualReview.v1",
+  "variant_id": "cover-a",
+  "asset_sha256": "fe1c2b75cb8ce0917b02255de4bae5ae9c61a89f3590bd91f2385ad9e972170a",
+  "thumbnails": {
+    "120": {
+      "path": "review/cover-a/thumbnail-120.png",
+      "sha256": "540a900d90e6fb8b7db9eb6232df77ec17a0cf4fa50e0330805d95aca731ea54"
+    },
+    "240": {
+      "path": "review/cover-a/thumbnail-240.png",
+      "sha256": "ed717a38f02a6ecbc13a980ac4617145d93d01d188ca2510e6e2e9b08af83576"
+    },
+    "360": {
+      "path": "review/cover-a/thumbnail-360.png",
+      "sha256": "d7686bbd4ba831676e334866ce957b25d46dbbb1ec439d3f736d62a65ffe5956"
+    }
+  },
+  "safe_area_overlay": {
+    "path": "review/cover-a/safe-area-overlay.png",
+    "sha256": "cc099c078d981ddc6ed117b305d2151992b9d424f48988f3b64984727e94b646"
+  },
+  "contrast": {
+    "primary-title": "#6F3810 on #FEF9EB",
+    "ratio": 8.4,
+    "minimum": 4.5,
+    "pass": true
+  },
+  "dimensions": {
+    "stop": {
+      "pass": true,
+      "evidence": "120px 缩略图首先看到狐狸与左侧声波线加深色截图块，明暗对比成立"
+    },
+    "understand": {
+      "pass": true,
+      "evidence": "240px 可读出口吻标题「说出口，就是能用的文字」与 on-device 副标，能复述\"说话直接得到可用文字\""
+    },
+    "believe": {
+      "pass": true,
+      "evidence": "360px 可辨认右侧为真实界面截图且标注「真实界面：AI 润色成稿」，无夸大措辞"
+    },
+    "continue": {
+      "pass": true,
+      "evidence": "预期点开后看到实现方式，README Quick Start 三步与首屏承诺一致"
+    }
+  },
+  "recall": {
+    "promise": "说话即可得到能用的文字",
+    "visual_anchor": "声波线变成文字加真实成稿截图",
+    "expected_payoff": "Quick Start 三步复现"
+  },
+  "note": "代理复核，不代替真实人工选择；真实平台预览面 readme_desktop/readme_mobile/dark_theme/light_theme 尚未取得回执"
+}

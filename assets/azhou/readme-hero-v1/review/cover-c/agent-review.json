@@ -1,0 +1,53 @@
+{
+  "schema_version": "AzhouCoverAgentVisualReview.v1",
+  "variant_id": "cover-c",
+  "asset_sha256": "828a3b2fe249a489f3dcac692a3d506cc4ed22047ea49705a08d0415d42888d5",
+  "thumbnails": {
+    "120": {
+      "path": "review/cover-c/thumbnail-120.png",
+      "sha256": "40102d2df4ef302ce7b260949c5b1cae1ab522ecd22bd0dd863e974b9975b758"
+    },
+    "240": {
+      "path": "review/cover-c/thumbnail-240.png",
+      "sha256": "ce9fd796c931f54c1c71139c36a63b46edbfa9f9dfe8e76507f65841144fb994"
+    },
+    "360": {
+      "path": "review/cover-c/thumbnail-360.png",
+      "sha256": "1e9d159dee36ec100f2aa8ba6d93c64e9218ec93ff0b474e1b68b383abccf5da"
+    }
+  },
+  "safe_area_overlay": {
+    "path": "review/cover-c/safe-area-overlay.png",
+    "sha256": "2744b33c0a65fc5faf062014c96da9efe313cf3a2a0ca38847c06b52004a39fd"
+  },
+  "contrast": {
+    "primary-title": "#6F3810 on #FEF9EB",
+    "ratio": 8.4,
+    "minimum": 4.5,
+    "pass": true
+  },
+  "dimensions": {
+    "stop": {
+      "pass": true,
+      "evidence": "120px 首先看到大键帽与狐狸，三候选中小尺寸对比最强"
+    },
+    "understand": {
+      "pass": true,
+      "evidence": "240px 可读「按一下，说完就完」并认出 Cmd+Shift+Space 键帽，能复述\"按热键说话即出字\""
+    },
+    "believe": {
+      "pass": true,
+      "evidence": "键帽是 Quick Start 第 2 步真实全局热键的物件化，无虚构能力"
+    },
+    "continue": {
+      "pass": true,
+      "evidence": "预期点开看到热键用法，Quick Start 与 Install 段兑现"
+    }
+  },
+  "recall": {
+    "promise": "按一下热键，说完就完",
+    "visual_anchor": "放大的 Cmd+Shift+Space 键帽",
+    "expected_payoff": "热键听写使用方法"
+  },
+  "note": "代理复核，不代替真实人工选择；真实平台预览面 readme_desktop/readme_mobile/dark_theme/light_theme 尚未取得回执"
+}

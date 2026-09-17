@@ -1,0 +1,53 @@
+{
+  "schema_version": "AzhouCoverAgentVisualReview.v1",
+  "variant_id": "cover-b",
+  "asset_sha256": "e2d0e0528d473a6a78b6009818ac28d385f0154b0a91e7b75b326f95157f06ad",
+  "thumbnails": {
+    "120": {
+      "path": "review/cover-b/thumbnail-120.png",
+      "sha256": "fd25b2af591f4711dd2fb2f33ce25a23778af8a3f914df963602788e0c648bb0"
+    },
+    "240": {
+      "path": "review/cover-b/thumbnail-240.png",
+      "sha256": "ca005ce169efe4741adaa192aff49da9c24551109047aac6f2a40bc4646b5537"
+    },
+    "360": {
+      "path": "review/cover-b/thumbnail-360.png",
+      "sha256": "1f6e1367a759f7bd3cda3b916ce7f658ead84123f2957501bb63623abea901fe"
+    }
+  },
+  "safe_area_overlay": {
+    "path": "review/cover-b/safe-area-overlay.png",
+    "sha256": "54d7e4e569ab04dda6bc2715038aee67997e77290104c5a5bd8386e58f461e29"
+  },
+  "contrast": {
+    "primary-title": "#6F3810 on #FEF9EB",
+    "ratio": 8.4,
+    "minimum": 4.5,
+    "pass": true
+  },
+  "dimensions": {
+    "stop": {
+      "pass": true,
+      "evidence": "120px 首先看到两块深色截图形成的左右对照"
+    },
+    "understand": {
+      "pass": true,
+      "evidence": "240px 可读「系统听写到『转出来』为止」，能复述\"Murmur 不止转写\""
+    },
+    "believe": {
+      "pass": true,
+      "evidence": "两格截图均来自同一真实截图的原始转写卡与润色成稿卡，标签分别为「原始转写」「AI 润色成稿」"
+    },
+    "continue": {
+      "pass": true,
+      "evidence": "预期正文给出逐项差异，对比表在首屏后紧随兑现"
+    }
+  },
+  "recall": {
+    "promise": "系统听写停在原料，Murmur 给到成稿",
+    "visual_anchor": "原始转写与润色成稿的单轴对照",
+    "expected_payoff": "正文对比表逐行差异"
+  },
+  "note": "代理复核，不代替真实人工选择；真实平台预览面 readme_desktop/readme_mobile/dark_theme/light_theme 尚未取得回执"
+}

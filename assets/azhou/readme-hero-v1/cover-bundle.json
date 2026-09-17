@@ -1,0 +1,373 @@
+{
+  "schema_version": "AzhouCoverBundle.v5",
+  "content_id": "murmur-readme-hero-v1",
+  "platform": "github",
+  "surface": "readme_image",
+  "content_format": "repo-readme",
+  "profile": {
+    "source": "authority/v1.9/platform-profiles/github/github-readme-image.v1.json",
+    "source_sha256": "a371d4776ebb93e27740437c725218485d02d986551a57c4f9dfb31701c5a7f3",
+    "profile_id": "github_readme_image_16_9",
+    "status": "active",
+    "canvas": {
+      "aspect_ratio": "16:9",
+      "height": 720,
+      "width": 1280
+    }
+  },
+  "layout_catalog": {
+    "source": "assets/layout-presets/v2/layout-presets.json",
+    "source_sha256": "579a54cf33dcb08c0ce6bd8895ebca3ebb75091ae1ca1747482c5be8cd609fab",
+    "schema_version": "AzhouCoverLayoutPresets.v2"
+  },
+  "attention_catalog": {
+    "source": "assets/attention-presets/v1/attention-presets.json",
+    "source_sha256": "d77f91aa6bb4d4012fdd678a88d9e1253f1b45d6a35cb656a3794d2042254dc4",
+    "schema_version": "AzhouCoverAttentionPresets.v1"
+  },
+  "creative_catalog": {
+    "source": "assets/creative-mechanisms/v1/creative-mechanisms.json",
+    "source_sha256": "34f86a7f8b00462fdc038981b70926968f6c8015fa4098b2ee246e0a2fdb0101",
+    "schema_version": "AzhouCoverCreativeMechanisms.v1"
+  },
+  "sources": [
+    {
+      "id": "source-readme",
+      "role": "both",
+      "path": "sources/README.md",
+      "locator": "Why Murmur 定位段、Features 表与 Quick Start 三节",
+      "sha256": "cb2d9c67257acfc07a7a9d2706b0396a81d8b1ea55ad29fea09cd008124d686e"
+    },
+    {
+      "id": "source-screenshot",
+      "role": "proof",
+      "path": "sources/screenshot-xhs-mode.jpg",
+      "locator": "上方原始转写文本卡片与下方小红书风格润色成稿卡片",
+      "sha256": "5fa02b0f8ec6b494bbe05c571284b76633a08cef09bd9c15dbd8ff7d949a5d0e"
+    },
+    {
+      "id": "source-research",
+      "role": "context",
+      "path": "research-notes.md",
+      "locator": "当期研究快照全文",
+      "sha256": "c74aad68525b5502c73d7bbc9ff1b0904eba8c47ede19ac130280cfee06c4201"
+    }
+  ],
+  "cover_5p": {
+    "promise": {
+      "text": "给需要中文语音输入的桌面用户：按下热键说话，文字直接到光标；导音频批量转写；AI 去口头禅并润色成稿——全部本地完成，不上传",
+      "source_refs": ["source-readme"]
+    },
+    "proof": {
+      "route": "evidence",
+      "skill": "azhou-evidence-cards",
+      "source_refs": ["source-readme", "source-screenshot"]
+    },
+    "priority": ["promise", "proof", "brand"],
+    "preview": {
+      "required_surfaces": [
+        "dark_theme",
+        "light_theme",
+        "readme_desktop",
+        "readme_mobile"
+      ]
+    },
+    "performance": {
+      "layers": [
+        "distribution",
+        "consumption",
+        "interaction",
+        "relationship",
+        "commercial"
+      ],
+      "success_signal": "发布后 README 访客向 Releases 下载与 Quick Start 滚动的有效进入增加",
+      "guard_signal": "进入后消费不衰减：clone、下载与文档点击不随首屏点击上升而变差",
+      "measurement_window": "发布后 14 天",
+      "confounders": [
+        "版本发布、外部推广链接、星标历史趋势与封面无关的自然波动"
+      ]
+    }
+  },
+  "guardrails": {
+    "promise_continuity": true,
+    "rights_checked": true,
+    "privacy_checked": true,
+    "ai_disclosure_decided": true,
+    "no_algorithm_claim": true
+  },
+  "creative_lab": {
+    "schema_version": "AzhouCoverCreativeLab.v3",
+    "research": {
+      "mode": "official-guidance-only",
+      "captured_at": "2026-09-08",
+      "scope": "仓库内 Spec #299 基准审计记录、GitHub 官方社交预览指南要点、本仓库真实截图资产",
+      "limitations": "基准审计为仓库内二手记录；无平台后台数据；机制观察只生成假设",
+      "source_refs": ["source-research"],
+      "observed_patterns": [
+        "首屏真实产品图是同类开源项目通行的首屏证明方式",
+        "可验证属性比主观星级自评更可信",
+        "README 图需明暗主题可读并带 alt text，且与社交预览资产分离"
+      ],
+      "anti_copy_boundary": true
+    },
+    "brief": {
+      "audience": "在 macOS 或 Windows 上写文档、做纪要、发内容的中文桌面用户与开发者",
+      "reader_problem": "打字慢、录音要回放整理、转写出来的原文还要自己删口头禅改成能发的稿子",
+      "stakes": "继续把会议和灵感耗在回放与二次整理上；用云端工具则语音数据离开本机",
+      "tension": "预期语音工具只给原始转写稿，事实是同一段声音可以直接给到润色后的成稿",
+      "proof_boundary": "真实截图可证明转写与 AI 润色链路存在且可用；不证明识别准确率数值或所有场景的润色质量",
+      "consumption_bridge": "README 首屏给出定位与对比表，Quick Start 三步即可当场验证热键听写"
+    },
+    "concepts": [
+      {
+        "id": "concept-outcome",
+        "mechanism": "outcome",
+        "headline": "说出口，就是能用的文字",
+        "visual_anchor": "一段手绘声波线收尾处直接变成一行干净文字与光标，旁贴真实润色成稿截图",
+        "tension": "预期得到原始稿，实际直接得到成稿",
+        "proof_signal": "真实截图中的小红书风格润色成稿卡片",
+        "consumption_bridge": "首屏 Quick Start 三步即可复现同一结果",
+        "source_refs": ["source-readme", "source-screenshot"],
+        "risk_note": "不能把润色质量暗示为百分之百",
+        "story": {
+          "mode": "object-metaphor",
+          "character_role": "brand-anchor",
+          "character_action": null,
+          "story_object": "-",
+          "dramatic_relation": "一段声波线与一行文字",
+          "headline_visual_relation": "complementary",
+          "thumbnail_read": "声波末端变形为干净文字|先看到声波变文字，再读标题"
+        }
+      },
+      {
+        "id": "concept-contrast",
+        "mechanism": "contrast",
+        "headline": "系统听写到「转出来」为止",
+        "visual_anchor": "左右单轴对照：同一段声音的原始转写（带口语杂质）与润色成稿两格真实截图",
+        "tension": "同样的声音，一边停在原料，一边给到成品",
+        "proof_signal": "同一真实截图内的转写卡片与成稿卡片",
+        "consumption_bridge": "正文对比表逐行兑现差异",
+        "source_refs": ["source-readme", "source-screenshot"],
+        "risk_note": "只比较转写后处理一个变量，不暗示识别率差异",
+        "story": {
+          "mode": "single-axis-contrast",
+          "character_role": "absent",
+          "character_action": null,
+          "story_object": "-",
+          "dramatic_relation": "两段同一来源的文字",
+          "headline_visual_relation": "complementary",
+          "thumbnail_read": "原料与成稿的单轴落差|先看到左乱右净，再读标题"
+        }
+      },
+      {
+        "id": "concept-action-choice",
+        "mechanism": "action-choice",
+        "headline": "按一下，说完就完",
+        "visual_anchor": "一个被放大的 Cmd+Shift+Space 键帽，文字从键帽边缘流出",
+        "tension": "输入可以不打字，但多数人还在打",
+        "proof_signal": "Quick Start 第 2 步的真实全局热键",
+        "consumption_bridge": "安装后按一次热键即可当场验证",
+        "source_refs": ["source-readme", "source-screenshot"],
+        "risk_note": "键帽为独立确定性图层，双爪接触必须可观察，不虚构系统级能力",
+        "story": {
+          "mode": "object-metaphor",
+          "character_role": "brand-anchor",
+          "character_action": null,
+          "story_object": "一个 Cmd+Shift+Space 键帽",
+          "dramatic_relation": "热键键帽作为唯一动作入口被放大",
+          "headline_visual_relation": "complementary",
+          "thumbnail_read": "先看到大键帽，再读「按一下，说完就完」"
+        }
+      },
+      {
+        "id": "concept-cost-loss",
+        "mechanism": "cost-loss",
+        "headline": "那段录音，你还要回放几遍",
+        "visual_anchor": "一叠音频文件图标和一条被拉长的时间轴",
+        "tension": "整理录音的时间常常超过会议本身",
+        "proof_signal": "文件转写与批量导出功能在 Features 表中列出",
+        "consumption_bridge": "正文 Features 表文件转写一格即兑现",
+        "source_refs": ["source-readme", "source-screenshot"],
+        "risk_note": "不夸大恐惧、不虚构时间数字",
+        "story": {
+          "mode": "object-metaphor",
+          "character_role": "absent",
+          "character_action": null,
+          "story_object": "-",
+          "dramatic_relation": "一叠音频文件与时间轴",
+          "headline_visual_relation": "complementary",
+          "thumbnail_read": "回放整理的时间被堆积放大|先看到文件堆，再读反问"
+        }
+      },
+      {
+        "id": "concept-question-gap",
+        "mechanism": "question-gap",
+        "headline": "拔掉网线，它还听得懂吗",
+        "visual_anchor": "一个画叉的 Wi-Fi 符号旁，一行文字仍在继续输出",
+        "tension": "语音工具通常被认为依赖云端",
+        "proof_signal": "全本地 FunASR 与零上传承诺",
+        "consumption_bridge": "Why Murmur 段当场回答：全在本机",
+        "source_refs": ["source-readme", "source-screenshot"],
+        "risk_note": "首屏必须兑现方向，不做假悬念",
+        "story": {
+          "mode": "object-metaphor",
+          "character_role": "absent",
+          "character_action": null,
+          "story_object": "-",
+          "dramatic_relation": "画叉的 Wi-Fi 与仍在输出的文字",
+          "headline_visual_relation": "complementary",
+          "thumbnail_read": "断网与继续识别形成未闭合问题|先看到断网符号，再读问题"
+        }
+      },
+      {
+        "id": "concept-self-recognition",
+        "mechanism": "self-recognition",
+        "headline": "对着电脑小声说话的人",
+        "visual_anchor": "工位显示器前一只麦克风，屏幕上文字正在出现",
+        "tension": "目标读者在工位口述的瞬间认出自己",
+        "proof_signal": "全局热键听写场景在 Quick Start 中描述",
+        "consumption_bridge": "Quick Start 场景与读者处境一致",
+        "source_refs": ["source-readme", "source-screenshot"],
+        "risk_note": "不使用未经授权的身份或伪造使用场景",
+        "story": {
+          "mode": "proof-moment",
+          "character_role": "absent",
+          "character_action": null,
+          "story_object": "-",
+          "dramatic_relation": "工位麦克风与屏幕文字",
+          "headline_visual_relation": "complementary",
+          "thumbnail_read": "读者在熟悉处境中认出自己|先看到工位瞬间，再读标题"
+        }
+      }
+    ],
+    "shortlist": [
+      "concept-outcome",
+      "concept-contrast",
+      "concept-action-choice"
+    ],
+    "shortlist_rationale": "三强覆盖 outcome、contrast、action-choice 三种不同传播机制；六概念整体覆盖 object-metaphor、single-axis-contrast、character-action、proof-moment 四种 story mode。cover-c 的主动角色版本因 evidence 路线不允许使用补充动作姿势而降级为品牌锚点加物件隐喻；cost-loss 与 question-gap 张力依赖反问、证据强度弱于真实截图方向；self-recognition 与 outcome 锚点接近，保留结果优先为基线"
+  },
+  "comparison": {
+    "mode": "creative_portfolio",
+    "test_axis": null,
+    "selection_basis": "blind_thumbnail_then_human",
+    "single_variant_reason": null
+  },
+  "variants": [
+    {
+      "id": "cover-a",
+      "concept_id": "concept-outcome",
+      "role": "baseline",
+      "public_title": "Murmur：说出口，就是能用的文字",
+      "public_title_source_refs": ["source-readme"],
+      "proof_source_refs": ["source-screenshot"],
+      "layout_preset": "promise-first",
+      "attention": {
+        "cover_type": "metaphor",
+        "text_level": "title-subtitle",
+        "mood": "balanced",
+        "font_role": "clean",
+        "headline": "说出口，就是能用的文字",
+        "subtitle": "Local speech-to-text · AI polish · fully on-device",
+        "tags": [],
+        "visual_anchor": "一段手绘声波线收尾处直接变成一行干净文字与光标，旁贴真实润色成稿截图",
+        "detail_destination": "readme-body",
+        "text_rich_reason": null,
+        "selection_mode": "explicit"
+      },
+      "change_summary": "基线：结果优先，声波变文字加真实成稿截图",
+      "hypothesis": "结果承诺在 README 首屏直接建立进入理由",
+      "alt_text": "Murmur 品牌主图：手绘声波线收尾变成一行干净文字与光标，旁贴 AI 润色成稿的真实界面截图，右侧为阿舟狐狸",
+      "status": "candidate",
+      "asset_path": "candidates/cover-a.png",
+      "asset_sha256": "fe1c2b75cb8ce0917b02255de4bae5ae9c61a89f3590bd91f2385ad9e972170a",
+      "message_pair_sha256": "9a7d19250cf8c38dae348926f877d37f24c5d1a13ba355abccb893a2879abbba",
+      "production_handoff": null,
+      "visual_audit": null,
+      "preview_receipts": {}
+    },
+    {
+      "id": "cover-b",
+      "concept_id": "concept-contrast",
+      "role": "challenger",
+      "public_title": "Murmur：不止转写，还有成稿",
+      "public_title_source_refs": ["source-readme"],
+      "proof_source_refs": ["source-screenshot"],
+      "layout_preset": "contrast",
+      "attention": {
+        "cover_type": "conceptual",
+        "text_level": "title-subtitle",
+        "mood": "balanced",
+        "font_role": "clean",
+        "headline": "系统听写到「转出来」为止",
+        "subtitle": "Murmur 多走一步：润色 · 纪要 · 成稿",
+        "tags": [],
+        "visual_anchor": "左右单轴对照：同一段声音的原始转写（带口语杂质）与润色成稿两格真实截图",
+        "detail_destination": "readme-body",
+        "text_rich_reason": null,
+        "selection_mode": "explicit"
+      },
+      "change_summary": "挑战者：同一段声音的原始稿与成稿单轴对照",
+      "hypothesis": "前后对照在小尺寸下比单点结果更可辨",
+      "alt_text": "Murmur 品牌主图：同一段声音的原始转写与 AI 润色成稿两格真实截图对照，右侧为阿舟狐狸",
+      "status": "candidate",
+      "asset_path": "candidates/cover-b.png",
+      "asset_sha256": "e2d0e0528d473a6a78b6009818ac28d385f0154b0a91e7b75b326f95157f06ad",
+      "message_pair_sha256": "0a7f31b42859c790cab728083cffd22d52dd7f01b5382fd7f28c61cfe28cc79b",
+      "production_handoff": null,
+      "visual_audit": null,
+      "preview_receipts": {}
+    },
+    {
+      "id": "cover-c",
+      "concept_id": "concept-action-choice",
+      "role": "challenger",
+      "public_title": "Murmur：按一下，说完就完",
+      "public_title_source_refs": ["source-readme"],
+      "proof_source_refs": ["source-screenshot"],
+      "layout_preset": "promise-first",
+      "attention": {
+        "cover_type": "metaphor",
+        "text_level": "title-only",
+        "mood": "bold",
+        "font_role": "display",
+        "headline": "按一下，说完就完",
+        "subtitle": null,
+        "tags": [],
+        "visual_anchor": "一个被放大的 Cmd+Shift+Space 键帽，文字从键帽边缘流出",
+        "detail_destination": "readme-body",
+        "text_rich_reason": null,
+        "selection_mode": "explicit"
+      },
+      "change_summary": "挑战者：阿舟双爪按下热键键帽的主动故事",
+      "hypothesis": "角色动作在开源项目首屏建立品牌记忆",
+      "alt_text": "Murmur 品牌主图：阿舟狐狸双爪按下巨大的 Cmd+Shift+Space 键帽，文字从键帽下流出",
+      "status": "candidate",
+      "asset_path": "candidates/cover-c.png",
+      "asset_sha256": "828a3b2fe249a489f3dcac692a3d506cc4ed22047ea49705a08d0415d42888d5",
+      "message_pair_sha256": "c271d4c4cdcedd277f66199082dd917a8e2789d22682ab78e87747ea8a4869c9",
+      "production_handoff": null,
+      "visual_audit": null,
+      "preview_receipts": {}
+    }
+  ],
+  "production_strategy": {
+    "mode": "parallel_finalists",
+    "direction_selection": null,
+    "refinement": null
+  },
+  "learning": {
+    "schema_version": "AzhouCoverLearningPlan.v1",
+    "decision_rule": "consumption_guarded_entry",
+    "baseline": "same_platform_surface_account_and_content_format",
+    "no_winner_allowed": true,
+    "outcome_receipt": null
+  },
+  "selected_variant": "cover-a",
+  "human_review": {
+    "status": "approved",
+    "reviewed_at": "2026-09-16",
+    "reviewed_pair_sha256": "9a7d19250cf8c38dae348926f877d37f24c5d1a13ba355abccb893a2879abbba",
+    "selection_note": "2026-09-16: owner approved cover-a for README.zh-CN.md and cover-a-en (same concept, English copy) for README.md in conversation. Agent thumbnail QA for cover-a-en recorded in review/cover-a-en/agent-review.json; readme_desktop/readme_mobile/dark_theme/light_theme preview receipts remain open until the commit is pushed to GitHub."
+  }
+}
