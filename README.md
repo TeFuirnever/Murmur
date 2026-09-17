@@ -277,19 +277,9 @@ PRs welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, code standards, a
 
 **Help & community**: questions → [FAQ](docs/faq.md) · troubleshooting → [Troubleshooting](docs/troubleshooting.md) · security issues → [Security Policy](SECURITY.md) (please report vulnerabilities privately, not as public issues).
 
-## 💬 Community
-
-<!-- [20260916_README_Community] Adds the missing community surface: the WeChat
-     community QR asset already shipped in assets/ but was unreachable from
-     the READMEs. -->
-
-<div align="center">
-
-<img src="assets/wechat-community-qrcode.png" width="160" alt="Murmur WeChat community QR code" />
-
-**Scan to join the WeChat community** — questions, feedback, and release news.
-
-</div>
+<!-- [20260917_README_RemoveCommunity] Owner request (2026-09-17): drop the
+     WeChat community section from both front doors; QR asset stays in
+     assets/ and can be re-linked later. -->
 
 ## 📊 Project Status
 

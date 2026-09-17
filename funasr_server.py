@@ -835,8 +835,14 @@ class FunASRServer:
                 if infer_path != audio_path:
                     try:
                         os.unlink(infer_path)
-                    except Exception:
-                        pass
+                    except Exception as unlink_error:
+                        # [20260913_Fix_197_UnlinkDebug] #197 #7: best-effort
+                        # cleanup stays non-fatal but diagnosable.
+                        logger.debug(
+                            "temp cleanup failed for %s: %s",
+                            infer_path,
+                            unlink_error,
+                        )
 
     def transcribe_file_audio(self, audio_path, options=None):
         """带时间戳的文件转录，用于 transcribe_file 命令"""
@@ -1107,8 +1113,14 @@ class FunASRServer:
                     for f in chunk_temp_files:
                         try:
                             os.unlink(f)
-                        except Exception:
-                            pass
+                        except Exception as unlink_error:
+                            # [20260913_Fix_197_UnlinkDebug] #197 #7: same
+                            # best-effort-but-diagnosable contract.
+                            logger.debug(
+                                "chunk temp cleanup failed for %s: %s",
+                                f,
+                                unlink_error,
+                            )
 
                 logger.info(f"ASR phase END (VAD-segmented) request_id={request_id} "
                             f"elapsed={time.time()-_t_asr:.2f}s chunks={total_chunks} text_len={len(raw_text)}")
@@ -1229,8 +1241,14 @@ class FunASRServer:
             if dsp_path and dsp_path != audio_path:
                 try:
                     os.unlink(dsp_path)
-                except Exception:
-                    pass
+                except Exception as unlink_error:
+                    # [20260913_Fix_197_UnlinkDebug] #197 #7: DSP temp cleanup
+                    # failure is best-effort but diagnosable.
+                    logger.debug(
+                        "DSP temp cleanup failed for %s: %s",
+                        dsp_path,
+                        unlink_error,
+                    )
             if (
                 converted_path
                 and converted_path != audio_path
