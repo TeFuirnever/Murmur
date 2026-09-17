@@ -4,7 +4,6 @@
 // Deterministic: the SVG is rendered to PNG via sharp (astro's transitive
 // image dependency, resolvable from website/node_modules).
 //   node scripts/og-image.mjs   →  public/og-image.png (1200×630)
-import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
