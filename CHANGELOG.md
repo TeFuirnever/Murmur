@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-09-17
+
+### Added
+
+- **MCP/CLI 程序化接口全量**（Spec #258，#258 + #260–#272）：`murmur` CLI（`config`/`history` 本地子命令 + `transcribe`/`polish`/`status`/`history delete` 桥接子命令）、`murmur mcp` stdio MCP server（transcribe_file / get_murmur_status / polish_text / list_transcriptions / get_transcription / delete_transcription 六工具，structuredContent + 诚实 annotations）、`murmur mcp install` 三客户端（Claude Code/Cursor/VS Code）幂等接入——「中文转写 + 说话人分离 + 本地优先」的 MCP server 生态位首家。安全模型：本地认证通道（token 握手 + 随机管道名 + 逐跳 SSRF 复验 + 响应体上限）经 Windows named pipe PoC 一手数据验证。
+- **单实例锁**（#260，PR #354）：双开不再争抢 ASR 子进程与 SQLite——第二实例硬退出，已有实例窗口唤起。
+- **模板可视化编辑器**（Spec #193 T15，#242，PR #367）：设置页模板编辑（400ms 防抖 + 卸载 flush），文件名净化（路径穿越/Windows 保留名封堵），保存即失效 30s 模板缓存，遮蔽内置模式警告，{output_lang}/{speakers} 占位符提示。
+- **深色 OG 图**（#150，PR #374）：匹配 20260803 重设计的 1200×630 OG 图，生成器入库（`node website/scripts/og-image.mjs`）可重跑。
+- **README 契约测试**（#299，PR #368）：站内链接完整性 / 版本声明 ↔ package.json 一致 / 中英标题对齐三断言；CONTRIBUTING 覆盖率数字对齐。
+
+### Changed
+
+- **三域服务化重构**（#261 #262，PR #356 #358）：转写 / AI / 历史能力收拢为不依赖渲染进程的服务函数——GUI 行为零变化，为 CLI/MCP 桥接提供无窗口调用面。
+- **依赖升级批次**：Actions（checkout v7 / setup-node v7 / setup-python v7）、@types/node 26、lint-staged 17.5.1、globals 17.11、website（astro 7 迁移 PR#373 + smol-toml/js-yaml/svgo/postcss）、python 嵌入环境 pins（hydra-core 1.3.4 / setuptools 83 / pillow 12.3 / msgpack 1.2.1）。
+
+### Fixed
+
+- **AI优化标签基线**（#197 #1，PR #370）：history 与结果组件的比较基线从 raw_text 改为显示文本——清洗过但无 AI 参与的记录不再显示误导性「AI优化」标签。
+- **CLI 历史搜索纳入 raw_text**（#197 #2，PR #377）：被清洗折叠的词组从清洗前原文保持可搜。
+- **temp-cleanup 静默点**（#197 #7，PR #378）：四处清理失败统一 debug 日志（非致命，可诊断）。
+- **模型就绪锚点跨语言契约**（#256 R1/R2，PR #371）：Node/Python 就绪判定集合等值（补齐 _.onnx/model.yaml/vocab_，移除 config.yaml），未来模型换版不再复活状态横跳；死参数 --output 移除、cache_root 落日志。
+
+### Security
+
+- **SSRF 门禁加固二期**（#319，PR #369）：AI 通道重定向逐跳复验（跨源剥 Authorization，MAX_REDIRECT_HOPS=3）、LIST_MODELS 响应体 512KB 上限、DNS rebinding TOCTOU 成文。
+- **fast-uri 3.1.7 override**：四条 high 通告（SSRF via skipped IDN / host confusion），经 ajv 传入。
+
 ## [1.5.1] - 2026-09-11
 
 ### Added
