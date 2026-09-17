@@ -111,10 +111,14 @@ const HistoryContent = ({
   const filteredTranscriptions = React.useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return transcriptions;
+    // [20260913_Fix_197_SearchRawText] Include raw_text in the search
+    // surface (#197 #2): phrases that the cleaner folded away (e.g.
+    // repeated filler words) remain findable from the pre-clean original.
     return transcriptions.filter(
       (item) =>
         item.text?.toLowerCase().includes(query) ||
-        item.processed_text?.toLowerCase().includes(query),
+        item.processed_text?.toLowerCase().includes(query) ||
+        item.raw_text?.toLowerCase().includes(query),
     );
   }, [transcriptions, searchQuery]);
 
