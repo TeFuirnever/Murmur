@@ -238,6 +238,28 @@ describe("[20260816_Test_HistoryPage] history window entry", () => {
     expect(screen.getByText("共 1 条记录")).toBeInTheDocument();
   });
 
+  // [20260913_Fix_197_SearchRawText] raw_text joins the search surface
+  // (#197 #2): phrases the cleaner folded away stay findable from the
+  // pre-clean original.
+  it("matches the query against raw_text (pre-clean original)", async () => {
+    apiMocks.getTranscriptions.mockResolvedValue([
+      makeRecord(3, "整理后的会议纪要", {
+        raw_text: "好的好的好的 那个 开一下会",
+      }),
+    ]);
+    await mountHistory();
+    expect(await screen.findByText("整理后的会议纪要")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText("搜索转录内容..."), {
+      target: { value: "开一下会" },
+    });
+
+    // The folded-away phrase is found via raw_text; the displayed text no
+    // longer contains it, so the match itself proves raw_text was searched.
+    expect(screen.getByText("整理后的会议纪要")).toBeInTheDocument();
+    expect(screen.getByText("共 1 条记录")).toBeInTheDocument();
+  });
+
   it("shows the no-match state for a query that hits nothing", async () => {
     apiMocks.getTranscriptions.mockResolvedValue([makeRecord(1, "苹果")]);
     await mountHistory();
