@@ -269,18 +269,8 @@ PRs welcome! 见 [CONTRIBUTING.md](CONTRIBUTING.md) 了解开发环境搭建、�
 
 **帮助与社区**：常见问题 → [FAQ](docs/faq.md) · 故障排除 → [故障排除指南](docs/troubleshooting.md) · 安全漏洞 → [安全策略](SECURITY.md)（安全报告请勿提交公开 issue）。
 
-## 💬 社区交流
-
-<!-- [20260916_README_Community] 补上此前缺失的社区入口：微信社区二维码资产早已在
-     assets/ 中，但 README 里没有任何地方能发现它。 -->
-
-<div align="center">
-
-<img src="assets/wechat-community-qrcode.png" width="160" alt="Murmur 微信社区二维码" />
-
-**扫码加入微信社区** —— 提问、反馈、第一时间获取更新动态。
-
-</div>
+<!-- [20260917_README_RemoveCommunity] 应 owner 要求（2026-09-17）：两个门脸
+     均撤下微信社区区块；二维码资产保留在 assets/，需要时可重新挂回。 -->
 
 ## 📊 项目状态
 
