@@ -49,6 +49,7 @@
     "format": "prettier --write \"*.{js,json,md,yml}\" \"src/**/*.{js,jsx,ts,tsx,css}\" \"tests/**/*.{js,ts}\" \"scripts/**/*.js\" \"cli/**/*.mjs\"",
     "format:check": "prettier --check \"*.{js,json,md,yml}\" \"src/**/*.{js,jsx,ts,tsx,css}\" \"tests/**/*.{js,ts}\" \"scripts/**/*.js\" \"cli/**/*.mjs\"",
     "license:check": "license-checker --failOn \"GPL-*;AGPL-*\" --excludePrivatePackages",
+    "check:debt-markers": "node scripts/check-debt-markers.js",
     "ci:check": "node scripts/ci-check.js",
     "ci:fix": "node scripts/ci-check.js --fix",
     "preview": "cd src && vite preview",

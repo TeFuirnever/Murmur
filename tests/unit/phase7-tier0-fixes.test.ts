@@ -13,7 +13,8 @@
 // lived in beforeEach blocks with no vi.mock → safe to hoist. The remaining
 // 3 require() calls are `require("fs")` INSIDE one it() body that mutates
 // Node's built-in fs.existsSync — those don't depend on resetModules and
-// converting them is out of scope (deferred, see TODO in that test).
+// were left in place at this stage; the "Tier 3.2 final" pass documented
+// directly below converted them.
 // [20260726_Tier32_Phase7Tier0Fixes] Tier 3.2 final: converted the last 3
 // require("fs") sites in the PYTHONUTF8 test. A single top-level
 // `import fs from "fs"` replaces all three `require("fs")` calls. Because

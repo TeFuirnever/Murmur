@@ -69,6 +69,14 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      # [20260918_Ci_DebtMarkerGate] ADHA-2: mirror of the local ci-check
+      # stage1 entry. Zero debt-marker comments in code is repo policy (debt
+      # is tracked in docs/follow-ups.md / backlog.md); any new marker in
+      # the scanned scope (src/, scripts/, build/, root code + configs)
+      # fails this step.
+      - name: Debt-marker check
+        run: pnpm run check:debt-markers
+
       - name: Typecheck
         run: pnpm typecheck
 

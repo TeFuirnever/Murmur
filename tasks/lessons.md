@@ -92,3 +92,13 @@ Three stacked root causes, each invisible to "did the build finish" checks:
 3. **pnpm only links `node_modules/.bin` shims for direct dependencies.** electron-builder 26 pulled `@electron/rebuild` in transitively; `npx` then found the package locally without its bin shim → "'electron-rebuild' is not recognized" on Windows CI.
 
 **Rule:** The release pipeline's acceptance object is "the installed app", not "files in dist/". Five gates now enforce this in `build.yml` (see `CONTRIBUTING.md` → Release Gates): native-ABI gate (open a real in-memory DB under `ELECTRON_RUN_AS_NODE` Electron), preload-presence gate (`test -f dist-preload/preload.js`), Python packaging gate (hard embedded-Python prep step that must really import numpy/soundfile/funasr before packaging), mac packaged boot smoke (mount the DMG, launch, assert 主窗口创建成功 / 应用启动完成 / 热键注册成功 — the last is renderer→preload→IPC, proving the bridge), and the Windows NSIS silent-install counterpart. When verifying locally, remember `require('better-sqlite3')` alone proves nothing — the addon loads lazily inside `new Database()`. And never run `asar extract-file` from the repo root: it writes the file's basename into the CWD (this clobbered package.json once).
+
+---
+
+## L8: Zero debt markers is enforced policy — and repo scanners must not self-match
+
+**Date:** 2026-09-16 (ADHA-1 audit; write-back lost with its worktree, restored here) / 2026-09-18 (ADHA-2 gate added)
+
+**Context:** The ADHA-1 full-repo inventory found zero TODO/FIXME/HACK in scope — not by luck but by policy: debt is tracked in `docs/follow-ups.md` / `backlog.md`, never as code comments. ADHA-2 turned the policy into a constraint: `scripts/check-debt-markers.js` fails `pnpm ci:check` stage 1 (and the "Debt-marker check" step in ci.yml) on any new marker in `src/`, `scripts/`, `build/`, or root code/config files (exclusions: `node_modules`, `python/`, `out/`, `website/`, `dist`/`dist-*`).
+
+**Rule:** Keep debt in the docs ledgers, not in code comments; treat any new marker as a regression. The living suppression surface to audit is `eslint-disable` / `@ts-ignore`, not markers. Two practical gotchas: (1) a scanner that lives inside its own scanned tree must assemble its marker patterns at runtime (`"TO" + "DO"`) so it does not match its own source or messages; (2) when a filtered grep pipeline reports a suspicious hit, verify with `awk 'NR==n'` on the original file — filter tools can misalign line numbers.
