@@ -138,6 +138,7 @@ chore: 升级 Electron 到 v36
 10. **Build renderer** — `pnpm run build:renderer`
 11. <!-- [20260816_Refactor_RemoveEffects] gate removed with the effects feature -->
 12. **E2E boot health（阻塞）** — `pnpm test:e2e:boot`（Spec #266 T01 起为合并门禁：失败阻塞 merge；全量 `pnpm test:e2e` 仍在 boot-health 连续 2–3 个 PR 双腿全绿后才会摘除非阻塞开关）
+13. **Debt-marker check** — `pnpm run check:debt-markers`（ADHA-2：代码零 TODO/FIXME/HACK 标记是既定政策，债务记入 `docs/follow-ups.md`/`backlog.md`；扫描 `src/`、`scripts/`、`build/` 及根目录代码与配置文件，命中即失败）
 
 ### Release Gates（Build Installers 流水线，tag `v*` 触发）
 

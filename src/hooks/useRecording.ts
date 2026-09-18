@@ -455,6 +455,12 @@ export const useRecording = ({
     } finally {
       processingRef.current.isProcessingAudio = false;
     }
+    // [20260918_Docs_ProcessAudioEmptyDeps] The empty deps below are
+    // deliberate (ADHA-1 finding #3): processAudio keeps ONE stable identity
+    // for the hook's lifetime — all mutable state flows through refs
+    // (processingRef, onTranscriptionCompleteRef, ...) and its only closure
+    // dependency (convertToWav) is itself frozen with [] deps. Do not "fix"
+    // the deps array or delete the disable without rechecking that contract.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

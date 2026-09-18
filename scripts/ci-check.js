@@ -268,6 +268,13 @@ async function main() {
     run("pnpm typecheck", "typecheck"),
     run("pnpm typecheck:tests", "typecheck:tests"),
     run("pnpm run test:python:unit", "test:python:unit"),
+    // [20260918_Ci_DebtMarkerGate] ADHA-2: zero debt-marker comments in code
+    // is repo policy (debt lives in docs/follow-ups.md / backlog.md); this
+    // gate turns the policy into a constraint — any new marker in the
+    // scanned scope fails the stage. Mirrored by the "Debt-marker check"
+    // step in ci.yml.
+    run("pnpm run check:debt-markers", "debt markers"),
+    // [20260918_Ci_DebtMarkerGate] END
   ]);
   stage1.forEach(printResult);
   // [20260725_Autopilot_T2.2] END
