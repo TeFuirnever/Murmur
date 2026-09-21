@@ -111,7 +111,7 @@
     "tailwindcss": "^4.1.10",
     "tailwindcss-animate": "^1.0.7",
     "tar": "^7.5.22",
-    "tsx": "^4.22.3",
+    "tsx": "^4.23.13",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.60.0",
     "vite": "^6.4.3",
