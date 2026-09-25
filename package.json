@@ -92,7 +92,7 @@
     "axe-core": "^4.13.0",
     "concurrently": "^8.2.2",
     "cross-env": "^10.0.0",
-    "electron": "39.8.10",
+    "electron": "44.4.3",
     "electron-builder": "^26.15.3",
     "esbuild": "^0.25.12",
     "eslint": "^9.25.0",
