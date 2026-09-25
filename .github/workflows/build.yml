@@ -86,7 +86,7 @@ jobs:
       # without a Python env while the build stayed green (spec #177 B-0).
       - name: Cache embedded Python
         id: cache-python
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: python
           key: embedded-python-${{ runner.os }}-${{ hashFiles('scripts/prepare-embedded-python.js') }}
@@ -337,7 +337,7 @@ jobs:
       # fails — a package without Python cannot transcribe at all.
       - name: Cache embedded Python
         id: cache-python
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: python
           key: embedded-python-${{ runner.os }}-${{ hashFiles('scripts/prepare-embedded-python.js') }}
