@@ -23,7 +23,16 @@ import { PREDEFINED_MODELS, MODEL_LABELS } from "../useSettings";
 
 interface AIConfigSectionProps {
   settings: SettingsState;
-  onInputChange: (key: string, value: unknown) => void;
+  // [20260926_Perf_402_TextInputDebounce] The third argument flags discrete
+  // controls (the AI-model dropdown) so their write skips the debounce.
+  onInputChange: (
+    key: string,
+    value: unknown,
+    options?: { immediate?: boolean },
+  ) => void;
+  // [20260926_Perf_402_TextInputDebounce] Blur flush hook for the debounced
+  // text inputs (issue #402: persist the tail keystroke on field exit).
+  onInputBlur?: () => void;
   customModel: boolean;
   setCustomModel: (v: boolean) => void;
   resolvedProviderPresets: {
@@ -54,6 +63,7 @@ interface AIConfigSectionProps {
 export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
   settings,
   onInputChange,
+  onInputBlur,
   customModel,
   setCustomModel,
   resolvedProviderPresets,
@@ -290,6 +300,7 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
             type={showApiKey ? "text" : "password"}
             value={settings.ai_api_key}
             onChange={(e) => onInputChange("ai_api_key", e.target.value)}
+            onBlur={onInputBlur}
             placeholder={t(
               "settings.ai.apiKeyPlaceholder",
               "请输入您的AI API Key",
@@ -325,6 +336,7 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
           type="url"
           value={settings.ai_base_url}
           onChange={(e) => onInputChange("ai_base_url", e.target.value)}
+          onBlur={onInputBlur}
           placeholder="https://api.openai.com/v1"
           className="w-full px-3 py-2 text-sm border border-[#d2d2d7] dark:border-[#3a3a3c] rounded-lg focus:ring-2 focus:ring-[#0071e3] focus:border-transparent bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7]"
         />
@@ -362,7 +374,9 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
             <select
               aria-label={t("settings.ai.predefinedModel", "预定义模型")}
               value={settings.ai_model}
-              onChange={(e) => onInputChange("ai_model", e.target.value)}
+              onChange={(e) =>
+                onInputChange("ai_model", e.target.value, { immediate: true })
+              }
               className="w-full px-3 py-2 text-sm border border-[#d2d2d7] dark:border-[#3a3a3c] rounded-lg focus:ring-2 focus:ring-[#0071e3] focus:border-transparent bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7]"
             >
               {PREDEFINED_MODELS.map((model) => (
@@ -395,6 +409,7 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
               type="text"
               value={settings.ai_model}
               onChange={(e) => onInputChange("ai_model", e.target.value)}
+              onBlur={onInputBlur}
               list="provider-model-list"
               placeholder={t(
                 "settings.ai.modelPlaceholder",

@@ -14,6 +14,12 @@ import type {
 // recording hotkey setting (issue #246: the setting existed in storage and
 // the allowlist but nothing read or wrote it).
 import { DEFAULT_HOTKEY } from "./hotkeyRecorder";
+// [20260926_Perf_402_TextInputDebounce] Debounce/flush engine for the
+// text-like persistence writes (issue #402).
+import {
+  createTextWriteScheduler,
+  TEXT_INPUT_SETTING_KEYS,
+} from "./textWriteScheduler";
 
 export { DEFAULT_HOTKEY };
 
@@ -120,6 +126,20 @@ export const DEFAULT_SETTINGS: SettingsState = {
   bot_expression: "neutral",
 };
 
+// [20260926_Perf_402_TextInputDebounce] Options for handleInputChange. The
+// immediate flag exists for discrete controls (the AI-model dropdown is a
+// <select> editing the text-like ai_model key): a select/switch/theme pick
+// must never wait out the debounce window, so it persists in the same tick
+// and supersedes any pending debounced value for that key.
+export interface HandleSettingChangeOptions {
+  immediate?: boolean;
+}
+
+// [20260926_Perf_402_TextInputDebounce] Debounce window and key list for
+// text-input persistence debounce live in ./textWriteScheduler (shared by
+// the hook and its unit tests); see the module comment for the issue #402
+// rationale. Discrete controls (selects, switches, theme) are deliberately
+// absent from the debounce set — they stay instant.
 export function applyTheme(theme: string): void {
   const root = document.documentElement;
   if (theme === "dark") {
@@ -138,6 +158,18 @@ export function useSettings() {
   const { t } = useTranslation();
   const [settings, setSettings] = useState<SettingsState>(DEFAULT_SETTINGS);
   const apiKeyInputRef = useRef<HTMLInputElement>(null);
+
+  // [20260926_Perf_402_TextInputDebounce] Debounced persistence writer
+  // for text-like keys (issue #402): collapses keystroke bursts into one
+  // setSetting write, with flush()/cancel() for the blur / hide / close
+  // paths. Instance is stable for the hook's lifetime.
+  const textWrites = useMemo(
+    () =>
+      createTextWriteScheduler((key, value) =>
+        window.electronAPI?.setSetting(key, value),
+      ),
+    [],
+  );
 
   const [customModel, setCustomModel] = useState(false);
   const [providerPresets, setProviderPresets] = useState<ProviderPreset[]>([]);
@@ -278,49 +310,68 @@ export function useSettings() {
   // the AI Config tab's Save button called saveSettings(), so General tab
   // settings (effects_enabled, theme, auto_paste, close_behavior) were stuck
   // in React state and lost when the settings window was destroyed (Alt+F4).
-  const handleInputChange = useCallback((key: string, value: unknown) => {
-    // [20260905_Fix_249_ReviewMajor] enable_ai_optimization and default_mode
-    // are two views of one knob. They used to diverge when the AI Config
-    // toggle was flipped after load: saveSettings then persisted the stale
-    // derived "auto" alongside the boolean, and the read-side migration
-    // (which only runs when default_mode is null) never saw it — the toggle
-    // showed off while AI kept running. Sync both directions here so the
-    // auto-persist and the save loop always stay consistent.
-    if (key === "enable_ai_optimization") {
-      const enabled = value !== false;
-      setSettings((prev) => ({
-        ...prev,
-        enable_ai_optimization: enabled,
-        default_mode: enabled
-          ? prev.default_mode === "off"
-            ? "auto"
-            : prev.default_mode
-          : "off",
-      }));
-      if (window.electronAPI?.setSetting) {
-        window.electronAPI.setSetting(key, enabled);
-        window.electronAPI.setSetting("default_mode", enabled ? "auto" : "off");
+  const handleInputChange = useCallback(
+    (key: string, value: unknown, options?: HandleSettingChangeOptions) => {
+      // [20260905_Fix_249_ReviewMajor] enable_ai_optimization and default_mode
+      // are two views of one knob. They used to diverge when the AI Config
+      // toggle was flipped after load: saveSettings then persisted the stale
+      // derived "auto" alongside the boolean, and the read-side migration
+      // (which only runs when default_mode is null) never saw it — the toggle
+      // showed off while AI kept running. Sync both directions here so the
+      // auto-persist and the save loop always stay consistent.
+      if (key === "enable_ai_optimization") {
+        const enabled = value !== false;
+        setSettings((prev) => ({
+          ...prev,
+          enable_ai_optimization: enabled,
+          default_mode: enabled
+            ? prev.default_mode === "off"
+              ? "auto"
+              : prev.default_mode
+            : "off",
+        }));
+        if (window.electronAPI?.setSetting) {
+          window.electronAPI.setSetting(key, enabled);
+          window.electronAPI.setSetting(
+            "default_mode",
+            enabled ? "auto" : "off",
+          );
+        }
+        return;
       }
-      return;
-    }
-    if (key === "default_mode") {
-      const mode = typeof value === "string" ? value : "auto";
-      setSettings((prev) => ({
-        ...prev,
-        default_mode: mode,
-        enable_ai_optimization: mode !== "off",
-      }));
-      if (window.electronAPI?.setSetting) {
-        window.electronAPI.setSetting(key, mode);
-        window.electronAPI.setSetting("enable_ai_optimization", mode !== "off");
+      if (key === "default_mode") {
+        const mode = typeof value === "string" ? value : "auto";
+        setSettings((prev) => ({
+          ...prev,
+          default_mode: mode,
+          enable_ai_optimization: mode !== "off",
+        }));
+        if (window.electronAPI?.setSetting) {
+          window.electronAPI.setSetting(key, mode);
+          window.electronAPI.setSetting(
+            "enable_ai_optimization",
+            mode !== "off",
+          );
+        }
+        return;
       }
-      return;
-    }
-    setSettings((prev) => ({ ...prev, [key]: value }));
-    if (window.electronAPI?.setSetting) {
-      window.electronAPI.setSetting(key, value);
-    }
-  }, []);
+      setSettings((prev) => ({ ...prev, [key]: value }));
+      // [20260926_Perf_402_TextInputDebounce] Text-like keys defer the
+      // persistence write to the 400ms debounce; discrete controls and
+      // immediate-flagged writes persist in the same tick. An immediate write
+      // also cancels the pending value for that key so an older debounced
+      // text can never overwrite a newer discrete choice.
+      if (!options?.immediate && TEXT_INPUT_SETTING_KEYS.has(key)) {
+        textWrites.schedule(key, value);
+        return;
+      }
+      textWrites.cancel(key);
+      if (window.electronAPI?.setSetting) {
+        window.electronAPI.setSetting(key, value);
+      }
+    },
+    [textWrites],
+  );
 
   // --- Provider presets ---
   const isLocalDetected = useCallback(
@@ -500,6 +551,28 @@ export function useSettings() {
     }
   }, [loadSettings]);
 
+  // [20260926_Perf_402_TextInputDebounce] Safety net for the debounced
+  // writes: flush on window blur / hide (document hidden) / beforeunload
+  // (window close), and on unmount so a pending timer never survives its
+  // hook instance. Without a bridge there is nothing to write to.
+  useEffect(() => {
+    if (!window.electronAPI) return;
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        textWrites.flush();
+      }
+    };
+    window.addEventListener("blur", textWrites.flush);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("beforeunload", textWrites.flush);
+    return () => {
+      window.removeEventListener("blur", textWrites.flush);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("beforeunload", textWrites.flush);
+      textWrites.flush();
+    };
+  }, [textWrites]);
+
   useEffect(() => {
     if (!window.electronAPI) return;
     window.electronAPI
@@ -550,6 +623,7 @@ export function useSettings() {
     loading,
     saving,
     handleInputChange,
+    flushPendingSettingWrites: textWrites.flush,
     saveSettings,
 
     // AI 配置

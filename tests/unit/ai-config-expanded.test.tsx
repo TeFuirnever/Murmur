@@ -353,7 +353,12 @@ describe("[20260729_Test_AIConfigExpanded] AIConfigSection uncovered branches", 
       "GPT-3.5 Turbo",
     ) as HTMLSelectElement;
     fireEvent.change(modelSelect, { target: { value: "gpt-4o" } });
-    expect(onInputChange).toHaveBeenCalledWith("ai_model", "gpt-4o");
+    // [20260926_Perf_402_TextInputDebounce] The dropdown is a discrete
+    // select editing the text-like ai_model key — its change is flagged
+    // immediate so the hook persists it in the same tick (no 400ms wait).
+    expect(onInputChange).toHaveBeenCalledWith("ai_model", "gpt-4o", {
+      immediate: true,
+    });
   });
 
   // ── Base URL change ──

@@ -188,4 +188,20 @@ describe("[20260816_Test_GeneralSection] GeneralSection", () => {
     });
     expect(onInputChange).toHaveBeenCalledWith("hotwords", "张晗玥");
   });
+
+  // [20260926_Perf_402_TextInputDebounce] The hotwords textarea is debounced
+  // at the persistence layer; leaving the field must flush the pending write
+  // (issue #402: avoid losing the tail keystroke on window close).
+  it("requests a pending-write flush when the hotwords textarea blurs", () => {
+    const onInputBlur = vi.fn();
+    render(
+      <GeneralSection
+        settings={BASE}
+        onInputChange={onInputChange}
+        onInputBlur={onInputBlur}
+      />,
+    );
+    fireEvent.blur(screen.getByLabelText("热词"));
+    expect(onInputBlur).toHaveBeenCalledTimes(1);
+  });
 });
