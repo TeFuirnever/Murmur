@@ -22,7 +22,9 @@ import path from "path";
 
 type ViFn = ReturnType<typeof vi.fn>;
 interface BrowserWindowInstance {
-  webContents: { send: ViFn };
+  // [20260926_Fix_BloubHiddenPause] webContents.on exists: windowManager
+  // registers did-finish-load there (initial visibility truth push)
+  webContents: { send: ViFn; on: ViFn };
   on: ViFn;
   loadURL: ViFn;
   loadFile: ViFn;
@@ -37,7 +39,12 @@ type EventListener = (...args: unknown[]) => void;
 
 const electronMock = vi.hoisted(() => ({
   BrowserWindow: vi.fn() as ViFn,
-  app: { getAppPath: vi.fn(() => "/fake/app/path") as ViFn },
+  // [20260926_Fix_BloubHiddenPause] on: createMainWindow now registers
+  // app-level hide/show hooks
+  app: {
+    getAppPath: vi.fn(() => "/fake/app/path") as ViFn,
+    on: vi.fn() as ViFn,
+  },
   session: {
     defaultSession: {
       webRequest: { onHeadersReceived: vi.fn() as ViFn },
@@ -63,7 +70,7 @@ describe("windowManager deferred main-window load (issue #211)", () => {
     Object.assign(process, { resourcesPath: "/fake/resources" });
     onHandlers = {};
     instance = {
-      webContents: { send: vi.fn() },
+      webContents: { send: vi.fn(), on: vi.fn() },
       on: vi.fn((event: string, handler: EventListener) => {
         onHandlers[event] = handler;
       }),

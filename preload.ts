@@ -23,6 +23,7 @@ import type {
   UpdateErrorData,
   DownloadProgress,
   FileTranscriptionProgressData,
+  WindowVisibilityData,
 } from "./src/types/ipc";
 
 // [20260725_CodeReview_ListenerHelper] Common shape for 7 `on*` event
@@ -53,6 +54,15 @@ export const preloadApi: ElectronAPI = {
   maximizeWindow: () => ipcRenderer.invoke(C.WINDOW.MAXIMIZE),
   onWindowMaximizeChange: (callback: (isMaximized: boolean) => void) =>
     makeListener<boolean>(C.EVENTS.WINDOW_MAXIMIZE_CHANGE, callback),
+  // [20260926_Fix_BloubHiddenPause] window-visibility truth push; full
+  // rationale in windowManager.ts.
+  onWindowVisibilityChange: (
+    callback: (visibility: WindowVisibilityData) => void,
+  ) =>
+    makeListener<WindowVisibilityData>(
+      C.EVENTS.WINDOW_VISIBILITY_CHANGE,
+      callback,
+    ),
   closeWindow: () => ipcRenderer.invoke(C.WINDOW.CLOSE),
   closeApp: () => ipcRenderer.invoke(C.WINDOW.CLOSE_APP),
   setAlwaysOnTop: (enabled: boolean) =>

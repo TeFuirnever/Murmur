@@ -16,7 +16,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 type ViFn = ReturnType<typeof vi.fn>;
 const electronMock = vi.hoisted(() => ({
   BrowserWindow: vi.fn() as ViFn,
-  app: { getAppPath: vi.fn(() => "/fake/app/path") as ViFn },
+  // [20260926_Fix_BloubHiddenPause] app-level hide/show hooks (the
+  // visibility truth backstop) bind app.on at createMainWindow time.
+  app: {
+    getAppPath: vi.fn(() => "/fake/app/path") as ViFn,
+    on: vi.fn() as ViFn,
+  },
   session: {
     defaultSession: {
       webRequest: { onHeadersReceived: vi.fn() as ViFn },
@@ -36,7 +41,13 @@ const minimizeMock = vi.hoisted(() => ({
 vi.mock("../../src/helpers/minimizeToTray", () => minimizeMock);
 
 interface BrowserWindowInstance {
-  webContents: { send: ReturnType<typeof vi.fn> };
+  // [20260926_Fix_BloubHiddenPause] the visibility truth-push hooks
+  // webContents.on("did-finish-load") during createMainWindow — the mock
+  // needs the listener registration, not just send.
+  webContents: {
+    send: ReturnType<typeof vi.fn>;
+    on: ReturnType<typeof vi.fn>;
+  };
   on: ReturnType<typeof vi.fn>;
   loadURL: ReturnType<typeof vi.fn>;
   loadFile: ReturnType<typeof vi.fn>;
@@ -58,7 +69,7 @@ describe("[20260926_Issue405] windowManager minimize-to-tray wiring", () => {
 
   function installBrowserWindow(): void {
     MockBrowserWindow = vi.fn(function (this: BrowserWindowInstance) {
-      this.webContents = { send: vi.fn() };
+      this.webContents = { send: vi.fn(), on: vi.fn() };
       this.on = vi.fn((event: string, handler: EventListener) => {
         onHandlers[event] = handler;
       });

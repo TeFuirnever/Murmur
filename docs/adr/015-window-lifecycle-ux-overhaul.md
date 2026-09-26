@@ -40,6 +40,8 @@
 
 **CPU 缓解**: 配套在 `EffectsLayer.tsx` 中添加 `visibilitychange` 监听，隐藏时暂停 WebGL 渲染循环。
 
+> **[20260926] 更新**：EffectsLayer 已随视觉特效系统整体移除（[20260816_Refactor_RemoveEffects]），且实测 `backgroundThrottling: false` 下 macOS 隐藏窗口不触发页面 `visibilitychange`，本条缓解的前提不成立。现行缓解机制为主进程推送窗口可见性真值（`WINDOW_VISIBILITY_CHANGE`）暂停 BloubBot 的 rAF 循环，完整依据见 `src/helpers/windowManager.ts`，回归测试见 `tests/unit/windowManager-events.test.ts`。
+
 ### D2: 移除 `transparent: true` 和 `skipTaskbar: true`
 
 移除主窗口的 `transparent: true`（Tracer 确认 body `background-color: hsl(0 0% 96.5%)` 和 root `bg-[#f5f5f7]` 均为不透明，透明度未被视觉使用）和 `skipTaskbar: true`。
@@ -156,12 +158,12 @@
 
 ## 风险评估
 
-| 风险                                         | 严重性 | 缓解                                                   |
-| -------------------------------------------- | ------ | ------------------------------------------------------ |
-| 移除 `transparent: true` 改变窗口外观        | 🟡 中  | Tracer 确认 body/#root 已不透明。需 Windows 手动验证。 |
-| `backgroundThrottling: false` 增加隐藏时 CPU | 🟡 中  | EffectsLayer visibilitychange 暂停缓解。               |
-| showSettings 取消置顶后崩溃未恢复            | 🟢 低  | closed 处理器无条件恢复 alwaysOnTop。                  |
-| saveSettings 返回值变更影响调用方            | 🟢 低  | 仅 `settings.tsx:142` 调用，改为 await + 检查返回值。  |
+| 风险                                         | 严重性 | 缓解                                                             |
+| -------------------------------------------- | ------ | ---------------------------------------------------------------- |
+| 移除 `transparent: true` 改变窗口外观        | 🟡 中  | Tracer 确认 body/#root 已不透明。需 Windows 手动验证。           |
+| `backgroundThrottling: false` 增加隐藏时 CPU | 🟡 中  | 见 D1 [20260926] 更新：window-visibility 推送暂停 BloubBot rAF。 |
+| showSettings 取消置顶后崩溃未恢复            | 🟢 低  | closed 处理器无条件恢复 alwaysOnTop。                            |
+| saveSettings 返回值变更影响调用方            | 🟢 低  | 仅 `settings.tsx:142` 调用，改为 await + 检查返回值。            |
 
 ## Review 记录
 

@@ -373,6 +373,12 @@ export interface FileTranscriptionProgressData {
   progress_pct?: number;
 }
 
+// [20260926_Fix_BloubHiddenPause] payload for the window-visibility-change
+// push; full rationale in windowManager.ts.
+export interface WindowVisibilityData {
+  visible: boolean;
+}
+
 // [20260725_CodeReview_OperationResult] Common shape for handlers that only
 // report success/failure with optional error message — no other payload.
 // Replaces inline `{ success: boolean; error?: string }` duplicated across

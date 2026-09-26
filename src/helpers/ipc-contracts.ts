@@ -154,6 +154,9 @@ export const EVENTS = {
   AI_POLISH_CHUNK: "ai-polish-chunk",
   HOTKEY_TRIGGERED: "hotkey-triggered",
   WINDOW_MAXIMIZE_CHANGE: "window-maximize-change",
+  // [20260926_Fix_BloubHiddenPause] window-visibility truth push; full
+  // rationale in windowManager.ts.
+  WINDOW_VISIBILITY_CHANGE: "window-visibility-change",
   SETTINGS_UPDATE: "settings-update",
   MODEL_DOWNLOAD_PROGRESS: "model-download-progress",
   FILE_TRANSCRIPTION_PROGRESS: "file-transcription-progress",

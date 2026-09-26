@@ -9,6 +9,12 @@ import { BrowserWindow, session, app } from "electron";
 // [20260724_TS_BigBang_DirnameFix] END
 import path from "path";
 import * as C from "./ipc-contracts";
+// [20260926_Fix_BloubHiddenPause] payload type for the visibility push below
+import type { WindowVisibilityData } from "../types/ipc";
+
+// [20260926_Fix_BloubHiddenPause] cadence of the visibility truth-poll
+// backstop (rationale in the marker block inside createMainWindow)
+const VISIBILITY_POLL_MS = 1000;
 // [20260926_Issue405] Minimize-to-tray interception (issue #405, win32
 // only — see the module for the macOS system-convention decision).
 import {
@@ -23,6 +29,9 @@ class WindowManager {
   private _creatingMainWindow: boolean;
   private _alwaysOnTop: boolean;
   private _cspSetup: boolean;
+  // [20260926_Fix_BloubHiddenPause] app-level hide/show hooks must register
+  // once per manager, not once per createMainWindow (window re-creation)
+  private _appVisibilityHooksRegistered: boolean;
   // [20260602_Fix_MaximizeToggle] Bounds snapshot before maximize
   // On Windows, transparent windows always report isMaximized() === false,
   // so we use this property as the maximize-state flag instead.
@@ -35,6 +44,7 @@ class WindowManager {
     this._creatingMainWindow = false;
     this._alwaysOnTop = true;
     this._cspSetup = false;
+    this._appVisibilityHooksRegistered = false;
     // [20260602_Fix_MaximizeToggle] Bounds snapshot before maximize
     // On Windows, transparent windows always report isMaximized() === false,
     // so we use this property as the maximize-state flag instead.
@@ -130,7 +140,13 @@ class WindowManager {
         },
       });
 
+      // [20260926_Fix_BloubHiddenPause] poll handle in a holder so the single
+      // 'closed' handler can clear the backstop poller created further down
+      // (in the marker block) — one 'closed' registration, no listener
+      // shadowing
+      const pollerRef: { timer?: ReturnType<typeof setInterval> } = {};
       this.mainWindow.on("closed", () => {
+        if (pollerRef.timer !== undefined) clearInterval(pollerRef.timer);
         this.mainWindow = null;
       });
 
@@ -150,6 +166,89 @@ class WindowManager {
           false,
         );
       });
+
+      // [20260926_Fix_BloubHiddenPause] backgroundThrottling is disabled on
+      // this window (ADR-015), and with that flag Chromium never flips page
+      // visibility on macOS hide()/minimize() — the renderer's
+      // visibilitychange never fires, so the mascot's rAF pause signal is
+      // pushed from here, where the true window state lives. Hooking the
+      // window events (not the IPC handlers) covers every hide path,
+      // including the custom close button, which goes through
+      // ipc/windowHandlers.ts calling mainWindow.hide().
+      //
+      // The payload is DERIVED TRUTH — isVisible() && !isMinimized() — not an
+      // event-name guess: on macOS, unhiding the APP (Cmd+H toggle) makes the
+      // window visible natively WITHOUT firing 'show' ('show' fires only on
+      // explicit win.show()), which left the mascot permanently paused. The
+      // 'focus' hook is the app-unhide resume signal, and recomputing the
+      // real state on every emission keeps duplicates (show+restore) harmless
+      // and future hide paths safe as long as some event correlates.
+      const emitVisibility = (): void => {
+        // the app-level hooks outlive any one window instance — skip when
+        // the main window is gone or mid-teardown (the five window-event
+        // hooks cannot fire on a destroyed window, so this guard is a
+        // no-op for them)
+        const win = this.mainWindow;
+        if (!win || win.isDestroyed()) return;
+        win.webContents.send(C.EVENTS.WINDOW_VISIBILITY_CHANGE, {
+          visible: win.isVisible() && !win.isMinimized(),
+        } satisfies WindowVisibilityData);
+      };
+      this.mainWindow.on("hide", emitVisibility);
+      this.mainWindow.on("minimize", emitVisibility);
+      this.mainWindow.on("show", emitVisibility);
+      this.mainWindow.on("restore", emitVisibility);
+      this.mainWindow.on("focus", emitVisibility);
+      // Initial truth push: a renderer that finishes loading while the
+      // window is already hidden (reload / crash-restore while hidden)
+      // would otherwise run its rAF loop from mount until an unrelated
+      // window event fired. Derived truth, so a visible-window boot
+      // harmlessly re-sends visible:true.
+      this.mainWindow.webContents.on("did-finish-load", emitVisibility);
+      // App-level hide/show: macOS application-level hide (Cmd+H toggle)
+      // delivers the window 'hide' event NON-DETERMINISTICALLY (observed on
+      // Electron 39.8.10 — flaky at later post-boot timings), so the app
+      // module's hide/show — deterministic at the app layer — back the same
+      // derived-truth push and give a second unhide signal on top of
+      // 'focus'. Registered once per manager: createMainWindow can run again
+      // after a main-window close, and must not duplicate the listeners.
+      if (!this._appVisibilityHooksRegistered) {
+        this._appVisibilityHooksRegistered = true;
+        // Electron 39's App interface omits the (runtime-present, documented
+        // macOS) 'hide'/'show' event overloads its own BaseWindow declares —
+        // one narrow cast via unknown instead of a string-literal lie or `any`.
+        const appOn = app.on.bind(app) as unknown as (
+          event: "hide" | "show",
+          listener: () => void,
+        ) => unknown;
+        // app 'hide' is DEFINITIVE truth — app hidden means the main window
+        // cannot be visible — so this hook sends literal false instead of
+        // deriving: isVisible() races the app-level hide on macOS and was
+        // observed emitting stale true at the exact hide moment.
+        appOn("hide", () => {
+          const win = this.mainWindow;
+          if (!win || win.isDestroyed()) return;
+          win.webContents.send(C.EVENTS.WINDOW_VISIBILITY_CHANGE, {
+            visible: false,
+          } satisfies WindowVisibilityData);
+        });
+        appOn("show", emitVisibility);
+      }
+
+      // Event delivery on the macOS app-level hide path is non-deterministic
+      // at every layer (empirically: window 'hide' flaky, app 'hide' silent
+      // even for a real app.hide()). The poller is the correctness mechanism:
+      // 1Hz unconditional truth converges every state — flaky-event hides,
+      // stale isVisible races, and renderers that mounted while hidden —
+      // while the event hooks above stay as the instant fast path where they
+      // do fire.
+      pollerRef.timer = setInterval(() => {
+        const win = this.mainWindow;
+        if (!win || win.isDestroyed()) return;
+        win.webContents.send(C.EVENTS.WINDOW_VISIBILITY_CHANGE, {
+          visible: win.isVisible() && !win.isMinimized(),
+        } satisfies WindowVisibilityData);
+      }, VISIBILITY_POLL_MS);
 
       // [20260926_Issue405] Minimize-to-tray interception (issue #405):
       // attached at creation so the Dock-recreate path
