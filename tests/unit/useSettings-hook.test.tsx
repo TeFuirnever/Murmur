@@ -239,6 +239,36 @@ describe("useSettings hook", () => {
     expect(result.current.settings.theme).toBe("light");
   });
 
+  // [20260926_Fix_395_ThemeLiveApply] The General tab select writes through
+  // handleInputChange, which persisted but never applied the theme — the
+  // settings window kept the old colors until reload (issue #395, evidence
+  // 1). The live document flip is part of the write contract now.
+  it("applies a theme change to the document the moment handleInputChange writes it", async () => {
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+    // The stubbed settings load "dark"; make the starting state explicit.
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
+
+    act(() => {
+      result.current.handleInputChange("theme", "light");
+    });
+    expect(result.current.settings.theme).toBe("light");
+    expect(document.documentElement.classList.contains("dark")).toBe(false);
+
+    act(() => {
+      result.current.handleInputChange("theme", "dark");
+    });
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
+
+    // "system" resolves through matchMedia (stubbed to light in beforeEach).
+    act(() => {
+      result.current.handleInputChange("theme", "system");
+    });
+    expect(document.documentElement.classList.contains("dark")).toBe(false);
+  });
+
   it("persists theme via setSetting when saveSettings runs", async () => {
     const { result } = renderHook(() => useSettings());
 

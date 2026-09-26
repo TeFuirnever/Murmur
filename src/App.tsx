@@ -6,6 +6,9 @@ import { useHotkey } from "./hooks/useHotkey";
 // [20260905_Fix_246_HotkeySettingsUi] Shared default for the persisted
 // recording hotkey (read on mount + SETTINGS_UPDATE re-apply).
 import { DEFAULT_HOTKEY } from "./settings/hotkeyRecorder";
+// [20260926_Fix_395_ThemeLiveApply] SETTINGS_UPDATE {key:"theme"} re-applies
+// the persisted theme in this window without a restart (issue #395).
+import { applyPersistedTheme } from "./settings/useSettings";
 import { useWindowDrag } from "./hooks/useWindowDrag";
 import { useRecording, determineProcessingMode } from "./hooks/useRecording";
 import { useModelStatus } from "./hooks/useModelStatus";
@@ -492,6 +495,15 @@ export default function App() {
           .catch(() => {
             // Broadcast raced app shutdown — nothing to apply.
           });
+      }
+      // [20260926_Fix_395_ThemeLiveApply] Theme switches from the settings
+      // window apply live: the broadcast carries only the KEY, so read the
+      // persisted value back and apply it — same read-back pattern as the
+      // language branch above.
+      if (data.key === "theme") {
+        applyPersistedTheme().catch(() => {
+          // Broadcast raced app shutdown — nothing to apply.
+        });
       }
     });
     return unsub;
