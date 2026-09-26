@@ -56,6 +56,10 @@ export interface AIProviderPreset {
   base_url: string;
   models: string[];
   requires_api_key: boolean;
+  // [20260926_Fix_398_ProviderLabelI18n] Locale-neutral marker for local
+  // providers (Ollama/LM Studio); the display suffix is composed via
+  // settings.providers.localSuffix in the renderer, not stored here.
+  is_local?: boolean;
   registration?: {
     url: string;
     recommended?: boolean;

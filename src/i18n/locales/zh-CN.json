@@ -24,7 +24,7 @@
     "stageError": "模型错误: {{error}}",
     "stageNotReady": "模型未就绪，请稍候...",
     "toastRecognizedOptimizing": "🎤 语音识别完成，AI正在优化文本...",
-    "toastOptimizeComplete": "🤖 AI文本优化完成并已自动粘贴！",
+    "toastOptimizeComplete": "🤖 AI 文本优化完成并已自动粘贴！",
     "toastOptimizeFailedPasted": "AI优化失败，已粘贴原始识别文本",
     "aiUnavailable": "AI 优化功能不可用",
     "aiOptimizeFailed": "AI 优化失败",
@@ -70,7 +70,6 @@
     "save": "保存设置",
     "saving": "保存中...",
     "saved": "已保存",
-    "reset": "重置",
     "close": "关闭",
     "about": "关于 Murmur",
     "ai_temperature": "创造性 (Temperature)",
@@ -121,6 +120,8 @@
       "vocabClear": "清空全部",
       "vocabCount": "{{count}} 条词对",
       "vocabAddFailed": "添加失败",
+      "vocabRemoveFailed": "删除失败",
+      "vocabClearFailed": "清空失败",
       "vocabClearConfirm": "确定清空全部修正词对吗？",
       "vocabDelete": "删除",
       "streamDegradationTitle": "流式降级记忆",
@@ -139,9 +140,9 @@
       "pasteKey": "已有 Key？粘贴"
     },
     "ai": {
-      "description": "AI 用于对识别出的文字做润色和优化，是可选功能。语音识别本身使用本地 FunASR 模型，无需在此配置。API Key 无效或留空时，将直接使用原始转录文本。",
-      "enableOptimization": "启用AI文本优化",
-      "apiKey": "API 密钥",
+      "description": "AI 用于对识别出的文字做润色和优化，是可选功能。语音识别本身使用本地 FunASR 模型，无需在此配置。API Key 无效或留空时，将直接使用原始识别文本。",
+      "enableOptimization": "启用 AI 文本优化",
+      "apiKey": "API Key",
       "apiKeyPlaceholder": "请输入您的AI API Key",
       "baseUrl": "API 地址",
       "baseUrlDesc": "AI服务的API端点地址，支持OpenAI兼容的API",
@@ -159,13 +160,13 @@
       "testFailed": "AI配置测试失败",
       "testFailedToast": "测试失败",
       "unknownError": "未知错误",
-      "missingKey": "请先输入API密钥",
-      "emptyKey": "API密钥不能为空",
+      "missingKey": "请先输入 API Key",
+      "emptyKey": "API Key 不能为空",
       "incomplete": "配置不完整",
-      "maskedKeyWarning": "当前显示的是已保存密钥的遮盖值，请清空后重新输入",
-      "maskedKeyAction": "请清空API密钥输入框并重新粘贴您的密钥",
-      "reenterKey": "请重新输入API密钥",
-      "reenterKeyTitle": "需要重新输入密钥",
+      "maskedKeyWarning": "当前显示的是已保存 API Key 的遮盖值，请清空后重新输入",
+      "maskedKeyAction": "请清空 API Key 输入框并重新粘贴您的 API Key",
+      "reenterKey": "请重新输入 API Key",
+      "reenterKeyTitle": "需要重新输入 API Key",
       "presetApplied": "已应用 {{label}} 预设",
       "testSuccessDesc": "模型: {{model}} - 连接正常",
       "unknownModel": "未知",
@@ -174,8 +175,6 @@
       "providerLabel": "提供商",
       "precise": "精确",
       "creative": "创造",
-      "ai_temperature": "创造性 (Temperature)",
-      "ai_max_tokens": "最大输出长度",
       "hideApiKey": "隐藏 API Key",
       "showApiKey": "显示 API Key"
     },
@@ -189,7 +188,7 @@
       "closeBehaviorDesc": "点击窗口关闭按钮时的行为",
       "hideBehavior": "隐藏到菜单栏",
       "quitBehavior": "退出应用",
-      "alwaysOnTop": "将应用窗口保持在最前面"
+      "alwaysOnTop": "窗口始终置顶"
     },
     "appearance": {
       "theme": "应用的颜色主题",
@@ -211,6 +210,7 @@
       "testFailed": "权限测试失败"
     },
     "providers": {
+      "localSuffix": "本地",
       "openai": {
         "guide": "注册后获取 API Key，按量付费"
       },

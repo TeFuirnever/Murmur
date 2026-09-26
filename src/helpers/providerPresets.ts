@@ -19,6 +19,11 @@ export interface ProviderPresetData {
   base_url: string;
   models: string[];
   requires_api_key: boolean;
+  // [20260926_Fix_398_ProviderLabelI18n] Locale-bound suffixes ("(本地)")
+  // must not live in this locale-neutral data — the suffix is composed at
+  // the label resolution point via settings.providers.localSuffix. Same
+  // policy as registration.guide (see file header).
+  is_local?: boolean;
   registration?: ProviderRegistration;
 }
 
@@ -117,17 +122,19 @@ const PROVIDER_PRESETS: ProviderPresetData[] = [
   },
   {
     name: "ollama",
-    label: "Ollama (本地)",
+    label: "Ollama",
     base_url: "http://localhost:11434/v1",
     models: ["qwen2.5:7b", "gemma2:9b", "llama3.1:8b"],
     requires_api_key: false,
+    is_local: true,
   },
   {
     name: "lmstudio",
-    label: "LM Studio (本地)",
+    label: "LM Studio",
     base_url: "http://localhost:1234/v1",
     models: ["loaded-model"],
     requires_api_key: false,
+    is_local: true,
   },
 ];
 

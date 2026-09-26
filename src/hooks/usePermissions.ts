@@ -32,10 +32,10 @@ export const usePermissions = (
       if (showAlertDialog) {
         showAlertDialog({
           title: "❌ 需要麦克风权限",
-          description: "请授予麦克风权限以使用语音转录功能。",
+          description: "请授予麦克风权限以使用语音识别功能。",
         });
       } else {
-        alert("❌ 需要麦克风权限！请授予麦克风权限以使用语音转录功能。");
+        alert("❌ 需要麦克风权限！请授予麦克风权限以使用语音识别功能。");
       }
     }
   }, [showAlertDialog]);
