@@ -71,6 +71,8 @@
     "about": "About Murmur",
     "ai_temperature": "Creativity (Temperature)",
     "ai_max_tokens": "Max Output Length",
+    "resetToDefault": "Reset to default",
+    "resetHint": "Modified — default: {{value}}",
     "sections": {
       "general": "General",
       "ai": "AI Configuration",
