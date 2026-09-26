@@ -13,11 +13,16 @@ import { StreamDegradationManager } from "./StreamDegradationManager";
 interface GeneralSectionProps {
   settings: SettingsState;
   onInputChange: (key: string, value: unknown) => void;
+  // [20260926_Perf_402_TextInputDebounce] Blur flush hook for the debounced
+  // hotwords textarea (issue #402: persist the tail keystroke on field
+  // exit; optional so section-only tests can omit it).
+  onInputBlur?: () => void;
 }
 
 export const GeneralSection: React.FC<GeneralSectionProps> = ({
   settings,
   onInputChange,
+  onInputBlur,
 }) => {
   const { t, i18n } = useTranslation();
   // [20260905_Fix_246_HotkeySettingsUi] Recording state for the hotkey
@@ -337,6 +342,7 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
           id="hotwords-input"
           value={settings.hotwords}
           onChange={(e) => onInputChange("hotwords", e.target.value)}
+          onBlur={onInputBlur}
           rows={4}
           spellCheck={false}
           placeholder={t("settings.general.hotwordsPlaceholder", "张晗玥…")}

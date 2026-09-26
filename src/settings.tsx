@@ -74,6 +74,7 @@ const SettingsPage = () => {
     loading,
     saving,
     handleInputChange,
+    flushPendingSettingWrites,
     saveSettings,
     customModel,
     setCustomModel,
@@ -154,6 +155,7 @@ const SettingsPage = () => {
                 <GeneralSection
                   settings={settings}
                   onInputChange={handleInputChange}
+                  onInputBlur={flushPendingSettingWrites}
                 />
               )}
               {activeSection === "bot" && (
@@ -168,6 +170,7 @@ const SettingsPage = () => {
                 <AIConfigSection
                   settings={settings}
                   onInputChange={handleInputChange}
+                  onInputBlur={flushPendingSettingWrites}
                   customModel={customModel}
                   setCustomModel={setCustomModel}
                   resolvedProviderPresets={resolvedProviderPresets}

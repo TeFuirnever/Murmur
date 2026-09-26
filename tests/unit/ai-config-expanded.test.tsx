@@ -351,7 +351,12 @@ describe("[20260729_Test_AIConfigExpanded] AIConfigSection uncovered branches", 
       "GPT-6 Sol (推荐)",
     ) as HTMLSelectElement;
     fireEvent.change(modelSelect, { target: { value: "gpt-6-luna" } });
-    expect(onInputChange).toHaveBeenCalledWith("ai_model", "gpt-6-luna");
+    // [20260926_Perf_402_TextInputDebounce] The dropdown is a discrete
+    // select editing the text-like ai_model key — its change is flagged
+    // immediate so the hook persists it in the same tick (no 400ms wait).
+    expect(onInputChange).toHaveBeenCalledWith("ai_model", "gpt-6-luna", {
+      immediate: true,
+    });
   });
 
   // ── Base URL change ──

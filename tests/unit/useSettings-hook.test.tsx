@@ -1078,3 +1078,185 @@ describe("[20260926_Fix_397_ModelCatalog] predefined model catalog (2026-09)", (
     ).toBe(true);
   });
 });
+
+// [20260926_Perf_402_TextInputDebounce] Text-like setting keys (hotwords,
+// ai_api_key, ai_base_url, ai_model) used to persist on EVERY keystroke —
+// one SQLite write + one syncToFileConfig (fs.writeFileSync) + two-window
+// broadcast each (issue #402). Now the persistence write is debounced 400ms
+// (matching TemplatesSection's TEMPLATE_AUTOSAVE_DELAY_MS convention) with
+// flush-on-blur/close so the tail keystroke is never lost. React state stays
+// immediate — only the setSetting IPC is deferred; select/switch/theme keys
+// persist synchronously as before.
+describe("useSettings hook — text-input persistence debounce (issue #402)", () => {
+  let originalAPI: ElectronAPI | undefined;
+  let originalMatchMedia: typeof window.matchMedia;
+
+  beforeEach(() => {
+    originalAPI = (globalThis.window as TestWindow).electronAPI;
+    originalMatchMedia = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })) as unknown as typeof window.matchMedia;
+    (globalThis.window as TestWindow).electronAPI = makeFullStub();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    const win = globalThis.window as TestWindow;
+    if (originalAPI === undefined) delete win.electronAPI;
+    else win.electronAPI = originalAPI;
+    window.matchMedia = originalMatchMedia;
+    vi.restoreAllMocks();
+  });
+
+  const api = () => (globalThis.window as TestWindow).electronAPI!;
+
+  async function mountLoaded() {
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    (api().setSetting as ReturnType<typeof vi.fn>).mockClear();
+    return { result };
+  }
+
+  it("debounces consecutive text keystrokes into a single persistence write", async () => {
+    const { result } = await mountLoaded();
+    vi.useFakeTimers();
+    act(() => {
+      result.current.handleInputChange("hotwords", "张");
+      result.current.handleInputChange("hotwords", "张晗");
+      result.current.handleInputChange("hotwords", "张晗玥");
+    });
+    // No per-keystroke write before the debounce window elapses.
+    expect(api().setSetting).not.toHaveBeenCalled();
+    act(() => {
+      vi.advanceTimersByTime(400);
+    });
+    // Exactly one write, carrying the LAST typed value.
+    expect(api().setSetting).toHaveBeenCalledTimes(1);
+    expect(api().setSetting).toHaveBeenCalledWith("hotwords", "张晗玥");
+  });
+
+  it("flushes pending text writes immediately and cancels the debounce timer", async () => {
+    const { result } = await mountLoaded();
+    vi.useFakeTimers();
+    act(() => {
+      result.current.handleInputChange("ai_api_key", "sk-new-key");
+    });
+    act(() => {
+      result.current.flushPendingSettingWrites();
+    });
+    // The pending value is written right away…
+    expect(api().setSetting).toHaveBeenCalledWith("ai_api_key", "sk-new-key");
+    expect(api().setSetting).toHaveBeenCalledTimes(1);
+    // …and the debounce timer no longer re-writes it.
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(api().setSetting).toHaveBeenCalledTimes(1);
+  });
+
+  it("flushes pending text writes on window blur and before window close", async () => {
+    const { result } = await mountLoaded();
+    vi.useFakeTimers();
+    act(() => {
+      result.current.handleInputChange("ai_base_url", "https://api.new.com/v1");
+    });
+    expect(api().setSetting).not.toHaveBeenCalled();
+    act(() => {
+      window.dispatchEvent(new Event("blur"));
+    });
+    expect(api().setSetting).toHaveBeenCalledWith(
+      "ai_base_url",
+      "https://api.new.com/v1",
+    );
+
+    // beforeunload (settings window close) flushes anything typed after.
+    act(() => {
+      result.current.handleInputChange("hotwords", "尾字");
+    });
+    act(() => {
+      window.dispatchEvent(new Event("beforeunload"));
+    });
+    expect(api().setSetting).toHaveBeenCalledWith("hotwords", "尾字");
+    // Still no timer-driven re-write afterwards.
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(api().setSetting).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps select/switch/theme keys immediate while text keys are debounced", async () => {
+    const { result } = await mountLoaded();
+    vi.useFakeTimers();
+    // Select-backed key persists synchronously, before any timer advance.
+    act(() => {
+      result.current.handleInputChange("theme", "light");
+    });
+    expect(api().setSetting).toHaveBeenCalledWith("theme", "light");
+    expect(api().setSetting).toHaveBeenCalledTimes(1);
+    // Switch-backed keys keep their paired-write branch untouched.
+    act(() => {
+      result.current.handleInputChange("enable_ai_optimization", false);
+    });
+    expect(api().setSetting).toHaveBeenCalledWith(
+      "enable_ai_optimization",
+      false,
+    );
+    expect(api().setSetting).toHaveBeenCalledWith("default_mode", "off");
+    // A text key typed afterwards stays pending until the window elapses.
+    act(() => {
+      result.current.handleInputChange("hotwords", "延迟");
+    });
+    expect(api().setSetting).toHaveBeenCalledTimes(3);
+    act(() => {
+      vi.advanceTimersByTime(400);
+    });
+    expect(api().setSetting).toHaveBeenLastCalledWith("hotwords", "延迟");
+  });
+
+  it("writes immediately when a text key is changed with the immediate override", async () => {
+    // The AI-model dropdown is a <select> editing the text-like ai_model
+    // key; it must stay instant (no 400ms wait on a discrete choice).
+    const { result } = await mountLoaded();
+    vi.useFakeTimers();
+    act(() => {
+      result.current.handleInputChange("ai_model", "gpt-4o", {
+        immediate: true,
+      });
+    });
+    expect(api().setSetting).toHaveBeenCalledWith("ai_model", "gpt-4o");
+    expect(api().setSetting).toHaveBeenCalledTimes(1);
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(api().setSetting).toHaveBeenCalledTimes(1);
+  });
+
+  it("drops a pending text write when the same key is written immediately after", async () => {
+    // Text "gpt-4o" is pending; the dropdown then selects "gpt-4". The
+    // stale pending value must never overwrite the newer discrete choice.
+    const { result } = await mountLoaded();
+    vi.useFakeTimers();
+    act(() => {
+      result.current.handleInputChange("ai_model", "gpt-4o");
+    });
+    act(() => {
+      result.current.handleInputChange("ai_model", "gpt-4", {
+        immediate: true,
+      });
+    });
+    expect(api().setSetting).toHaveBeenCalledWith("ai_model", "gpt-4");
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(api().setSetting).toHaveBeenCalledTimes(1);
+    expect(api().setSetting).toHaveBeenLastCalledWith("ai_model", "gpt-4");
+  });
+});
