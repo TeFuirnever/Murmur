@@ -70,7 +70,6 @@
     "save": "Save Settings",
     "saving": "Saving...",
     "saved": "Saved",
-    "reset": "Reset",
     "close": "Close",
     "about": "About Murmur",
     "ai_temperature": "Creativity (Temperature)",
@@ -121,6 +120,8 @@
       "vocabClear": "Clear all",
       "vocabCount": "{{count}} pairs",
       "vocabAddFailed": "Add failed",
+      "vocabRemoveFailed": "Delete failed",
+      "vocabClearFailed": "Clear failed",
       "vocabClearConfirm": "Clear ALL correction pairs?",
       "vocabDelete": "Delete",
       "streamDegradationTitle": "Streaming fallback memory",
@@ -174,8 +175,6 @@
       "providerLabel": "Provider",
       "precise": "Precise",
       "creative": "Creative",
-      "ai_temperature": "Creativity (Temperature)",
-      "ai_max_tokens": "Max Output Length",
       "hideApiKey": "Hide API Key",
       "showApiKey": "Show API Key"
     },
@@ -189,7 +188,7 @@
       "closeBehaviorDesc": "Behavior when clicking the window close button",
       "hideBehavior": "Hide to menu bar",
       "quitBehavior": "Quit application",
-      "alwaysOnTop": "Keep window always on top"
+      "alwaysOnTop": "Always on Top"
     },
     "appearance": {
       "theme": "Color theme",
@@ -211,6 +210,7 @@
       "testFailed": "Permission test failed"
     },
     "providers": {
+      "localSuffix": "local",
       "openai": {
         "guide": "Sign up to get an API Key, pay-as-you-go"
       },

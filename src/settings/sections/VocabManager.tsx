@@ -52,7 +52,7 @@ export const VocabManager: React.FC = () => {
   const remove = async (target: string) => {
     const result = await window.electronAPI?.deleteVocabCorrection?.(target);
     if (!result?.success) {
-      toast.error(t("settings.general.vocabAddFailed", "添加失败"));
+      toast.error(t("settings.general.vocabRemoveFailed", "删除失败"));
       return;
     }
     await reload();
@@ -68,7 +68,7 @@ export const VocabManager: React.FC = () => {
     }
     const result = await window.electronAPI?.clearVocabCorrections?.();
     if (!result?.success) {
-      toast.error(t("settings.general.vocabAddFailed", "添加失败"));
+      toast.error(t("settings.general.vocabClearFailed", "清空失败"));
       return;
     }
     await reload();

@@ -190,6 +190,21 @@ describe("providerPresets", () => {
         expect(p.registration).toBeUndefined();
       }
     });
+
+    // [20260926_Fix_398_ProviderLabelI18n] The "(本地)" suffix was hardcoded
+    // Chinese in the label strings — English UI rendered it verbatim (issue
+    // #398). Same class of bug as registration.guide: locale-bound text must
+    // not live in the locale-neutral preset data. The suffix now composes via
+    // i18n (settings.providers.localSuffix) at the label resolution point, so
+    // the data carries a locale-neutral is_local flag instead.
+    it("local presets are flagged is_local and labels carry no locale suffix", () => {
+      const presets = getProviderPresets();
+      const local = presets.filter((p) => p.is_local === true);
+      expect(local.map((p) => p.name).sort()).toEqual(["lmstudio", "ollama"]);
+      for (const p of presets) {
+        expect(p.label).not.toMatch(/\(本地\)|\(local\)/i);
+      }
+    });
   });
 
   describe("getProviderByName", () => {

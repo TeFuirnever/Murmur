@@ -334,19 +334,29 @@ export function useSettings() {
     [detectedLocalModels],
   );
 
+  // [20260926_Fix_398_ProviderLabelI18n] "(本地)" was hardcoded Chinese in
+  // providerPresets.ts — English UI showed it verbatim. Local presets now
+  // carry a locale-neutral is_local flag; the suffix composes here, at the
+  // single label-resolution point, so the quick-select buttons and the
+  // presetApplied toast stay consistent.
   const resolvedProviderPresets = useMemo(
     () =>
       providerPresets.length > 0
-        ? providerPresets.map((p) => ({
-            label: isLocalDetected(p.name) ? `${p.label} ✓` : p.label,
-            baseUrl: p.base_url,
-            model: isLocalDetected(p.name)
-              ? (getDetectedModels(p.name)[0] ?? p.models[0] ?? "")
-              : (p.models[0] ?? ""),
-            noApiKey: !p.requires_api_key,
-          }))
+        ? providerPresets.map((p) => {
+            const label = p.is_local
+              ? `${p.label} (${t("settings.providers.localSuffix", "本地")})`
+              : p.label;
+            return {
+              label: isLocalDetected(p.name) ? `${label} ✓` : label,
+              baseUrl: p.base_url,
+              model: isLocalDetected(p.name)
+                ? (getDetectedModels(p.name)[0] ?? p.models[0] ?? "")
+                : (p.models[0] ?? ""),
+              noApiKey: !p.requires_api_key,
+            };
+          })
         : [],
-    [providerPresets, isLocalDetected, getDetectedModels],
+    [providerPresets, isLocalDetected, getDetectedModels, t],
   );
 
   const applyProviderPreset = useCallback(
