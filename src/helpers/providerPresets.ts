@@ -31,18 +31,36 @@ const PROVIDER_PRESETS: ProviderPresetData[] = [
   {
     name: "openai",
     label: "OpenAI",
+    // developers.openai.com/api/docs/models documents the GPT-6 family
+    // (gpt-6-sol / gpt-6-luna / gpt-6-astra); the gpt-4 generation is
+    // retired / shutting down through fall 2026.
     base_url: "https://api.openai.com/v1",
-    models: ["gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo"],
+    models: ["gpt-6-sol", "gpt-6-astra", "gpt-6-luna"],
     requires_api_key: true,
     registration: {
       url: "https://platform.openai.com/signup",
     },
   },
   {
+    name: "anthropic",
+    label: "Anthropic",
+    // platform.claude.com OpenAI-SDK compatibility layer: Bearer auth +
+    // POST /v1/chat/completions, matching Murmur's plain OpenAI-compatible
+    // client. Current lineup: Fable 5.1 / Opus 5.5 / Sonnet 5 / Haiku 4.5.
+    base_url: "https://api.anthropic.com/v1",
+    models: ["claude-sonnet-5", "claude-opus-5-5", "claude-haiku-4-5"],
+    requires_api_key: true,
+    registration: {
+      url: "https://console.anthropic.com",
+    },
+  },
+  {
     name: "deepseek",
     label: "DeepSeek",
-    base_url: "https://api.deepseek.com/v1",
-    models: ["deepseek-chat", "deepseek-reasoner"],
+    // api-docs.deepseek.com documents the OpenAI-format base as the bare
+    // domain; deepseek-chat/reasoner are gone, replaced by the V4 generation.
+    base_url: "https://api.deepseek.com",
+    models: ["deepseek-flash", "deepseek-v4-pro"],
     requires_api_key: true,
     registration: {
       url: "https://platform.deepseek.com/sign_up",
@@ -53,7 +71,8 @@ const PROVIDER_PRESETS: ProviderPresetData[] = [
     name: "qwen",
     label: "通义千问",
     base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    models: ["qwen-turbo", "qwen-plus", "qwen-max"],
+    // Qwen3.8-Max went GA 2026-09 (the preview name 404s since then).
+    models: ["qwen3.8-max", "qwen3.5-plus", "qwen3.5-flash"],
     requires_api_key: true,
     registration: {
       url: "https://dashscope.console.aliyun.com/",
@@ -63,7 +82,8 @@ const PROVIDER_PRESETS: ProviderPresetData[] = [
     name: "glm",
     label: "智谱 GLM",
     base_url: "https://open.bigmodel.cn/api/paas/v4",
-    models: ["glm-4-flash", "glm-4-plus", "glm-4"],
+    // GLM-5.3 (2026-08 flagship) and the lightweight GLM-5.3-Flash.
+    models: ["glm-5.3", "glm-5.3-flash"],
     requires_api_key: true,
     registration: {
       url: "https://open.bigmodel.cn/usercenter/apikeys",
@@ -73,7 +93,9 @@ const PROVIDER_PRESETS: ProviderPresetData[] = [
     name: "siliconflow",
     label: "硅基流动",
     base_url: "https://api.siliconflow.cn/v1",
-    models: ["deepseek-ai/DeepSeek-V2.5", "Qwen/Qwen2.5-7B-Instruct"],
+    // Docs examples: deepseek-ai/DeepSeek-V4-Flash; "Pro/" is the premium
+    // deployment tier of the same open-source model.
+    models: ["deepseek-ai/DeepSeek-V4-Flash", "Pro/deepseek-ai/DeepSeek-V4"],
     requires_api_key: true,
     registration: {
       url: "https://cloud.siliconflow.cn",
@@ -84,7 +106,13 @@ const PROVIDER_PRESETS: ProviderPresetData[] = [
     name: "groq",
     label: "Groq",
     base_url: "https://api.groq.com/openai/v1",
-    models: ["llama-3.3-70b-versatile", "mixtral-8x7b-32768"],
+    // console.groq.com/docs/models production tier; mixtral-8x7b-32768
+    // retired.
+    models: [
+      "openai/gpt-oss-120b",
+      "llama-3.3-70b-versatile",
+      "llama-3.1-8b-instant",
+    ],
     requires_api_key: true,
     registration: {
       url: "https://console.groq.com",
@@ -94,7 +122,9 @@ const PROVIDER_PRESETS: ProviderPresetData[] = [
     name: "moonshot",
     label: "Moonshot",
     base_url: "https://api.moonshot.cn/v1",
-    models: ["moonshot-v1-8k", "moonshot-v1-32k"],
+    // platform.kimi.com docs: the moonshot-v1-* series is gone; current IDs
+    // are kimi-k3 (flagship) and kimi-k2.6.
+    models: ["kimi-k3", "kimi-k2.6"],
     requires_api_key: true,
     registration: {
       url: "https://platform.moonshot.cn/",
@@ -117,14 +147,17 @@ const PROVIDER_PRESETS: ProviderPresetData[] = [
     name: "minimax",
     label: "MiniMax",
     base_url: "https://api.minimaxi.com/v1",
-    models: ["MiniMax-Text-01"],
+    // platform.minimax.io docs: M3 is the latest M-series; Text-01 is retired.
+    models: ["MiniMax-M3", "MiniMax-M2.5"],
     requires_api_key: true,
   },
   {
     name: "ollama",
     label: "Ollama",
     base_url: "http://localhost:11434/v1",
-    models: ["qwen2.5:7b", "gemma2:9b", "llama3.1:8b"],
+    // ollama.com/library top-pulled tags, 2026-09. Detection (detectLocalModels)
+    // replaces these suggestions whenever a local runtime answers.
+    models: ["qwen3:8b", "gemma3:4b", "llama3.1:8b"],
     requires_api_key: false,
     is_local: true,
   },

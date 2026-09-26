@@ -69,6 +69,15 @@ describe("[20260816_Test_GeneralSection] GeneralSection", () => {
     expect(toggle).toHaveAttribute("aria-checked", "true");
   });
 
+  // [20260926_Fix_397_JsxCommentLeak] Issue #397 F1: a bare `//` line sat in
+  // the JSX children between the always-on-top label and its description, so
+  // React rendered the source comment as literal UI text under the toggle.
+  it("does not leak the axe-a11y source comment into the rendered UI", () => {
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+    expect(screen.queryByText(/20260906_Test_AxeA11y/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/axe gate/)).not.toBeInTheDocument();
+  });
+
   it("toggling always-on-top persists the change AND applies it live via IPC", () => {
     render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
     fireEvent.click(screen.getByRole("switch"));

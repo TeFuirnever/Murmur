@@ -450,11 +450,13 @@ describe("[20260729_Test_SettingsSections] AIConfigSection", () => {
   it("renders the predefined model select when customModel is false", () => {
     const props = buildAIConfigProps({
       customModel: false,
-      settings: buildSettings({ ai_model: "gpt-4o" }),
+      settings: buildSettings({ ai_model: "gpt-6-sol" }),
     });
     render(<AIConfigSection {...props} />);
 
-    const modelSelect = screen.getByDisplayValue("GPT-4o") as HTMLSelectElement;
+    const modelSelect = screen.getByDisplayValue(
+      "GPT-6 Sol (推荐)",
+    ) as HTMLSelectElement;
     expect(modelSelect).toBeInTheDocument();
     expect(modelSelect.tagName).toBe("SELECT");
   });
@@ -468,7 +470,7 @@ describe("[20260729_Test_SettingsSections] AIConfigSection", () => {
 
     // The placeholder is the locale value of settings.ai.modelPlaceholder.
     const customInput = screen.getByPlaceholderText(
-      "输入自定义模型名称，如：qwen3-30b-a3b-instruct-2507",
+      "输入自定义模型名称，如：gpt-6-sol",
     );
     expect(customInput).toHaveValue("my-custom-model");
   });

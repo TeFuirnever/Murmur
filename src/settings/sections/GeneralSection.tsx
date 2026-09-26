@@ -54,8 +54,8 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
           <label className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
             {t("settings.recognition.alwaysOnTop", "窗口始终置顶")}
           </label>
-          // [20260906_Test_AxeA11y] #6e6e73 passes 4.5:1 (small text); the //
-          former #86868b measured ~3.5:1 and failed the axe gate.
+          {/* [20260906_Test_AxeA11y] #6e6e73 passes 4.5:1 (small text); the
+              former #86868b measured ~3.5:1 and failed the axe gate. */}
           <p className="text-xs text-[#6e6e73]">
             {t("settings.general.alwaysOnTopDesc", "将应用窗口保持在最前面")}
           </p>

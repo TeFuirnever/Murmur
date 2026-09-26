@@ -19,7 +19,7 @@ import type { SettingsState, ProviderPreset } from "../useSettings";
 // [20260815_Refactor_ModelListDedup] The <option> list below renders from the
 // single PREDEFINED_MODELS/MODEL_LABELS source of truth in useSettings.ts
 // instead of a second hardcoded copy that could silently drift.
-import { PREDEFINED_MODELS, MODEL_LABELS } from "../useSettings";
+import { PREDEFINED_MODELS, MODEL_LABELS, DEFAULT_MODEL } from "../useSettings";
 
 interface AIConfigSectionProps {
   settings: SettingsState;
@@ -367,8 +367,8 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
             >
               {PREDEFINED_MODELS.map((model) => (
                 <option key={model} value={model}>
-                  {model.startsWith("qwen")
-                    ? t("settings.ai.qwenRecommended", "Qwen3-30B (推荐)")
+                  {model === DEFAULT_MODEL
+                    ? t("settings.ai.modelRecommended", "GPT-6 Sol (推荐)")
                     : MODEL_LABELS[model]}
                 </option>
               ))}
