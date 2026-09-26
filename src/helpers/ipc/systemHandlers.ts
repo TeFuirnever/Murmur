@@ -5,8 +5,12 @@
 // WINDOW.RELOAD / WINDOW.OPEN_DEV_TOOLS block were removed — zero renderer
 // callers (orphans yellow list). Only OPEN_EXTERNAL / VERSION / LOG remain,
 // so the Managers surface shrank to the logger alone.
-import { app, shell } from "electron";
+import { app, shell, systemPreferences } from "electron";
 import * as C from "../ipc-contracts";
+import type {
+  MediaPermissionStatus,
+  PermissionStatusResult,
+} from "../../types/ipc";
 
 interface Logger {
   info?(message: string, ...args: unknown[]): void;
@@ -33,6 +37,39 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
 
   ipcMain.handle(C.SYSTEM.VERSION, () => {
     return app.getVersion();
+  });
+
+  // [20260926_Fix_396_PermissionStatus] Real OS systemPreferences-backed
+  // permission status (issue #396). macOS: getMediaAccessStatus("microphone")
+  // plus isTrustedAccessibilityClient(false) — prompt=false is a pure
+  // AXIsProcessTrusted query and never triggers the system prompt. Windows:
+  // getMediaAccessStatus("microphone") mirrors the real global Windows
+  // privacy setting for desktop apps, but Windows has no accessibility
+  // permission model — report "unsupported" instead of pretending. Failures
+  // degrade to "unknown" WITH a logged warning, so the UI shows no badge
+  // rather than a fake one.
+  ipcMain.handle(C.SYSTEM.PERMISSION_STATUS, (): PermissionStatusResult => {
+    try {
+      if (process.platform === "darwin") {
+        const microphone: MediaPermissionStatus =
+          systemPreferences.getMediaAccessStatus("microphone");
+        const accessibility: MediaPermissionStatus =
+          systemPreferences.isTrustedAccessibilityClient(false)
+            ? "granted"
+            : "denied";
+        return { microphone, accessibility };
+      }
+      if (process.platform === "win32") {
+        return {
+          microphone: systemPreferences.getMediaAccessStatus("microphone"),
+          accessibility: "unsupported",
+        };
+      }
+      return { microphone: "unknown", accessibility: "unknown" };
+    } catch (error) {
+      logger.warn("查询系统权限状态失败:", error);
+      return { microphone: "unknown", accessibility: "unknown" };
+    }
   });
 
   ipcMain.handle(

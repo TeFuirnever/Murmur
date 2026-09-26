@@ -27,6 +27,7 @@ import type {
   TemplateListResult,
   TemplateReadResult,
   TemplateSaveResult,
+  PermissionStatusResult,
 } from "./types/ipc";
 
 export interface ElectronAPI {
@@ -228,6 +229,8 @@ export interface ElectronAPI {
 
   // System
   getAppVersion: () => Promise<string>;
+  // [20260926_Fix_396_PermissionStatus] Real OS permission status (#396).
+  getPermissionStatus: () => Promise<PermissionStatusResult>;
 
   // Update management
   checkForUpdates: () => Promise<UpdateCheckResult>;

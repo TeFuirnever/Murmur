@@ -176,6 +176,9 @@ export const preloadApi: ElectronAPI = {
 
   // App info
   getAppVersion: () => ipcRenderer.invoke(C.SYSTEM.VERSION),
+  // [20260926_Fix_396_PermissionStatus] Real OS permission status for the
+  // settings permission badges (issue #396).
+  getPermissionStatus: () => ipcRenderer.invoke(C.SYSTEM.PERMISSION_STATUS),
   checkForUpdates: () => ipcRenderer.invoke(C.UPDATE.CHECK),
   downloadUpdate: (updateInfo: unknown) =>
     ipcRenderer.invoke(C.UPDATE.DOWNLOAD, updateInfo),

@@ -137,6 +137,10 @@ export const SYSTEM = {
   VERSION: "get-app-version",
   LOG: "log",
   OPEN_EXTERNAL: "open-external",
+  // [20260926_Fix_396_PermissionStatus] Real OS permission status for the
+  // settings badges (issue #396). Main process answers from Electron's
+  // systemPreferences; the renderer never fakes it from session probes.
+  PERMISSION_STATUS: "get-permission-status",
 } as const;
 
 export const EVENTS = {
