@@ -158,12 +158,12 @@
 
 ## 风险评估
 
-| 风险                                         | 严重性 | 缓解                                                   |
-| -------------------------------------------- | ------ | ------------------------------------------------------ |
-| 移除 `transparent: true` 改变窗口外观        | 🟡 中  | Tracer 确认 body/#root 已不透明。需 Windows 手动验证。 |
+| 风险                                         | 严重性 | 缓解                                                             |
+| -------------------------------------------- | ------ | ---------------------------------------------------------------- |
+| 移除 `transparent: true` 改变窗口外观        | 🟡 中  | Tracer 确认 body/#root 已不透明。需 Windows 手动验证。           |
 | `backgroundThrottling: false` 增加隐藏时 CPU | 🟡 中  | 见 D1 [20260926] 更新：window-visibility 推送暂停 BloubBot rAF。 |
-| showSettings 取消置顶后崩溃未恢复            | 🟢 低  | closed 处理器无条件恢复 alwaysOnTop。                  |
-| saveSettings 返回值变更影响调用方            | 🟢 低  | 仅 `settings.tsx:142` 调用，改为 await + 检查返回值。  |
+| showSettings 取消置顶后崩溃未恢复            | 🟢 低  | closed 处理器无条件恢复 alwaysOnTop。                            |
+| saveSettings 返回值变更影响调用方            | 🟢 低  | 仅 `settings.tsx:142` 调用，改为 await + 检查返回值。            |
 
 ## Review 记录
 
