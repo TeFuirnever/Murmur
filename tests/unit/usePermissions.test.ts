@@ -20,6 +20,10 @@ import type { ElectronAPI } from "../../src/electronAPI";
 vi.mock("react", () => ({
   useState: (initial: unknown) => [initial, vi.fn()],
   useCallback: (fn: (...args: never[]) => unknown) => fn,
+  // [20260926_Fix_396_PermissionStatus] The hook now mounts a real-status
+  // fetch via useEffect; run the body once so this node-env mock stays
+  // representative (and exercises the optional-chain guards below).
+  useEffect: (fn: () => void) => fn(),
 }));
 
 // [20260725_Tier3_UsePermissionsMigrate] Typed via the source's named export
