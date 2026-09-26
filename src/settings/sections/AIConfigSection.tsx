@@ -18,6 +18,8 @@ import type { SettingsState, ProviderPreset } from "../useSettings";
 // single PREDEFINED_MODELS/MODEL_LABELS source of truth in useSettings.ts
 // instead of a second hardcoded copy that could silently drift.
 import { PREDEFINED_MODELS, MODEL_LABELS, DEFAULT_MODEL } from "../useSettings";
+// [20260926_Issue407] Modified dot + reset-to-default (schema-derived).
+import { SettingResetButton } from "../SettingResetButton";
 
 interface AIConfigSectionProps {
   settings: SettingsState;
@@ -139,32 +141,41 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
             )}
           </p>
         </div>
-        <button
-          type="button"
-          id="ai-optimization-toggle"
-          role="switch"
-          aria-checked={settings.enable_ai_optimization}
-          onClick={() =>
-            onInputChange(
-              "enable_ai_optimization",
-              !settings.enable_ai_optimization,
-            )
-          }
-          className={`${
-            settings.enable_ai_optimization
-              ? "bg-[#0071e3]"
-              : "bg-[#d2d2d7] dark:bg-[#3a3a3c]"
-          } relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-2`}
-        >
-          <span
-            aria-hidden="true"
+        <div className="flex items-center gap-2">
+          <SettingResetButton
+            settingKey="enable_ai_optimization"
+            value={settings.enable_ai_optimization}
+            onReset={(key, value) =>
+              onInputChange(key, value, { immediate: true })
+            }
+          />
+          <button
+            type="button"
+            id="ai-optimization-toggle"
+            role="switch"
+            aria-checked={settings.enable_ai_optimization}
+            onClick={() =>
+              onInputChange(
+                "enable_ai_optimization",
+                !settings.enable_ai_optimization,
+              )
+            }
             className={`${
               settings.enable_ai_optimization
-                ? "translate-x-4"
-                : "translate-x-0"
-            } inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
-          />
-        </button>
+                ? "bg-[#0071e3]"
+                : "bg-[#d2d2d7] dark:bg-[#3a3a3c]"
+            } relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-2`}
+          >
+            <span
+              aria-hidden="true"
+              className={`${
+                settings.enable_ai_optimization
+                  ? "translate-x-4"
+                  : "translate-x-0"
+              } inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+            />
+          </button>
+        </div>
       </div>
 
       {/* Quick Start 引导 */}
@@ -339,9 +350,18 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
 
       {/* Model */}
       <div>
-        <label className="block text-xs font-medium text-[#1d1d1f]/80 dark:text-[#f5f5f7]/80 mb-1">
-          {t("settings.ai.model", "AI模型")}
-        </label>
+        <div className="mb-1 flex items-center gap-1.5">
+          <label className="text-xs font-medium text-[#1d1d1f]/80 dark:text-[#f5f5f7]/80">
+            {t("settings.ai.model", "AI模型")}
+          </label>
+          <SettingResetButton
+            settingKey="ai_model"
+            value={settings.ai_model}
+            onReset={(key, value) =>
+              onInputChange(key, value, { immediate: true })
+            }
+          />
+        </div>
         <div className="space-y-2">
           <div className="flex items-center space-x-2">
             <input
@@ -425,9 +445,18 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
       <div className="space-y-3">
         <div>
           <div className="flex justify-between">
-            <label className="text-xs font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
-              {t("settings.ai_temperature", "创造性 (Temperature)")}
-            </label>
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
+                {t("settings.ai_temperature", "创造性 (Temperature)")}
+              </label>
+              <SettingResetButton
+                settingKey="ai_temperature"
+                value={settings.ai_temperature}
+                onReset={(key, value) =>
+                  onInputChange(key, value, { immediate: true })
+                }
+              />
+            </div>
             <span className="text-xs text-[#86868b]">
               {settings.ai_temperature.toFixed(1)}
             </span>
@@ -451,9 +480,18 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
 
         <div>
           <div className="flex justify-between">
-            <label className="text-xs font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
-              {t("settings.ai_max_tokens", "最大输出长度")}
-            </label>
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
+                {t("settings.ai_max_tokens", "最大输出长度")}
+              </label>
+              <SettingResetButton
+                settingKey="ai_max_tokens"
+                value={settings.ai_max_tokens}
+                onReset={(key, value) =>
+                  onInputChange(key, value, { immediate: true })
+                }
+              />
+            </div>
             <span className="text-xs text-[#86868b]">
               {settings.ai_max_tokens}
             </span>

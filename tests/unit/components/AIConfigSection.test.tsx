@@ -70,8 +70,10 @@ function renderSection(settings: SettingsState = BASE_SETTINGS) {
 
 function findMaxTokensSlider(): HTMLInputElement {
   const label = screen.getByText("最大输出长度");
-  // The label and its slider share the wrapping <div> block.
-  const block = label.closest("div")!.parentElement!;
+  // The label and its slider share the wrapping <div> block. Issue #407 put
+  // the modified/reset dot next to the label (one extra wrapper level), so
+  // the block is now two parentElement hops above the label.
+  const block = label.closest("div")!.parentElement!.parentElement!;
   const slider = block.querySelector(
     'input[type="range"]',
   ) as HTMLInputElement | null;

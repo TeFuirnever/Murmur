@@ -13,6 +13,9 @@ import { buildAccelerator, formatAccelerator } from "../hotkeyRecorder";
 import { VocabManager } from "./VocabManager";
 // [20260910_Feat_237_StreamDegradation] T10 degradation-memory panel.
 import { StreamDegradationManager } from "./StreamDegradationManager";
+// [20260926_Issue407] Per-setting modified dot + reset-to-default control
+// (schema-derived; renders nothing while the value sits at its default).
+import { SettingResetButton } from "../SettingResetButton";
 
 interface GeneralSectionProps {
   settings: SettingsState;
@@ -114,31 +117,42 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
             {t("settings.general.alwaysOnTopDesc", "将应用窗口保持在最前面")}
           </p>
         </div>
-        <button
-          type="button"
-          role="switch"
-          aria-label={t("settings.recognition.alwaysOnTop", "窗口始终置顶")}
-          aria-checked={settings.window_always_on_top}
-          onClick={() => {
-            const newVal = !settings.window_always_on_top;
-            onInputChange("window_always_on_top", newVal);
-            if (window.electronAPI?.setAlwaysOnTop) {
-              window.electronAPI.setAlwaysOnTop(newVal);
-            }
-          }}
-          className={`${
-            settings.window_always_on_top
-              ? "bg-[#0071e3]"
-              : "bg-[#d2d2d7] dark:bg-[#3a3a3c]"
-          } relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-2`}
-        >
-          <span
-            aria-hidden="true"
-            className={`${
-              settings.window_always_on_top ? "translate-x-4" : "translate-x-0"
-            } inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+        <div className="flex items-center gap-2">
+          {/* [20260926_Issue407] Modified dot + reset-to-default; renders
+              nothing while the toggle sits at its schema default. */}
+          <SettingResetButton
+            settingKey="window_always_on_top"
+            value={settings.window_always_on_top}
+            onReset={onInputChange}
           />
-        </button>
+          <button
+            type="button"
+            role="switch"
+            aria-label={t("settings.recognition.alwaysOnTop", "窗口始终置顶")}
+            aria-checked={settings.window_always_on_top}
+            onClick={() => {
+              const newVal = !settings.window_always_on_top;
+              onInputChange("window_always_on_top", newVal);
+              if (window.electronAPI?.setAlwaysOnTop) {
+                window.electronAPI.setAlwaysOnTop(newVal);
+              }
+            }}
+            className={`${
+              settings.window_always_on_top
+                ? "bg-[#0071e3]"
+                : "bg-[#d2d2d7] dark:bg-[#3a3a3c]"
+            } relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-2`}
+          >
+            <span
+              aria-hidden="true"
+              className={`${
+                settings.window_always_on_top
+                  ? "translate-x-4"
+                  : "translate-x-0"
+              } inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+            />
+          </button>
+        </div>
       </div>
 
       {/* [20260926_Issue400] show_notifications switch (issue #400): gates the
@@ -160,28 +174,38 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
             )}
           </p>
         </div>
-        <button
-          type="button"
-          role="switch"
-          data-testid="show-notifications"
-          aria-label={t("settings.general.showNotificationsLabel", "系统通知")}
-          aria-checked={settings.show_notifications}
-          onClick={() =>
-            onInputChange("show_notifications", !settings.show_notifications)
-          }
-          className={`${
-            settings.show_notifications
-              ? "bg-[#0071e3]"
-              : "bg-[#d2d2d7] dark:bg-[#3a3a3c]"
-          } relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-2`}
-        >
-          <span
-            aria-hidden="true"
-            className={`${
-              settings.show_notifications ? "translate-x-4" : "translate-x-0"
-            } inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+        <div className="flex items-center gap-2">
+          <SettingResetButton
+            settingKey="show_notifications"
+            value={settings.show_notifications}
+            onReset={onInputChange}
           />
-        </button>
+          <button
+            type="button"
+            role="switch"
+            data-testid="show-notifications"
+            aria-label={t(
+              "settings.general.showNotificationsLabel",
+              "系统通知",
+            )}
+            aria-checked={settings.show_notifications}
+            onClick={() =>
+              onInputChange("show_notifications", !settings.show_notifications)
+            }
+            className={`${
+              settings.show_notifications
+                ? "bg-[#0071e3]"
+                : "bg-[#d2d2d7] dark:bg-[#3a3a3c]"
+            } relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-2`}
+          >
+            <span
+              aria-hidden="true"
+              className={`${
+                settings.show_notifications ? "translate-x-4" : "translate-x-0"
+              } inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+            />
+          </button>
+        </div>
       </div>
 
       {/* [20260926_Issue404] auto_start switch (issue #404): renders from
@@ -204,32 +228,39 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
             )}
           </p>
         </div>
-        <button
-          type="button"
-          role="switch"
-          data-testid="auto-start"
-          aria-label={t("settings.general.autoStartLabel", "开机自启")}
-          aria-checked={settings.auto_start}
-          onClick={() => {
-            const newVal = !settings.auto_start;
-            onInputChange("auto_start", newVal);
-            if (window.electronAPI?.setLoginItemSettings) {
-              window.electronAPI.setLoginItemSettings(newVal);
-            }
-          }}
-          className={`${
-            settings.auto_start
-              ? "bg-[#0071e3]"
-              : "bg-[#d2d2d7] dark:bg-[#3a3a3c]"
-          } relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-2`}
-        >
-          <span
-            aria-hidden="true"
-            className={`${
-              settings.auto_start ? "translate-x-4" : "translate-x-0"
-            } inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+        <div className="flex items-center gap-2">
+          <SettingResetButton
+            settingKey="auto_start"
+            value={settings.auto_start}
+            onReset={onInputChange}
           />
-        </button>
+          <button
+            type="button"
+            role="switch"
+            data-testid="auto-start"
+            aria-label={t("settings.general.autoStartLabel", "开机自启")}
+            aria-checked={settings.auto_start}
+            onClick={() => {
+              const newVal = !settings.auto_start;
+              onInputChange("auto_start", newVal);
+              if (window.electronAPI?.setLoginItemSettings) {
+                window.electronAPI.setLoginItemSettings(newVal);
+              }
+            }}
+            className={`${
+              settings.auto_start
+                ? "bg-[#0071e3]"
+                : "bg-[#d2d2d7] dark:bg-[#3a3a3c]"
+            } relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-2`}
+          >
+            <span
+              aria-hidden="true"
+              className={`${
+                settings.auto_start ? "translate-x-4" : "translate-x-0"
+              } inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+            />
+          </button>
+        </div>
       </div>
 
       {/* [20260926_Issue405] minimize_to_tray switch (issue #405) — Windows
@@ -289,9 +320,16 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
           check: if (autoPaste === "clipboard_only"). Using "clipboard"
           would cause auto-paste even when user chose clipboard-only. */}
       <div>
-        <label className="block text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7] mb-1">
-          {t("settings.recognition.autoPaste", "自动粘贴行为")}
-        </label>
+        <div className="mb-1 flex items-center gap-1.5">
+          <label className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
+            {t("settings.recognition.autoPaste", "自动粘贴行为")}
+          </label>
+          <SettingResetButton
+            settingKey="auto_paste"
+            value={settings.auto_paste}
+            onReset={onInputChange}
+          />
+        </div>
         <select
           aria-label={t("settings.recognition.autoPaste", "自动粘贴行为")}
           value={settings.auto_paste}
@@ -323,12 +361,19 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
           merged custom-template list from GET_MODES). "auto" picks by text
           length, "off" disables, the rest map to built-in/template modes. */}
       <div>
-        <label
-          htmlFor="default-mode"
-          className="block text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7] mb-1"
-        >
-          {t("settings.general.defaultModeLabel", "默认 AI 处理模式")}
-        </label>
+        <div className="mb-1 flex items-center gap-1.5">
+          <label
+            htmlFor="default-mode"
+            className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]"
+          >
+            {t("settings.general.defaultModeLabel", "默认 AI 处理模式")}
+          </label>
+          <SettingResetButton
+            settingKey="default_mode"
+            value={settings.default_mode}
+            onReset={onInputChange}
+          />
+        </div>
         <select
           id="default-mode"
           data-testid="default-mode"
@@ -358,9 +403,16 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
 
       {/* 关闭行为 */}
       <div>
-        <label className="block text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7] mb-1">
-          {t("settings.recognition.closeBehavior", "关闭行为")}
-        </label>
+        <div className="mb-1 flex items-center gap-1.5">
+          <label className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
+            {t("settings.recognition.closeBehavior", "关闭行为")}
+          </label>
+          <SettingResetButton
+            settingKey="close_behavior"
+            value={settings.close_behavior}
+            onReset={onInputChange}
+          />
+        </div>
         <select
           aria-label={t("settings.recognition.closeBehavior", "关闭行为")}
           value={settings.close_behavior}
@@ -384,9 +436,16 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
 
       {/* 外观主题 */}
       <div>
-        <label className="block text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7] mb-1">
-          {t("settings.appearance.theme", "外观主题")}
-        </label>
+        <div className="mb-1 flex items-center gap-1.5">
+          <label className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
+            {t("settings.appearance.theme", "外观主题")}
+          </label>
+          <SettingResetButton
+            settingKey="theme"
+            value={settings.theme}
+            onReset={onInputChange}
+          />
+        </div>
         <select
           aria-label={t("settings.appearance.theme", "外观主题")}
           value={settings.theme}
@@ -500,6 +559,11 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
               ? t("settings.general.hotkeyCancel", "取消")
               : t("settings.general.hotkeyStart", "更改")}
           </button>
+          <SettingResetButton
+            settingKey="hotkey"
+            value={settings.hotkey}
+            onReset={onInputChange}
+          />
         </div>
         {recording && (
           <div

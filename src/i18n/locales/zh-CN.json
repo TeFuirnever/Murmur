@@ -71,6 +71,8 @@
     "about": "关于 Murmur",
     "ai_temperature": "创造性 (Temperature)",
     "ai_max_tokens": "最大输出长度",
+    "resetToDefault": "重置为默认值",
+    "resetHint": "已修改，默认值：{{value}}",
     "sections": {
       "general": "通用设置",
       "ai": "AI 配置",
