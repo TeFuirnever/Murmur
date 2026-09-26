@@ -5,7 +5,7 @@
 import "../setup/react";
 import React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -42,18 +42,28 @@ const BASE: SettingsState = {
 };
 
 type TestWindow = Omit<Window, "electronAPI"> & {
-  electronAPI?: { setAlwaysOnTop: (v: boolean) => void };
+  electronAPI?: {
+    setAlwaysOnTop: (v: boolean) => void;
+    getSetting: (key: string, defaultValue?: unknown) => Promise<unknown>;
+    setSetting: (key: string, value: unknown) => Promise<void>;
+  };
 };
 
 describe("[20260816_Test_GeneralSection] GeneralSection", () => {
   const onInputChange = vi.fn();
   const setAlwaysOnTop = vi.fn();
+  const getSetting = vi.fn();
+  const setSetting = vi.fn();
   const originalAPI = (globalThis.window as unknown as TestWindow).electronAPI;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    getSetting.mockResolvedValue(true);
+    setSetting.mockResolvedValue(undefined);
     (globalThis.window as unknown as TestWindow).electronAPI = {
       setAlwaysOnTop,
+      getSetting,
+      setSetting,
     };
   });
 
@@ -65,7 +75,7 @@ describe("[20260816_Test_GeneralSection] GeneralSection", () => {
 
   it("renders the always-on-top switch reflecting the setting", () => {
     render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
-    const toggle = screen.getByRole("switch");
+    const toggle = screen.getByRole("switch", { name: "窗口始终置顶" });
     expect(toggle).toHaveAttribute("aria-checked", "true");
   });
 
@@ -80,8 +90,8 @@ describe("[20260816_Test_GeneralSection] GeneralSection", () => {
 
   it("toggling always-on-top persists the change AND applies it live via IPC", () => {
     render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
-    fireEvent.click(screen.getByRole("switch"));
-    // [20260712_Fix_SetAlwaysOnTop] regression lock: the IPC call must fire
+    fireEvent.click(screen.getByRole("switch", { name: "窗口始终置顶" }));
+    // [20260712_Fix_SetAlwaysOnTop] regression lock: the IPC write must fire
     // immediately, not only on Save.
     expect(onInputChange).toHaveBeenCalledWith("window_always_on_top", false);
     expect(setAlwaysOnTop).toHaveBeenCalledWith(false);
@@ -161,7 +171,9 @@ describe("[20260816_Test_GeneralSection] GeneralSection", () => {
         onInputChange={onInputChange}
       />,
     );
-    expect(screen.getByRole("switch")).toHaveAttribute("aria-checked", "false");
+    expect(
+      screen.getByRole("switch", { name: "窗口始终置顶" }),
+    ).toHaveAttribute("aria-checked", "false");
   });
 
   it("cancels the hotkey capture when the cancel button is clicked", () => {
@@ -196,5 +208,66 @@ describe("[20260816_Test_GeneralSection] GeneralSection", () => {
       target: { value: "张晗玥" },
     });
     expect(onInputChange).toHaveBeenCalledWith("hotwords", "张晗玥");
+  });
+
+  // [20260926_Issue400] show_notifications switch: reads/writes the key
+  // through the existing SETTINGS.GET/SET channels (electronAPI.getSetting /
+  // setSetting) with local state — the key is NOT in SettingsState (the
+  // schema-migration ticket will fold it in; do not extend the state here).
+  it("renders the show-notifications switch defaulting to on when nothing is stored", async () => {
+    getSetting.mockResolvedValue(true);
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+
+    const toggle = screen.getByRole("switch", { name: "系统通知" });
+    await waitFor(() => expect(toggle).toHaveAttribute("aria-checked", "true"));
+  });
+
+  it("reflects a stored show_notifications=false as unchecked", async () => {
+    getSetting.mockResolvedValue(false);
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+
+    const toggle = screen.getByRole("switch", { name: "系统通知" });
+    await waitFor(() =>
+      expect(toggle).toHaveAttribute("aria-checked", "false"),
+    );
+  });
+
+  it("toggling the show-notifications switch persists through setSetting", async () => {
+    getSetting.mockResolvedValue(true);
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+
+    const toggle = screen.getByRole("switch", { name: "系统通知" });
+    await waitFor(() => expect(toggle).toHaveAttribute("aria-checked", "true"));
+
+    fireEvent.click(toggle);
+    expect(setSetting).toHaveBeenCalledWith("show_notifications", false);
+    expect(toggle).toHaveAttribute("aria-checked", "false");
+
+    fireEvent.click(toggle);
+    expect(setSetting).toHaveBeenCalledWith("show_notifications", true);
+    expect(toggle).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("coerces a non-boolean stored value to the on state", async () => {
+    // Robustness arm: getSetting resolving a non-boolean (e.g. a legacy
+    // string) still yields a boolean switch state (!== false → on).
+    getSetting.mockResolvedValue("false");
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+
+    const toggle = screen.getByRole("switch", { name: "系统通知" });
+    await waitFor(() => expect(toggle).toHaveAttribute("aria-checked", "true"));
+  });
+
+  it("rolls the switch back when the persist write fails", async () => {
+    getSetting.mockResolvedValue(true);
+    setSetting.mockRejectedValue(new Error("ipc down"));
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+
+    const toggle = screen.getByRole("switch", { name: "系统通知" });
+    await waitFor(() => expect(toggle).toHaveAttribute("aria-checked", "true"));
+
+    fireEvent.click(toggle);
+    await waitFor(() => expect(toggle).toHaveAttribute("aria-checked", "true"));
+    expect(setSetting).toHaveBeenCalledWith("show_notifications", false);
   });
 });
