@@ -12,7 +12,7 @@
 // boot, BEFORE funasrManager.initializeAtStartup() spawns the Python
 // server / download subprocess (both inherit process.env; the server env
 // copy in buildPythonEnvironment snapshots it too). FunASR subprocess
-// lifecycle code is untouched (CLAUDE.md high-risk area).
+// lifecycle code is untouched (AGENTS.md high-risk area).
 //
 // Semantics chosen for the boot-time contract: a non-empty setting SETS
 // process.env.MODELSCOPE_CACHE (trimmed); an empty setting leaves the

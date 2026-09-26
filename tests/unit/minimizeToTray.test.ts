@@ -4,7 +4,7 @@
 //      STRICT `=== true` gate and the historical default FALSE (mirror image
 //      of the `!== false` gates whose defaults are on; same shape as
 //      auto_start in #404). A thrown db read degrades to "off" (normal
-//      minimize) WITH a logged warning — no silent swallow (CLAUDE.md rule).
+//      minimize) WITH a logged warning — no silent swallow (AGENTS.md rule).
 //   2. isMinimizeToTraySupportedPlatform() — win32 only. macOS minimizes
 //      into the Dock by system convention and is already tray-resident via
 //      close_behavior "hide"; minimize→tray is non-idiomatic there (issue

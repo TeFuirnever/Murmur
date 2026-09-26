@@ -37,7 +37,7 @@ export const IDLE_UNLOAD_TIMEOUT_MS = resolveIdleUnloadTimeoutMs();
 // Both the server spawn (env copy in buildPythonEnvironment) and the
 // download spawn (inherits process.env) therefore see the configured
 // directory. CONFIG-SIDE ONLY — no FunASR subprocess lifecycle code is
-// touched (CLAUDE.md high-risk area); changes take effect at the next app
+// touched (AGENTS.md high-risk area); changes take effect at the next app
 // start (the UI description says so).
 // Semantics for the boot-time contract: a non-empty setting SETS the env var
 // (trimmed); an empty setting ("system default") leaves the environment
