@@ -699,12 +699,10 @@ describe("[20260816_Test_GeneralSection] GeneralSection", () => {
   // Native <details> keeps the expander dependency-free; the children mount
   // eagerly, so the bridge reads still run while collapsed.
   it("folds the corrections table and stream-degradation memory into a collapsed Advanced section (#409)", async () => {
-    const listVocab = vi
-      .fn()
-      .mockResolvedValue({
-        success: true,
-        entries: [{ wrong: "A", right: "B" }],
-      });
+    const listVocab = vi.fn().mockResolvedValue({
+      success: true,
+      entries: [{ wrong: "A", right: "B" }],
+    });
     const listStream = vi.fn().mockResolvedValue({
       success: true,
       entries: [{ baseUrl: "https://gw.example/v1", at: 1_700_000_000_000 }],
@@ -729,12 +727,10 @@ describe("[20260816_Test_GeneralSection] GeneralSection", () => {
   });
 
   it("keeps the advanced managers functional after expanding (#409)", async () => {
-    const listVocab = vi
-      .fn()
-      .mockResolvedValue({
-        success: true,
-        entries: [{ wrong: "A", right: "B" }],
-      });
+    const listVocab = vi.fn().mockResolvedValue({
+      success: true,
+      entries: [{ wrong: "A", right: "B" }],
+    });
     const addVocab = vi.fn().mockResolvedValue({ success: true });
     const listStream = vi.fn().mockResolvedValue({
       success: true,

@@ -52,20 +52,16 @@ _Add new lessons as `[date] [summary]` entries with Rule/Context sections._
 
 ---
 
-## L5: Settings persistence is a 4-touch + allowlist operation
+## L5: Adding a setting = one schema entry, nothing else
 
-**Date:** 2026-07-29
-**Context:** Adding `effects_enabled` setting for visual effects
+**Date:** 2026-07-29 (effects_enabled era) — superseded 2026-09-26 by [20260926_Refactor_403_SettingsSchema]
+**Context:** Adding any new setting to Murmur
 
-Adding a new setting to Murmur requires touching **5 places**, and missing any one causes a **silent** failure — no error, no crash, just data that doesn't persist or a save that's silently rejected:
+Before #403, a setting key had to be hand-synced in **5 places** (`SettingsState`, `DEFAULT_SETTINGS`, the `loadSettings` builder, the repo's `saveSettings` body in `useSettings.ts`, plus `ALLOWED_SETTING_KEYS` in `settingsHandlers.ts`) and missing any one caused a **silent** failure — no error, no crash, just data that doesn't persist or a save that's silently rejected.
 
-1. `SettingsState` interface (`useSettings.ts`)
-2. `DEFAULT_SETTINGS` (`useSettings.ts`)
-3. `loadSettings` builder (`useSettings.ts`) — reading from DB
-4. `saveSettings` body (`useSettings.ts`) — **hardcoded per-key**, not auto-iterating SettingsState
-5. `ALLOWED_SETTING_KEYS` set (`settingsHandlers.ts`) — `validateSetting` rejects unknown keys; the IPC returns `{success: false}` but `setSetting` doesn't throw, so the UI shows "saved" while nothing was written
+[20260926_Refactor_403_SettingsSchema] retired that discipline: declare the key **once** in `src/settings/settingsSchema.ts` (key, type, default, load coercion, scope, `fileSync`/`textLike` traits); `SettingsState`, `DEFAULT_SETTINGS`, the load builder, `ALLOWED_SETTING_KEYS`, `FILE_CONFIGURABLE_KEYS` and `TEXT_INPUT_SETTING_KEYS` are all derived from it.
 
-**Rule:** When adding any setting, grep for an existing setting key (e.g. `window_always_on_top`) and update every place it appears. The saveSettings hardcoded list is the most-missed.
+**Rule:** Never declare a setting key outside the schema (useSettings.ts, settingsHandlers.ts, fileConfig.ts) — a stray declaration silently breaks persistence. `tests/unit/settings-schema.test.ts` pins the migration equivalence and the one-entry acceptance.
 
 ---
 

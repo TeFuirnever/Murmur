@@ -103,7 +103,7 @@ English · [简体中文](./README.zh-CN.md)
 | ----------------- | ------------------------------- | ------------------------ | --------------- |
 | `Cmd+Shift+Space` | OpenAI/DeepSeek/Qwen/GLM/Ollama | SQLite + search + export | zh-CN / English |
 
-> 🤖 **Meet the animated Bot mascot** — the little fellow in the title bar morphs with app state: eyes wide open while recording, thinking dots while recognizing, a comet when a transcription finishes. The engine is ported from [bloub](https://github.com/jeremy-prt/bloub) (MIT) with frame-by-frame measured animation constants, replicated with zero drift. Pick its shape / color / expression under Settings → Bot.
+> 🤖 **Meet the animated Bot mascot** — the little fellow in the title bar morphs with app state: eyes wide open while recording, thinking dots while recognizing, a comet when a transcription finishes. The engine is ported from [bloub](https://github.com/jeremy-prt/bloub) (MIT) with frame-by-frame measured animation constants, replicated with zero drift. Pick its shape / color / expression under Settings → General.
 
 ## 🖼 Screenshots
 
