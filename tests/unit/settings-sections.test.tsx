@@ -391,6 +391,19 @@ describe("[20260729_Test_SettingsSections] AIConfigSection", () => {
     expect(toggle).toHaveAttribute("aria-checked", "true");
   });
 
+  // [20260926_Fix_399_UnifiedKnobWording] Issue #399 evidence #3: the AI tab
+  // toggle (enable_ai_optimization) and the General tab default_mode dropdown
+  // are ONE knob (bidirectional sync in useSettings.handleInputChange). The
+  // toggle joins the dropdown's 「AI 处理」 term family and its description
+  // cross-references the dropdown instead of describing a separate feature.
+  it("labels the AI toggle with the unified AI-processing term (#399)", () => {
+    const props = buildAIConfigProps();
+    render(<AIConfigSection {...props} />);
+
+    expect(screen.getByLabelText("启用 AI 处理")).toBeInTheDocument();
+    expect(screen.getByText(/「默认 AI 处理模式」/)).toBeInTheDocument();
+  });
+
   it("renders the API key input with the current value", () => {
     const props = buildAIConfigProps({
       settings: buildSettings({ ai_api_key: "sk-secret-key" }),

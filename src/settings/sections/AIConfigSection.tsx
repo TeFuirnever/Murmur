@@ -142,14 +142,27 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
         )}
       </p>
 
-      {/* AI优化开关 */}
+      {/* AI优化开关 — [20260926_Fix_399_UnifiedKnobWording] issue #399: this
+          toggle and the General tab's default_mode dropdown are ONE knob
+          (bidirectional sync in useSettings.handleInputChange). The label
+          joins the dropdown's 「AI 处理」 term family and the description
+          cross-references the dropdown instead of posing as a feature of its
+          own. */}
       <div className="flex items-center justify-between">
-        <label
-          htmlFor="ai-optimization-toggle"
-          className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]"
-        >
-          {t("settings.ai.enableOptimization", "启用AI文本优化")}
-        </label>
+        <div>
+          <label
+            htmlFor="ai-optimization-toggle"
+            className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]"
+          >
+            {t("settings.ai.enableOptimization", "启用 AI 处理")}
+          </label>
+          <p className="text-xs text-[#6e6e73]">
+            {t(
+              "settings.ai.enableOptimizationDesc",
+              "与「通用」页的「默认 AI 处理模式」为同一状态：关闭此开关等同于选择「关闭 AI 处理」。",
+            )}
+          </p>
+        </div>
         <button
           type="button"
           id="ai-optimization-toggle"
