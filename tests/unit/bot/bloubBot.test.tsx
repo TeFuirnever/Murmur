@@ -675,39 +675,40 @@ describe("BloubBot tracking mood rotation (issue #227)", () => {
   });
 });
 
+/** A deterministic rAF queue replaces the global: the assertions are about
+ * scheduling, not wall time. Shared by the hidden-pause and fps-tiering
+ * suites. */
+function installRafQueue() {
+  const pending = new Map<number, FrameRequestCallback>();
+  let seq = 0;
+  const raf = vi.fn((cb: FrameRequestCallback) => {
+    const id = ++seq;
+    pending.set(id, cb);
+    return id;
+  });
+  const cancel = vi.fn((id: number) => {
+    pending.delete(id);
+  });
+  vi.stubGlobal("requestAnimationFrame", raf);
+  vi.stubGlobal("cancelAnimationFrame", cancel);
+  return {
+    raf,
+    cancel,
+    pending,
+    /** Fire every pending callback once, in scheduling order. */
+    pump(): number {
+      const frames = [...pending.values()];
+      pending.clear();
+      for (const cb of frames) cb(performance.now());
+      return frames.length;
+    },
+  };
+}
+
 // [20260926_Fix_BloubHiddenPause] Pins the mascot loop's hidden-pause
 // signalling against the main-process WINDOW_VISIBILITY_CHANGE push; full
-// rationale in windowManager.ts. A deterministic rAF queue replaces the
-// global so the assertions are about scheduling, not wall time.
+// rationale in windowManager.ts.
 describe("BloubBot hidden pause ([20260926_Fix_BloubHiddenPause])", () => {
-  /** Replace the global rAF pair with a deterministic, manually pumped queue. */
-  function installRafQueue() {
-    const pending = new Map<number, FrameRequestCallback>();
-    let seq = 0;
-    const raf = vi.fn((cb: FrameRequestCallback) => {
-      const id = ++seq;
-      pending.set(id, cb);
-      return id;
-    });
-    const cancel = vi.fn((id: number) => {
-      pending.delete(id);
-    });
-    vi.stubGlobal("requestAnimationFrame", raf);
-    vi.stubGlobal("cancelAnimationFrame", cancel);
-    return {
-      raf,
-      cancel,
-      pending,
-      /** Fire every pending callback once, in scheduling order. */
-      pump(): number {
-        const frames = [...pending.values()];
-        pending.clear();
-        for (const cb of frames) cb(performance.now());
-        return frames.length;
-      },
-    };
-  }
-
   /**
    * Stub the preload bridge: capture the visibility listener so tests fire
    * the main-process signal by hand, exactly as windowManager would.
@@ -785,5 +786,75 @@ describe("BloubBot hidden pause ([20260926_Fix_BloubHiddenPause])", () => {
 
     unmount();
     expect(visibility.unsub).toHaveBeenCalledTimes(1); // no listener leak
+  });
+});
+
+// [20260926_Feat_BloubFpsTiering] Two-tier frame gating. Idle tier: with no
+// recent display-state change the loop processes at most 12fps — faked
+// performance plus the shared rAF queue pin the cadence without wall time.
+// Burst tier: entering a display state opens a full-rate window for that
+// state's catalogue duration; when it elapses the cap resumes.
+describe("BloubBot fps tiering ([20260926_Feat_BloubFpsTiering])", () => {
+  /** Display-frame step for the pumped clock; 5 steps clear the 83.3ms cap interval. */
+  const FRAME_MS = 16.7;
+
+  /** Advance the faked clock one frame, then fire the pending rAF callbacks. */
+  function pumpStep(q: ReturnType<typeof installRafQueue>): void {
+    vi.advanceTimersByTime(FRAME_MS);
+    q.pump();
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  it("caps the idle cadence: frame work only every 5th-6th 16.7ms frame", () => {
+    vi.useFakeTimers({ toFake: ["performance"] });
+    const q = installRafQueue();
+    const sampleSpy = vi.spyOn(BotEngine.prototype, "sample");
+    render(<BloubBot state="idle" ariaLabel="Murmur bot" />);
+    pumpStep(q); // t=16.7ms — the first frame always processes
+    expect(sampleSpy).toHaveBeenCalledTimes(1);
+    // t=33.4..83.5ms: every gap sits under the 83.3ms interval — all skipped
+    for (let i = 0; i < 4; i++) pumpStep(q);
+    expect(sampleSpy).toHaveBeenCalledTimes(1);
+    pumpStep(q); // t=100.2ms: 83.5ms since the paint — processes
+    expect(sampleSpy).toHaveBeenCalledTimes(2);
+    for (let i = 0; i < 6; i++) pumpStep(q); // through t=200.4ms
+    expect(sampleSpy).toHaveBeenCalledTimes(3); // processed again at ~183.7ms
+  });
+
+  it("processes every frame inside the burst window after a state change", () => {
+    vi.useFakeTimers({ toFake: ["performance"] });
+    const q = installRafQueue();
+    const sampleSpy = vi.spyOn(BotEngine.prototype, "sample");
+    const { rerender } = render(
+      <BloubBot state="idle" ariaLabel="Murmur bot" />,
+    );
+    pumpStep(q); // t=16.7ms baseline idle frame
+    rerender(<BloubBot state="wink" ariaLabel="Murmur bot" />);
+    // wink holds 1.6s; 95 frames x 16.7ms span 1586ms — all inside the burst
+    for (let i = 0; i < 95; i++) pumpStep(q);
+    // baseline + 95: not one frame skipped while the window is open
+    expect(sampleSpy).toHaveBeenCalledTimes(96);
+  });
+
+  it("returns to the capped cadence once the burst window elapses", () => {
+    vi.useFakeTimers({ toFake: ["performance"] });
+    const q = installRafQueue();
+    const sampleSpy = vi.spyOn(BotEngine.prototype, "sample");
+    const { rerender } = render(
+      <BloubBot state="idle" ariaLabel="Murmur bot" />,
+    );
+    pumpStep(q); // t=16.7ms baseline idle frame
+    rerender(<BloubBot state="wink" ariaLabel="Murmur bot" />); // burst: 1.6s
+    for (let i = 0; i < 95; i++) pumpStep(q); // burst runs through t≈1603ms
+    expect(sampleSpy).toHaveBeenCalledTimes(96);
+    for (let i = 0; i < 4; i++) pumpStep(q); // window closed: sub-interval skips
+    expect(sampleSpy).toHaveBeenCalledTimes(96);
+    pumpStep(q); // t≈1687ms: 83.5ms since the last burst frame — processes
+    expect(sampleSpy).toHaveBeenCalledTimes(97);
   });
 });

@@ -108,6 +108,21 @@ const MOOD_INTERVAL_S = 4.2;
  */
 const MAX_FRAME_DELTA = 0.064;
 
+// [20260926_Feat_BloubFpsTiering] Two-tier frame gating for the animation
+// loop. Idle tier: outside a burst window the loop processes at most 12fps —
+// the 44px idle mascot is slow motion anyway, and the engine sample + SVG
+// paint are the cost (visible-idle renderer CPU ~20% -> ~4-5%). Burst tier:
+// entering a display state (state prop, playOnce egg, egg return) opens a
+// full-rate window for that state's catalogue duration (BURST_FLOOR_S when a
+// state ever lacks one), so wink/egg/notify flashes stay crisp. If the
+// burst-window rule ever proves wrong, a flat 12fps cap is the accepted
+// degradation.
+const IDLE_FPS_CAP = 12;
+/** ms between processed frames at the idle cap. */
+const IDLE_INTERVAL_MS = 1000 / IDLE_FPS_CAP;
+/** Burst-window floor in seconds when a state has no catalogue duration. */
+const BURST_FLOOR_S = 2;
+
 /**
  * States whose pose loops decoratively for as long as they hold. `orbit`'s
  * rings fade after 3.4 s and the pose degenerates into a slow-spinning ball,
@@ -236,6 +251,13 @@ function BloubBotImpl(
     running: playing,
     paintedAt: -1,
   });
+  // [20260926_Feat_BloubFpsTiering] Wall-clock ms of the last processed frame
+  // (-Infinity = process the first frame at once, mirroring paintedAt: -1)
+  // and the wall-clock ms until which the burst tier runs (0 = none).
+  const fpsGateRef = useRef({
+    lastPaintAt: -Infinity,
+    burstUntil: 0,
+  });
   const engineRef = useRef<BotEngine | null>(null);
   const eggTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reducedRef = useRef(false);
@@ -273,6 +295,13 @@ function BloubBotImpl(
   }, [shape, expression]);
 
   const clockNow = useCallback(() => clockRef.current.value, []);
+
+  /** [20260926_Feat_BloubFpsTiering] Open the burst tier for state `id`. */
+  const openBurst = useCallback((id: StateId) => {
+    fpsGateRef.current.burstUntil =
+      performance.now() +
+      1000 * (STATE_BY_ID.get(id)?.duration ?? BURST_FLOOR_S);
+  }, []);
 
   const resolveInk = useCallback(() => {
     return color
@@ -462,9 +491,10 @@ function BloubBotImpl(
     const now = clockNow();
     displayRef.current = { state, setAt: now };
     engine().setState(state, now);
+    openBurst(state);
     // [20260905_Fix_BloubBotReviewFixes] repaint even when paused (engine mutation changed sample() output)
     clockRef.current.paintedAt = -1;
-  }, [state, engine, clockNow]);
+  }, [state, engine, clockNow, openBurst]);
 
   useEffect(() => {
     engine().setShape(
@@ -608,6 +638,21 @@ function BloubBotImpl(
         c.value += Math.min((realNow - c.realLast) / 1000, MAX_FRAME_DELTA);
       }
       c.realLast = realNow;
+      // [20260926_Feat_BloubFpsTiering] Idle cap: below the interval and
+      // outside a burst window, skip the frame work (replay check, gaze, mood,
+      // engine sample, paint) and just re-queue. The gate sits after the clock
+      // bookkeeping so the clock stays real-time — mood rotation and orbit
+      // replay keep wall-clock timing; the skipped arithmetic is three
+      // assignments, the sample+paint is the CPU.
+      const gate = fpsGateRef.current;
+      if (
+        realNow - gate.lastPaintAt < IDLE_INTERVAL_MS &&
+        realNow >= gate.burstUntil
+      ) {
+        raf = requestAnimationFrame(tick);
+        return;
+      }
+      gate.lastPaintAt = realNow;
       if (c.value !== c.paintedAt) {
         const display = displayRef.current;
         if (
@@ -683,17 +728,19 @@ function BloubBotImpl(
         const now = clockNow();
         engine().setState(id, now);
         displayRef.current = { state: id, setAt: now };
+        openBurst(id);
         const hold = STATE_BY_ID.get(id)?.duration ?? 2;
         eggTimerRef.current = setTimeout(() => {
           eggTimerRef.current = null;
           const back = clockNow();
           engine().setState(underlyingRef.current, back);
           displayRef.current = { state: underlyingRef.current, setAt: back };
+          openBurst(underlyingRef.current);
         }, hold * 1000);
       },
       getState: () => displayRef.current.state,
     }),
-    [engine, clockNow],
+    [engine, clockNow, openBurst],
   );
 
   return (
