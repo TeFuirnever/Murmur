@@ -21,6 +21,7 @@ import type {
   UpdateProgressData,
   UpdateCompleteData,
   UpdateErrorData,
+  WindowVisibilityData,
   HotkeyRegistrationResult,
   FileTranscriptionProgressData,
   OperationResult,
@@ -36,6 +37,11 @@ export interface ElectronAPI {
   maximizeWindow: () => Promise<void>;
   onWindowMaximizeChange: (
     callback: (isMaximized: boolean) => void,
+  ) => () => void;
+  // [20260926_Fix_BloubHiddenPause] mirrors the preload bridge; full
+  // rationale in windowManager.ts.
+  onWindowVisibilityChange: (
+    callback: (visibility: WindowVisibilityData) => void,
   ) => () => void;
   closeWindow: () => Promise<void>;
   closeApp: () => Promise<void>;

@@ -627,8 +627,36 @@ function BloubBotImpl(
       }
       raf = requestAnimationFrame(tick);
     };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    // [20260926_Fix_BloubHiddenPause] Pauses rAF on the main process's
+    // WINDOW_VISIBILITY_CHANGE truth push (rationale in windowManager.ts):
+    // document visibilitychange never fires here because
+    // backgroundThrottling:false (ADR-015) blocks the flip on macOS
+    // hide/minimize. Resume refreshes realLast so the hidden gap never
+    // enters the frame delta (MAX_FRAME_DELTA would clamp it regardless).
+    const start = () => {
+      if (raf === 0) raf = requestAnimationFrame(tick);
+    };
+    const stop = () => {
+      if (raf !== 0) {
+        cancelAnimationFrame(raf);
+        raf = 0;
+      }
+    };
+    const unsubVisibility = window.electronAPI?.onWindowVisibilityChange?.(
+      ({ visible }) => {
+        if (visible) {
+          clockRef.current.realLast = performance.now();
+          start();
+        } else {
+          stop();
+        }
+      },
+    );
+    start();
+    return () => {
+      stop();
+      unsubVisibility?.();
+    };
   }, [frozenAt, playing, engine, paint, stepMood]);
 
   // ink + paper resolution and (frozen) repaint — declared LAST so the frame

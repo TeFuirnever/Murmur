@@ -674,3 +674,116 @@ describe("BloubBot tracking mood rotation (issue #227)", () => {
     }
   });
 });
+
+// [20260926_Fix_BloubHiddenPause] Pins the mascot loop's hidden-pause
+// signalling against the main-process WINDOW_VISIBILITY_CHANGE push; full
+// rationale in windowManager.ts. A deterministic rAF queue replaces the
+// global so the assertions are about scheduling, not wall time.
+describe("BloubBot hidden pause ([20260926_Fix_BloubHiddenPause])", () => {
+  /** Replace the global rAF pair with a deterministic, manually pumped queue. */
+  function installRafQueue() {
+    const pending = new Map<number, FrameRequestCallback>();
+    let seq = 0;
+    const raf = vi.fn((cb: FrameRequestCallback) => {
+      const id = ++seq;
+      pending.set(id, cb);
+      return id;
+    });
+    const cancel = vi.fn((id: number) => {
+      pending.delete(id);
+    });
+    vi.stubGlobal("requestAnimationFrame", raf);
+    vi.stubGlobal("cancelAnimationFrame", cancel);
+    return {
+      raf,
+      cancel,
+      pending,
+      /** Fire every pending callback once, in scheduling order. */
+      pump(): number {
+        const frames = [...pending.values()];
+        pending.clear();
+        for (const cb of frames) cb(performance.now());
+        return frames.length;
+      },
+    };
+  }
+
+  /**
+   * Stub the preload bridge: capture the visibility listener so tests fire
+   * the main-process signal by hand, exactly as windowManager would.
+   */
+  function installVisibilityBridge() {
+    let listener: ((v: { visible: boolean }) => void) | null = null;
+    const unsub = vi.fn(() => {
+      listener = null;
+    });
+    const subscribe = vi.fn(
+      (cb: (v: { visible: boolean }) => void): (() => void) => {
+        listener = cb;
+        return unsub;
+      },
+    );
+    (window as unknown as { electronAPI?: unknown }).electronAPI = {
+      onWindowVisibilityChange: subscribe,
+    };
+    return {
+      subscribe,
+      unsub,
+      fire: (visible: boolean) => listener?.({ visible }),
+    };
+  }
+
+  afterEach(() => {
+    delete (window as unknown as { electronAPI?: unknown }).electronAPI;
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps requesting frames while visible (no signal needed)", () => {
+    installVisibilityBridge(); // bridge present, no events: the app is visible
+    const rafQ = installRafQueue();
+    render(<BloubBot state="idle" ariaLabel="Murmur bot" />);
+    expect(rafQ.raf).toHaveBeenCalledTimes(1); // loop is live on mount
+    expect(rafQ.pump()).toBe(1);
+    // the tick re-queues itself — the loop keeps running while visible
+    expect(rafQ.raf).toHaveBeenCalledTimes(2);
+  });
+
+  it("stops re-queueing frames on visible=false and resumes on visible=true", () => {
+    const visibility = installVisibilityBridge();
+    const rafQ = installRafQueue();
+    render(<BloubBot state="idle" ariaLabel="Murmur bot" />);
+    rafQ.pump(); // one visible frame; the tick has re-queued
+    expect(rafQ.raf).toHaveBeenCalledTimes(2);
+    expect(rafQ.pending.size).toBe(1);
+
+    visibility.fire(false);
+    // the pending frame is cancelled and nothing re-queues while hidden
+    expect(rafQ.cancel).toHaveBeenCalledTimes(1);
+    expect(rafQ.pending.size).toBe(0);
+    expect(rafQ.pump()).toBe(0); // no frame fires no matter how long we wait
+
+    visibility.fire(true);
+    expect(rafQ.raf).toHaveBeenCalledTimes(3); // the loop resumed
+    expect(rafQ.pump()).toBe(1);
+    expect(rafQ.raf).toHaveBeenCalledTimes(4); // looping again, as before
+  });
+
+  it("stays stopped while visible=false persists, and unsubscribes on unmount", () => {
+    const visibility = installVisibilityBridge();
+    const rafQ = installRafQueue();
+    const { unmount } = render(
+      <BloubBot state="idle" ariaLabel="Murmur bot" />,
+    );
+    visibility.fire(false); // right after mount, before any frame runs
+    expect(rafQ.raf).toHaveBeenCalledTimes(1); // mount started it, signal stopped it
+    expect(rafQ.pump()).toBe(0);
+    visibility.fire(false); // duplicate hide signals stay idempotent
+    expect(rafQ.pump()).toBe(0);
+
+    visibility.fire(true);
+    expect(rafQ.raf).toHaveBeenCalledTimes(2); // resumes on the show signal
+
+    unmount();
+    expect(visibility.unsub).toHaveBeenCalledTimes(1); // no listener leak
+  });
+});

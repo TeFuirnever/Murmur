@@ -49,7 +49,12 @@ import path from "path";
 type ViFn = ReturnType<typeof vi.fn>;
 const electronMock = vi.hoisted(() => ({
   BrowserWindow: vi.fn() as ViFn,
-  app: { getAppPath: vi.fn(() => "/fake/app/path") as ViFn },
+  app: {
+    getAppPath: vi.fn(() => "/fake/app/path") as ViFn,
+    // [20260926_Fix_BloubHiddenPause] app-level hide/show hook recorder;
+    // re-assigned fresh in beforeEach by suites that assert on it
+    on: vi.fn() as ViFn,
+  },
   session: {
     defaultSession: {
       webRequest: { onHeadersReceived: vi.fn() as ViFn },
@@ -65,7 +70,12 @@ vi.mock("electron", () => electronMock);
 // Only the fields the body assigns + the tests read are listed. Preserved
 // verbatim from the pre-refactor file.
 interface BrowserWindowInstance {
-  webContents: { send: ReturnType<typeof vi.fn> };
+  webContents: {
+    send: ReturnType<typeof vi.fn>;
+    // [20260926_Fix_BloubHiddenPause] did-finish-load is hooked (and typed)
+    // on webContents, not the window
+    on: ReturnType<typeof vi.fn>;
+  };
   on: ReturnType<typeof vi.fn>;
   loadURL: ReturnType<typeof vi.fn>;
   loadFile: ReturnType<typeof vi.fn>;
@@ -74,6 +84,9 @@ interface BrowserWindowInstance {
   maximize: ReturnType<typeof vi.fn>;
   isMaximized: ReturnType<typeof vi.fn>;
   isDestroyed: ReturnType<typeof vi.fn>;
+  // [20260926_Fix_BloubHiddenPause] truth sources for the visibility push
+  isVisible: ReturnType<typeof vi.fn>;
+  isMinimized: ReturnType<typeof vi.fn>;
   setAlwaysOnTop: ReturnType<typeof vi.fn>;
   // [20260906_Spec259_T2] close/hide are exercised by the branch close-out
   // describe below (hide/close window guards).
@@ -89,6 +102,9 @@ type EventListener = (...args: unknown[]) => void;
 describe("windowManager — real module execution with mocked electron", () => {
   let sendSpy: ReturnType<typeof vi.fn>;
   let onHandlers: Record<string, EventListener>;
+  // [20260926_Fix_BloubHiddenPause] handlers registered on the electron app
+  // module (app-level hide/show)
+  let onAppHandlers: Record<string, EventListener>;
   // [20260726_Tier32_WindowManagerEvents] MockBrowserWindow is a vi.fn used
   // as a constructor + asserted on via toHaveBeenCalledWith. Re-assigning
   // electronMock.BrowserWindow here each test, then dynamically importing
@@ -105,15 +121,22 @@ describe("windowManager — real module execution with mocked electron", () => {
 
     sendSpy = vi.fn();
     onHandlers = {};
+    onAppHandlers = {};
+    // [20260926_Fix_BloubHiddenPause] app-level hooks record here so tests
+    // can fire them by hand, mirroring the BrowserWindow on-handler harness
+    electronMock.app.on = vi.fn((event: string, handler: EventListener) => {
+      onAppHandlers[event] = handler;
+    });
     // [20260726_Tier32_WindowManagerEvents] vi.fn used as a constructor:
     // the typed `this` parameter routes the body's assignments through the
     // BrowserWindowInstance interface so no field access reads as `any`.
     // Body preserved verbatim from the pre-refactor file.
     MockBrowserWindow = vi.fn(function (this: BrowserWindowInstance) {
-      this.webContents = { send: sendSpy };
-      this.on = vi.fn((event: string, handler: EventListener) => {
+      const windowOn = vi.fn((event: string, handler: EventListener) => {
         onHandlers[event] = handler;
       });
+      this.on = windowOn;
+      this.webContents = { send: sendSpy, on: windowOn };
       this.loadURL = vi.fn(() => Promise.resolve());
       this.loadFile = vi.fn(() => Promise.resolve());
       this.focus = vi.fn();
@@ -122,6 +145,8 @@ describe("windowManager — real module execution with mocked electron", () => {
       this.maximize = vi.fn();
       this.isMaximized = vi.fn(() => false);
       this.isDestroyed = vi.fn(() => false);
+      this.isVisible = vi.fn(() => true);
+      this.isMinimized = vi.fn(() => false);
       return this;
     });
 
@@ -171,6 +196,194 @@ describe("windowManager — real module execution with mocked electron", () => {
       C.EVENTS.WINDOW_MAXIMIZE_CHANGE,
       false,
     );
+  });
+
+  // [20260926_Fix_BloubHiddenPause] truth-derived payload + 'focus' hook
+  // (app-level unhide resume); full rationale in windowManager.ts.
+  it("window-visibility push derives truth from window state; 'focus' covers app-level unhide", async () => {
+    const WindowManager = await loadWindowManager();
+    const wm = new WindowManager();
+    process.env.NODE_ENV = "development";
+    await wm.createMainWindow();
+
+    // every event that can correlate with a real visibility change is hooked
+    for (const ev of ["hide", "show", "minimize", "restore", "focus"]) {
+      expect(typeof onHandlers[ev]).toBe("function");
+    }
+
+    const main = wm.mainWindow!;
+
+    // Case A — app-level unhide (Cmd+H toggle): no 'show' event fires; the
+    // window is visible and focused by the time 'focus' runs.
+    onHandlers.focus!();
+    expect(sendSpy).toHaveBeenLastCalledWith(
+      C.EVENTS.WINDOW_VISIBILITY_CHANGE,
+      { visible: true },
+    );
+
+    // Case B — hide: truth flips to false regardless of the event name.
+    main.isVisible = vi.fn(() => false);
+    onHandlers.hide!();
+    expect(sendSpy).toHaveBeenLastCalledWith(
+      C.EVENTS.WINDOW_VISIBILITY_CHANGE,
+      { visible: false },
+    );
+
+    // Case C — minimize reports hidden even though isVisible() is still true.
+    main.isVisible = vi.fn(() => true);
+    main.isMinimized = vi.fn(() => true);
+    onHandlers.minimize!();
+    expect(sendSpy).toHaveBeenLastCalledWith(
+      C.EVENTS.WINDOW_VISIBILITY_CHANGE,
+      { visible: false },
+    );
+
+    // Case D — un-minimize returns truth to visible.
+    main.isMinimized = vi.fn(() => false);
+    onHandlers.restore!();
+    expect(sendSpy).toHaveBeenLastCalledWith(
+      C.EVENTS.WINDOW_VISIBILITY_CHANGE,
+      { visible: true },
+    );
+
+    // Case E — 'focus' while hidden stays false (no spurious resume).
+    main.isVisible = vi.fn(() => false);
+    onHandlers.focus!();
+    expect(sendSpy).toHaveBeenLastCalledWith(
+      C.EVENTS.WINDOW_VISIBILITY_CHANGE,
+      { visible: false },
+    );
+  });
+
+  // [20260926_Fix_BloubHiddenPause] initial truth push — full rationale in
+  // windowManager.ts. One derived-truth emission on did-finish-load closes
+  // the mounted-while-hidden race (reload / crash-restore while hidden);
+  // a visible-window boot harmlessly re-sends visible:true.
+  it("pushes initial visibility truth on did-finish-load", async () => {
+    const WindowManager = await loadWindowManager();
+    const wm = new WindowManager();
+    process.env.NODE_ENV = "development";
+    await wm.createMainWindow();
+
+    expect(typeof onHandlers["did-finish-load"]).toBe("function");
+    const main = wm.mainWindow!;
+
+    // hidden load: the fresh renderer must learn the window is hidden
+    main.isVisible = vi.fn(() => false);
+    onHandlers["did-finish-load"]!();
+    expect(sendSpy).toHaveBeenLastCalledWith(
+      C.EVENTS.WINDOW_VISIBILITY_CHANGE,
+      { visible: false },
+    );
+
+    // visible boot: the re-sent true is harmless derived truth
+    main.isVisible = vi.fn(() => true);
+    onHandlers["did-finish-load"]!();
+    expect(sendSpy).toHaveBeenLastCalledWith(
+      C.EVENTS.WINDOW_VISIBILITY_CHANGE,
+      { visible: true },
+    );
+  });
+
+  // [20260926_Fix_BloubHiddenPause] app-level hide/show hooks — full
+  // rationale in windowManager.ts: macOS application-level hide delivers
+  // the window 'hide' event non-deterministically, the app module's
+  // hide/show are deterministic. Registered once per manager; skipped when
+  // the main window is gone.
+  it("app hide/show push derived truth once per manager; skipped when the window is gone", async () => {
+    const WindowManager = await loadWindowManager();
+    const wm = new WindowManager();
+    process.env.NODE_ENV = "development";
+    await wm.createMainWindow();
+
+    const appOn = electronMock.app.on as ViFn;
+    expect(appOn).toHaveBeenCalledWith("hide", expect.any(Function));
+    expect(appOn).toHaveBeenCalledWith("show", expect.any(Function));
+
+    const main = wm.mainWindow!;
+
+    // deterministic app-level hide (the Cmd+H path): the event is definitive
+    // truth — isVisible() may still read a STALE true at the exact hide
+    // moment (observed racing on macOS), so the handler must send literal
+    // false even when isVisible() lies
+    main.isVisible = vi.fn(() => true);
+    onAppHandlers.hide!();
+    expect(sendSpy).toHaveBeenLastCalledWith(
+      C.EVENTS.WINDOW_VISIBILITY_CHANGE,
+      { visible: false },
+    );
+
+    // app-level unhide — a second deterministic resume signal
+    main.isVisible = vi.fn(() => true);
+    main.isMinimized = vi.fn(() => false);
+    onAppHandlers.show!();
+    expect(sendSpy).toHaveBeenLastCalledWith(
+      C.EVENTS.WINDOW_VISIBILITY_CHANGE,
+      { visible: true },
+    );
+
+    // window re-creation must not duplicate the app-level registrations
+    await wm.createMainWindow();
+    expect(appOn.mock.calls.filter(([event]) => event === "hide")).toHaveLength(
+      1,
+    );
+
+    // a destroyed main window is never sent to via the app-level hooks
+    main.isDestroyed = vi.fn(() => true);
+    const sendsBefore = sendSpy.mock.calls.length;
+    onAppHandlers.hide!();
+    expect(sendSpy.mock.calls.length).toBe(sendsBefore);
+  });
+
+  // [20260926_Fix_BloubHiddenPause] 1Hz truth-poll backstop — full rationale
+  // in windowManager.ts: macOS event delivery is non-deterministic at every
+  // layer on the app-hide path; the poll is the correctness mechanism and
+  // the events stay the instant fast path.
+  it("polls derived truth at 1Hz as the backstop, and stops on close", async () => {
+    vi.useFakeTimers();
+    try {
+      const WindowManager = await loadWindowManager();
+      const wm = new WindowManager();
+      process.env.NODE_ENV = "development";
+      await wm.createMainWindow();
+
+      const main = wm.mainWindow!;
+
+      // one tick per second, unconditionally, with current derived truth
+      const sendsAtStart = sendSpy.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(sendSpy.mock.calls.length).toBe(sendsAtStart + 1);
+      expect(sendSpy).toHaveBeenLastCalledWith(
+        C.EVENTS.WINDOW_VISIBILITY_CHANGE,
+        { visible: true },
+      );
+
+      // truth flips WITHOUT any event firing — the poll still converges
+      main.isVisible = vi.fn(() => false);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(sendSpy).toHaveBeenLastCalledWith(
+        C.EVENTS.WINDOW_VISIBILITY_CHANGE,
+        { visible: false },
+      );
+
+      // a destroyed window is skipped by the guard
+      main.isDestroyed = vi.fn(() => true);
+      const sendsWhileDestroyed = sendSpy.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(sendSpy.mock.calls.length).toBe(sendsWhileDestroyed);
+
+      // closing the window clears the poller — no further sends, ever
+      main.isDestroyed = vi.fn(() => false);
+      const clearSpy = vi.spyOn(globalThis, "clearInterval");
+      onHandlers.closed!();
+      expect(clearSpy).toHaveBeenCalled();
+      clearSpy.mockRestore();
+      const sendsAfterClose = sendSpy.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(sendSpy.mock.calls.length).toBe(sendsAfterClose);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("respects setDefaultAlwaysOnTop(false) in BrowserWindow options", async () => {
@@ -319,10 +532,11 @@ describe("[20260906_Spec259_T2] windowManager branch close-out", () => {
   // rebinds electronMock.BrowserWindow to a fresh spy (same as above).
   function installBrowserWindow(loadURLImpl?: () => Promise<void>): void {
     MockBrowserWindow = vi.fn(function (this: BrowserWindowInstance) {
-      this.webContents = { send: vi.fn() };
-      this.on = vi.fn((event: string, handler: EventListener) => {
+      const windowOn = vi.fn((event: string, handler: EventListener) => {
         onHandlers[event] = handler;
       });
+      this.on = windowOn;
+      this.webContents = { send: vi.fn(), on: windowOn };
       this.loadURL = loadURLImpl
         ? vi.fn(loadURLImpl)
         : vi.fn(() => Promise.resolve());
@@ -333,6 +547,8 @@ describe("[20260906_Spec259_T2] windowManager branch close-out", () => {
       this.maximize = vi.fn();
       this.isMaximized = vi.fn(() => false);
       this.isDestroyed = vi.fn(() => false);
+      this.isVisible = vi.fn(() => true);
+      this.isMinimized = vi.fn(() => false);
       this.close = vi.fn();
       this.hide = vi.fn();
       return this;
@@ -351,6 +567,9 @@ describe("[20260906_Spec259_T2] windowManager branch close-out", () => {
     vi.resetModules();
     onHandlers = {};
     electronMock.app.getAppPath = vi.fn(() => "/fake/app/path");
+    // [20260926_Fix_BloubHiddenPause] createMainWindow registers app-level
+    // hide/show hooks; a plain recorder suffices here (never asserted)
+    electronMock.app.on = vi.fn();
     electronMock.session.defaultSession.webRequest.onHeadersReceived = vi.fn();
     installBrowserWindow();
   });
