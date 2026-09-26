@@ -147,10 +147,10 @@
       "baseUrlDesc": "AI service API endpoint, supports OpenAI-compatible APIs",
       "model": "AI Model",
       "modelDesc": "Select the AI model for text optimization",
-      "modelPlaceholder": "Enter custom model name, e.g.: qwen3-30b-a3b-instruct-2507",
+      "modelPlaceholder": "Enter custom model name, e.g.: gpt-6-sol",
       "predefinedModel": "Predefined Model",
       "customModel": "Custom Model",
-      "qwenRecommended": "Qwen3-30B (Recommended)",
+      "modelRecommended": "GPT-6 Sol (Recommended)",
       "testConfig": "Test Configuration",
       "testing": "Testing...",
       "testSuccess": "AI configuration test passed",
@@ -213,6 +213,9 @@
     "providers": {
       "openai": {
         "guide": "Sign up to get an API Key, pay-as-you-go"
+      },
+      "anthropic": {
+        "guide": "Sign up for an API Key; Claude runs on the official OpenAI-compatible endpoint"
       },
       "deepseek": {
         "guide": "Free credits on sign-up, great for Chinese text"

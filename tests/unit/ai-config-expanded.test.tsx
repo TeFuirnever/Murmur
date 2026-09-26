@@ -173,7 +173,7 @@ describe("[20260729_Test_AIConfigExpanded] AIConfigSection uncovered branches", 
 
     // The placeholder is the locale value of settings.ai.modelPlaceholder.
     const customInput = screen.getByPlaceholderText(
-      "输入自定义模型名称，如：qwen3-30b-a3b-instruct-2507",
+      "输入自定义模型名称，如：gpt-6-sol",
     );
     expect(customInput).toHaveValue("my-custom-model");
     expect(customInput).toHaveAttribute("type", "text");
@@ -187,9 +187,7 @@ describe("[20260729_Test_AIConfigExpanded] AIConfigSection uncovered branches", 
     render(<AIConfigSection {...props} />);
 
     expect(
-      screen.queryByPlaceholderText(
-        "输入自定义模型名称，如：qwen3-30b-a3b-instruct-2507",
-      ),
+      screen.queryByPlaceholderText("输入自定义模型名称，如：gpt-6-sol"),
     ).not.toBeInTheDocument();
   });
 
@@ -203,7 +201,7 @@ describe("[20260729_Test_AIConfigExpanded] AIConfigSection uncovered branches", 
     render(<AIConfigSection {...props} />);
 
     const customInput = screen.getByPlaceholderText(
-      "输入自定义模型名称，如：qwen3-30b-a3b-instruct-2507",
+      "输入自定义模型名称，如：gpt-6-sol",
     );
     fireEvent.change(customInput, { target: { value: "qwen-turbo" } });
 
@@ -344,16 +342,16 @@ describe("[20260729_Test_AIConfigExpanded] AIConfigSection uncovered branches", 
     const onInputChange = vi.fn();
     const props = buildAIConfigProps({
       customModel: false,
-      settings: buildSettings({ ai_model: "gpt-3.5-turbo" }),
+      settings: buildSettings({ ai_model: "gpt-6-sol" }),
       onInputChange,
     });
     render(<AIConfigSection {...props} />);
 
     const modelSelect = screen.getByDisplayValue(
-      "GPT-3.5 Turbo",
+      "GPT-6 Sol (推荐)",
     ) as HTMLSelectElement;
-    fireEvent.change(modelSelect, { target: { value: "gpt-4o" } });
-    expect(onInputChange).toHaveBeenCalledWith("ai_model", "gpt-4o");
+    fireEvent.change(modelSelect, { target: { value: "gpt-6-luna" } });
+    expect(onInputChange).toHaveBeenCalledWith("ai_model", "gpt-6-luna");
   });
 
   // ── Base URL change ──

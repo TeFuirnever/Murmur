@@ -147,10 +147,10 @@
       "baseUrlDesc": "AI服务的API端点地址，支持OpenAI兼容的API",
       "model": "AI 模型",
       "modelDesc": "选择用于文本优化的AI模型",
-      "modelPlaceholder": "输入自定义模型名称，如：qwen3-30b-a3b-instruct-2507",
+      "modelPlaceholder": "输入自定义模型名称，如：gpt-6-sol",
       "predefinedModel": "预定义模型",
       "customModel": "自定义模型",
-      "qwenRecommended": "Qwen3-30B (推荐)",
+      "modelRecommended": "GPT-6 Sol (推荐)",
       "testConfig": "测试配置",
       "testing": "测试中...",
       "testSuccess": "AI配置测试成功",
@@ -213,6 +213,9 @@
     "providers": {
       "openai": {
         "guide": "注册后获取 API Key，按量付费"
+      },
+      "anthropic": {
+        "guide": "注册获取 API Key，Claude 走官方 OpenAI 兼容端点"
       },
       "deepseek": {
         "guide": "注册即送免费额度，适合中文文本处理"

@@ -199,8 +199,8 @@ describe("providerPresets", () => {
       expect(deepseek.name).toBe("deepseek");
     });
 
-    // [20260725_TDD_ProviderPresets] openai lookup — verifies the find()
-    // happy path returns a fully-defined preset for a known provider name.
+    // [20260725_TDD_ProviderPresets] openai models refresh — pins the
+    // 2026-09 verified GPT-6 family as the advertised catalog.
     it("returns defined preset with name 'openai' for getProviderByName('openai')", () => {
       const openai = getProviderByName("openai")!;
       expect(openai).toBeDefined();
@@ -211,6 +211,98 @@ describe("providerPresets", () => {
 
     it("returns undefined for unknown provider", () => {
       expect(getProviderByName("nonexistent")).toBeUndefined();
+    });
+  });
+
+  // [20260926_Fix_397_ProviderAudit] Issue #397 F3: every base_url and model
+  // mapping below was verified against the provider's own API docs in
+  // 2026-09. These pins exist so silent upstream catalog drift surfaces as a
+  // red test instead of a broken preset button in the settings UI.
+  describe("[20260926_Fix_397_ProviderAudit] 2026-09 factual audit", () => {
+    it("openai preset advertises the GPT-6 family, not the retired gpt-4 generation", () => {
+      const openai = getProviderByName("openai")!;
+      expect(openai.base_url).toBe("https://api.openai.com/v1");
+      expect(openai.models).toEqual(["gpt-6-sol", "gpt-6-astra", "gpt-6-luna"]);
+    });
+
+    it("anthropic preset exposes the OpenAI-compatibility endpoint with current Claude models", () => {
+      const anthropic = getProviderByName("anthropic")!;
+      expect(anthropic.base_url).toBe("https://api.anthropic.com/v1");
+      expect(anthropic.models).toEqual([
+        "claude-sonnet-5",
+        "claude-opus-5-5",
+        "claude-haiku-4-5",
+      ]);
+      expect(anthropic.requires_api_key).toBe(true);
+      expect(anthropic.registration?.url).toBe("https://console.anthropic.com");
+    });
+
+    it("deepseek preset uses the documented bare-domain base_url and the V4-generation models", () => {
+      // api-docs.deepseek.com documents the OpenAI-format base as the bare
+      // domain; the legacy /v1 suffix is no longer part of the docs.
+      const deepseek = getProviderByName("deepseek")!;
+      expect(deepseek.base_url).toBe("https://api.deepseek.com");
+      expect(deepseek.models).toEqual(["deepseek-flash", "deepseek-v4-pro"]);
+    });
+
+    it("qwen preset lists the Qwen3.8 generation", () => {
+      const qwen = getProviderByName("qwen")!;
+      expect(qwen.base_url).toBe(
+        "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      );
+      expect(qwen.models).toEqual([
+        "qwen3.8-max",
+        "qwen3.5-plus",
+        "qwen3.5-flash",
+      ]);
+    });
+
+    it("glm preset lists the GLM-5 generation", () => {
+      const glm = getProviderByName("glm")!;
+      expect(glm.base_url).toBe("https://open.bigmodel.cn/api/paas/v4");
+      expect(glm.models).toEqual(["glm-5.3", "glm-5.3-flash"]);
+    });
+
+    it("siliconflow preset lists the current DeepSeek-V4 catalog IDs", () => {
+      const sf = getProviderByName("siliconflow")!;
+      expect(sf.base_url).toBe("https://api.siliconflow.cn/v1");
+      expect(sf.models).toEqual([
+        "deepseek-ai/DeepSeek-V4-Flash",
+        "Pro/deepseek-ai/DeepSeek-V4",
+      ]);
+    });
+
+    it("groq preset drops the retired mixtral and lists production-tier models", () => {
+      const groq = getProviderByName("groq")!;
+      expect(groq.base_url).toBe("https://api.groq.com/openai/v1");
+      expect(groq.models).toEqual([
+        "openai/gpt-oss-120b",
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
+      ]);
+    });
+
+    it("moonshot preset lists the Kimi K generation on the documented /v1 host", () => {
+      const moonshot = getProviderByName("moonshot")!;
+      expect(moonshot.base_url).toBe("https://api.moonshot.cn/v1");
+      expect(moonshot.models).toEqual(["kimi-k3", "kimi-k2.6"]);
+    });
+
+    it("minimax preset lists the current M-series", () => {
+      const minimax = getProviderByName("minimax")!;
+      expect(minimax.base_url).toBe("https://api.minimaxi.com/v1");
+      expect(minimax.models).toEqual(["MiniMax-M3", "MiniMax-M2.5"]);
+    });
+
+    it("ollama preset suggests currently mainstream library tags", () => {
+      const ollama = getProviderByName("ollama")!;
+      expect(ollama.models).toEqual(["qwen3:8b", "gemma3:4b", "llama3.1:8b"]);
+    });
+
+    it("lmstudio preset keeps the loaded-model placeholder", () => {
+      const lmstudio = getProviderByName("lmstudio")!;
+      expect(lmstudio.base_url).toBe("http://localhost:1234/v1");
+      expect(lmstudio.models).toEqual(["loaded-model"]);
     });
   });
 });

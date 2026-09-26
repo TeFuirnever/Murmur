@@ -62,28 +62,32 @@ export interface DetectedLocalModel {
   models: string[];
 }
 
+// [20260926_Fix_397_ModelCatalog] Refreshed 2026-09: the previous list still
+// advertised the gpt-3.5/gpt-4 generation that every provider has retired or
+// is sunsetting through fall 2026. Current mainstream picks: GPT-6 family
+// (developers.openai.com), Qwen3.8-Max (Bailian) and DeepSeek-V4.1-Flash
+// (api-docs.deepseek.com). Custom-model input remains the escape hatch.
 export const PREDEFINED_MODELS = [
-  "gpt-3.5-turbo",
-  "gpt-4",
-  "gpt-4-turbo",
-  "gpt-4o",
-  "gpt-4o-mini",
-  "qwen3-30b-a3b-instruct-2507",
+  "gpt-6-sol",
+  "gpt-6-luna",
+  "gpt-6-astra",
+  "qwen3.8-max",
+  "deepseek-flash",
 ] as const;
 
-export const DEFAULT_MODEL = "gpt-3.5-turbo";
+export const DEFAULT_MODEL = "gpt-6-sol";
 
 // [20260815_Refactor_ModelListDedup] Display labels for PREDEFINED_MODELS.
 // AIConfigSection used to hardcode the same models a second time as <option>
-// tags — two copies that silently drift. The qwen3 entry is localized at the
-// usage site (settings.ai.qwenRecommended), so its label here is a fallback.
+// tags — two copies that silently drift. The DEFAULT_MODEL entry gets the
+// localized "(推荐)" suffix at the usage site
+// (settings.ai.modelRecommended), so its label here is a fallback.
 export const MODEL_LABELS: Record<string, string> = {
-  "gpt-3.5-turbo": "GPT-3.5 Turbo",
-  "gpt-4": "GPT-4",
-  "gpt-4-turbo": "GPT-4 Turbo",
-  "gpt-4o": "GPT-4o",
-  "gpt-4o-mini": "GPT-4o Mini",
-  "qwen3-30b-a3b-instruct-2507": "Qwen3-30B",
+  "gpt-6-sol": "GPT-6 Sol",
+  "gpt-6-luna": "GPT-6 Luna",
+  "gpt-6-astra": "GPT-6 Astra",
+  "qwen3.8-max": "Qwen3.8-Max",
+  "deepseek-flash": "DeepSeek Flash",
 };
 
 export function isMaskedKey(key: string): boolean {

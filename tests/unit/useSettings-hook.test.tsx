@@ -10,7 +10,12 @@ import "../setup/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { DEFAULT_HOTKEY } from "../../src/settings/hotkeyRecorder";
-import { useSettings } from "../../src/settings/useSettings";
+import {
+  DEFAULT_MODEL,
+  MODEL_LABELS,
+  PREDEFINED_MODELS,
+  useSettings,
+} from "../../src/settings/useSettings";
 import type { ElectronAPI } from "../../src/electronAPI";
 // [20260816_Test_BranchPush] Toast assertions for the load/save failure paths.
 import { toast } from "sonner";
@@ -826,7 +831,7 @@ describe("useSettings hook — branch push", () => {
     expect(checkAIStatus).toHaveBeenCalledWith({
       ai_api_key: "sk-test",
       ai_base_url: "https://api.openai.com/v1",
-      ai_model: "gpt-3.5-turbo",
+      ai_model: "gpt-6-sol",
     });
   });
 
@@ -999,5 +1004,47 @@ describe("useSettings hook — branch push", () => {
       result.current.handleInputChange("theme", "light");
     });
     expect(result.current.settings.theme).toBe("light");
+  });
+});
+
+// [20260926_Fix_397_ModelCatalog] Issue #397 F2: the predefined list still
+// advertised the retired gpt-3.5/gpt-4 generation and the recommended default
+// pointed at gpt-3.5-turbo. Pin the refreshed 2026-09 catalog as a data
+// contract so the next provider-side retirement cannot slip through silently.
+describe("[20260926_Fix_397_ModelCatalog] predefined model catalog (2026-09)", () => {
+  it("drops the retired gpt-3.5/gpt-4 generation entirely", () => {
+    for (const retired of [
+      "gpt-3.5-turbo",
+      "gpt-4",
+      "gpt-4-turbo",
+      "gpt-4o",
+      "gpt-4o-mini",
+    ]) {
+      expect(PREDEFINED_MODELS).not.toContain(retired);
+    }
+    expect(DEFAULT_MODEL).not.toMatch(/^gpt-[34]/);
+  });
+
+  it("lists the 2026-09 mainstream models across providers", () => {
+    expect([...PREDEFINED_MODELS]).toEqual([
+      "gpt-6-sol",
+      "gpt-6-luna",
+      "gpt-6-astra",
+      "qwen3.8-max",
+      "deepseek-flash",
+    ]);
+    expect(DEFAULT_MODEL).toBe("gpt-6-sol");
+  });
+
+  it("gives every predefined model a display label", () => {
+    for (const model of PREDEFINED_MODELS) {
+      expect(MODEL_LABELS[model]).toBeTruthy();
+    }
+  });
+
+  it("keeps DEFAULT_MODEL inside PREDEFINED_MODELS", () => {
+    expect(
+      (PREDEFINED_MODELS as readonly string[]).includes(DEFAULT_MODEL),
+    ).toBe(true);
   });
 });
