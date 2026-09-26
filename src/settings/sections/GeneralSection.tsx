@@ -184,6 +184,54 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
         </button>
       </div>
 
+      {/* [20260926_Issue404] auto_start switch (issue #404): renders from
+          settings state and persists through onInputChange (standard
+          pipeline, like show_notifications) PLUS the live main-process side
+          effect — the toggle calls the SYSTEM.SET_LOGIN_ITEM bridge so the
+          OS login item changes immediately (same immediate-IPC pattern as
+          the always-on-top switch). Platform differences (macOS
+          openAtLogin / Windows registry args) are encapsulated main-side;
+          the renderer sends only the boolean. Default off. */}
+      <div className="flex items-center justify-between">
+        <div>
+          <label className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
+            {t("settings.general.autoStartLabel", "开机自启")}
+          </label>
+          <p className="text-xs text-[#6e6e73]">
+            {t(
+              "settings.general.autoStartDesc",
+              "登录系统时自动在后台启动 Murmur，不抢占焦点",
+            )}
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          data-testid="auto-start"
+          aria-label={t("settings.general.autoStartLabel", "开机自启")}
+          aria-checked={settings.auto_start}
+          onClick={() => {
+            const newVal = !settings.auto_start;
+            onInputChange("auto_start", newVal);
+            if (window.electronAPI?.setLoginItemSettings) {
+              window.electronAPI.setLoginItemSettings(newVal);
+            }
+          }}
+          className={`${
+            settings.auto_start
+              ? "bg-[#0071e3]"
+              : "bg-[#d2d2d7] dark:bg-[#3a3a3c]"
+          } relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-2`}
+        >
+          <span
+            aria-hidden="true"
+            className={`${
+              settings.auto_start ? "translate-x-4" : "translate-x-0"
+            } inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+          />
+        </button>
+      </div>
+
       {/* [20260816_Refactor_RemoveEffects] The visual-effects toggle was
           removed with the whole effects feature (ogl/motion deps). */}
 

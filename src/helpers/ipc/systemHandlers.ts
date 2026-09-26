@@ -7,6 +7,9 @@
 // so the Managers surface shrank to the logger alone.
 import { app, shell, systemPreferences } from "electron";
 import * as C from "../ipc-contracts";
+// [20260926_Issue404] Login-item payload building/apply lives in the
+// loginItem module (unit-tested standalone with a mocked electron app).
+import { applyLoginItemSetting } from "../loginItem";
 import type {
   MediaPermissionStatus,
   PermissionStatusResult,
@@ -70,6 +73,22 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
       logger.warn("查询系统权限状态失败:", error);
       return { microphone: "unknown", accessibility: "unknown" };
     }
+  });
+
+  // [20260926_Issue404] Launch-at-login apply (issue #404): the renderer's
+  // auto_start toggle notifies main to (re)write the OS login item. The
+  // boolean is coerced strictly (only literal true enables) and the
+  // platform payload (macOS openAtLogin / Windows registry args) is built
+  // by the loginItem module — platform differences never reach the
+  // renderer. Failures return a { success:false, error } envelope WITH a
+  // logged warning (no silent swallowing).
+  ipcMain.handle(C.SYSTEM.SET_LOGIN_ITEM, (_event, enabled: unknown) => {
+    const value = enabled === true;
+    const result = applyLoginItemSetting(value);
+    if (!result.success) {
+      logger.warn("应用开机自启失败:", result.error);
+    }
+    return result;
   });
 
   ipcMain.handle(

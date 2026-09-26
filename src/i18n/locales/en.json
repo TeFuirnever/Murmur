@@ -98,6 +98,8 @@
       "hotwordsLimit": "Up to 200 lines, 32 chars each",
       "showNotificationsLabel": "System notifications",
       "showNotificationsDesc": "Show a system notification when an update finishes downloading",
+      "autoStartLabel": "Launch at Login",
+      "autoStartDesc": "Start Murmur automatically when you log in (runs quietly in the background)",
       "hotkeyLabel": "Recording Hotkey",
       "hotkeyDesc": "Global shortcut to start/stop recording from anywhere.",
       "hotkeyStart": "Change",

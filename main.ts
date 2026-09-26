@@ -63,6 +63,12 @@ import ClipboardManager from "./src/helpers/clipboard";
 import FunASRManager from "./src/helpers/funasrManager";
 import TrayManager from "./src/helpers/tray";
 import HotkeyManager from "./src/helpers/hotkeyManager";
+// [20260926_Issue404] Login-item startup alignment (settings win) and the
+// login-launch hidden-window behavior (menu-bar convention, no focus steal).
+import {
+  syncLoginItemAtStartup,
+  hideMainWindowOnLoginLaunch,
+} from "./src/helpers/loginItem";
 import { registerAll as registerIPCHandlers } from "./src/helpers/ipc";
 // [20260912_Feat_265_LocalChannel] Local IPC channel (ticket #265, spec
 // #258): an authenticated unix-socket/named-pipe bridge for CLI/MCP
@@ -256,6 +262,10 @@ async function startApp(): Promise<void> {
 
   // Create main window
   windowManager._setupCSP();
+  // [20260926_Issue404] Settings-win alignment BEFORE window creation (#394
+  // precedent): read the persisted auto_start and force the real OS login
+  // item onto it when they disagree. Never throws (loginItem module).
+  syncLoginItemAtStartup(databaseManager, logger);
   try {
     logger.info("创建主窗口...");
     const alwaysOnTop = Boolean(
@@ -298,6 +308,14 @@ async function startApp(): Promise<void> {
   } catch (error) {
     logger.error("加载主窗口内容失败:", error);
   }
+
+  // [20260926_Issue404] At a login launch, hide the content-loaded main
+  // window (menu-bar convention — no focus steal; the window still exists
+  // for tray toggle / hotkey recording / 显示主窗口). Non-login launches are
+  // a no-op. Placed AFTER the renderer load so a hidden window is never
+  // empty (a hidden blank window would strand tray "show" on a dead
+  // surface). Never throws (loginItem module).
+  hideMainWindowOnLoginLaunch(windowManager, logger);
 
   // Set up tray
   logger.info("设置系统托盘...");

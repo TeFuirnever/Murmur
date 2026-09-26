@@ -411,6 +411,54 @@ describe("useSettings hook", () => {
     expect(result.current.settings.show_notifications).toBe(false);
     expect(api.setSetting).toHaveBeenCalledWith("show_notifications", false);
   });
+
+  // [20260926_Issue404] auto_start joins SettingsState with the schema
+  // (#404 General-tab launch-at-login switch). Load semantics mirror the
+  // stored default: absent/odd → off, only literal true reads as on — the
+  // mirror image of the `!== false` booleans whose defaults are on.
+  it("defaults auto_start to off when nothing is stored", async () => {
+    const api = (globalThis.window as TestWindow).electronAPI!;
+    (api.getAllSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...MOCK_SETTINGS,
+    });
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.settings.auto_start).toBe(false);
+  });
+
+  it("loads a stored auto_start=true as on", async () => {
+    const api = (globalThis.window as TestWindow).electronAPI!;
+    (api.getAllSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...MOCK_SETTINGS,
+      auto_start: true,
+    });
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.settings.auto_start).toBe(true);
+  });
+
+  it("coerces a non-boolean stored auto_start to off", async () => {
+    const api = (globalThis.window as TestWindow).electronAPI!;
+    (api.getAllSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...MOCK_SETTINGS,
+      auto_start: "yes",
+    });
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.settings.auto_start).toBe(false);
+  });
+
+  it("persists auto_start through handleInputChange immediately (discrete switch, no debounce)", async () => {
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    const api = (globalThis.window as TestWindow).electronAPI!;
+    (api.setSetting as ReturnType<typeof vi.fn>).mockClear();
+    act(() => {
+      result.current.handleInputChange("auto_start", true);
+    });
+    expect(result.current.settings.auto_start).toBe(true);
+    expect(api.setSetting).toHaveBeenCalledWith("auto_start", true);
+  });
 });
 
 // [20260816_Test_UseSettingsExpanded] Second describe: save reconciliation
@@ -469,7 +517,8 @@ describe("useSettings hook — save / test / presets / updates", () => {
     // 1 special-cased (unmasked api_key) + 15 in the loop.
     // [20260905_Fix_246_HotkeySettingsUi] count updated for the hotkey key.
     // [20260926_Refactor_403_SettingsSchema] +show_notifications (schema fold).
-    expect(calls).toHaveLength(17);
+    // [20260926_Issue404] +auto_start (joins SettingsState with the schema).
+    expect(calls).toHaveLength(18);
   });
 
   it("saveSettings skips re-sending a masked api_key but still saves the rest", async () => {
@@ -486,7 +535,7 @@ describe("useSettings hook — save / test / presets / updates", () => {
     });
     const calls = (api().setSetting as ReturnType<typeof vi.fn>).mock.calls;
     expect(calls.find((c) => c[0] === "ai_api_key")).toBeUndefined();
-    expect(calls).toHaveLength(16); // [20260905_Fix_249_DefaultModeUi] 15 loop keys after default_mode. [20260905_Fix_246_HotkeySettingsUi] +hotkey. [20260820_T14_Hotwords] 10 loop keys after hotwords. [20260926_Refactor_403_SettingsSchema] +show_notifications.
+    expect(calls).toHaveLength(17); // [20260905_Fix_249_DefaultModeUi] 15 loop keys after default_mode. [20260905_Fix_246_HotkeySettingsUi] +hotkey. [20260820_T14_Hotwords] 10 loop keys after hotwords. [20260926_Refactor_403_SettingsSchema] +show_notifications. [20260926_Issue404] +auto_start.
   });
 
   it("saveSettings returns false and toasts on IPC failure", async () => {
