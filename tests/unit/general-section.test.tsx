@@ -75,8 +75,10 @@ const BASE: SettingsState = {
 type TestWindow = Omit<Window, "electronAPI"> & {
   electronAPI?: {
     setAlwaysOnTop: (v: boolean) => void;
-    getSetting: (key: string, defaultValue?: unknown) => Promise<unknown>;
-    setSetting: (key: string, value: unknown) => Promise<void>;
+    // Optional members: each test's inline stub only provides what it needs
+    // (issue #399 baseline-path tests stub setAlwaysOnTop+getAIModes only).
+    getSetting?: (key: string, defaultValue?: unknown) => Promise<unknown>;
+    setSetting?: (key: string, value: unknown) => Promise<void>;
     // [20260926_Fix_399_DefaultModeOptions] Optional so the beforeEach stub
     // (setAlwaysOnTop only) keeps exercising the static-baseline path.
     getAIModes?: () => Promise<
