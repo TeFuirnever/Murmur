@@ -81,7 +81,6 @@
       "permissions": "Permissions",
       "language": "Language",
       "about": "About Murmur",
-      "bot": "Bot",
       "templates": "Templates"
     },
     "sidebar": {
@@ -89,7 +88,6 @@
       "permissions": "Permissions",
       "ai": "AI Config",
       "about": "About",
-      "bot": "Bot",
       "templates": "Templates"
     },
     "general": {
@@ -135,7 +133,10 @@
       "streamDegradationCount": "{{count}} gateways",
       "streamDegradationReset": "Reset",
       "streamDegradationResetConfirm": "Reset ALL streaming fallback memory?",
-      "streamDegradationResetFailed": "Reset failed"
+      "streamDegradationResetFailed": "Reset failed",
+
+      "appearance": "Appearance",
+      "advancedSection": "Advanced"
     },
     "quickStart": {
       "title": "Quick Start",

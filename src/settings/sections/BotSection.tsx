@@ -1,8 +1,10 @@
-// [20260905_Feat_BloubSettings] Settings section exposing the bot mascot's
-// catalogue (shape / colour / expression) per spec #224 ticket 5 and decision
-// #220. Three pickers, one settings key each; writes go through the shared
-// handleInputChange so they persist immediately and broadcast to the main
-// window (onSettingsUpdate), where the mascot hot-swaps.
+// [20260905_Feat_BloubSettings] Bot mascot catalogue pickers (shape /
+// colour / expression) per spec #224 ticket 5 and decision #220.
+// [20260926_Issue409] No longer a standalone tab: GeneralSection embeds this
+// component in its appearance group. Three pickers, one settings key each;
+// writes go through the shared handleInputChange so they persist immediately
+// and broadcast to the main window (onSettingsUpdate), where the mascot
+// hot-swaps.
 // Catalogue item labels resolve via i18n keys with the capitalised id as the
 // inline default, so missing keys degrade to a readable English name.
 

@@ -16,6 +16,10 @@ import { StreamDegradationManager } from "./StreamDegradationManager";
 // [20260926_Issue407] Per-setting modified dot + reset-to-default control
 // (schema-derived; renders nothing while the value sits at its default).
 import { SettingResetButton } from "../SettingResetButton";
+// [20260926_Issue409] The Bot tab merges into General: the mascot pickers
+// (shape/colour/expression, each with its reset button) embed here in the
+// appearance group.
+import { BotSection } from "./BotSection";
 
 interface GeneralSectionProps {
   settings: SettingsState;
@@ -434,6 +438,13 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
         </p>
       </div>
 
+      {/* [20260926_Issue409] Appearance group heading — theme / language and
+          the mascot pickers (BotSection, below) read as one visual group now
+          that the standalone Bot tab is gone. */}
+      <h3 className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
+        {t("settings.general.appearance", "外观")}
+      </h3>
+
       {/* 外观主题 */}
       <div>
         <div className="mb-1 flex items-center gap-1.5">
@@ -487,6 +498,12 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
           <option value="en">{t("settings.language.en", "English")}</option>
         </select>
       </div>
+
+      {/* [20260926_Issue409] Bot mascot pickers join General (issue #409):
+          the Bot tab merges into the appearance group. The component moves
+          unchanged — pickers, reset buttons and settings.bot.* keys keep
+          their contracts; only the navigation entry disappears. */}
+      <BotSection settings={settings} onInputChange={onInputChange} />
 
       {/* [20260820_T14_Hotwords] Hotword editor: raw multi-line storage;
           full sanitization happens at the injection boundary
@@ -620,10 +637,25 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
         />
       </div>
 
-      {/* [20260908_Feat_240_VocabCorrections] T13 corrections management. */}
-      <VocabManager />
-      {/* [20260910_Feat_237_StreamDegradation] T10 degradation memory. */}
-      <StreamDegradationManager />
+      {/* [20260926_Issue409] Corrections table + streaming-degradation memory
+          fold into a collapsed-by-default Advanced section (issue #409): real
+          diagnostic tools, but not first-screen material. Native <details>
+          keeps the expander dependency-free; children mount eagerly, so the
+          bridge reads still run while collapsed. */}
+      <details
+        data-testid="advanced-section"
+        className="rounded-xl border border-[#d2d2d7] dark:border-[#3a3a3c] px-4 py-3"
+      >
+        <summary className="cursor-pointer select-none text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
+          {t("settings.general.advancedSection", "高级")}
+        </summary>
+        <div className="mt-4 space-y-6">
+          {/* [20260908_Feat_240_VocabCorrections] T13 corrections management. */}
+          <VocabManager />
+          {/* [20260910_Feat_237_StreamDegradation] T10 degradation memory. */}
+          <StreamDegradationManager />
+        </div>
+      </details>
     </div>
   );
 };

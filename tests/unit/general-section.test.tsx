@@ -17,6 +17,7 @@ import {
   within,
   waitFor,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 import zhCN from "../../src/i18n/locales/zh-CN.json";
 
@@ -101,6 +102,21 @@ type TestWindow = Omit<Window, "electronAPI"> & {
     >;
     // [20260926_Issue404] Launch-at-login apply (issue #404).
     setLoginItemSettings?: (enabled: boolean) => Promise<unknown>;
+    // [20260926_Issue409] Advanced-section managers (corrections table +
+    // streaming-degradation memory) read/mutate through these.
+    listVocabCorrections?: () => Promise<{
+      success: boolean;
+      entries: Array<{ wrong: string; right: string }>;
+    }>;
+    addVocabCorrection?: (
+      wrong: string,
+      right: string,
+    ) => Promise<{ success: boolean }>;
+    listStreamDegradations?: () => Promise<{
+      success: boolean;
+      entries: Array<{ baseUrl: string; at: number }>;
+    }>;
+    resetStreamDegradations?: () => Promise<{ success: boolean }>;
   };
 };
 
@@ -628,5 +644,111 @@ describe("[20260816_Test_GeneralSection] GeneralSection", () => {
     // The restart-required note is the issue's UI acceptance item — it must
     // be user-visible, not only a tooltip/placeholder.
     expect(screen.getByText(/重启应用后生效/)).toBeInTheDocument();
+  });
+
+  // [20260926_Issue409] The Bot tab merges into General: the mascot pickers
+  // render inside the General tab's appearance group and keep writing their
+  // settings keys through onInputChange. Row labels keep their inline English
+  // fallbacks ("Shape" / "Colour" / "Expression") — the locale ships the
+  // catalogue values, not the row labels (see botSettings.test.tsx).
+  it("renders the bot shape/colour/expression pickers in the General tab (#409)", () => {
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+    expect(screen.getByText("外观")).toBeInTheDocument();
+    expect(screen.getByLabelText("Shape")).toBeInTheDocument();
+    expect(screen.getByLabelText("Colour")).toBeInTheDocument();
+    expect(screen.getByLabelText("Expression")).toBeInTheDocument();
+    // The mascot description paragraph moved with the group.
+    expect(screen.getByText(/Bot 吉祥物/)).toBeInTheDocument();
+  });
+
+  it("writes the bot keys through onInputChange from the General tab (#409)", async () => {
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+    await userEvent.selectOptions(screen.getByLabelText("Shape"), "droplet");
+    expect(onInputChange).toHaveBeenCalledWith("bot_shape", "droplet");
+    await userEvent.selectOptions(screen.getByLabelText("Colour"), "blue");
+    expect(onInputChange).toHaveBeenCalledWith("bot_color", "blue");
+    await userEvent.selectOptions(screen.getByLabelText("Expression"), "happy");
+    expect(onInputChange).toHaveBeenCalledWith("bot_expression", "happy");
+  });
+
+  // [20260926_Issue409] Corrections table + streaming-degradation memory fold
+  // into a collapsed-by-default Advanced section at the bottom of General.
+  // Native <details> keeps the expander dependency-free; the children mount
+  // eagerly, so the bridge reads still run while collapsed.
+  it("folds the corrections table and stream-degradation memory into a collapsed Advanced section (#409)", async () => {
+    const listVocab = vi
+      .fn()
+      .mockResolvedValue({
+        success: true,
+        entries: [{ wrong: "A", right: "B" }],
+      });
+    const listStream = vi.fn().mockResolvedValue({
+      success: true,
+      entries: [{ baseUrl: "https://gw.example/v1", at: 1_700_000_000_000 }],
+    });
+    (globalThis.window as unknown as TestWindow).electronAPI = {
+      setAlwaysOnTop,
+      listVocabCorrections: listVocab,
+      listStreamDegradations: listStream,
+    };
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+    const details = screen.getByTestId("advanced-section");
+    expect(details).not.toHaveAttribute("open");
+    expect(screen.getByText("高级")).toBeInTheDocument();
+    // Both managers are mounted (their data reads run) but hidden in the
+    // collapsed section.
+    expect(screen.getByTestId("vocab-manager")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("stream-degradation-manager"),
+    ).toBeInTheDocument();
+    await waitFor(() => expect(listVocab).toHaveBeenCalled());
+    await waitFor(() => expect(listStream).toHaveBeenCalled());
+  });
+
+  it("keeps the advanced managers functional after expanding (#409)", async () => {
+    const listVocab = vi
+      .fn()
+      .mockResolvedValue({
+        success: true,
+        entries: [{ wrong: "A", right: "B" }],
+      });
+    const addVocab = vi.fn().mockResolvedValue({ success: true });
+    const listStream = vi.fn().mockResolvedValue({
+      success: true,
+      entries: [{ baseUrl: "https://gw.example/v1", at: 1_700_000_000_000 }],
+    });
+    const resetStream = vi.fn().mockResolvedValue({ success: true });
+    (globalThis.window as unknown as TestWindow).electronAPI = {
+      setAlwaysOnTop,
+      listVocabCorrections: listVocab,
+      addVocabCorrection: addVocab,
+      listStreamDegradations: listStream,
+      resetStreamDegradations: resetStream,
+    };
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+    const details = screen.getByTestId("advanced-section");
+    expect(details).not.toHaveAttribute("open");
+
+    // Expanding via the summary toggles the native expander open.
+    fireEvent.click(screen.getByText("高级"));
+    expect(details).toHaveAttribute("open");
+
+    // Corrections table: adding a pair still works inside the expander.
+    await waitFor(() => expect(listVocab).toHaveBeenCalled());
+    fireEvent.change(screen.getByLabelText("错误词"), {
+      target: { value: "A" },
+    });
+    fireEvent.change(screen.getByLabelText("正确词"), {
+      target: { value: "B" },
+    });
+    fireEvent.click(screen.getByTestId("vocab-add"));
+    await waitFor(() => expect(addVocab).toHaveBeenCalledWith("A", "B"));
+
+    // Streaming-degradation memory: reset still works inside the expander.
+    await waitFor(() => expect(listStream).toHaveBeenCalled());
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    fireEvent.click(screen.getByTestId("stream-degradation-reset"));
+    await waitFor(() => expect(resetStream).toHaveBeenCalledTimes(1));
+    confirmSpy.mockRestore();
   });
 });

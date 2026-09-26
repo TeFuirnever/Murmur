@@ -101,13 +101,16 @@ describe("[20260816_Test_SettingsPage] SettingsPage component", () => {
     vi.clearAllMocks();
   });
 
-  it("renders the General section by default with the sidebar tabs", () => {
+  it("renders five sidebar tabs after the Bot tab merges into General (#409)", () => {
     render(<SettingsPage />);
-    // Sidebar tabs (role=tab per SettingsSidebar).
-    expect(screen.getByRole("tab", { name: "通用" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "权限" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "AI 配置" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "关于" })).toBeInTheDocument();
+    // Sidebar tabs (role=tab per SettingsSidebar): general / permissions /
+    // ai / templates / about. The Bot tab is gone (issue #409) — its pickers
+    // now live in the General tab's appearance group.
+    expect(screen.getAllByRole("tab")).toHaveLength(5);
+    expect(screen.queryByRole("tab", { name: "Bot 吉祥物" })).toBeNull();
+    for (const name of ["通用", "权限", "AI 配置", "模板", "关于"]) {
+      expect(screen.getByRole("tab", { name })).toBeInTheDocument();
+    }
     // General section content is visible; AI content is not.
     expect(screen.getByText("应用的颜色主题")).toBeInTheDocument();
     expect(screen.queryByText("预定义模型")).not.toBeInTheDocument();

@@ -101,16 +101,20 @@ describe("[20260729_Test_MiscComponents] i18n/index.ts", () => {
 // [20260815_Refactor_DeadUI] settings/SettingsSidebar.tsx
 // ---------------------------------------------------------------------------
 describe("[20260729_Test_MiscComponents] SettingsSidebar", () => {
-  it("renders all four sections with their labels", () => {
+  it("renders the five sections with their labels (Bot tab dropped, #409)", () => {
     render(
       <SettingsSidebar activeSection="general" onSectionChange={vi.fn()} />,
     );
 
     // Labels come from the zh-CN locale (mocked t() resolves settings.sidebar.*).
+    // [20260926_Issue409] The Bot tab merges into General — five tabs left.
+    expect(screen.getAllByRole("tab")).toHaveLength(5);
     expect(screen.getByRole("tab", { name: "通用" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "权限" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "AI 配置" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "模板" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "关于" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Bot 吉祥物" })).toBeNull();
   });
 
   it("marks the active section as aria-selected", () => {

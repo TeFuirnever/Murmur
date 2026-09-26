@@ -68,7 +68,6 @@ import {
 import { DEFAULT_HOTKEY } from "../../../src/settings/hotkeyRecorder";
 import { DEFAULT_MODEL } from "../../../src/settings/modelCatalog";
 import { GeneralSection } from "../../../src/settings/sections/GeneralSection";
-import { BotSection } from "../../../src/settings/sections/BotSection";
 import { AIConfigSection } from "../../../src/settings/sections/AIConfigSection";
 
 // The wiring tests start from the SCHEMA defaults (the exact baseline the
@@ -288,12 +287,12 @@ describe("[20260926_Issue407] GeneralSection wiring", () => {
   });
 });
 
-describe("[20260926_Issue407] BotSection wiring", () => {
+describe("[20260926_Issue409] Bot pickers wiring (embedded in GeneralSection)", () => {
   afterEach(cleanup);
 
   it("shows no reset controls while every picker sits at its default", () => {
     const { container } = render(
-      <BotSection settings={BASE} onInputChange={vi.fn()} />,
+      <GeneralSection settings={BASE} onInputChange={vi.fn()} />,
     );
     expect(resetButtonsIn(container)).toHaveLength(0);
   });
@@ -307,7 +306,9 @@ describe("[20260926_Issue407] BotSection wiring", () => {
     (key, modified) => {
       const onInputChange = vi.fn();
       const settings = { ...BASE, [key]: modified } as SettingsState;
-      render(<BotSection settings={settings} onInputChange={onInputChange} />);
+      render(
+        <GeneralSection settings={settings} onInputChange={onInputChange} />,
+      );
       const button = screen.getByTestId(`reset-${key}`);
       expect(button).toBeInTheDocument();
       fireEvent.click(button);

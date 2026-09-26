@@ -81,7 +81,6 @@
       "permissions": "权限管理",
       "language": "语言",
       "about": "关于 Murmur",
-      "bot": "Bot 吉祥物",
       "templates": "模板"
     },
     "sidebar": {
@@ -89,7 +88,6 @@
       "permissions": "权限",
       "ai": "AI 配置",
       "about": "关于",
-      "bot": "Bot 吉祥物",
       "templates": "模板"
     },
     "general": {
@@ -135,7 +133,10 @@
       "streamDegradationCount": "{{count}} 个网关",
       "streamDegradationReset": "重置",
       "streamDegradationResetConfirm": "确定重置全部流式降级记忆吗？",
-      "streamDegradationResetFailed": "重置失败"
+      "streamDegradationResetFailed": "重置失败",
+
+      "appearance": "外观",
+      "advancedSection": "高级"
     },
     "quickStart": {
       "title": "快速开始",
