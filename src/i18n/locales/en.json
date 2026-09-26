@@ -103,6 +103,9 @@
       "modelDownloadPathLabel": "Model Download Directory",
       "modelDownloadPathDesc": "Directory where speech-recognition model files are stored. Leave empty for the system default location; restart the app to apply changes.",
       "modelDownloadPathPlaceholder": "Leave empty for the system default",
+
+      "minimizeToTrayLabel": "Minimize to Tray",
+      "minimizeToTrayDesc": "Hide to the system tray instead of the taskbar when the minimize button is clicked (Windows only)",
       "hotkeyLabel": "Recording Hotkey",
       "hotkeyDesc": "Global shortcut to start/stop recording from anywhere.",
       "hotkeyStart": "Change",

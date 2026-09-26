@@ -103,6 +103,9 @@
       "modelDownloadPathLabel": "模型下载目录",
       "modelDownloadPathDesc": "语音识别模型文件的存放目录。留空使用系统默认位置；重启应用后生效。",
       "modelDownloadPathPlaceholder": "留空使用系统默认位置",
+
+      "minimizeToTrayLabel": "最小化到托盘",
+      "minimizeToTrayDesc": "点击最小化按钮时隐藏到系统托盘而非任务栏（仅 Windows）",
       "hotkeyLabel": "录音快捷键",
       "hotkeyDesc": "全局快捷键,任意界面按下即可开始/停止录音。",
       "hotkeyStart": "更改",

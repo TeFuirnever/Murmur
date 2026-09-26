@@ -519,6 +519,8 @@ describe("useSettings hook — save / test / presets / updates", () => {
     // [20260926_Refactor_403_SettingsSchema] +show_notifications (schema fold).
     // [20260926_Issue404] +auto_start (joins SettingsState with the schema).
     // [20260926_Issue406] +model_download_path (joins SettingsState).
+
+    // [20260926_Issue405] +minimize_to_tray (joins SettingsState with the schema).
     expect(calls).toHaveLength(19);
   });
 
@@ -542,6 +544,8 @@ describe("useSettings hook — save / test / presets / updates", () => {
     // +show_notifications. [20260926_Issue404] +auto_start.
     // [20260926_Issue406] +model_download_path (joins SettingsState).
     expect(calls).toHaveLength(18);
+
+    expect(calls).toHaveLength(18); // [20260905_Fix_249_DefaultModeUi] 15 loop keys after default_mode. [20260905_Fix_246_HotkeySettingsUi] +hotkey. [20260820_T14_Hotwords] 10 loop keys after hotwords. [20260926_Refactor_403_SettingsSchema] +show_notifications. [20260926_Issue404] +auto_start. [20260926_Issue405] +minimize_to_tray.
   });
 
   it("saveSettings returns false and toasts on IPC failure", async () => {

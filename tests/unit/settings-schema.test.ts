@@ -65,13 +65,19 @@ const PRE_REFACTOR_DEFAULTS = {
   bot_expression: "neutral",
   show_notifications: true,
   // [20260926_Issue404] auto_start moves from persisted-only into
-  // SettingsState (the #404 General-tab switch) — the one sanctioned
-  // addition, like show_notifications above. Default stays false.
+  // SettingsState (the #404 General-tab switch) — a sanctioned addition,
+  // like show_notifications above. Default stays false.
   auto_start: false,
   // [20260926_Issue406] model_download_path moves from persisted-only into
   // SettingsState (the #406 General-tab model directory input) — sanctioned
   // addition like auto_start above. Default stays "" (system default location).
   model_download_path: "",
+
+  // [20260926_Issue405] minimize_to_tray moves from persisted-only into
+  // SettingsState (the #405 General-tab switch, Windows-only). Default
+  // stays false — the strict `=== true` load arm keeps absent/odd stored
+  // values reading as off.
+  minimize_to_tray: false,
 };
 
 // [20260926_Refactor_403_SettingsSchema] The pre-refactor ALLOWED_SETTING_KEYS
@@ -379,6 +385,26 @@ describe("[20260926_Refactor_403_SettingsSchema] migration equivalence (old stor
       raw: { model_download_path: 42 },
       expected: "",
     },
+
+    // [20260926_Issue405] minimize_to_tray joins SettingsState with the
+    // same strict default-false gate as auto_start: only a persisted
+    // boolean true reads as on.
+    {
+      key: "minimize_to_tray",
+      raw: { minimize_to_tray: true },
+      expected: true,
+    },
+    {
+      key: "minimize_to_tray",
+      raw: { minimize_to_tray: false },
+      expected: false,
+    },
+    { key: "minimize_to_tray", raw: {}, expected: false },
+    {
+      key: "minimize_to_tray",
+      raw: { minimize_to_tray: "true" },
+      expected: false,
+    },
   ];
 
   it("reads every legacy stored value back unchanged", () => {
@@ -403,10 +429,8 @@ describe("[20260926_Refactor_403_SettingsSchema] migration equivalence (old stor
   it("keeps persisted-only keys (language et al.) OUT of the loaded state", () => {
     const loaded = loadSettingsState({
       language: "en",
-      minimize_to_tray: true,
     });
     expect(Object.keys(loaded)).not.toContain("language");
-    expect(Object.keys(loaded)).not.toContain("minimize_to_tray");
   });
 
   // [20260926_Issue406] model_download_path joins SettingsState (#406
@@ -435,6 +459,16 @@ describe("[20260926_Refactor_403_SettingsSchema] migration equivalence (old stor
   it("auto_start loads into the state with the strict `=== true` arm", () => {
     expect(loadSettingsState({ auto_start: true }).auto_start).toBe(true);
     expect(loadSettingsState({}).auto_start).toBe(false);
+  });
+
+  // [20260926_Issue405] minimize_to_tray joins SettingsState (#405
+  // General-tab switch, Windows-only): a stored boolean (or its absence)
+  // must surface in the loaded state through the schema load arm.
+  it("minimize_to_tray loads into the state with the strict `=== true` arm", () => {
+    expect(loadSettingsState({ minimize_to_tray: true }).minimize_to_tray).toBe(
+      true,
+    );
+    expect(loadSettingsState({}).minimize_to_tray).toBe(false);
   });
 });
 

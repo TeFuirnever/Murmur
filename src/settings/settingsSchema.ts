@@ -43,6 +43,10 @@ export type SettingTypeTag = "string" | "number" | "boolean";
  *   (i18n.changeLanguage + localStorage + SETTINGS.SET broadcast);
  *   minimize_to_tray has no current in-app editor (kept writable for the
  *   CLI / murmur.json pipeline).
+
+ *   model_download_path has no current in-app editor (kept writable for the
+ *   CLI / murmur.json pipeline). auto_start (#404) and minimize_to_tray
+ *   (#405) graduated into settings-state with their General-tab switches.
  */
 export type SettingScope = "settings-state" | "persisted-only";
 
@@ -230,6 +234,23 @@ export const SETTINGS_SCHEMA = {
     textLike: true,
     load: (raw: unknown): string => (typeof raw === "string" ? raw : ""),
   },
+  // [20260926_Issue405] Minimize-to-tray (issue #405): the General-tab
+
+  // [20260926_Issue405] Minimize-to-tray (issue #405): the General-tab
+  // switch (Windows-only UI — macOS minimizes into the Dock by system
+  // convention and stays out of scope; the main-process interception in
+  // src/helpers/minimizeToTray.ts never attaches on darwin). Same strict
+  // `raw === true` load arm as auto_start: the historical default is FALSE,
+  // so absent/odd stored values must read as off. The main process reads
+  // the persisted value at minimize time, so the toggle applies live.
+  minimize_to_tray: {
+    type: "boolean",
+    scope: "settings-state",
+    default: false,
+    descriptionKey: "settings.general.minimizeToTrayDesc",
+    fileSync: true,
+    load: (raw: unknown): boolean => raw === true,
+  },
   auto_paste: {
     type: "string",
     scope: "settings-state",
@@ -311,16 +332,6 @@ export const SETTINGS_SCHEMA = {
     type: "string",
     scope: "persisted-only",
     default: "zh-CN",
-    fileSync: true,
-  },
-  // minimize_to_tray: legacy configurable key with no current in-app editor
-  // — kept persisted (murmur.json sync + CLI whitelist) so existing user
-  // files keep round-tripping. (auto_start left this group in #404 and
-  // model_download_path in #406 — both have General-tab editors now.)
-  minimize_to_tray: {
-    type: "boolean",
-    scope: "persisted-only",
-    default: false,
     fileSync: true,
   },
 } as const satisfies SchemaRecord;

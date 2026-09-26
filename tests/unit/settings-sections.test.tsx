@@ -121,6 +121,9 @@ function buildSettings(overrides: Partial<SettingsState> = {}): SettingsState {
     auto_start: false,
     // [20260926_Issue406] new SettingsState key
     model_download_path: "",
+
+    // [20260926_Issue405] new SettingsState key
+    minimize_to_tray: false,
     ...overrides,
   };
 }

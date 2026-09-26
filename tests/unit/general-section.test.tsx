@@ -76,11 +76,15 @@ const BASE: SettingsState = {
   // settings pipeline like every other General-tab control).
   show_notifications: true,
   // [20260926_Issue404] auto_start joins SettingsState with the schema
-  // (#404 General-tab launch-at-login switch).
+  // (#404 General tab switch).
   auto_start: false,
   // [20260926_Issue406] model_download_path joins SettingsState with the
   // schema (#406 General-tab model-directory input).
   model_download_path: "",
+
+  // [20260926_Issue405] minimize_to_tray joins SettingsState with the
+  // schema (#405 General-tab switch, Windows-only UI).
+  minimize_to_tray: false,
 };
 
 type TestWindow = Omit<Window, "electronAPI"> & {
@@ -101,6 +105,24 @@ type TestWindow = Omit<Window, "electronAPI"> & {
 };
 
 describe("[20260816_Test_GeneralSection] GeneralSection", () => {
+  // [20260926_Issue405] Platform stub for the Windows-only minimize-to-tray
+  // switch tests (loginItem.test.ts's helper shape).
+  function withPlatform<T>(platform: NodeJS.Platform, fn: () => T): T {
+    const real = process.platform;
+    Object.defineProperty(process, "platform", {
+      value: platform,
+      configurable: true,
+    });
+    try {
+      return fn();
+    } finally {
+      Object.defineProperty(process, "platform", {
+        value: real,
+        configurable: true,
+      });
+    }
+  }
+
   const onInputChange = vi.fn();
   const setAlwaysOnTop = vi.fn();
   const originalAPI = (globalThis.window as unknown as TestWindow).electronAPI;
@@ -477,6 +499,71 @@ describe("[20260816_Test_GeneralSection] GeneralSection", () => {
       fireEvent.click(screen.getByTestId("auto-start")),
     ).not.toThrow();
     expect(onInputChange).toHaveBeenCalledWith("auto_start", true);
+  });
+
+  // [20260926_Issue405] minimize_to_tray switch (issue #405): Windows-only
+  // UI. macOS minimizes into the Dock by system convention (and Murmur is
+  // already tray-resident there via close_behavior "hide"), so the switch
+  // is hidden on darwin and the main-process interception never attaches —
+  // see tests/unit/minimizeToTray.test.ts for the platform gate.
+  it("hides the minimize-to-tray switch on macOS (system-convention downgrade)", () => {
+    withPlatform("darwin", () => {
+      render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+      expect(screen.queryByTestId("minimize-to-tray")).toBeNull();
+    });
+  });
+
+  it("hides the minimize-to-tray switch on other non-Windows platforms", () => {
+    withPlatform("linux", () => {
+      render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+      expect(screen.queryByTestId("minimize-to-tray")).toBeNull();
+    });
+  });
+
+  it("renders the minimize-to-tray switch on Windows reflecting the setting state", () => {
+    withPlatform("win32", () => {
+      render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+      expect(screen.getByTestId("minimize-to-tray")).toHaveAttribute(
+        "aria-checked",
+        "false",
+      );
+    });
+  });
+
+  it("renders the minimize-to-tray switch checked when the setting is on (win32)", () => {
+    withPlatform("win32", () => {
+      render(
+        <GeneralSection
+          settings={{ ...BASE, minimize_to_tray: true }}
+          onInputChange={onInputChange}
+        />,
+      );
+    });
+    expect(screen.getByTestId("minimize-to-tray")).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+  });
+
+  it("toggling minimize-to-tray persists through the standard pipeline (win32)", () => {
+    withPlatform("win32", () => {
+      render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+      fireEvent.click(screen.getByTestId("minimize-to-tray"));
+      expect(onInputChange).toHaveBeenCalledWith("minimize_to_tray", true);
+    });
+  });
+
+  it("toggling minimize-to-tray off reports the off value (win32)", () => {
+    withPlatform("win32", () => {
+      render(
+        <GeneralSection
+          settings={{ ...BASE, minimize_to_tray: true }}
+          onInputChange={onInputChange}
+        />,
+      );
+      fireEvent.click(screen.getByTestId("minimize-to-tray"));
+      expect(onInputChange).toHaveBeenCalledWith("minimize_to_tray", false);
+    });
   });
 
   // [20260926_Perf_402_TextInputDebounce] The hotwords textarea is debounced
