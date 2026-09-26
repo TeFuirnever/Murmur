@@ -144,9 +144,9 @@ describe("AIConfigSection text-input flush + immediate select (issue #402)", () 
     const onInputChange = vi.fn();
     renderWithOverrides({ onInputChange });
     fireEvent.change(screen.getByRole("combobox"), {
-      target: { value: "gpt-4o" },
+      target: { value: "gpt-6-luna" },
     });
-    expect(onInputChange).toHaveBeenCalledWith("ai_model", "gpt-4o", {
+    expect(onInputChange).toHaveBeenCalledWith("ai_model", "gpt-6-luna", {
       immediate: true,
     });
   });
