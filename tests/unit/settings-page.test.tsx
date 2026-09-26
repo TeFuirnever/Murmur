@@ -202,8 +202,10 @@ describe("[20260816_Test_SettingsPage] settings entry mount", () => {
       getSetting,
     };
     await import("../../src/settings");
-    await new Promise((r) => setTimeout(r, 30));
-    expect(changeLanguage).toHaveBeenCalledWith("en");
+    // React 18 render + IPC promise chain resolve asynchronously; poll instead
+    // of a fixed 30ms sleep so cold-transform load cannot outrun the mount
+    // effect (changeLanguage called 0 times flake).
+    await waitFor(() => expect(changeLanguage).toHaveBeenCalledWith("en"));
 
     // Rejection arm: silent.
     changeLanguage.mockClear();
