@@ -164,3 +164,6 @@ scripts/asr_regression_results.json
 .backpassrc.json
 hypit.runtime.json
 productions/
+# Unrelated in-progress research docs (kept local by owner)
+docs/research/2026-09-26-installer-size-and-resource-usage-best-practices.md
+docs/research/2026-09-26-mac-runtime-measurements.md
