@@ -100,6 +100,8 @@
       "hotwordsDesc": "One entry per line. Recognition prefers these terms (colleague names, product names) — improves rare proper-noun hit rate, not a guarantee.",
       "hotwordsPlaceholder": "Jane Zhang\nAcme API…",
       "hotwordsLimit": "Up to 200 lines, 32 chars each",
+      "showNotificationsLabel": "System notifications",
+      "showNotificationsDesc": "Show a system notification when an update finishes downloading",
       "hotkeyLabel": "Recording Hotkey",
       "hotkeyDesc": "Global shortcut to start/stop recording from anywhere.",
       "hotkeyStart": "Change",

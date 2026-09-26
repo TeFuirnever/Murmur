@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type React from "react";
 import type { SettingsState } from "../useSettings";
 // [20260905_Fix_246_HotkeySettingsUi] Hotkey recorder (issue #246: the
@@ -25,6 +25,43 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
   // onInputChange("hotkey", ...) — the main window re-registers on
   // SETTINGS_UPDATE (App.tsx).
   const [recording, setRecording] = useState(false);
+
+  // [20260926_Issue400] show_notifications is intentionally NOT in
+  // SettingsState (the schema-migration ticket folds it in) — this switch
+  // reads/writes the key directly through the existing SETTINGS.GET/SET
+  // channels with local state. Default on: matches the main-process gate.
+  const [showNotifications, setShowNotifications] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const api = window.electronAPI;
+    if (!api?.getSetting) return;
+    api
+      .getSetting("show_notifications", true)
+      .then((value) => {
+        if (!cancelled) setShowNotifications(value !== false);
+        return value;
+      })
+      .catch(() => {
+        // IPC read failed — reset to the default (on) so the switch reflects
+        // the effective behavior instead of a stale value.
+        if (!cancelled) setShowNotifications(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleShowNotificationsToggle = (next: boolean): void => {
+    setShowNotifications(next);
+    const api = window.electronAPI;
+    if (!api?.setSetting) return;
+    api.setSetting("show_notifications", next).catch(() => {
+      // Persist failed — roll the switch back so the UI reflects what is
+      // actually stored rather than the intent.
+      setShowNotifications(!next);
+    });
+  };
 
   const handleCaptureKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     // The capture zone only renders while recording, so no !recording guard
@@ -82,6 +119,45 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
             aria-hidden="true"
             className={`${
               settings.window_always_on_top ? "translate-x-4" : "translate-x-0"
+            } inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+          />
+        </button>
+      </div>
+
+      {/* [20260926_Issue400] show_notifications switch (issue #400): gates the
+          update-download system notification in the main process. Read/write
+          go through the existing SETTINGS.GET/SET channels (key already in
+          ALLOWED_SETTING_KEYS); local state only — SettingsState is not
+          extended in this ticket. */}
+      <div className="flex items-center justify-between">
+        <div>
+          <label className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
+            {t("settings.general.showNotificationsLabel", "系统通知")}
+          </label>
+          <p className="text-xs text-[#6e6e73]">
+            {t(
+              "settings.general.showNotificationsDesc",
+              "更新下载完成后发送系统通知",
+            )}
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          data-testid="show-notifications"
+          aria-label={t("settings.general.showNotificationsLabel", "系统通知")}
+          aria-checked={showNotifications}
+          onClick={() => handleShowNotificationsToggle(!showNotifications)}
+          className={`${
+            showNotifications
+              ? "bg-[#0071e3]"
+              : "bg-[#d2d2d7] dark:bg-[#3a3a3c]"
+          } relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-2`}
+        >
+          <span
+            aria-hidden="true"
+            className={`${
+              showNotifications ? "translate-x-4" : "translate-x-0"
             } inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
           />
         </button>

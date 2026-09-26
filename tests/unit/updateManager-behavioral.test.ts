@@ -875,3 +875,129 @@ describe("[20260906_Spec259_T2] updateManager register() IPC behavior", () => {
     });
   });
 });
+
+// [20260926_Issue400] show_notifications gates the app's only system
+// notification (the download-complete one). The gate reads the stored setting
+// through the optional databaseManager at send time; default true keeps the
+// pre-gate behavior (and keeps the no-databaseManager harness above green).
+describe("[20260926_Issue400] updateManager show_notifications gate", () => {
+  let tmpDir: string;
+  let handlers: Record<string, (...args: unknown[]) => unknown>;
+  const getSetting = vi.fn();
+
+  const LATEST_VERSION = "9.9.9";
+  const DOWNLOAD_URL = "https://example.com/murmur.dmg";
+  const CHECKSUMS_URL = "https://example.com/checksums.txt";
+  const EXT = process.platform === "darwin" ? ".dmg" : ".exe";
+  const FILE_NAME = `Murmur-${LATEST_VERSION}${EXT}`;
+
+  function makeReader(): {
+    read: () => Promise<IteratorResult<Uint8Array>>;
+  } {
+    const bytes = Buffer.from("fake installer payload bytes", "utf8");
+    let done = false;
+    return {
+      read: () => {
+        if (done) return Promise.resolve({ done: true, value: undefined });
+        done = true;
+        return Promise.resolve({ done: false, value: new Uint8Array(bytes) });
+      },
+    };
+  }
+
+  function scriptSuccessfulDownload(): void {
+    const bytes = Buffer.from("fake installer payload bytes", "utf8");
+    const hash = crypto.createHash("sha256").update(bytes).digest("hex");
+    electronMock.net.fetch = vi.fn(async (url: string | URL | Request) => {
+      if (String(url) === CHECKSUMS_URL) {
+        return { ok: true, text: async () => `${hash}  ${FILE_NAME}\n` };
+      }
+      if (String(url) === DOWNLOAD_URL) {
+        return {
+          ok: true,
+          headers: {
+            get: (k: string) =>
+              k === "content-length" ? String(bytes.length) : null,
+          },
+          body: { getReader: () => makeReader() },
+        };
+      }
+      throw new Error(`unexpected fetch ${String(url)}`);
+    });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "um-gate-"));
+    electronMock.app.getVersion.mockReturnValue("1.2.3");
+    electronMock.app.getPath.mockReturnValue(tmpDir);
+    electronMock.BrowserWindow.fromWebContents.mockReturnValue(null);
+    electronMock.Notification.isSupported.mockReturnValue(true);
+    electronMock.notificationInstances.length = 0;
+    getSetting.mockReturnValue(true);
+    handlers = {};
+    const ipcMain = {
+      handle: vi.fn((channel: string, fn: (...args: unknown[]) => unknown) => {
+        handlers[channel] = fn;
+      }),
+    };
+    register(ipcMain as unknown as Electron.IpcMain, {
+      databaseManager: { getSetting },
+    });
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  async function runDownload(): Promise<Record<string, unknown>> {
+    scriptSuccessfulDownload();
+    return (await handlers[C.UPDATE.DOWNLOAD]!(
+      { sender: {} },
+      {
+        downloadUrl: DOWNLOAD_URL,
+        checksumsUrl: CHECKSUMS_URL,
+        latestVersion: LATEST_VERSION,
+      },
+    )) as Record<string, unknown>;
+  }
+
+  it("reads show_notifications with default true at send time", async () => {
+    const result = await runDownload();
+
+    expect(result.success).toBe(true);
+    expect(getSetting).toHaveBeenCalledWith("show_notifications", true);
+  });
+
+  it("suppresses the download-complete notification when show_notifications is false", async () => {
+    getSetting.mockReturnValue(false);
+
+    const result = await runDownload();
+
+    // The download itself still completes and reports to the renderer; only
+    // the system notification is withheld.
+    expect(result).toEqual({
+      success: true,
+      filePath: path.join(tmpDir, FILE_NAME),
+      hashValid: true,
+    });
+    expect(electronMock.notificationInstances).toHaveLength(0);
+  });
+
+  it("shows the notification when show_notifications is true", async () => {
+    getSetting.mockReturnValue(true);
+
+    await runDownload();
+
+    expect(electronMock.notificationInstances).toHaveLength(1);
+    expect(electronMock.notificationInstances[0]!.show).toHaveBeenCalled();
+  });
+
+  it("defaults to showing when the stored value is unset", async () => {
+    getSetting.mockReturnValue(null);
+
+    await runDownload();
+
+    expect(electronMock.notificationInstances).toHaveLength(1);
+  });
+});

@@ -152,7 +152,11 @@ describe("[20260816_Test_SettingsPage] SettingsPage component", () => {
 
   it("changes a general setting through the section's handler", () => {
     render(<SettingsPage />);
-    fireEvent.click(screen.getByRole("switch"));
+    // Two switches live on the General tab now (issue #400 added the
+    // show-notifications one) — target the always-on-top one by name.
+    fireEvent.click(
+      screen.getByRole("switch", { name: "将应用窗口保持在最前面" }),
+    );
     expect(handleInputChangeMock).toHaveBeenCalledWith(
       "window_always_on_top",
       false,
