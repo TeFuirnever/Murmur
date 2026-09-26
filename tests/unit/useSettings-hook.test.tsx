@@ -362,6 +362,55 @@ describe("useSettings hook", () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.settings.default_mode).toBe("correct");
   });
+
+  // [20260926_Refactor_403_SettingsSchema] show_notifications joins
+  // SettingsState with the schema (issue #400 shipped it as a local-state
+  // special case; #403 folds it in). Load semantics are the SAME gate the
+  // #400 GeneralSection read path and the main-process updateManager gate
+  // used: `!== false` — only a literal false reads as off.
+  it("defaults show_notifications to on when nothing is stored", async () => {
+    const api = (globalThis.window as TestWindow).electronAPI!;
+    (api.getAllSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...MOCK_SETTINGS,
+    });
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.settings.show_notifications).toBe(true);
+  });
+
+  it("loads a stored show_notifications=false as off", async () => {
+    const api = (globalThis.window as TestWindow).electronAPI!;
+    (api.getAllSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...MOCK_SETTINGS,
+      show_notifications: false,
+    });
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.settings.show_notifications).toBe(false);
+  });
+
+  it("coerces a non-boolean stored show_notifications to on", async () => {
+    const api = (globalThis.window as TestWindow).electronAPI!;
+    (api.getAllSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...MOCK_SETTINGS,
+      show_notifications: "false",
+    });
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.settings.show_notifications).toBe(true);
+  });
+
+  it("persists show_notifications through handleInputChange immediately (discrete switch, no debounce)", async () => {
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    const api = (globalThis.window as TestWindow).electronAPI!;
+    (api.setSetting as ReturnType<typeof vi.fn>).mockClear();
+    act(() => {
+      result.current.handleInputChange("show_notifications", false);
+    });
+    expect(result.current.settings.show_notifications).toBe(false);
+    expect(api.setSetting).toHaveBeenCalledWith("show_notifications", false);
+  });
 });
 
 // [20260816_Test_UseSettingsExpanded] Second describe: save reconciliation
@@ -414,11 +463,13 @@ describe("useSettings hook — save / test / presets / updates", () => {
     const keys = calls.map((c) => c[0]);
     expect(keys).toContain("theme");
     expect(keys).toContain("ai_max_tokens");
+    expect(keys).toContain("show_notifications");
     expect(keys).not.toContain(undefined);
     // [20260905_Fix_249_DefaultModeUi] count updated for default_mode:
     // 1 special-cased (unmasked api_key) + 15 in the loop.
     // [20260905_Fix_246_HotkeySettingsUi] count updated for the hotkey key.
-    expect(calls).toHaveLength(16);
+    // [20260926_Refactor_403_SettingsSchema] +show_notifications (schema fold).
+    expect(calls).toHaveLength(17);
   });
 
   it("saveSettings skips re-sending a masked api_key but still saves the rest", async () => {
@@ -435,7 +486,7 @@ describe("useSettings hook — save / test / presets / updates", () => {
     });
     const calls = (api().setSetting as ReturnType<typeof vi.fn>).mock.calls;
     expect(calls.find((c) => c[0] === "ai_api_key")).toBeUndefined();
-    expect(calls).toHaveLength(15); // [20260905_Fix_249_DefaultModeUi] 15 loop keys after default_mode. [20260905_Fix_246_HotkeySettingsUi] +hotkey. [20260820_T14_Hotwords] 10 loop keys after hotwords
+    expect(calls).toHaveLength(16); // [20260905_Fix_249_DefaultModeUi] 15 loop keys after default_mode. [20260905_Fix_246_HotkeySettingsUi] +hotkey. [20260820_T14_Hotwords] 10 loop keys after hotwords. [20260926_Refactor_403_SettingsSchema] +show_notifications.
   });
 
   it("saveSettings returns false and toasts on IPC failure", async () => {

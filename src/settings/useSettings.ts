@@ -10,6 +10,21 @@ import type {
   UpdateProgressData,
   UpdateCompleteData,
 } from "../types/ipc";
+// [20260926_Refactor_403_SettingsSchema] Issue #403: the schema module is
+// the single source of truth for every persisted setting key. SettingsState,
+// DEFAULT_SETTINGS and the load builder are DERIVED there and re-exported
+// below so existing importers (sections, tests) keep their import paths.
+// Adding a setting now means ONE schema entry — type, defaults, the IPC
+// allowlist, the murmur.json sync filter and the #402 debounce set all
+// follow automatically (see tests/unit/settings-schema.test.ts).
+import {
+  DEFAULT_SETTINGS,
+  loadSettingsState,
+  type SettingsState,
+} from "./settingsSchema";
+// [20260926_Fix_397_ModelCatalog] React-free model catalogue (moved out of
+// this React-importing module so the schema can reference DEFAULT_MODEL).
+import { PREDEFINED_MODELS, DEFAULT_MODEL, MODEL_LABELS } from "./modelCatalog";
 // [20260905_Fix_246_HotkeySettingsUi] Single renderer-side default for the
 // recording hotkey setting (issue #246: the setting existed in storage and
 // the allowlist but nothing read or wrote it).
@@ -22,40 +37,11 @@ import {
 } from "./textWriteScheduler";
 
 export { DEFAULT_HOTKEY };
-
-export interface SettingsState {
-  ai_api_key: string;
-  ai_base_url: string;
-  ai_model: string;
-  ai_temperature: number;
-  ai_max_tokens: number;
-  enable_ai_optimization: boolean;
-  // [20260905_Fix_249_DefaultModeUi] Default AI processing mode the recording
-  // and file-transcription pipelines apply automatically (issue #249: the
-  // read side honored it but nothing could write it). One of "auto" (pick by
-  // text length), "off", or a built-in/template mode name.
-  default_mode: string;
-  window_always_on_top: boolean;
-  auto_paste: string;
-  close_behavior: string;
-  theme: string;
-  // [20260905_Fix_246_HotkeySettingsUi] Global recording hotkey as an
-  // Electron accelerator string ("CommandOrControl+Shift+Space"). Edited in
-  // the settings window's General tab recorder; the main window re-registers
-  // on SETTINGS_UPDATE.
-  hotkey: string;
-  // [20260820_T14_Hotwords] Hotword list, one entry per line; sanitized at
-  // the save and injection boundaries (src/helpers/hotwords.ts).
-  hotwords: string;
-  // [20260905_Feat_BloubSettings] bot mascot catalogue keys (spec #224
-  // ticket 5, decision #220). Values: ShapeId / "auto"|ColorId /
-  // ExpressionId, stored as strings like every other setting.
-  bot_shape: string;
-  bot_color: string;
-  bot_expression: string;
-  // [20260816_Refactor_RemoveEffects] effects_enabled was removed with the
-  // visual-effects feature (ogl/motion deps deleted the same day).
-}
+// [20260926_Refactor_403_SettingsSchema] Stable re-exports: every consumer
+// that used to import these from useSettings keeps working.
+export type { SettingsState };
+export { DEFAULT_SETTINGS };
+export { PREDEFINED_MODELS, DEFAULT_MODEL, MODEL_LABELS };
 
 // [20260712_Fix_ProviderPresetType] Use the canonical AIProviderPreset
 // type directly instead of redefining the shape. This ensures a single
@@ -68,67 +54,9 @@ export interface DetectedLocalModel {
   models: string[];
 }
 
-// [20260926_Fix_397_ModelCatalog] Refreshed 2026-09: the previous list still
-// advertised the gpt-3.5/gpt-4 generation that every provider has retired or
-// is sunsetting through fall 2026. Current mainstream picks: GPT-6 family
-// (developers.openai.com), Qwen3.8-Max (Bailian) and DeepSeek-V4.1-Flash
-// (api-docs.deepseek.com). Custom-model input remains the escape hatch.
-export const PREDEFINED_MODELS = [
-  "gpt-6-sol",
-  "gpt-6-luna",
-  "gpt-6-astra",
-  "qwen3.8-max",
-  "deepseek-flash",
-] as const;
-
-export const DEFAULT_MODEL = "gpt-6-sol";
-
-// [20260815_Refactor_ModelListDedup] Display labels for PREDEFINED_MODELS.
-// AIConfigSection used to hardcode the same models a second time as <option>
-// tags — two copies that silently drift. The DEFAULT_MODEL entry gets the
-// localized "(推荐)" suffix at the usage site
-// (settings.ai.modelRecommended), so its label here is a fallback.
-export const MODEL_LABELS: Record<string, string> = {
-  "gpt-6-sol": "GPT-6 Sol",
-  "gpt-6-luna": "GPT-6 Luna",
-  "gpt-6-astra": "GPT-6 Astra",
-  "qwen3.8-max": "Qwen3.8-Max",
-  "deepseek-flash": "DeepSeek Flash",
-};
-
 export function isMaskedKey(key: string): boolean {
   return key.startsWith("****");
 }
-
-// [20260905_Fix_246_HotkeySettingsUi] Exported so tests can pin the settings
-// contract (defaults shape) without reaching into module internals.
-export const DEFAULT_SETTINGS: SettingsState = {
-  ai_api_key: "",
-  ai_base_url: "https://api.openai.com/v1",
-  ai_model: DEFAULT_MODEL,
-  ai_temperature: 0.3,
-  // [20260815_Fix_AiMaxTokensDefault] 8192 (was 2000): reasoning models count
-  // thinking tokens against max_tokens; 2000 let reasoning alone exhaust the
-  // budget and return empty content (see 20260815_Fix_AiEmptyContent).
-  ai_max_tokens: 8192,
-  enable_ai_optimization: true,
-  // [20260905_Fix_249_DefaultModeUi] Read-side vocabulary: "auto" delegates
-  // to determineProcessingMode (length-based optimize/optimize_long).
-  default_mode: "auto",
-  window_always_on_top: true,
-  auto_paste: "paste",
-  close_behavior: "hide",
-  theme: "system",
-  // [20260905_Fix_246_HotkeySettingsUi] Exported for the settings contract
-  // test and the General-section recorder default.
-  hotkey: DEFAULT_HOTKEY,
-  hotwords: "",
-  // [20260905_Feat_BloubSettings] faithful-replica defaults; "auto" colour
-  // means theme-aware (light -> ink, dark -> cream) at the mascot
-  bot_shape: "circle",
-  bot_color: "auto",
-  bot_expression: "neutral",
-};
 
 // [20260926_Perf_402_TextInputDebounce] Options for handleInputChange. The
 // immediate flag exists for discrete controls (the AI-model dropdown is a
@@ -218,58 +146,17 @@ export function useSettings() {
     useState<UpdateCompleteData | null>(null);
 
   // --- 加载设置 ---
+  // [20260926_Refactor_403_SettingsSchema] The per-key builder (and its
+  // migration quirks — the default_mode legacy migration, the `!== false`
+  // boolean gates, the falsy-number fallbacks) moved verbatim into the
+  // schema entries; settings-schema.test.ts pins the value-for-value
+  // equivalence against the pre-refactor arms.
   const loadSettings = useCallback(async () => {
     try {
       setLoading(true);
       if (window.electronAPI) {
         const allSettings = await window.electronAPI.getAllSettings();
-        const loadedSettings: SettingsState = {
-          ai_api_key: (allSettings.ai_api_key || "") as string,
-          ai_base_url: (allSettings.ai_base_url ||
-            "https://api.openai.com/v1") as string,
-          ai_model: (allSettings.ai_model || DEFAULT_MODEL) as string,
-          ai_temperature:
-            parseFloat(allSettings.ai_temperature as string) || 0.3,
-          ai_max_tokens:
-            parseInt(allSettings.ai_max_tokens as string, 10) || 8192,
-          enable_ai_optimization: allSettings.enable_ai_optimization !== false,
-          // [20260905_Fix_249_DefaultModeUi] MIGRATE, don't blindly default:
-          // when default_mode was never written, derive it from the legacy
-          // enable_ai_optimization boolean (same migration the read side in
-          // useRecording/useFileTranscription applies). A blind "auto" here
-          // would auto-persist "auto" on any settings save and silently
-          // re-enable AI for users who turned it off.
-          default_mode:
-            typeof allSettings.default_mode === "string" &&
-            allSettings.default_mode
-              ? allSettings.default_mode
-              : allSettings.enable_ai_optimization === false
-                ? "off"
-                : "auto",
-          window_always_on_top: allSettings.window_always_on_top !== false,
-          auto_paste: (allSettings.auto_paste || "paste") as string,
-          close_behavior: (allSettings.close_behavior || "hide") as string,
-          theme: (allSettings.theme || "system") as string,
-          // [20260905_Fix_246_HotkeySettingsUi] Hotkey accelerator; falls
-          // back to the historical default when absent or non-string.
-          hotkey:
-            typeof allSettings.hotkey === "string" && allSettings.hotkey
-              ? allSettings.hotkey
-              : DEFAULT_HOTKEY,
-          // [20260820_T14_Hotwords] Stored raw (multi-line, save boundary
-          // = allowlist + generic length cap); FULL sanitization happens
-          // once, at the injection boundary (src/helpers/hotwords.ts).
-          hotwords:
-            typeof allSettings.hotwords === "string"
-              ? allSettings.hotwords
-              : "",
-          // [20260905_Feat_BloubSettings] bot mascot catalogue keys; stored
-          // values are validated at the mascot boundary (unknown ids fall
-          // back to the defaults there)
-          bot_shape: (allSettings.bot_shape || "circle") as string,
-          bot_color: (allSettings.bot_color || "auto") as string,
-          bot_expression: (allSettings.bot_expression || "neutral") as string,
-        };
+        const loadedSettings = loadSettingsState(allSettings);
         setSettings((prev) => ({ ...prev, ...loadedSettings }));
         applyTheme(loadedSettings.theme);
 

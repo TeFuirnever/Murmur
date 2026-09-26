@@ -70,6 +70,11 @@ const BASE: SettingsState = {
   bot_shape: "circle",
   bot_color: "auto",
   bot_expression: "neutral",
+  // [20260926_Refactor_403_SettingsSchema] show_notifications joined
+  // SettingsState with the schema (#400 shipped it as local state; #403
+  // folds it in — the switch now reads/writes through the standard
+  // settings pipeline like every other General-tab control).
+  show_notifications: true,
 };
 
 type TestWindow = Omit<Window, "electronAPI"> & {
@@ -90,18 +95,12 @@ type TestWindow = Omit<Window, "electronAPI"> & {
 describe("[20260816_Test_GeneralSection] GeneralSection", () => {
   const onInputChange = vi.fn();
   const setAlwaysOnTop = vi.fn();
-  const getSetting = vi.fn();
-  const setSetting = vi.fn();
   const originalAPI = (globalThis.window as unknown as TestWindow).electronAPI;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    getSetting.mockResolvedValue(true);
-    setSetting.mockResolvedValue(undefined);
     (globalThis.window as unknown as TestWindow).electronAPI = {
       setAlwaysOnTop,
-      getSetting,
-      setSetting,
     };
   });
 
@@ -357,65 +356,52 @@ describe("[20260816_Test_GeneralSection] GeneralSection", () => {
     expect(onInputChange).toHaveBeenCalledWith("hotwords", "张晗玥");
   });
 
-  // [20260926_Issue400] show_notifications switch: reads/writes the key
-  // through the existing SETTINGS.GET/SET channels (electronAPI.getSetting /
-  // setSetting) with local state — the key is NOT in SettingsState (the
-  // schema-migration ticket will fold it in; do not extend the state here).
-  it("renders the show-notifications switch defaulting to on when nothing is stored", async () => {
-    getSetting.mockResolvedValue(true);
+  // [20260926_Issue400] show_notifications switch: gates the update-download
+  // system notification in the main process. [20260926_Refactor_403_
+  // SettingsSchema] Issue #403 folded the key into SettingsState, so the
+  // switch now goes through the standard pipeline — it renders from
+  // settings state and toggles through onInputChange (which auto-persists
+  // via SETTINGS.SET) exactly like the always-on-top switch above. The
+  // stored-value read semantics (absent → on, only literal false → off)
+  // live in the schema load arm and are covered by useSettings-hook tests.
+  it("renders the show-notifications switch reflecting the setting state", () => {
     render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
-
-    const toggle = screen.getByRole("switch", { name: "系统通知" });
-    await waitFor(() => expect(toggle).toHaveAttribute("aria-checked", "true"));
-  });
-
-  it("reflects a stored show_notifications=false as unchecked", async () => {
-    getSetting.mockResolvedValue(false);
-    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
-
-    const toggle = screen.getByRole("switch", { name: "系统通知" });
-    await waitFor(() =>
-      expect(toggle).toHaveAttribute("aria-checked", "false"),
+    expect(screen.getByRole("switch", { name: "系统通知" })).toHaveAttribute(
+      "aria-checked",
+      "true",
     );
   });
 
-  it("toggling the show-notifications switch persists through setSetting", async () => {
-    getSetting.mockResolvedValue(true);
-    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
-
-    const toggle = screen.getByRole("switch", { name: "系统通知" });
-    await waitFor(() => expect(toggle).toHaveAttribute("aria-checked", "true"));
-
-    fireEvent.click(toggle);
-    expect(setSetting).toHaveBeenCalledWith("show_notifications", false);
-    expect(toggle).toHaveAttribute("aria-checked", "false");
-
-    fireEvent.click(toggle);
-    expect(setSetting).toHaveBeenCalledWith("show_notifications", true);
-    expect(toggle).toHaveAttribute("aria-checked", "true");
+  it("renders the show-notifications switch unchecked when the setting is off", () => {
+    render(
+      <GeneralSection
+        settings={{ ...BASE, show_notifications: false }}
+        onInputChange={onInputChange}
+      />,
+    );
+    expect(screen.getByRole("switch", { name: "系统通知" })).toHaveAttribute(
+      "aria-checked",
+      "false",
+    );
   });
 
-  it("coerces a non-boolean stored value to the on state", async () => {
-    // Robustness arm: getSetting resolving a non-boolean (e.g. a legacy
-    // string) still yields a boolean switch state (!== false → on).
-    getSetting.mockResolvedValue("false");
+  it("toggling the show-notifications switch routes through onInputChange", () => {
     render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
-
     const toggle = screen.getByRole("switch", { name: "系统通知" });
-    await waitFor(() => expect(toggle).toHaveAttribute("aria-checked", "true"));
-  });
-
-  it("rolls the switch back when the persist write fails", async () => {
-    getSetting.mockResolvedValue(true);
-    setSetting.mockRejectedValue(new Error("ipc down"));
-    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
-
-    const toggle = screen.getByRole("switch", { name: "系统通知" });
-    await waitFor(() => expect(toggle).toHaveAttribute("aria-checked", "true"));
 
     fireEvent.click(toggle);
-    await waitFor(() => expect(toggle).toHaveAttribute("aria-checked", "true"));
-    expect(setSetting).toHaveBeenCalledWith("show_notifications", false);
+    expect(onInputChange).toHaveBeenCalledWith("show_notifications", false);
+  });
+
+  it("toggling an off show-notifications switch reports the on value", () => {
+    render(
+      <GeneralSection
+        settings={{ ...BASE, show_notifications: false }}
+        onInputChange={onInputChange}
+      />,
+    );
+    fireEvent.click(screen.getByRole("switch", { name: "系统通知" }));
+    expect(onInputChange).toHaveBeenCalledWith("show_notifications", true);
   });
 
   // [20260926_Perf_402_TextInputDebounce] The hotwords textarea is debounced

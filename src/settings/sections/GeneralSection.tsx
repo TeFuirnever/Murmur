@@ -35,29 +35,6 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
   // SETTINGS_UPDATE (App.tsx).
   const [recording, setRecording] = useState(false);
 
-  // [20260926_Issue400] show_notifications is intentionally NOT in
-  // SettingsState (the schema-migration ticket folds it in) — this switch
-  // reads/writes the key directly through the existing SETTINGS.GET/SET
-  // channels with local state. Default on: matches the main-process gate.
-  const [showNotifications, setShowNotifications] = useState(true);
-
-  useEffect(() => {
-    const cancelled = false;
-    const api = window.electronAPI;
-    if (!api?.getSetting) return;
-    api
-      .getSetting("show_notifications", true)
-      .then((value) => {
-        if (!cancelled) setShowNotifications(value !== false);
-        return value;
-      })
-      .catch(() => {
-        // IPC read failed — reset to the default (on) so the switch reflects
-        // the effective behavior instead of a stale value.
-        if (!cancelled) setShowNotifications(true);
-      });
-  }, []);
-
   // [20260926_Fix_399_DefaultModeOptions] Issue #399: the default_mode
   // dropdown exposed only 4 of the 10 built-in modes and no custom-template
   // modes — a pure UI exposure gap, the read side (processText) dispatches
@@ -86,17 +63,6 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
       cancelled = true;
     };
   }, []);
-
-  const handleShowNotificationsToggle = (next: boolean): void => {
-    setShowNotifications(next);
-    const api = window.electronAPI;
-    if (!api?.setSetting) return;
-    api.setSetting("show_notifications", next).catch(() => {
-      // Persist failed — roll the switch back so the UI reflects what is
-      // actually stored rather than the intent.
-      setShowNotifications(!next);
-    });
-  };
 
   const isBuiltInModeName = (name: string): boolean =>
     (BUILT_IN_MODE_NAMES as readonly string[]).includes(name);
@@ -176,10 +142,12 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
       </div>
 
       {/* [20260926_Issue400] show_notifications switch (issue #400): gates the
-          update-download system notification in the main process. Read/write
-          go through the existing SETTINGS.GET/SET channels (key already in
-          ALLOWED_SETTING_KEYS); local state only — SettingsState is not
-          extended in this ticket. */}
+          update-download system notification in the main process.
+          [20260926_Refactor_403_SettingsSchema] Issue #403 folded the key
+          into SettingsState — the switch now renders from settings state and
+          toggles through onInputChange (auto-persisting via SETTINGS.SET)
+          exactly like the always-on-top switch above. Default on: matches
+          the main-process gate. */}
       <div className="flex items-center justify-between">
         <div>
           <label className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
@@ -197,10 +165,12 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
           role="switch"
           data-testid="show-notifications"
           aria-label={t("settings.general.showNotificationsLabel", "系统通知")}
-          aria-checked={showNotifications}
-          onClick={() => handleShowNotificationsToggle(!showNotifications)}
+          aria-checked={settings.show_notifications}
+          onClick={() =>
+            onInputChange("show_notifications", !settings.show_notifications)
+          }
           className={`${
-            showNotifications
+            settings.show_notifications
               ? "bg-[#0071e3]"
               : "bg-[#d2d2d7] dark:bg-[#3a3a3c]"
           } relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-2`}
@@ -208,7 +178,7 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
           <span
             aria-hidden="true"
             className={`${
-              showNotifications ? "translate-x-4" : "translate-x-0"
+              settings.show_notifications ? "translate-x-4" : "translate-x-0"
             } inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
           />
         </button>

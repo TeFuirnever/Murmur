@@ -101,7 +101,7 @@ When adding platform-specific code, use `process.platform === "win32"` checks. A
 2. No silent error swallowing in main process.
 3. No hardcoded IPC channel strings — use `ipc-contracts.ts` constants.
 4. No new IPC handler files without registering in `src/helpers/ipc/index.ts`.
-5. No adding settings without touching **all 4** places: `SettingsState` + `DEFAULT_SETTINGS` + `loadSettings` builder + `saveSettings` body in `useSettings.ts`, AND the key in `ALLOWED_SETTING_KEYS` (`settingsHandlers.ts`). Missing any one silently breaks persistence.
+5. No adding settings except by declaring them **once** in the schema: `src/settings/settingsSchema.ts` (key, type, default, load coercion, scope, `fileSync`/`textLike` traits). [20260926_Refactor_403_SettingsSchema] `SettingsState`, `DEFAULT_SETTINGS`, the load builder, `ALLOWED_SETTING_KEYS`, `FILE_CONFIGURABLE_KEYS` and `TEXT_INPUT_SETTING_KEYS` are all derived from the schema — a key declared anywhere else (useSettings.ts, settingsHandlers.ts, fileConfig.ts) silently breaks persistence. `tests/unit/settings-schema.test.ts` pins the migration equivalence and the one-entry acceptance.
 6. <!-- [20260816_Refactor_RemoveEffects] Rule removed with the visual-effects feature: ogl/motion no longer exist in the dependency tree. -->
 
 ## Verification
