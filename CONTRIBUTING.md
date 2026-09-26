@@ -178,7 +178,7 @@ pnpm lint && pnpm test # 快速迭代
 FunASR Python 进程
 ```
 
-- **IPC 通道**：常量定义在 `src/helpers/ipc-contracts.js`，处理器按领域拆分在 `src/helpers/ipc/`，通过 `preload.js` 暴露为 `window.electronAPI`
+- **IPC 通道**：常量定义在 `src/helpers/ipc-contracts.ts`，处理器按领域拆分在 `src/helpers/ipc/`，通过 `preload.ts` 暴露为 `window.electronAPI`
 - **FunASR 通信**：Node.js spawn Python 子进程，通过 JSON over stdin/stdout 通信
 - **消息路由**：`ServerMessageRouter` 管理 UUID 请求-响应匹配
 
@@ -192,7 +192,7 @@ FunASR Python 进程
 
 ### Python 子进程生命周期
 
-FunASR 以 Python 子进程方式运行，生命周期由 `FunASRManager`（`src/helpers/funasrManager.js`）管理：
+FunASR 以 Python 子进程方式运行，生命周期由 `FunASRManager`（`src/helpers/funasrManager.ts`）管理：
 
 1. **启动（spawn）**：Electron 主进程通过 `child_process.spawn` 启动 `funasr_server.py`，传入模型路径和配置参数
 2. **通信（stdin/stdout JSON IPC）**：Node.js 通过 stdin 向 Python 发送 JSON 请求（含 UUID），Python 处理后通过 stdout 返回 JSON 响应。`ServerMessageRouter` 通过 UUID 匹配请求与响应
@@ -232,16 +232,16 @@ FunASR 以 Python 子进程方式运行，生命周期由 `FunASRManager`（`src
 
 | 模块                | 文件                                 | 职责                                                                                                    |
 | ------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------- |
-| FunASRManager       | `src/helpers/funasrManager.js`       | FunASR 门面，委托到 `funasrServer.js`、`modelManager.js`、`pythonEnvironment.js`、`audioFileHelpers.js` |
-| IPC Handlers        | `src/helpers/ipc/`                   | 按 9 个领域拆分的 Electron IPC 处理器，常量定义在 `ipc-contracts.js`                                    |
-| DatabaseManager     | `src/helpers/database.js`            | SQLite CRUD、schema 迁移、数据查询分页                                                                  |
-| WindowManager       | `src/helpers/windowManager.js`       | 窗口创建、大小管理、浮动控件                                                                            |
-| ClipboardManager    | `src/helpers/clipboard.js`           | 自动粘贴到光标位置（macOS osascript / Electron clipboard）                                              |
-| HotkeyManager       | `src/helpers/hotkeyManager.js`       | 全局热键注册、F2 双击检测                                                                               |
-| PythonInstaller     | `src/helpers/pythonInstaller.js`     | 嵌入式 Python 环境准备                                                                                  |
-| ServerMessageRouter | `src/helpers/serverMessageRouter.js` | UUID 请求-响应匹配路由                                                                                  |
-| ExportFormatters    | `src/helpers/exportFormatters.js`    | TXT/SRT/VTT/MD/DOCX 导出格式化                                                                          |
-| UpdateManager       | `src/helpers/updateManager.js`       | 半自动更新（SHA256 校验、进度 UI、系统通知）                                                            |
+| FunASRManager       | `src/helpers/funasrManager.ts`       | FunASR 门面，委托到 `funasrServer.ts`、`modelManager.ts`、`pythonEnvironment.ts`、`audioFileHelpers.ts` |
+| IPC Handlers        | `src/helpers/ipc/`                   | 按 10 个领域拆分的 Electron IPC 处理器，常量定义在 `ipc-contracts.ts`                                   |
+| DatabaseManager     | `src/helpers/database.ts`            | SQLite CRUD、schema 迁移、数据查询分页                                                                  |
+| WindowManager       | `src/helpers/windowManager.ts`       | 窗口创建、大小管理、浮动控件                                                                            |
+| ClipboardManager    | `src/helpers/clipboard.ts`           | 自动粘贴到光标位置（macOS osascript / Electron clipboard）                                              |
+| HotkeyManager       | `src/helpers/hotkeyManager.ts`       | 全局热键注册、F2 双击检测                                                                               |
+| PythonInstaller     | `src/helpers/pythonInstaller.ts`     | 嵌入式 Python 环境准备                                                                                  |
+| ServerMessageRouter | `src/helpers/serverMessageRouter.ts` | UUID 请求-响应匹配路由                                                                                  |
+| ExportFormatters    | `src/helpers/exportFormatters.ts`    | TXT/SRT/VTT/MD/DOCX 导出格式化                                                                          |
+| UpdateManager       | `src/helpers/updateManager.ts`       | 半自动更新（SHA256 校验、进度 UI、系统通知）                                                            |
 
 ## 报告问题
 

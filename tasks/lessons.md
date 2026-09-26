@@ -98,3 +98,11 @@ Three stacked root causes, each invisible to "did the build finish" checks:
 **Context:** The ADHA-1 full-repo inventory found zero TODO/FIXME/HACK in scope — not by luck but by policy: debt is tracked in `docs/follow-ups.md` / `backlog.md`, never as code comments. ADHA-2 turned the policy into a constraint: `scripts/check-debt-markers.js` fails `pnpm ci:check` stage 1 (and the "Debt-marker check" step in ci.yml) on any new marker in `src/`, `scripts/`, `build/`, or root code/config files (exclusions: `node_modules`, `python/`, `out/`, `website/`, `dist`/`dist-*`).
 
 **Rule:** Keep debt in the docs ledgers, not in code comments; treat any new marker as a regression. The living suppression surface to audit is `eslint-disable` / `@ts-ignore`, not markers. Two practical gotchas: (1) a scanner that lives inside its own scanned tree must assemble its marker patterns at runtime (`"TO" + "DO"`) so it does not match its own source or messages; (2) when a filtered grep pipeline reports a suspicious hit, verify with `awk 'NR==n'` on the original file — filter tools can misalign line numbers.
+
+## 2026-09-26 · Sandboxed renderer has no `process` global
+
+**Date:** 2026-09-26 (settings-overhaul PR #411, pipeline review F1)
+
+**Context:** #405's Windows-only switch gated rendering on `process.platform === "win32"` inside `GeneralSection.tsx`. All 2900+ vitest suites were green (jsdom runs under Node, which provides `process`), but the shipped app would have blanked the entire settings window on both platforms the moment the General tab mounted: renderer pages run sandbox:true + nodeIntegration:false + contextIsolation:true, so the page main world has no `process`; Vite's define only statically replaces `process.env.NODE_ENV`, leaving `process.platform` as a live reference that throws `ReferenceError`.
+
+**Rule:** `process.platform` belongs to main-process / plain-Node code only. Renderer platform gates go through the preload bridge (`window.electronAPI.getPlatform()`), undefined-safe. jsdom greens are not evidence a renderer global exists at runtime. The no-mistakes pipeline's Playwright run against the real Electron bundle caught what 17 TDD tickets did not.
