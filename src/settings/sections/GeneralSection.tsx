@@ -1,7 +1,11 @@
 import { useTranslation } from "react-i18next";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type React from "react";
+import type { AIMode } from "../../types/ipc";
 import type { SettingsState } from "../useSettings";
+// [20260926_Fix_399_DefaultModeOptions] Shared full built-in mode list (see
+// the module comment for why it must be mirrored renderer-side).
+import { BUILT_IN_MODE_NAMES } from "../builtInModes";
 // [20260905_Fix_246_HotkeySettingsUi] Hotkey recorder (issue #246: the
 // settings entry the main-window failure toast pointed at did not exist).
 import { buildAccelerator, formatAccelerator } from "../hotkeyRecorder";
@@ -25,6 +29,51 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
   // onInputChange("hotkey", ...) — the main window re-registers on
   // SETTINGS_UPDATE (App.tsx).
   const [recording, setRecording] = useState(false);
+
+  // [20260926_Fix_399_DefaultModeOptions] Issue #399: the default_mode
+  // dropdown exposed only 4 of the 10 built-in modes and no custom-template
+  // modes — a pure UI exposure gap, the read side (processText) dispatches
+  // any mode name. Options are the FULL built-in list as the always-present
+  // baseline (available before GET_MODES resolves and on bridge failure, so
+  // the select never blanks and a saved mode value stays displayable); once
+  // GET_MODES resolves, the merged list (built-ins minus shadowed + custom
+  // templates) takes over. Built-in labels resolve through the Templates
+  // tab's builtinLabels i18n vocabulary (identical wording, no drift);
+  // customs keep their frontmatter label. GET_MODES is not rate-limited and
+  // TranscriptionResult already fetches it on mount — same pattern here.
+  const [templateModes, setTemplateModes] = useState<AIMode[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    // Bridge failure keeps the static baseline (intentional degradation, not
+    // a swallowed error — the dropdown must never blank out).
+    window.electronAPI
+      ?.getAIModes?.()
+      .then((modes) => {
+        if (!cancelled && Array.isArray(modes) && modes.length > 0) {
+          setTemplateModes(modes);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const isBuiltInModeName = (name: string): boolean =>
+    (BUILT_IN_MODE_NAMES as readonly string[]).includes(name);
+
+  const modeOptions: Array<{ name: string; label: string }> = (
+    templateModes.length > 0
+      ? templateModes
+      : BUILT_IN_MODE_NAMES.map(
+          (name) => ({ name, label: "", description: "" }) satisfies AIMode,
+        )
+  ).map((mode) => ({
+    name: mode.name,
+    label: isBuiltInModeName(mode.name)
+      ? t(`settings.templates.builtinLabels.${mode.name}`, mode.name)
+      : mode.label || mode.name,
+  }));
 
   const handleCaptureKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     // The capture zone only renders while recording, so no !recording guard
@@ -122,10 +171,12 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
         </p>
       </div>
 
-      {/* [20260905_Fix_249_DefaultModeUi] Default AI processing mode for the
-          recording / file-transcription pipelines (issue #249: the read side
-          honored "default_mode" but nothing could write it). "auto" picks by
-          text length, "off" disables, the rest map to built-in modes. */}
+      {/* [20260926_Fix_399_DefaultModeOptions] Default AI processing mode
+          for the recording / file-transcription pipelines (issue #249 gave
+          it a write path; issue #399 exposes the FULL mode vocabulary: all
+          10 built-ins via the shared BUILT_IN_MODE_NAMES baseline plus the
+          merged custom-template list from GET_MODES). "auto" picks by text
+          length, "off" disables, the rest map to built-in/template modes. */}
       <div>
         <label
           htmlFor="default-mode"
@@ -143,18 +194,11 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
           <option value="auto">
             {t("settings.general.defaultModeAuto", "智能判断（按文本长度）")}
           </option>
-          <option value="optimize">
-            {t("settings.general.defaultModeOptimize", "智能润色")}
-          </option>
-          <option value="optimize_long">
-            {t("settings.general.defaultModeOptimizeLong", "长文本整理")}
-          </option>
-          <option value="correct">
-            {t("settings.general.defaultModeCorrect", "校对纠错")}
-          </option>
-          <option value="summarize">
-            {t("settings.general.defaultModeSummarize", "摘要总结")}
-          </option>
+          {modeOptions.map((mode) => (
+            <option key={mode.name} value={mode.name}>
+              {mode.label}
+            </option>
+          ))}
           <option value="off">
             {t("settings.general.defaultModeOff", "关闭 AI 处理")}
           </option>
@@ -162,7 +206,7 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
         <p className="mt-1 text-xs text-[#6e6e73]">
           {t(
             "settings.general.defaultModeDesc",
-            "录音与文件导入完成后自动应用的 AI 处理方式；单次结果面板仍可临时切换。",
+            "录音与文件导入完成后自动应用的 AI 处理方式；单次结果面板仍可临时切换。与「AI 配置」页的「启用 AI 处理」开关为同一状态。",
           )}
         </p>
       </div>

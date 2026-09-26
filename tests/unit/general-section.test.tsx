@@ -2,14 +2,45 @@
 // [20260816_Test_GeneralSection] GeneralSection was 0% — render + interaction
 // coverage for the always-on-top toggle (live IPC side effect), theme select,
 // and auto-paste/close-behavior selects.
+// [20260926_Fix_399_DefaultModeOptions] Issue #399: the default_mode dropdown
+// exposed only 4 of the 10 built-in modes and no custom-template modes (the
+// read side dispatches any mode name — pure UI exposure gap). The i18n mock
+// now resolves against the shipped zh-CN locale (same pattern as
+// settings-sections.test.tsx) so assertions pin real user-visible strings.
 import "../setup/react";
 import React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  within,
+  waitFor,
+} from "@testing-library/react";
+
+import zhCN from "../../src/i18n/locales/zh-CN.json";
+
+// Flatten the nested locale into dot-notation keys for O(1) lookup.
+function flatten(
+  obj: Record<string, unknown>,
+  prefix = "",
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    const key = prefix ? `${prefix}.${k}` : k;
+    if (v !== null && typeof v === "object") {
+      Object.assign(out, flatten(v as Record<string, unknown>, key));
+    } else {
+      out[key] = String(v);
+    }
+  }
+  return out;
+}
+const LOCALE = flatten(zhCN as Record<string, unknown>);
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
-    t: (key: string, fallback?: string) => fallback ?? key,
+    t: (key: string, fallback?: string) => LOCALE[key] ?? fallback ?? key,
     i18n: { language: "zh-CN", changeLanguage: vi.fn() },
   }),
 }));
@@ -42,7 +73,14 @@ const BASE: SettingsState = {
 };
 
 type TestWindow = Omit<Window, "electronAPI"> & {
-  electronAPI?: { setAlwaysOnTop: (v: boolean) => void };
+  electronAPI?: {
+    setAlwaysOnTop: (v: boolean) => void;
+    // [20260926_Fix_399_DefaultModeOptions] Optional so the beforeEach stub
+    // (setAlwaysOnTop only) keeps exercising the static-baseline path.
+    getAIModes?: () => Promise<
+      Array<{ name: string; label: string; description: string }>
+    >;
+  };
 };
 
 describe("[20260816_Test_GeneralSection] GeneralSection", () => {
@@ -89,7 +127,9 @@ describe("[20260816_Test_GeneralSection] GeneralSection", () => {
 
   it("changing auto-paste behavior reports the selected mode", () => {
     render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
-    fireEvent.change(screen.getByDisplayValue("自动粘贴到光标处"), {
+    // Locale string (pasteOption) — the shipped zh-CN value, not the inline
+    // component fallback (which still reads 自动粘贴到光标处).
+    fireEvent.change(screen.getByDisplayValue("自动粘贴到当前应用"), {
       target: { value: "clipboard_only" },
     });
     expect(onInputChange).toHaveBeenCalledWith("auto_paste", "clipboard_only");
@@ -110,7 +150,9 @@ describe("[20260816_Test_GeneralSection] GeneralSection", () => {
 
   it("changing close behavior reports the selected mode", () => {
     render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
-    fireEvent.change(screen.getByDisplayValue("隐藏到托盘"), {
+    // Locale string (hideBehavior) — the shipped zh-CN value, not the inline
+    // component fallback (隐藏到托盘).
+    fireEvent.change(screen.getByDisplayValue("隐藏到菜单栏"), {
       target: { value: "quit" },
     });
     expect(onInputChange).toHaveBeenCalledWith("close_behavior", "quit");
@@ -136,6 +178,111 @@ describe("[20260816_Test_GeneralSection] GeneralSection", () => {
       target: { value: "off" },
     });
     expect(onInputChange).toHaveBeenCalledWith("default_mode", "off");
+  });
+
+  // [20260926_Fix_399_DefaultModeOptions] Issue #399: the dropdown exposed
+  // only 4 of the 10 built-in modes. The full value list (auto + 10 built-ins
+  // + off) is the baseline contract, mirrored from BUILT_IN_MODES in
+  // src/helpers/ipc/aiHandlers.ts via the shared renderer constant.
+  it("renders every built-in mode in the default-mode dropdown (#399)", () => {
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+    const values = within(screen.getByTestId("default-mode"))
+      .getAllByRole("option")
+      .map((option) => option.getAttribute("value"));
+    expect(values).toEqual([
+      "auto",
+      "optimize",
+      "optimize_long",
+      "format",
+      "correct",
+      "summarize",
+      "enhance",
+      "xiaohongshu",
+      "zhihu",
+      "douyin",
+      "de-ai",
+      "off",
+    ]);
+  });
+
+  it("appends custom template modes once GET_MODES resolves (#399)", async () => {
+    (globalThis.window as unknown as TestWindow).electronAPI = {
+      setAlwaysOnTop,
+      getAIModes: vi.fn().mockResolvedValue([
+        { name: "optimize", label: "智能润色", description: "" },
+        { name: "weekly-report", label: "周报整理", description: "" },
+      ]),
+    };
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+    await waitFor(() => {
+      const values = within(screen.getByTestId("default-mode"))
+        .getAllByRole("option")
+        .map((option) => option.getAttribute("value"));
+      expect(values).toContain("weekly-report");
+    });
+    // The custom entry shows the template's own (backend) label.
+    expect(screen.getByText("周报整理")).toBeInTheDocument();
+  });
+
+  it("keeps one option per mode name when a template shadows a built-in (#399)", async () => {
+    (globalThis.window as unknown as TestWindow).electronAPI = {
+      setAlwaysOnTop,
+      getAIModes: vi.fn().mockResolvedValue([
+        { name: "optimize", label: "智能润色", description: "" },
+        // Shadowing template: same mode name "correct", custom label.
+        { name: "correct", label: "我的校对覆盖", description: "" },
+      ]),
+    };
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+    await waitFor(() => {
+      const values = within(screen.getByTestId("default-mode"))
+        .getAllByRole("option")
+        .map((option) => option.getAttribute("value"));
+      expect(values).toContain("correct");
+    });
+    const values = within(screen.getByTestId("default-mode"))
+      .getAllByRole("option")
+      .map((option) => option.getAttribute("value"));
+    // Exactly one "correct" option — no built-in/template value duplication.
+    expect(values.filter((v) => v === "correct")).toHaveLength(1);
+  });
+
+  it("falls back to the full built-in list when GET_MODES fails (#399)", async () => {
+    const getAIModes = vi.fn().mockRejectedValue(new Error("bridge down"));
+    (globalThis.window as unknown as TestWindow).electronAPI = {
+      setAlwaysOnTop,
+      getAIModes,
+    };
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+    // The static baseline survives the bridge failure — the select never
+    // blanks and a saved mode value stays displayable.
+    const values = within(screen.getByTestId("default-mode"))
+      .getAllByRole("option")
+      .map((option) => option.getAttribute("value"));
+    expect(values).toEqual([
+      "auto",
+      "optimize",
+      "optimize_long",
+      "format",
+      "correct",
+      "summarize",
+      "enhance",
+      "xiaohongshu",
+      "zhihu",
+      "douyin",
+      "de-ai",
+      "off",
+    ]);
+    await waitFor(() => expect(getAIModes).toHaveBeenCalled());
+  });
+
+  // [20260926_Fix_399_UnifiedKnobWording] Issue #399 evidence #3: the AI tab
+  // toggle (enable_ai_optimization) and the General tab dropdown
+  // (default_mode) are ONE knob. The descriptions cross-reference instead of
+  // each describing themselves.
+  it("cross-references the AI tab toggle from the default-mode description (#399)", () => {
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+    expect(screen.getByText(/「启用 AI 处理」/)).toBeInTheDocument();
   });
 
   it("defaults the contract default_mode to auto", () => {

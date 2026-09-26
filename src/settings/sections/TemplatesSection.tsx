@@ -34,6 +34,10 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 import type { TemplateMeta } from "../../types/ipc";
+// [20260926_Fix_399_DefaultModeOptions] Shared renderer-side built-in mode
+// list (single source for GeneralSection's default-mode dropdown baseline
+// and this section's shadow detection + restore-default visibility).
+import { BUILT_IN_MODE_NAMES } from "../builtInModes";
 
 /** Debounce window for the editor autosave (named constant per ticket). */
 const TEMPLATE_AUTOSAVE_DELAY_MS = 400;
@@ -57,25 +61,6 @@ const RATE_LIMIT_ERROR = "Rate limit exceeded";
  * fs and must not be imported into renderer code).
  */
 const WARNING_MISSING_FRONTMATTER = "missing_frontmatter";
-
-/**
- * Built-in mode names mirrored from aiHandlers' BUILT_IN_MODES. Needed in
- * the renderer for shadow detection and restore-default visibility; the
- * merged GET_MODES list hides shadowed built-ins, so they cannot be
- * recovered from the backend alone.
- */
-const BUILT_IN_MODE_NAMES = [
-  "optimize",
-  "optimize_long",
-  "format",
-  "correct",
-  "summarize",
-  "enhance",
-  "xiaohongshu",
-  "zhihu",
-  "douyin",
-  "de-ai",
-] as const;
 
 // [20260912_Fix_242_ReviewRound2] Identity-carrying autosave payload: the
 // pending slot is cleared only when THIS object is still the newest edit.
