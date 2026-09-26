@@ -179,6 +179,10 @@ export const preloadApi: ElectronAPI = {
   // [20260926_Fix_396_PermissionStatus] Real OS permission status for the
   // settings permission badges (issue #396).
   getPermissionStatus: () => ipcRenderer.invoke(C.SYSTEM.PERMISSION_STATUS),
+  // [20260926_Issue404] Launch-at-login apply (issue #404): renderer sends
+  // only the boolean; platform payload differences are main-process-only.
+  setLoginItemSettings: (enabled: boolean) =>
+    ipcRenderer.invoke(C.SYSTEM.SET_LOGIN_ITEM, enabled),
   checkForUpdates: () => ipcRenderer.invoke(C.UPDATE.CHECK),
   downloadUpdate: (updateInfo: unknown) =>
     ipcRenderer.invoke(C.UPDATE.DOWNLOAD, updateInfo),

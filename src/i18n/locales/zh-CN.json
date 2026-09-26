@@ -101,6 +101,8 @@
       "hotwordsLimit": "最多 200 行,每行 32 字",
       "showNotificationsLabel": "系统通知",
       "showNotificationsDesc": "更新下载完成后发送系统通知",
+      "autoStartLabel": "开机自启",
+      "autoStartDesc": "登录系统时自动在后台启动 Murmur，不抢占焦点",
       "hotkeyLabel": "录音快捷键",
       "hotkeyDesc": "全局快捷键,任意界面按下即可开始/停止录音。",
       "hotkeyStart": "更改",

@@ -38,6 +38,8 @@ const BASE_SETTINGS: SettingsState = {
   bot_expression: "neutral",
   // [20260926_Refactor_403_SettingsSchema] new SettingsState key
   show_notifications: true,
+  // [20260926_Issue404] new SettingsState key
+  auto_start: false,
 };
 
 function renderSection(settings: SettingsState = BASE_SETTINGS) {

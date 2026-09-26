@@ -196,6 +196,21 @@ export const SETTINGS_SCHEMA = {
     fileSync: true,
     load: (raw: unknown): boolean => raw !== false,
   },
+  // [20260926_Issue404] Launch-at-login (issue #404): the General-tab
+  // switch persists through the standard pipeline; the main process applies
+  // the value to app.setLoginItemSettings (SYSTEM.SET_LOGIN_ITEM) and
+  // re-aligns the real login item at every boot (settings win). Load arm is
+  // `raw === true` — NOT the legacy `!== false`: the historical default is
+  // FALSE, so absent/odd stored values must read as off (mirror image of
+  // the on-by-default booleans above).
+  auto_start: {
+    type: "boolean",
+    scope: "settings-state",
+    default: false,
+    descriptionKey: "settings.general.autoStartDesc",
+    fileSync: true,
+    load: (raw: unknown): boolean => raw === true,
+  },
   auto_paste: {
     type: "string",
     scope: "settings-state",
@@ -279,15 +294,10 @@ export const SETTINGS_SCHEMA = {
     default: "zh-CN",
     fileSync: true,
   },
-  // auto_start / minimize_to_tray / model_download_path: legacy configurable
-  // keys with no current in-app editor — kept persisted (murmur.json sync +
-  // CLI whitelist) so existing user files keep round-tripping.
-  auto_start: {
-    type: "boolean",
-    scope: "persisted-only",
-    default: false,
-    fileSync: true,
-  },
+  // minimize_to_tray / model_download_path: legacy configurable keys with
+  // no current in-app editor — kept persisted (murmur.json sync + CLI
+  // whitelist) so existing user files keep round-tripping. (auto_start left
+  // this group in #404 — it has a General-tab editor now.)
   minimize_to_tray: {
     type: "boolean",
     scope: "persisted-only",

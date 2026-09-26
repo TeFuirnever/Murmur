@@ -231,6 +231,9 @@ export interface ElectronAPI {
   getAppVersion: () => Promise<string>;
   // [20260926_Fix_396_PermissionStatus] Real OS permission status (#396).
   getPermissionStatus: () => Promise<PermissionStatusResult>;
+  // [20260926_Issue404] Launch-at-login apply (#404): renderer sends only
+  // the boolean; platform payload differences are main-process-only.
+  setLoginItemSettings: (enabled: boolean) => Promise<OperationResult>;
 
   // Update management
   checkForUpdates: () => Promise<UpdateCheckResult>;

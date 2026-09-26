@@ -37,6 +37,8 @@ const BASE: SettingsState = {
   bot_expression: "neutral",
   // [20260926_Refactor_403_SettingsSchema] new SettingsState key
   show_notifications: true,
+  // [20260926_Issue404] new SettingsState key
+  auto_start: false,
 };
 
 describe("bot settings keys are writable through the IPC allowlist", () => {

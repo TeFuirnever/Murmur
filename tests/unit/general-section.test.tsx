@@ -75,6 +75,9 @@ const BASE: SettingsState = {
   // folds it in — the switch now reads/writes through the standard
   // settings pipeline like every other General-tab control).
   show_notifications: true,
+  // [20260926_Issue404] auto_start joins SettingsState with the schema
+  // (#404 General-tab launch-at-login switch).
+  auto_start: false,
 };
 
 type TestWindow = Omit<Window, "electronAPI"> & {
@@ -89,6 +92,8 @@ type TestWindow = Omit<Window, "electronAPI"> & {
     getAIModes?: () => Promise<
       Array<{ name: string; label: string; description: string }>
     >;
+    // [20260926_Issue404] Launch-at-login apply (issue #404).
+    setLoginItemSettings?: (enabled: boolean) => Promise<unknown>;
   };
 };
 
@@ -402,6 +407,73 @@ describe("[20260816_Test_GeneralSection] GeneralSection", () => {
     );
     fireEvent.click(screen.getByRole("switch", { name: "系统通知" }));
     expect(onInputChange).toHaveBeenCalledWith("show_notifications", true);
+  });
+
+  // [20260926_Issue404] auto_start switch (issue #404): same standard
+  // pipeline as show_notifications — renders from settings state, toggles
+  // through onInputChange (auto-persists via SETTINGS.SET) — PLUS the live
+  // main-process side effect: the toggle must call the
+  // SYSTEM.SET_LOGIN_ITEM bridge so the OS login item changes immediately
+  // (same pattern as the always-on-top switch's immediate setAlwaysOnTop).
+  it("renders the auto-start switch reflecting the setting state", () => {
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+    expect(screen.getByTestId("auto-start")).toHaveAttribute(
+      "aria-checked",
+      "false",
+    );
+  });
+
+  it("renders the auto-start switch checked when the setting is on", () => {
+    render(
+      <GeneralSection
+        settings={{ ...BASE, auto_start: true }}
+        onInputChange={onInputChange}
+      />,
+    );
+    expect(screen.getByTestId("auto-start")).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+  });
+
+  it("toggling auto-start persists AND applies the OS login item live", () => {
+    const setLoginItemSettings = vi.fn();
+    (globalThis.window as unknown as TestWindow).electronAPI = {
+      setAlwaysOnTop,
+      setLoginItemSettings,
+    };
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+    fireEvent.click(screen.getByTestId("auto-start"));
+    expect(onInputChange).toHaveBeenCalledWith("auto_start", true);
+    expect(setLoginItemSettings).toHaveBeenCalledWith(true);
+  });
+
+  it("toggling auto-start off reports the off value and applies the off login item", () => {
+    const setLoginItemSettings = vi.fn();
+    (globalThis.window as unknown as TestWindow).electronAPI = {
+      setAlwaysOnTop,
+      setLoginItemSettings,
+    };
+    render(
+      <GeneralSection
+        settings={{ ...BASE, auto_start: true }}
+        onInputChange={onInputChange}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("auto-start"));
+    expect(onInputChange).toHaveBeenCalledWith("auto_start", false);
+    expect(setLoginItemSettings).toHaveBeenCalledWith(false);
+  });
+
+  it("does not throw when the login-item bridge is absent (test stubs / older preload)", () => {
+    (globalThis.window as unknown as TestWindow).electronAPI = {
+      setAlwaysOnTop,
+    };
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+    expect(() =>
+      fireEvent.click(screen.getByTestId("auto-start")),
+    ).not.toThrow();
+    expect(onInputChange).toHaveBeenCalledWith("auto_start", true);
   });
 
   // [20260926_Perf_402_TextInputDebounce] The hotwords textarea is debounced

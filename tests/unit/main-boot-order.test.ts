@@ -45,9 +45,15 @@ const h = vi.hoisted(() => {
     // [20260926_Fix_394_AlwaysOnTopStartupRead] Spies for the startup
     // alwaysOnTop contract: the persisted read (database) and the apply
     // (windowManager) are hoisted so tests can control the persisted value
-    // and assert call arguments/ordering.
+    // (dbGetSetting) and assert call arguments/ordering.
     dbGetSetting: vi.fn(),
     wmSetDefaultAlwaysOnTop: vi.fn(),
+    // [20260926_Issue404] Login-item startup wiring spies: main.ts must call
+    // syncLoginItemAtStartup(db, logger) during startApp and
+    // hideMainWindowOnLoginLaunch(windowManager, logger) after the renderer
+    // has loaded (login-launch hidden window, no focus steal).
+    syncLoginItemAtStartup: vi.fn(),
+    hideMainWindowOnLoginLaunch: vi.fn(),
   };
 });
 
@@ -181,6 +187,15 @@ vi.mock("../../src/helpers/ipc", () => ({
   registerAll: vi.fn(),
 }));
 
+// [20260926_Issue404] The login-item module is mocked so the boot-order
+// harness asserts main.ts's WIRING (when each call happens relative to
+// window creation / renderer load); the module's internal logic (what it
+// calls on electron app, when it applies) is covered by loginItem.test.ts.
+vi.mock("../../src/helpers/loginItem", () => ({
+  syncLoginItemAtStartup: h.syncLoginItemAtStartup,
+  hideMainWindowOnLoginLaunch: h.hideMainWindowOnLoginLaunch,
+}));
+
 async function importMain(): Promise<void> {
   await import("../../main");
 }
@@ -281,5 +296,66 @@ describe("[20260926_Fix_394_AlwaysOnTopStartupRead] main.ts startup alwaysOnTop 
 
     expect(h.dbGetSetting).toHaveBeenCalledWith("window_always_on_top", true);
     expect(h.wmSetDefaultAlwaysOnTop).toHaveBeenCalledWith(true);
+  });
+});
+
+// ── [20260926_Issue404] Issue #404 ────────────────────────────────────────
+// Contract: at startup, main.ts must call syncLoginItemAtStartup(db, logger)
+// so the real OS login item is aligned with the persisted auto_start setting
+// (settings win), and call hideMainWindowOnLoginLaunch(windowManager,
+// logger) AFTER the renderer has loaded so a login launch ends with the
+// main window hidden (menu-bar convention, no focus steal).
+describe("[20260926_Issue404] main.ts login-item startup wiring", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    h.order.length = 0;
+    h.setSafeStorageThrows = false;
+    vi.mocked(h_isEncryptionAvailable).mockReturnValue(true);
+    h.dbGetSetting.mockClear();
+    h.wmSetDefaultAlwaysOnTop.mockClear();
+    h.dbGetSetting.mockImplementation(
+      (_key: string, defaultValue: unknown) => defaultValue,
+    );
+    h.wmSetDefaultAlwaysOnTop.mockImplementation(() => {
+      h.order.push("setDefaultAlwaysOnTop");
+    });
+    h.syncLoginItemAtStartup.mockClear();
+    h.hideMainWindowOnLoginLaunch.mockClear();
+    h.hideMainWindowOnLoginLaunch.mockImplementation(() => {
+      h.order.push("hideMainWindowOnLoginLaunch");
+    });
+  });
+
+  it("syncs the login item with the persisted auto_start setting during startApp", async () => {
+    h.dbGetSetting.mockImplementation((key: string) =>
+      key === "auto_start" ? true : undefined,
+    );
+    await importMain();
+    h.resolveReady();
+    await vi.waitFor(() => expect(h.order).toContain("createTray"));
+
+    expect(h.syncLoginItemAtStartup).toHaveBeenCalledTimes(1);
+    // First arg is the databaseManager (carries the hoisted getSetting spy);
+    // second is the logger.
+    expect(h.syncLoginItemAtStartup).toHaveBeenCalledWith(
+      expect.objectContaining({ getSetting: h.dbGetSetting }),
+      expect.objectContaining({ warn: expect.any(Function) }),
+    );
+  });
+
+  it("hides the main window on a login launch after the renderer has loaded", async () => {
+    await importMain();
+    h.resolveReady();
+    await vi.waitFor(() => expect(h.order).toContain("createTray"));
+
+    expect(h.hideMainWindowOnLoginLaunch).toHaveBeenCalledTimes(1);
+    const loadIdx = h.order.indexOf("loadMainWindowContent");
+    expect(loadIdx).toBeGreaterThanOrEqual(0);
+    // The hide runs after the renderer load — the window must already carry
+    // its content when it is hidden (a hidden empty window would strand the
+    // tray "show" action on a blank surface).
+    expect(h.hideMainWindowOnLoginLaunch.mock.calls[0]).toBeTruthy();
+    const hideIdx = h.order.indexOf("hideMainWindowOnLoginLaunch");
+    expect(hideIdx).toBeGreaterThan(loadIdx);
   });
 });

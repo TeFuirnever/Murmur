@@ -64,6 +64,10 @@ const PRE_REFACTOR_DEFAULTS = {
   bot_color: "auto",
   bot_expression: "neutral",
   show_notifications: true,
+  // [20260926_Issue404] auto_start moves from persisted-only into
+  // SettingsState (the #404 General-tab switch) — the one sanctioned
+  // addition, like show_notifications above. Default stays false.
+  auto_start: false,
 };
 
 // [20260926_Refactor_403_SettingsSchema] The pre-refactor ALLOWED_SETTING_KEYS
@@ -343,6 +347,13 @@ describe("[20260926_Refactor_403_SettingsSchema] migration equivalence (old stor
       raw: { show_notifications: "false" },
       expected: true,
     },
+    // [20260926_Issue404] auto_start: `raw === true` — the historical
+    // default is FALSE, so absent/odd stored values must read as off (the
+    // mirror image of the `!== false` gates above whose defaults are on).
+    { key: "auto_start", raw: { auto_start: true }, expected: true },
+    { key: "auto_start", raw: { auto_start: false }, expected: false },
+    { key: "auto_start", raw: {}, expected: false },
+    { key: "auto_start", raw: { auto_start: "true" }, expected: false },
   ];
 
   it("reads every legacy stored value back unchanged", () => {
@@ -367,14 +378,20 @@ describe("[20260926_Refactor_403_SettingsSchema] migration equivalence (old stor
   it("keeps persisted-only keys (language et al.) OUT of the loaded state", () => {
     const loaded = loadSettingsState({
       language: "en",
-      auto_start: true,
       minimize_to_tray: true,
       model_download_path: "/tmp",
     });
     expect(Object.keys(loaded)).not.toContain("language");
-    expect(Object.keys(loaded)).not.toContain("auto_start");
     expect(Object.keys(loaded)).not.toContain("minimize_to_tray");
     expect(Object.keys(loaded)).not.toContain("model_download_path");
+  });
+
+  // [20260926_Issue404] auto_start joins SettingsState (#404 General-tab
+  // switch): a stored boolean (or its absence) must surface in the loaded
+  // state through the schema load arm.
+  it("auto_start loads into the state with the strict `=== true` arm", () => {
+    expect(loadSettingsState({ auto_start: true }).auto_start).toBe(true);
+    expect(loadSettingsState({}).auto_start).toBe(false);
   });
 });
 
