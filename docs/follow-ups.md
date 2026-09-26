@@ -87,3 +87,4 @@ dev:main 改用 `build:main && electron .`，dev/e2e/prod 加载同一 artifact�
 6. **权限徽章为查询快照**（#396 风险登记）：用户在系统设置授权后需重进设置页或点测试才刷新；后续可在窗口 focus 时重查。
 7. **影子内置模式的下拉标签**（#399 已知边界）：自定义模板覆盖内置模式时下拉显示内置 i18n 标签；精确标签需扩展 IPC 契约。
 8. **e2e 启动器 userData 未隔离**（PR #411 test 步发现）：`tests/e2e/helpers/electron-launch.ts` 以 `MURMUR_DB_PATH=:memory:` 启动不隔离 fileSync——setSetting('theme'/'language') 会写穿到真实 `~/Library/Application Support/murmur/murmur.json`。pipeline 验证 run 后已手工还原；根治需在启动 helper 里重定向 userData。
+9. **auto_start 的 SMAppService「requires-approval」态无 UI 反馈**（#404 遗留）：macOS 13+ 若登录项在系统设置中未获批准，开关显示开但登录项未生效，启动同步每 boot 仅记 info 日志。后续可在开关侧显示批准引导（System Settings → General → Login Items 链接）。
