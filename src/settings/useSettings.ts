@@ -129,7 +129,6 @@ export function useSettings() {
     DetectedLocalModel[]
   >([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<AICheckStatusResult | null>(
@@ -175,17 +174,18 @@ export function useSettings() {
   }, [t]);
 
   // --- 保存设置 ---
-  // [ADR-015] Returns boolean so callers can show inline success feedback
-  // (savedFlash) only on actual success, not on the catch path.
+  // [20260926_Feat_408_NoSaveButton] Issue #408 removed the AI-tab save
+  // button, so this no longer has a UI caller: it remains as the hook's
+  // non-UI bulk-reconciliation pass (masked api_key skip + whole-object
+  // loop write) for programmatic callers, covered by its own tests.
   // [20260815_Refactor_SaveSettingsLoop] The 11 hand-listed setSetting calls
   // (each with a per-key comment) became a loop over the settings object:
   // handleInputChange already auto-persists every change, so this bulk save
-  // only exists as the explicit Save-button reconciliation pass — a loop
-  // keeps future settings keys included automatically instead of needing a
-  // mandatory new line (the old effects_enabled reviewer finding).
+  // only exists as an explicit reconciliation pass — a loop keeps future
+  // settings keys included automatically instead of needing a mandatory new
+  // line (the old effects_enabled reviewer finding).
   const saveSettings = useCallback(async (): Promise<boolean> => {
     try {
-      setSaving(true);
       if (window.electronAPI) {
         if (!isMaskedKey(settings.ai_api_key)) {
           await window.electronAPI.setSetting(
@@ -209,8 +209,6 @@ export function useSettings() {
       console.error("Failed to save settings:", error);
       toast.error(t("settings.saveFailed", "保存设置失败"));
       return false;
-    } finally {
-      setSaving(false);
     }
   }, [settings, t]);
 
@@ -343,8 +341,14 @@ export function useSettings() {
   );
 
   // --- 测试 AI 配置 ---
+  // [20260926_Feat_408_NoSaveButton] Issue #408: with the save button gone,
+  // a text edit can still be sitting in the #402 debounce window when the
+  // user clicks 测试配置. Flush first so the check exercises the latest
+  // SAVED config (the check itself reads React state, which was already
+  // immediate — this guarantees storage catches up before it runs).
   const testAIConfiguration = useCallback(async () => {
     try {
+      textWrites.flush();
       setTesting(true);
       setTestResult(null);
 
@@ -421,7 +425,7 @@ export function useSettings() {
     } finally {
       setTesting(false);
     }
-  }, [settings, t]);
+  }, [settings, t, textWrites]);
 
   // --- 更新检查 ---
   const checkForUpdates = useCallback(async () => {
@@ -550,7 +554,6 @@ export function useSettings() {
     // 设置状态
     settings,
     loading,
-    saving,
     handleInputChange,
     flushPendingSettingWrites: textWrites.flush,
     saveSettings,

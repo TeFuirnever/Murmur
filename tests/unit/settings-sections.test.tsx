@@ -141,8 +141,6 @@ function buildAIConfigProps(
     testing: false,
     testResult: null,
     testAIConfiguration: vi.fn(),
-    saveSettings: vi.fn(),
-    saving: false,
     showQuickStart: false,
     ...overrides,
   };
@@ -585,15 +583,19 @@ describe("[20260729_Test_SettingsSections] AIConfigSection", () => {
     expect(testAIConfiguration).toHaveBeenCalledTimes(1);
   });
 
-  it("renders and invokes the save button", async () => {
-    const user = userEvent.setup();
-    const saveSettings = vi.fn();
-    const props = buildAIConfigProps({ saveSettings });
+  it("renders no save button — AI settings apply immediately (issue #408)", () => {
+    // Issue #408: every AI-tab change persists as it is made (debounced text
+    // fields + immediate discrete controls), so the explicit 保存设置 button
+    // is gone; the 测试配置 button stays.
+    const props = buildAIConfigProps();
     render(<AIConfigSection {...props} />);
 
-    const saveButton = screen.getByRole("button", { name: "保存设置" });
-    await user.click(saveButton);
-    expect(saveSettings).toHaveBeenCalledTimes(1);
+    expect(
+      screen.queryByRole("button", { name: "保存设置" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "测试配置" }),
+    ).toBeInTheDocument();
   });
 
   it("renders the quick start panel with registration-required presets when showQuickStart is true", () => {

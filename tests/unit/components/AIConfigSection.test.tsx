@@ -56,8 +56,6 @@ function renderSection(settings: SettingsState = BASE_SETTINGS) {
       testing={false}
       testResult={null}
       testAIConfiguration={vi.fn()}
-      saveSettings={vi.fn().mockResolvedValue(true)}
-      saving={false}
       showQuickStart={false}
     />,
   );
@@ -127,8 +125,6 @@ describe("AIConfigSection text-input flush + immediate select (issue #402)", () 
         testing={false}
         testResult={null}
         testAIConfiguration={vi.fn()}
-        saveSettings={vi.fn().mockResolvedValue(true)}
-        saving={false}
         showQuickStart={false}
       />,
     );

@@ -502,7 +502,6 @@ describe("useSettings hook — save / test / presets / updates", () => {
       ok = await result.current.saveSettings();
     });
     expect(ok).toBe(false);
-    expect(result.current.saving).toBe(false);
     errSpy.mockRestore();
   });
 
@@ -1241,6 +1240,38 @@ describe("useSettings hook — text-input persistence debounce (issue #402)", ()
       vi.advanceTimersByTime(1000);
     });
     expect(api().setSetting).toHaveBeenCalledTimes(2);
+  });
+
+  it("flushes pending text writes before running the AI configuration test", async () => {
+    // Issue #408: 「测试配置」 must exercise the latest saved config. A text
+    // edit still inside the 400ms debounce window is flushed BEFORE
+    // checkAIStatus runs; the invocation order proves the write landed first.
+    const { result } = await mountLoaded();
+    vi.useFakeTimers();
+    act(() => {
+      result.current.handleInputChange("ai_base_url", "https://api.new.com/v1");
+    });
+    // The edit is still pending — nothing persisted yet.
+    expect(api().setSetting).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await result.current.testAIConfiguration();
+    });
+
+    expect(api().setSetting).toHaveBeenCalledWith(
+      "ai_base_url",
+      "https://api.new.com/v1",
+    );
+    const setSettingOrder = (api().setSetting as ReturnType<typeof vi.fn>).mock
+      .invocationCallOrder[0];
+    const checkStatusOrder = (api().checkAIStatus as ReturnType<typeof vi.fn>)
+      .mock.invocationCallOrder[0];
+    expect(setSettingOrder).toBeDefined();
+    expect(checkStatusOrder).toBeDefined();
+    expect(setSettingOrder).toBeLessThan(checkStatusOrder!);
+    // The debounce window never elapses under fake timers, so this write
+    // came from the flush — not from a timer.
+    expect(api().setSetting).toHaveBeenCalledTimes(1);
   });
 
   it("keeps select/switch/theme keys immediate while text keys are debounced", async () => {

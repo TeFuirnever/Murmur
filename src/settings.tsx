@@ -72,10 +72,8 @@ const SettingsPage = () => {
   const {
     settings,
     loading,
-    saving,
     handleInputChange,
     flushPendingSettingWrites,
-    saveSettings,
     customModel,
     setCustomModel,
     resolvedProviderPresets,
@@ -182,8 +180,6 @@ const SettingsPage = () => {
                   testing={testing}
                   testResult={testResult}
                   testAIConfiguration={testAIConfiguration}
-                  saveSettings={saveSettings}
-                  saving={saving}
                   showQuickStart={showQuickStart}
                 />
               )}

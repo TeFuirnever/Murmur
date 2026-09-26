@@ -2,9 +2,10 @@
 // The existing settings-sections.test.tsx AIConfigSection describe block
 // covers the render paths and a few click handlers but leaves the custom
 // model input, slider change handlers, test-result display branches,
-// testing/saving button states, the optimization-toggle click, and the
-// quick-start action buttons (openExternal / focus ref) uncovered. This
-// file targets exactly those branches.
+// testing button states (the #408 change removed the save button), the
+// optimization-toggle click, and the quick-start action buttons
+// (openExternal / focus ref) uncovered. This file targets exactly those
+// branches.
 //
 // Runs under jsdom because RTL render() needs a DOM.
 // @vitest-environment jsdom
@@ -123,8 +124,6 @@ function buildAIConfigProps(
     testing: false,
     testResult: null,
     testAIConfiguration: vi.fn(),
-    saveSettings: vi.fn(),
-    saving: false,
     showQuickStart: false,
     ...overrides,
   };
@@ -409,7 +408,7 @@ describe("[20260729_Test_AIConfigExpanded] AIConfigSection uncovered branches", 
     expect(setShowApiKey).toHaveBeenCalledWith(false);
   });
 
-  // ── Testing / saving button states ──
+  // ── Testing button states ──
 
   it("disables the test button and shows the testing label while testing is true", () => {
     const props = buildAIConfigProps({ testing: true });
@@ -419,15 +418,17 @@ describe("[20260729_Test_AIConfigExpanded] AIConfigSection uncovered branches", 
     expect(testingButton).toBeDisabled();
   });
 
-  it("disables the save button and shows the saving label while saving is true", () => {
-    const props = buildAIConfigProps({ saving: true });
+  it("renders no save button — every change persists immediately (issue #408)", () => {
+    // Issue #408 removed the explicit 保存设置 button: text fields persist
+    // debounced (flushed on blur/close), discrete controls persist at once,
+    // so there is no explicit save action left to disable or label.
+    const props = buildAIConfigProps();
     render(<AIConfigSection {...props} />);
 
-    // The save button carries aria-label "保存设置" (settings.save), so the
-    // accessible name is stable. The visible label text switches to "保存中...".
-    const saveButton = screen.getByRole("button", { name: "保存设置" });
-    expect(saveButton).toBeDisabled();
-    expect(screen.getByText("保存中...")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "保存设置" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("保存中...")).not.toBeInTheDocument();
   });
 
   it("does not call testAIConfiguration when the test button is disabled (testing state)", async () => {

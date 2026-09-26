@@ -46,7 +46,6 @@ vi.mock("react-i18next", () => ({
 }));
 
 // Controlled useSettings fixture — the hook itself has its own suite.
-const saveSettingsMock = vi.fn().mockResolvedValue(true);
 const handleInputChangeMock = vi.fn();
 vi.mock("../../src/settings/useSettings", async (importOriginal) => {
   // Keep the real constants (PREDEFINED_MODELS / MODEL_LABELS / applyTheme...)
@@ -71,9 +70,7 @@ vi.mock("../../src/settings/useSettings", async (importOriginal) => {
         hotkey: "CommandOrControl+Shift+Space",
       },
       loading: false,
-      saving: false,
       handleInputChange: handleInputChangeMock,
-      saveSettings: saveSettingsMock,
       customModel: false,
       setCustomModel: vi.fn(),
       providerPresets: [],
@@ -140,14 +137,14 @@ describe("[20260816_Test_SettingsPage] SettingsPage component", () => {
     expect(hideSettingsWindow).toHaveBeenCalledTimes(1);
   });
 
-  it("invokes saveSettings from the AI section's save button", async () => {
-    // The save button lives in AIConfigSection — switch there first.
+  it("no longer renders a save button in the AI section (issue #408)", () => {
+    // Issue #408: settings apply immediately — the AI tab has no 保存设置
+    // button; the hook-level saveSettings helper is no longer UI-bound.
     render(<SettingsPage />);
     fireEvent.click(screen.getByRole("tab", { name: "AI 配置" }));
-    fireEvent.click(screen.getByRole("button", { name: "保存设置" }));
-    await waitFor(() => {
-      expect(saveSettingsMock).toHaveBeenCalledTimes(1);
-    });
+    expect(
+      screen.queryByRole("button", { name: "保存设置" }),
+    ).not.toBeInTheDocument();
   });
 
   it("changes a general setting through the section's handler", () => {
