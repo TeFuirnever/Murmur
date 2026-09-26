@@ -41,6 +41,11 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
   // onInputChange("hotkey", ...) — the main window re-registers on
   // SETTINGS_UPDATE (App.tsx).
   const [recording, setRecording] = useState(false);
+  // [20260926_Issue405] Renderer pages are sandboxed (no `process` global in
+  // the main world) — platform gates resolve through the preload bridge's
+  // synchronous getPlatform(), undefined when the bridge is absent, which
+  // hides the Windows-only switch instead of crashing the tab.
+  const [platform] = useState(() => window.electronAPI?.getPlatform?.());
 
   // [20260926_Fix_399_DefaultModeOptions] Issue #399: the default_mode
   // dropdown exposed only 4 of the 10 built-in modes and no custom-template
@@ -236,7 +241,12 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
           <SettingResetButton
             settingKey="auto_start"
             value={settings.auto_start}
-            onReset={onInputChange}
+            onReset={(key, value) => {
+              onInputChange(key, value);
+              if (window.electronAPI?.setLoginItemSettings) {
+                window.electronAPI.setLoginItemSettings(value === true);
+              }
+            }}
           />
           <button
             type="button"
@@ -275,7 +285,7 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
           persists through onInputChange (SETTINGS.SET); the main process
           reads the persisted value at minimize time, so the toggle takes
           effect without any extra bridge call. */}
-      {process.platform === "win32" && (
+      {platform === "win32" && (
         <div className="flex items-center justify-between">
           <div>
             <label className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">

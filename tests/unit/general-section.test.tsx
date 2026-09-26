@@ -102,6 +102,8 @@ type TestWindow = Omit<Window, "electronAPI"> & {
     >;
     // [20260926_Issue404] Launch-at-login apply (issue #404).
     setLoginItemSettings?: (enabled: boolean) => Promise<unknown>;
+    // Platform gate for the Windows-only minimize-to-tray switch.
+    getPlatform?: () => string;
     // [20260926_Issue409] Advanced-section managers (corrections table +
     // streaming-degradation memory) read/mutate through these.
     listVocabCorrections?: () => Promise<{
@@ -121,24 +123,6 @@ type TestWindow = Omit<Window, "electronAPI"> & {
 };
 
 describe("[20260816_Test_GeneralSection] GeneralSection", () => {
-  // [20260926_Issue405] Platform stub for the Windows-only minimize-to-tray
-  // switch tests (loginItem.test.ts's helper shape).
-  function withPlatform<T>(platform: NodeJS.Platform, fn: () => T): T {
-    const real = process.platform;
-    Object.defineProperty(process, "platform", {
-      value: platform,
-      configurable: true,
-    });
-    try {
-      return fn();
-    } finally {
-      Object.defineProperty(process, "platform", {
-        value: real,
-        configurable: true,
-      });
-    }
-  }
-
   const onInputChange = vi.fn();
   const setAlwaysOnTop = vi.fn();
   const originalAPI = (globalThis.window as unknown as TestWindow).electronAPI;
@@ -521,40 +505,55 @@ describe("[20260816_Test_GeneralSection] GeneralSection", () => {
   // UI. macOS minimizes into the Dock by system convention (and Murmur is
   // already tray-resident there via close_behavior "hide"), so the switch
   // is hidden on darwin and the main-process interception never attaches —
-  // see tests/unit/minimizeToTray.test.ts for the platform gate.
+  // see tests/unit/minimizeToTray.test.ts for the platform gate. The gate
+  // reads the platform from the electronAPI bridge (sandboxed renderers have
+  // no `process` global), so tests stub getPlatform per platform.
   it("hides the minimize-to-tray switch on macOS (system-convention downgrade)", () => {
-    withPlatform("darwin", () => {
-      render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
-      expect(screen.queryByTestId("minimize-to-tray")).toBeNull();
-    });
+    (globalThis.window as unknown as TestWindow).electronAPI = {
+      setAlwaysOnTop,
+      getPlatform: () => "darwin",
+    };
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+    expect(screen.queryByTestId("minimize-to-tray")).toBeNull();
   });
 
   it("hides the minimize-to-tray switch on other non-Windows platforms", () => {
-    withPlatform("linux", () => {
-      render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
-      expect(screen.queryByTestId("minimize-to-tray")).toBeNull();
-    });
+    (globalThis.window as unknown as TestWindow).electronAPI = {
+      setAlwaysOnTop,
+      getPlatform: () => "linux",
+    };
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+    expect(screen.queryByTestId("minimize-to-tray")).toBeNull();
+  });
+
+  it("hides the minimize-to-tray switch when the platform bridge is absent", () => {
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+    expect(screen.queryByTestId("minimize-to-tray")).toBeNull();
   });
 
   it("renders the minimize-to-tray switch on Windows reflecting the setting state", () => {
-    withPlatform("win32", () => {
-      render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
-      expect(screen.getByTestId("minimize-to-tray")).toHaveAttribute(
-        "aria-checked",
-        "false",
-      );
-    });
+    (globalThis.window as unknown as TestWindow).electronAPI = {
+      setAlwaysOnTop,
+      getPlatform: () => "win32",
+    };
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+    expect(screen.getByTestId("minimize-to-tray")).toHaveAttribute(
+      "aria-checked",
+      "false",
+    );
   });
 
   it("renders the minimize-to-tray switch checked when the setting is on (win32)", () => {
-    withPlatform("win32", () => {
-      render(
-        <GeneralSection
-          settings={{ ...BASE, minimize_to_tray: true }}
-          onInputChange={onInputChange}
-        />,
-      );
-    });
+    (globalThis.window as unknown as TestWindow).electronAPI = {
+      setAlwaysOnTop,
+      getPlatform: () => "win32",
+    };
+    render(
+      <GeneralSection
+        settings={{ ...BASE, minimize_to_tray: true }}
+        onInputChange={onInputChange}
+      />,
+    );
     expect(screen.getByTestId("minimize-to-tray")).toHaveAttribute(
       "aria-checked",
       "true",
@@ -562,24 +561,48 @@ describe("[20260816_Test_GeneralSection] GeneralSection", () => {
   });
 
   it("toggling minimize-to-tray persists through the standard pipeline (win32)", () => {
-    withPlatform("win32", () => {
-      render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
-      fireEvent.click(screen.getByTestId("minimize-to-tray"));
-      expect(onInputChange).toHaveBeenCalledWith("minimize_to_tray", true);
-    });
+    (globalThis.window as unknown as TestWindow).electronAPI = {
+      setAlwaysOnTop,
+      getPlatform: () => "win32",
+    };
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+    fireEvent.click(screen.getByTestId("minimize-to-tray"));
+    expect(onInputChange).toHaveBeenCalledWith("minimize_to_tray", true);
   });
 
   it("toggling minimize-to-tray off reports the off value (win32)", () => {
-    withPlatform("win32", () => {
-      render(
-        <GeneralSection
-          settings={{ ...BASE, minimize_to_tray: true }}
-          onInputChange={onInputChange}
-        />,
-      );
-      fireEvent.click(screen.getByTestId("minimize-to-tray"));
-      expect(onInputChange).toHaveBeenCalledWith("minimize_to_tray", false);
-    });
+    (globalThis.window as unknown as TestWindow).electronAPI = {
+      setAlwaysOnTop,
+      getPlatform: () => "win32",
+    };
+    render(
+      <GeneralSection
+        settings={{ ...BASE, minimize_to_tray: true }}
+        onInputChange={onInputChange}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("minimize-to-tray"));
+    expect(onInputChange).toHaveBeenCalledWith("minimize_to_tray", false);
+  });
+
+  // [20260926_Issue404] The auto-start reset follows the toggle's live-apply
+  // contract: writing the schema default (off) must ALSO push the OS login
+  // item through the SET_LOGIN_ITEM bridge, not just persist the setting.
+  it("resetting auto-start persists the default AND applies the OS login item live", () => {
+    const setLoginItemSettings = vi.fn();
+    (globalThis.window as unknown as TestWindow).electronAPI = {
+      setAlwaysOnTop,
+      setLoginItemSettings,
+    };
+    render(
+      <GeneralSection
+        settings={{ ...BASE, auto_start: true }}
+        onInputChange={onInputChange}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("reset-auto_start"));
+    expect(onInputChange).toHaveBeenCalledWith("auto_start", false);
+    expect(setLoginItemSettings).toHaveBeenCalledWith(false);
   });
 
   // [20260926_Perf_402_TextInputDebounce] The hotwords textarea is debounced

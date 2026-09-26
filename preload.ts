@@ -183,6 +183,10 @@ export const preloadApi: ElectronAPI = {
   // only the boolean; platform payload differences are main-process-only.
   setLoginItemSettings: (enabled: boolean) =>
     ipcRenderer.invoke(C.SYSTEM.SET_LOGIN_ITEM, enabled),
+  // [20260926_Issue405] Platform gate for the Windows-only minimize-to-tray
+  // switch: sandboxed renderers have no `process` global in the page main
+  // world, so the platform travels through the bridge synchronously.
+  getPlatform: () => process.platform,
   checkForUpdates: () => ipcRenderer.invoke(C.UPDATE.CHECK),
   downloadUpdate: (updateInfo: unknown) =>
     ipcRenderer.invoke(C.UPDATE.DOWNLOAD, updateInfo),
