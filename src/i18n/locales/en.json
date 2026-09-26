@@ -388,6 +388,7 @@
     "unknown": "Unknown",
     "copiedToClipboard": "Text copied to clipboard",
     "autoPasteDone": "Text auto-pasted to the input field",
+    "noAutoAction": "No automatic action taken per your settings",
     "copiedManualPaste": "Text copied to clipboard — paste it manually",
     "operationFailed": "Operation failed",
     "accessibilityPasteHint": "Check accessibility permission. Text was copied to the clipboard — paste it manually with Cmd+V.",

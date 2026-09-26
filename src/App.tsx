@@ -179,9 +179,11 @@ export default function App() {
   }, [selectDroppedFileFromPath]);
   // [20260911_Fix_338_DragDropImport] END
 
-  // 安全粘贴函数
+  // [20260926_Fix_393_AutoPasteNone] 安全粘贴函数. Returns true when an
+  // automatic delivery (copy or paste) was actually performed, so callers can
+  // avoid claiming "已自动粘贴" when auto_paste=none skipped delivery.
   const safePaste = useCallback(
-    async (text: string) => {
+    async (text: string): Promise<boolean> => {
       const now = Date.now();
       const lastPaste = lastPasteRef.current;
 
@@ -190,7 +192,7 @@ export default function App() {
         lastPaste.text === text &&
         now - lastPaste.timestamp < PASTE_DEBOUNCE_TIME
       ) {
-        return;
+        return false;
       }
 
       // 更新最后粘贴记录
@@ -199,21 +201,28 @@ export default function App() {
       try {
         if (window.electronAPI) {
           const autoPaste = settingsRef.current.auto_paste;
+          // [#393] auto_paste=none («不自动操作»): neither the clipboard nor
+          // the target input is touched; only a quiet notice is shown.
+          if (autoPaste === "none") {
+            toast.info(t("common.noAutoAction", "已按设置不自动操作"));
+            return false;
+          }
           if (autoPaste === "clipboard_only") {
             await window.electronAPI.copyText(text);
             toast.success(t("common.copiedToClipboard", "文本已复制到剪贴板"));
-          } else {
-            await window.electronAPI.pasteText(text);
-            toast.success(
-              t("common.autoPasteDone", "文本已自动粘贴到当前输入框"),
-            );
+            return true;
           }
-        } else {
-          await navigator.clipboard.writeText(text);
-          toast.info(
-            t("common.copiedManualPaste", "文本已复制到剪贴板，请手动粘贴"),
+          await window.electronAPI.pasteText(text);
+          toast.success(
+            t("common.autoPasteDone", "文本已自动粘贴到当前输入框"),
           );
+          return true;
         }
+        await navigator.clipboard.writeText(text);
+        toast.info(
+          t("common.copiedManualPaste", "文本已复制到剪贴板，请手动粘贴"),
+        );
+        return true;
       } catch {
         toast.error(t("common.operationFailed", "操作失败"), {
           description: t(
@@ -221,6 +230,7 @@ export default function App() {
             "请检查辅助功能权限。文本已复制到剪贴板 - 请手动使用 Cmd+V 粘贴。",
           ),
         });
+        return false;
       }
     },
     [t],
@@ -277,23 +287,29 @@ export default function App() {
         setProcessedText(optimizedResult.text as string);
 
         // 自动粘贴AI优化后的文本
-        await safePaste(optimizedResult.text as string);
+        const delivered = await safePaste(optimizedResult.text as string);
 
         // [20260905_Feat_BloubMascotWiring] end of the transcription pipeline
         mascotRef.current?.playOnce("comet");
-        toast.success(
-          t("app.toastOptimizeComplete", "🤖 AI文本优化完成并已自动粘贴！"),
-        );
+        // [20260926_Fix_393_AutoPasteNone] only claim "已自动粘贴" when the
+        // delivery actually happened — auto_paste=none skips it (issue #393).
+        if (delivered) {
+          toast.success(
+            t("app.toastOptimizeComplete", "🤖 AI文本优化完成并已自动粘贴！"),
+          );
+        }
       } else {
         // 如果AI优化失败，则粘贴原始文本
         if (originalText) {
-          await safePaste(originalText);
-          toast.info(
-            t(
-              "app.toastOptimizeFailedPasted",
-              "AI优化失败，已粘贴原始识别文本",
-            ),
-          );
+          const delivered = await safePaste(originalText);
+          if (delivered) {
+            toast.info(
+              t(
+                "app.toastOptimizeFailedPasted",
+                "AI优化失败，已粘贴原始识别文本",
+              ),
+            );
+          }
         }
       }
     },

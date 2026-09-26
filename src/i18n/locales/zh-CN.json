@@ -388,6 +388,7 @@
     "unknown": "未知",
     "copiedToClipboard": "文本已复制到剪贴板",
     "autoPasteDone": "文本已自动粘贴到当前输入框",
+    "noAutoAction": "已按设置不自动操作",
     "copiedManualPaste": "文本已复制到剪贴板，请手动粘贴",
     "operationFailed": "操作失败",
     "accessibilityPasteHint": "请检查辅助功能权限。文本已复制到剪贴板 - 请手动使用 Cmd+V 粘贴。",
