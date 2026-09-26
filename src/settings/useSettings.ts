@@ -134,6 +134,26 @@ export function applyTheme(theme: string): void {
   }
 }
 
+// [20260926_Fix_395_ThemeLiveApply] The SETTINGS_UPDATE broadcast (settingsHandlers.ts)
+// carries only the KEY — the persisted value lives in the settings DB — so a
+// window re-applying a remote theme change must read it back through the
+// bridge, the same read-back pattern the language branch uses. App.tsx (main
+// window) and history.tsx (history window) share this helper; the settings
+// window applies the freshly picked value directly in handleInputChange.
+// Callers attach .catch(() => {}) — a rejected read means the broadcast or
+// read raced window teardown and there is nothing left to apply.
+export function applyPersistedTheme(): Promise<void> {
+  const read = window.electronAPI?.getSetting?.("theme", "system");
+  if (!read) {
+    return Promise.resolve();
+  }
+  return read.then((theme) => {
+    if (typeof theme === "string" && theme) {
+      applyTheme(theme);
+    }
+  });
+}
+
 export function useSettings() {
   const { t } = useTranslation();
   const [settings, setSettings] = useState<SettingsState>(DEFAULT_SETTINGS);
@@ -315,6 +335,14 @@ export function useSettings() {
         window.electronAPI.setSetting("enable_ai_optimization", mode !== "off");
       }
       return;
+    }
+    // [20260926_Fix_395_ThemeLiveApply] The General tab theme select writes
+    // through this input path; applying the picked value to the document at
+    // write time is part of the write contract now (issue #395: the settings
+    // window kept the old colors until reload because only loadSettings and
+    // the AI-tab Save button called applyTheme).
+    if (key === "theme" && typeof value === "string") {
+      applyTheme(value);
     }
     setSettings((prev) => ({ ...prev, [key]: value }));
     if (window.electronAPI?.setSetting) {

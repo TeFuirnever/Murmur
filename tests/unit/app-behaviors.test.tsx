@@ -601,6 +601,45 @@ describe("[20260816_Test_AppBehaviors] App behavior matrix", () => {
     expect(i18nMocks.changeLanguage).toHaveBeenCalledWith("en");
   });
 
+  // [20260926_Fix_395_ThemeLiveApply] The main window read the theme once at
+  // boot (main.tsx) and ignored the theme SETTINGS_UPDATE broadcast — the
+  // window kept the old colors until restart (issue #395, evidence 2). The
+  // broadcast re-apply branch must flip the document theme class live, and
+  // the value comes from the DB read-back, not the payload.
+  it("applies a theme change from SETTINGS_UPDATE live via the DB value", async () => {
+    apiMocks.getSetting.mockImplementation(async (key: string, d?: unknown) =>
+      key === "theme" ? "dark" : d,
+    );
+    Object.assign(modelCtl, {
+      stage: "ready",
+      isReady: true,
+      isLoading: false,
+    });
+    document.documentElement.classList.remove("dark");
+    await mountApp();
+    act(() => {
+      for (const cb of listeners.settingsList ?? []) {
+        (cb as (d: { key: string }) => void)({ key: "theme" });
+      }
+    });
+    await waitFor(() => {
+      expect(document.documentElement.classList.contains("dark")).toBe(true);
+    });
+
+    // And back: light must clear the class without a restart.
+    apiMocks.getSetting.mockImplementation(async (key: string, d?: unknown) =>
+      key === "theme" ? "light" : d,
+    );
+    act(() => {
+      for (const cb of listeners.settingsList ?? []) {
+        (cb as (d: { key: string }) => void)({ key: "theme" });
+      }
+    });
+    await waitFor(() => {
+      expect(document.documentElement.classList.contains("dark")).toBe(false);
+    });
+  });
+
   it("reloads cached settings when the settings-update event fires", async () => {
     Object.assign(modelCtl, {
       stage: "ready",

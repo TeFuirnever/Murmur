@@ -14,6 +14,10 @@ import { Search, FileText, Calendar, Copy, Trash2, Pencil } from "lucide-react";
 import "./index.css";
 import { assertElectronAPI } from "./bootstrap/assertElectronAPI.js";
 import type { TranscriptionRecord } from "./types/ipc";
+// [20260926_Fix_395_ThemeLiveApply] The history window never applied the
+// theme (issue #395): read the persisted choice at boot and follow the
+// settings broadcast live.
+import { applyPersistedTheme } from "./settings/useSettings";
 
 // [20260816_Refactor_RemoveEffects] The visual-effects layer (Aurora/BlurText
 // via ogl+motion, the Sparkles header toggle, and the effects_enabled
@@ -165,6 +169,14 @@ const HistoryContent = ({
             // Broadcast raced window teardown — nothing to apply.
           });
       }
+      // [20260926_Fix_395_ThemeLiveApply] Theme switches from the settings
+      // window apply live here too: read the persisted value back and apply
+      // it — same read-back pattern as the language branch above.
+      if (data.key === "theme") {
+        applyPersistedTheme().catch(() => {
+          // Broadcast raced window teardown — nothing to apply.
+        });
+      }
     });
     return unsub;
   }, [i18n]);
@@ -186,6 +198,15 @@ const HistoryContent = ({
         // Settings read raced window teardown — keep navigator language.
       });
   }, [i18n]);
+
+  // [20260926_Fix_395_ThemeLiveApply] The history window never applied the
+  // theme (issue #395): read the persisted choice at boot, the same way
+  // main.tsx does for the main window.
+  React.useEffect(() => {
+    applyPersistedTheme().catch(() => {
+      // Settings read raced window teardown — keep the default look.
+    });
+  }, []);
 
   // [20260905_Fix_248_HistoryClearExport] Bulk export with a user-chosen
   // format; the main-process handler resolves the formatter and the save
