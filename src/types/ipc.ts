@@ -56,6 +56,10 @@ export interface AIProviderPreset {
   base_url: string;
   models: string[];
   requires_api_key: boolean;
+  // [20260926_Fix_398_ProviderLabelI18n] Locale-neutral marker for local
+  // providers (Ollama/LM Studio); the display suffix is composed via
+  // settings.providers.localSuffix in the renderer, not stored here.
+  is_local?: boolean;
   registration?: {
     url: string;
     recommended?: boolean;
@@ -286,6 +290,25 @@ export interface PythonInstallResult {
 
 // [20260906_Refactor_DeadChannelCleanup] FunASRInstallResult removed —
 // pythonEnvironment declares its own; the IPC copy had zero importers.
+// ─── System ───
+
+// [20260926_Fix_396_PermissionStatus] Real OS permission status (issue #396).
+// The values mirror Electron's getMediaAccessStatus, extended with
+// "unsupported" (platform has no such permission model, e.g. Windows
+// accessibility) and "unknown" (query failed — never fake a badge).
+export type MediaPermissionStatus =
+  | "not-determined"
+  | "granted"
+  | "denied"
+  | "restricted"
+  | "unsupported"
+  | "unknown";
+
+export interface PermissionStatusResult {
+  microphone: MediaPermissionStatus;
+  accessibility: MediaPermissionStatus;
+}
+
 // ─── Update ───
 
 export interface UpdateCheckResult {

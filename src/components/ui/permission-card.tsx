@@ -1,5 +1,6 @@
 import * as React from "react";
 import { Check, type LucideIcon } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 interface PermissionCardProps {
   icon: LucideIcon;
@@ -7,7 +8,7 @@ interface PermissionCardProps {
   description: string;
   granted: boolean;
   onRequest: () => void;
-  buttonText?: string;
+  buttonText: string;
 }
 
 const PermissionCard: React.FC<PermissionCardProps> = ({
@@ -16,8 +17,9 @@ const PermissionCard: React.FC<PermissionCardProps> = ({
   description,
   granted,
   onRequest,
-  buttonText = "授予权限",
+  buttonText,
 }) => {
+  const { t } = useTranslation();
   return (
     <div className="border border-[#d2d2d7] dark:border-[#3a3a3c] rounded-md p-2 bg-white dark:bg-[#2c2c2e] shadow-sm">
       <div className="flex items-center justify-between">
@@ -33,7 +35,9 @@ const PermissionCard: React.FC<PermissionCardProps> = ({
         {granted ? (
           <div className="text-[#34c759] flex items-center gap-1 flex-shrink-0">
             <Check className="w-3 h-3" />
-            <span className="text-xs font-medium">已授予</span>
+            <span className="text-xs font-medium">
+              {t("settings.permissions.granted")}
+            </span>
           </div>
         ) : (
           <button

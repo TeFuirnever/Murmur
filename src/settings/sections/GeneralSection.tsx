@@ -1,7 +1,11 @@
 import { useTranslation } from "react-i18next";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type React from "react";
+import type { AIMode } from "../../types/ipc";
 import type { SettingsState } from "../useSettings";
+// [20260926_Fix_399_DefaultModeOptions] Shared full built-in mode list (see
+// the module comment for why it must be mirrored renderer-side).
+import { BUILT_IN_MODE_NAMES } from "../builtInModes";
 // [20260905_Fix_246_HotkeySettingsUi] Hotkey recorder (issue #246: the
 // settings entry the main-window failure toast pointed at did not exist).
 import { buildAccelerator, formatAccelerator } from "../hotkeyRecorder";
@@ -9,15 +13,27 @@ import { buildAccelerator, formatAccelerator } from "../hotkeyRecorder";
 import { VocabManager } from "./VocabManager";
 // [20260910_Feat_237_StreamDegradation] T10 degradation-memory panel.
 import { StreamDegradationManager } from "./StreamDegradationManager";
+// [20260926_Issue407] Per-setting modified dot + reset-to-default control
+// (schema-derived; renders nothing while the value sits at its default).
+import { SettingResetButton } from "../SettingResetButton";
+// [20260926_Issue409] The Bot tab merges into General: the mascot pickers
+// (shape/colour/expression, each with its reset button) embed here in the
+// appearance group.
+import { BotSection } from "./BotSection";
 
 interface GeneralSectionProps {
   settings: SettingsState;
   onInputChange: (key: string, value: unknown) => void;
+  // [20260926_Perf_402_TextInputDebounce] Blur flush hook for the debounced
+  // hotwords textarea (issue #402: persist the tail keystroke on field
+  // exit; optional so section-only tests can omit it).
+  onInputBlur?: () => void;
 }
 
 export const GeneralSection: React.FC<GeneralSectionProps> = ({
   settings,
   onInputChange,
+  onInputBlur,
 }) => {
   const { t, i18n } = useTranslation();
   // [20260905_Fix_246_HotkeySettingsUi] Recording state for the hotkey
@@ -25,6 +41,56 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
   // onInputChange("hotkey", ...) — the main window re-registers on
   // SETTINGS_UPDATE (App.tsx).
   const [recording, setRecording] = useState(false);
+  // [20260926_Issue405] Renderer pages are sandboxed (no `process` global in
+  // the main world) — platform gates resolve through the preload bridge's
+  // synchronous getPlatform(), undefined when the bridge is absent, which
+  // hides the Windows-only switch instead of crashing the tab.
+  const [platform] = useState(() => window.electronAPI?.getPlatform?.());
+
+  // [20260926_Fix_399_DefaultModeOptions] Issue #399: the default_mode
+  // dropdown exposed only 4 of the 10 built-in modes and no custom-template
+  // modes — a pure UI exposure gap, the read side (processText) dispatches
+  // any mode name. Options are the FULL built-in list as the always-present
+  // baseline (available before GET_MODES resolves and on bridge failure, so
+  // the select never blanks and a saved mode value stays displayable); once
+  // GET_MODES resolves, the merged list (built-ins minus shadowed + custom
+  // templates) takes over. Built-in labels resolve through the Templates
+  // tab's builtinLabels i18n vocabulary (identical wording, no drift);
+  // customs keep their frontmatter label. GET_MODES is not rate-limited and
+  // TranscriptionResult already fetches it on mount — same pattern here.
+  const [templateModes, setTemplateModes] = useState<AIMode[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    // Bridge failure keeps the static baseline (intentional degradation, not
+    // a swallowed error — the dropdown must never blank out).
+    window.electronAPI
+      ?.getAIModes?.()
+      .then((modes) => {
+        if (!cancelled && Array.isArray(modes) && modes.length > 0) {
+          setTemplateModes(modes);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const isBuiltInModeName = (name: string): boolean =>
+    (BUILT_IN_MODE_NAMES as readonly string[]).includes(name);
+
+  const modeOptions: Array<{ name: string; label: string }> = (
+    templateModes.length > 0
+      ? templateModes
+      : BUILT_IN_MODE_NAMES.map(
+          (name) => ({ name, label: "", description: "" }) satisfies AIMode,
+        )
+  ).map((mode) => ({
+    name: mode.name,
+    label: isBuiltInModeName(mode.name)
+      ? t(`settings.templates.builtinLabels.${mode.name}`, mode.name)
+      : mode.label || mode.name,
+  }));
 
   const handleCaptureKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     // The capture zone only renders while recording, so no !recording guard
@@ -54,38 +120,218 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
           <label className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
             {t("settings.recognition.alwaysOnTop", "窗口始终置顶")}
           </label>
-          // [20260906_Test_AxeA11y] #6e6e73 passes 4.5:1 (small text); the //
-          former #86868b measured ~3.5:1 and failed the axe gate.
+          {/* [20260906_Test_AxeA11y] #6e6e73 passes 4.5:1 (small text); the
+              former #86868b measured ~3.5:1 and failed the axe gate. */}
           <p className="text-xs text-[#6e6e73]">
             {t("settings.general.alwaysOnTopDesc", "将应用窗口保持在最前面")}
           </p>
         </div>
-        <button
-          type="button"
-          role="switch"
-          aria-label={t("settings.recognition.alwaysOnTop", "窗口始终置顶")}
-          aria-checked={settings.window_always_on_top}
-          onClick={() => {
-            const newVal = !settings.window_always_on_top;
-            onInputChange("window_always_on_top", newVal);
-            if (window.electronAPI?.setAlwaysOnTop) {
-              window.electronAPI.setAlwaysOnTop(newVal);
-            }
-          }}
-          className={`${
-            settings.window_always_on_top
-              ? "bg-[#0071e3]"
-              : "bg-[#d2d2d7] dark:bg-[#3a3a3c]"
-          } relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-2`}
-        >
-          <span
-            aria-hidden="true"
-            className={`${
-              settings.window_always_on_top ? "translate-x-4" : "translate-x-0"
-            } inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+        <div className="flex items-center gap-2">
+          {/* [20260926_Issue407] Modified dot + reset-to-default; renders
+              nothing while the toggle sits at its schema default. */}
+          <SettingResetButton
+            settingKey="window_always_on_top"
+            value={settings.window_always_on_top}
+            onReset={onInputChange}
           />
-        </button>
+          <button
+            type="button"
+            role="switch"
+            aria-label={t("settings.recognition.alwaysOnTop", "窗口始终置顶")}
+            aria-checked={settings.window_always_on_top}
+            onClick={() => {
+              const newVal = !settings.window_always_on_top;
+              onInputChange("window_always_on_top", newVal);
+              if (window.electronAPI?.setAlwaysOnTop) {
+                window.electronAPI.setAlwaysOnTop(newVal);
+              }
+            }}
+            className={`${
+              settings.window_always_on_top
+                ? "bg-[#0071e3]"
+                : "bg-[#d2d2d7] dark:bg-[#3a3a3c]"
+            } relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-2`}
+          >
+            <span
+              aria-hidden="true"
+              className={`${
+                settings.window_always_on_top
+                  ? "translate-x-4"
+                  : "translate-x-0"
+              } inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+            />
+          </button>
+        </div>
       </div>
+
+      {/* [20260926_Issue400] show_notifications switch (issue #400): gates the
+          update-download system notification in the main process.
+          [20260926_Refactor_403_SettingsSchema] Issue #403 folded the key
+          into SettingsState — the switch now renders from settings state and
+          toggles through onInputChange (auto-persisting via SETTINGS.SET)
+          exactly like the always-on-top switch above. Default on: matches
+          the main-process gate. */}
+      <div className="flex items-center justify-between">
+        <div>
+          <label className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
+            {t("settings.general.showNotificationsLabel", "系统通知")}
+          </label>
+          <p className="text-xs text-[#6e6e73]">
+            {t(
+              "settings.general.showNotificationsDesc",
+              "更新下载完成后发送系统通知",
+            )}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <SettingResetButton
+            settingKey="show_notifications"
+            value={settings.show_notifications}
+            onReset={onInputChange}
+          />
+          <button
+            type="button"
+            role="switch"
+            data-testid="show-notifications"
+            aria-label={t(
+              "settings.general.showNotificationsLabel",
+              "系统通知",
+            )}
+            aria-checked={settings.show_notifications}
+            onClick={() =>
+              onInputChange("show_notifications", !settings.show_notifications)
+            }
+            className={`${
+              settings.show_notifications
+                ? "bg-[#0071e3]"
+                : "bg-[#d2d2d7] dark:bg-[#3a3a3c]"
+            } relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-2`}
+          >
+            <span
+              aria-hidden="true"
+              className={`${
+                settings.show_notifications ? "translate-x-4" : "translate-x-0"
+              } inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+            />
+          </button>
+        </div>
+      </div>
+
+      {/* [20260926_Issue404] auto_start switch (issue #404): renders from
+          settings state and persists through onInputChange (standard
+          pipeline, like show_notifications) PLUS the live main-process side
+          effect — the toggle calls the SYSTEM.SET_LOGIN_ITEM bridge so the
+          OS login item changes immediately (same immediate-IPC pattern as
+          the always-on-top switch). Platform differences (macOS
+          openAtLogin / Windows registry args) are encapsulated main-side;
+          the renderer sends only the boolean. Default off. */}
+      <div className="flex items-center justify-between">
+        <div>
+          <label className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
+            {t("settings.general.autoStartLabel", "开机自启")}
+          </label>
+          <p className="text-xs text-[#6e6e73]">
+            {t(
+              "settings.general.autoStartDesc",
+              "登录系统时自动在后台启动 Murmur，不抢占焦点",
+            )}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <SettingResetButton
+            settingKey="auto_start"
+            value={settings.auto_start}
+            onReset={(key, value) => {
+              onInputChange(key, value);
+              if (window.electronAPI?.setLoginItemSettings) {
+                window.electronAPI.setLoginItemSettings(value === true);
+              }
+            }}
+          />
+          <button
+            type="button"
+            role="switch"
+            data-testid="auto-start"
+            aria-label={t("settings.general.autoStartLabel", "开机自启")}
+            aria-checked={settings.auto_start}
+            onClick={() => {
+              const newVal = !settings.auto_start;
+              onInputChange("auto_start", newVal);
+              if (window.electronAPI?.setLoginItemSettings) {
+                window.electronAPI.setLoginItemSettings(newVal);
+              }
+            }}
+            className={`${
+              settings.auto_start
+                ? "bg-[#0071e3]"
+                : "bg-[#d2d2d7] dark:bg-[#3a3a3c]"
+            } relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-2`}
+          >
+            <span
+              aria-hidden="true"
+              className={`${
+                settings.auto_start ? "translate-x-4" : "translate-x-0"
+              } inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+            />
+          </button>
+        </div>
+      </div>
+
+      {/* [20260926_Issue405] minimize_to_tray switch (issue #405) — Windows
+          only. macOS minimizes into the Dock by system convention (and
+          Murmur is already tray-resident there via close_behavior "hide"),
+          so the switch is hidden on darwin and the main-process
+          interception never attaches on it. Renders from settings state and
+          persists through onInputChange (SETTINGS.SET); the main process
+          reads the persisted value at minimize time, so the toggle takes
+          effect without any extra bridge call. */}
+      {platform === "win32" && (
+        <div className="flex items-center justify-between">
+          <div>
+            <label className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
+              {t("settings.general.minimizeToTrayLabel", "最小化到托盘")}
+            </label>
+            <p className="text-xs text-[#6e6e73]">
+              {t(
+                "settings.general.minimizeToTrayDesc",
+                "点击最小化按钮时隐藏到系统托盘而非任务栏（仅 Windows）",
+              )}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <SettingResetButton
+              settingKey="minimize_to_tray"
+              value={settings.minimize_to_tray}
+              onReset={onInputChange}
+            />
+            <button
+              type="button"
+              role="switch"
+              data-testid="minimize-to-tray"
+              aria-label={t(
+                "settings.general.minimizeToTrayLabel",
+                "最小化到托盘",
+              )}
+              aria-checked={settings.minimize_to_tray}
+              onClick={() =>
+                onInputChange("minimize_to_tray", !settings.minimize_to_tray)
+              }
+              className={`${
+                settings.minimize_to_tray
+                  ? "bg-[#0071e3]"
+                  : "bg-[#d2d2d7] dark:bg-[#3a3a3c]"
+              } relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-2`}
+            >
+              <span
+                aria-hidden="true"
+                className={`${
+                  settings.minimize_to_tray ? "translate-x-4" : "translate-x-0"
+                } inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+              />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* [20260816_Refactor_RemoveEffects] The visual-effects toggle was
           removed with the whole effects feature (ogl/motion deps). */}
@@ -95,9 +341,16 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
           check: if (autoPaste === "clipboard_only"). Using "clipboard"
           would cause auto-paste even when user chose clipboard-only. */}
       <div>
-        <label className="block text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7] mb-1">
-          {t("settings.recognition.autoPaste", "自动粘贴行为")}
-        </label>
+        <div className="mb-1 flex items-center gap-1.5">
+          <label className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
+            {t("settings.recognition.autoPaste", "自动粘贴行为")}
+          </label>
+          <SettingResetButton
+            settingKey="auto_paste"
+            value={settings.auto_paste}
+            onReset={onInputChange}
+          />
+        </div>
         <select
           aria-label={t("settings.recognition.autoPaste", "自动粘贴行为")}
           value={settings.auto_paste}
@@ -122,17 +375,26 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
         </p>
       </div>
 
-      {/* [20260905_Fix_249_DefaultModeUi] Default AI processing mode for the
-          recording / file-transcription pipelines (issue #249: the read side
-          honored "default_mode" but nothing could write it). "auto" picks by
-          text length, "off" disables, the rest map to built-in modes. */}
+      {/* [20260926_Fix_399_DefaultModeOptions] Default AI processing mode
+          for the recording / file-transcription pipelines (issue #249 gave
+          it a write path; issue #399 exposes the FULL mode vocabulary: all
+          10 built-ins via the shared BUILT_IN_MODE_NAMES baseline plus the
+          merged custom-template list from GET_MODES). "auto" picks by text
+          length, "off" disables, the rest map to built-in/template modes. */}
       <div>
-        <label
-          htmlFor="default-mode"
-          className="block text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7] mb-1"
-        >
-          {t("settings.general.defaultModeLabel", "默认 AI 处理模式")}
-        </label>
+        <div className="mb-1 flex items-center gap-1.5">
+          <label
+            htmlFor="default-mode"
+            className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]"
+          >
+            {t("settings.general.defaultModeLabel", "默认 AI 处理模式")}
+          </label>
+          <SettingResetButton
+            settingKey="default_mode"
+            value={settings.default_mode}
+            onReset={onInputChange}
+          />
+        </div>
         <select
           id="default-mode"
           data-testid="default-mode"
@@ -143,18 +405,11 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
           <option value="auto">
             {t("settings.general.defaultModeAuto", "智能判断（按文本长度）")}
           </option>
-          <option value="optimize">
-            {t("settings.general.defaultModeOptimize", "智能润色")}
-          </option>
-          <option value="optimize_long">
-            {t("settings.general.defaultModeOptimizeLong", "长文本整理")}
-          </option>
-          <option value="correct">
-            {t("settings.general.defaultModeCorrect", "校对纠错")}
-          </option>
-          <option value="summarize">
-            {t("settings.general.defaultModeSummarize", "摘要总结")}
-          </option>
+          {modeOptions.map((mode) => (
+            <option key={mode.name} value={mode.name}>
+              {mode.label}
+            </option>
+          ))}
           <option value="off">
             {t("settings.general.defaultModeOff", "关闭 AI 处理")}
           </option>
@@ -162,16 +417,23 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
         <p className="mt-1 text-xs text-[#6e6e73]">
           {t(
             "settings.general.defaultModeDesc",
-            "录音与文件导入完成后自动应用的 AI 处理方式；单次结果面板仍可临时切换。",
+            "录音与文件导入完成后自动应用的 AI 处理方式；单次结果面板仍可临时切换。与「AI 配置」页的「启用 AI 处理」开关为同一状态。",
           )}
         </p>
       </div>
 
       {/* 关闭行为 */}
       <div>
-        <label className="block text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7] mb-1">
-          {t("settings.recognition.closeBehavior", "关闭行为")}
-        </label>
+        <div className="mb-1 flex items-center gap-1.5">
+          <label className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
+            {t("settings.recognition.closeBehavior", "关闭行为")}
+          </label>
+          <SettingResetButton
+            settingKey="close_behavior"
+            value={settings.close_behavior}
+            onReset={onInputChange}
+          />
+        </div>
         <select
           aria-label={t("settings.recognition.closeBehavior", "关闭行为")}
           value={settings.close_behavior}
@@ -193,11 +455,25 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
         </p>
       </div>
 
+      {/* [20260926_Issue409] Appearance group heading — theme / language and
+          the mascot pickers (BotSection, below) read as one visual group now
+          that the standalone Bot tab is gone. */}
+      <h3 className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
+        {t("settings.general.appearance", "外观")}
+      </h3>
+
       {/* 外观主题 */}
       <div>
-        <label className="block text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7] mb-1">
-          {t("settings.appearance.theme", "外观主题")}
-        </label>
+        <div className="mb-1 flex items-center gap-1.5">
+          <label className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
+            {t("settings.appearance.theme", "外观主题")}
+          </label>
+          <SettingResetButton
+            settingKey="theme"
+            value={settings.theme}
+            onReset={onInputChange}
+          />
+        </div>
         <select
           aria-label={t("settings.appearance.theme", "外观主题")}
           value={settings.theme}
@@ -240,6 +516,12 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
         </select>
       </div>
 
+      {/* [20260926_Issue409] Bot mascot pickers join General (issue #409):
+          the Bot tab merges into the appearance group. The component moves
+          unchanged — pickers, reset buttons and settings.bot.* keys keep
+          their contracts; only the navigation entry disappears. */}
+      <BotSection settings={settings} onInputChange={onInputChange} />
+
       {/* [20260820_T14_Hotwords] Hotword editor: raw multi-line storage;
           full sanitization happens at the injection boundary
           (src/helpers/hotwords.ts). Limits surface in the hint so paste
@@ -261,6 +543,7 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
           id="hotwords-input"
           value={settings.hotwords}
           onChange={(e) => onInputChange("hotwords", e.target.value)}
+          onBlur={onInputBlur}
           rows={4}
           spellCheck={false}
           placeholder={t("settings.general.hotwordsPlaceholder", "张晗玥…")}
@@ -310,6 +593,11 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
               ? t("settings.general.hotkeyCancel", "取消")
               : t("settings.general.hotkeyStart", "更改")}
           </button>
+          <SettingResetButton
+            settingKey="hotkey"
+            value={settings.hotkey}
+            onReset={onInputChange}
+          />
         </div>
         {recording && (
           <div
@@ -330,10 +618,61 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
           </div>
         )}
       </div>
-      {/* [20260908_Feat_240_VocabCorrections] T13 corrections management. */}
-      <VocabManager />
-      {/* [20260910_Feat_237_StreamDegradation] T10 degradation memory. */}
-      <StreamDegradationManager />
+      {/* [20260926_Issue406] FunASR model download directory (issue #406):
+          General tab advanced area. Renders from settings state and edits
+          route through onInputChange — the standard auto-persist pipeline
+          (text-like → debounced write + blur flush). No live side effect:
+          the main process injects the persisted value as MODELSCOPE_CACHE at
+          next boot; the description states the restart requirement (the
+          issue's UI note requirement). */}
+      <div>
+        <label
+          htmlFor="model-download-path-input"
+          className="block text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7] mb-1"
+        >
+          {t("settings.general.modelDownloadPathLabel", "模型下载目录")}
+        </label>
+        <p className="text-xs text-[#6e6e73] mb-2">
+          {t(
+            "settings.general.modelDownloadPathDesc",
+            "语音识别模型文件的存放目录。留空使用系统默认位置；重启应用后生效。",
+          )}
+        </p>
+        <input
+          id="model-download-path-input"
+          data-testid="model-download-path"
+          type="text"
+          value={settings.model_download_path}
+          onChange={(e) => onInputChange("model_download_path", e.target.value)}
+          onBlur={onInputBlur}
+          placeholder={t(
+            "settings.general.modelDownloadPathPlaceholder",
+            "留空使用系统默认位置",
+          )}
+          spellCheck={false}
+          className="w-full text-sm px-3 py-2 border border-[#d2d2d7] dark:border-[#3a3a3c] rounded-lg bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7] focus:ring-2 focus:ring-[#0071e3] focus:border-transparent"
+        />
+      </div>
+
+      {/* [20260926_Issue409] Corrections table + streaming-degradation memory
+          fold into a collapsed-by-default Advanced section (issue #409): real
+          diagnostic tools, but not first-screen material. Native <details>
+          keeps the expander dependency-free; children mount eagerly, so the
+          bridge reads still run while collapsed. */}
+      <details
+        data-testid="advanced-section"
+        className="rounded-xl border border-[#d2d2d7] dark:border-[#3a3a3c] px-4 py-3"
+      >
+        <summary className="cursor-pointer select-none text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
+          {t("settings.general.advancedSection", "高级")}
+        </summary>
+        <div className="mt-4 space-y-6">
+          {/* [20260908_Feat_240_VocabCorrections] T13 corrections management. */}
+          <VocabManager />
+          {/* [20260910_Feat_237_StreamDegradation] T10 degradation memory. */}
+          <StreamDegradationManager />
+        </div>
+      </details>
     </div>
   );
 };

@@ -1,12 +1,12 @@
 import type React from "react";
-import { Settings, Shield, Bot, Info, Sparkles, FileText } from "lucide-react";
+import { Settings, Shield, Bot, Info, FileText } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-// [20260905_Feat_BloubSettings] "bot" section added (spec #224 ticket 5)
 // [20260912_Feat_242_TemplateSystem] "templates" section added (spec #193 T15)
+// [20260926_Issue409] "bot" section removed — the mascot pickers moved into
+// the General tab's appearance group (spec #392 wave 3, issue #409).
 export type SettingsSection =
   | "general"
-  | "bot"
   | "permissions"
   | "ai"
   | "templates"
@@ -23,8 +23,6 @@ const SECTIONS: {
   labelKey: string;
 }[] = [
   { id: "general", icon: Settings, labelKey: "settings.sidebar.general" },
-  // [20260905_Feat_BloubSettings] bot mascot section
-  { id: "bot", icon: Sparkles, labelKey: "settings.sidebar.bot" },
   { id: "permissions", icon: Shield, labelKey: "settings.sidebar.permissions" },
   { id: "ai", icon: Bot, labelKey: "settings.sidebar.ai" },
   // [20260912_Feat_242_TemplateSystem] template editor section
@@ -37,7 +35,6 @@ const SECTIONS: {
 // Chinese remains in this file.
 const sectionLabelFallbacks: Record<SettingsSection, string> = {
   general: "General",
-  bot: "Bot", // [20260905_Feat_BloubSettings]
   permissions: "Permissions",
   ai: "AI Config",
   templates: "Templates", // [20260912_Feat_242_TemplateSystem]

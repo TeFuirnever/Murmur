@@ -1,7 +1,10 @@
 // [20260905_Feat_BloubSettings] Ticket 5 (spec #224): expose the bot
 // catalogue through settings. Pins the allowlist side of the 4-places
-// contract (the only place not enforced by the compiler) and the BotSection
-// UI contract (three pickers writing the right settings keys).
+// contract (the only place not enforced by the compiler) and the picker UI
+// contract (three pickers writing the right settings keys).
+// [20260926_Issue409] The Bot tab merges into General: the picker tests now
+// render the GeneralSection render tree (BotSection embedded there) while
+// every UI assertion stays untouched.
 
 // @vitest-environment jsdom
 import "../setup/react";
@@ -9,7 +12,7 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { validateSetting } from "../../src/helpers/ipc/settingsHandlers";
-import { BotSection } from "../../src/settings/sections/BotSection";
+import { GeneralSection } from "../../src/settings/sections/GeneralSection";
 import { COLORS, SHAPES } from "../../src/bot/skins";
 import { EXPRESSIONS } from "../../src/bot/expressions";
 import zhCN from "../../src/i18n/locales/zh-CN.json";
@@ -35,6 +38,15 @@ const BASE: SettingsState = {
   bot_shape: "circle",
   bot_color: "auto",
   bot_expression: "neutral",
+  // [20260926_Refactor_403_SettingsSchema] new SettingsState key
+  show_notifications: true,
+  // [20260926_Issue404] new SettingsState key
+  auto_start: false,
+  // [20260926_Issue406] new SettingsState key
+  model_download_path: "",
+
+  // [20260926_Issue405] new SettingsState key
+  minimize_to_tray: false,
 };
 
 describe("bot settings keys are writable through the IPC allowlist", () => {
@@ -51,37 +63,37 @@ describe("bot settings keys are writable through the IPC allowlist", () => {
   });
 });
 
-describe("BotSection", () => {
+describe("Bot pickers inside the General tab (#409)", () => {
   it("renders shape, colour and expression pickers", () => {
-    render(<BotSection settings={BASE} onInputChange={vi.fn()} />);
+    render(<GeneralSection settings={BASE} onInputChange={vi.fn()} />);
     expect(screen.getByLabelText(/Shape/)).toBeInTheDocument();
     expect(screen.getByLabelText(/Colour/)).toBeInTheDocument();
     expect(screen.getByLabelText(/Expression/)).toBeInTheDocument();
   });
 
   it("colour picker offers the follow-theme default plus the 12-colour catalogue", () => {
-    render(<BotSection settings={BASE} onInputChange={vi.fn()} />);
+    render(<GeneralSection settings={BASE} onInputChange={vi.fn()} />);
     const colorSelect = screen.getByLabelText(/Colour/) as HTMLSelectElement;
     expect(colorSelect.options.length).toBe(13); // auto + 12 colours
   });
 
   it("writes bot_shape on change", async () => {
     const onInputChange = vi.fn();
-    render(<BotSection settings={BASE} onInputChange={onInputChange} />);
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
     await userEvent.selectOptions(screen.getByLabelText(/Shape/), "droplet");
     expect(onInputChange).toHaveBeenCalledWith("bot_shape", "droplet");
   });
 
   it("writes bot_color on change", async () => {
     const onInputChange = vi.fn();
-    render(<BotSection settings={BASE} onInputChange={onInputChange} />);
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
     await userEvent.selectOptions(screen.getByLabelText(/Colour/), "blue");
     expect(onInputChange).toHaveBeenCalledWith("bot_color", "blue");
   });
 
   it("writes bot_expression on change", async () => {
     const onInputChange = vi.fn();
-    render(<BotSection settings={BASE} onInputChange={onInputChange} />);
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
     await userEvent.selectOptions(screen.getByLabelText(/Expression/), "happy");
     expect(onInputChange).toHaveBeenCalledWith("bot_expression", "happy");
   });
@@ -109,8 +121,14 @@ describe("bot label keys exist in both locales", () => {
           `${name} expression ${e.id}`,
         ).toBeDefined();
       expect(bot.autoColor).toBeDefined();
-      expect(data.settings.sections.bot).toBeDefined();
-      expect(data.settings.sidebar.bot).toBeDefined();
+      // [20260926_Issue409] The standalone Bot tab is gone — the
+      // section/sidebar entries are deleted from both locales while the
+      // settings.bot.* catalogue keys stay. Typed access would be a compile
+      // error after removal, so the absence is pinned through a record view.
+      const sections = data.settings.sections as Record<string, unknown>;
+      const sidebar = data.settings.sidebar as Record<string, unknown>;
+      expect(sections.bot).toBeUndefined();
+      expect(sidebar.bot).toBeUndefined();
     }
   });
 

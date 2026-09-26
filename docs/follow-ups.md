@@ -74,3 +74,16 @@ dev:main 改用 `build:main && electron .`，dev/e2e/prod 加载同一 artifact�
 
 - **录制 10 秒 demo GIF**（说话 → 文字出现 → AI 润色 → 自动粘贴），用于 README hero 区；原 [20260731_README_RewriteHero] 注释 TODO 已随 T4 移除，本条为唯一跟踪位置。当前 hero 使用静态截图 docs/promotion/screenshots/screenshot-xhs-mode.jpg。
 - **按 Fox rebrand（2026-07-29）后版式重截产品截图**：docs/promotion/screenshots/ 现有三张摄于 2026-07-20，icon 为旧版；重截前 hero 沿用现有素材（已在 README 内注记）。
+
+## 设置页整治（Epic #392）登记的范围外发现（2026-09-26）
+
+实现过程中识别、超出当票边界、需要后续单独处理的项：
+
+1. **主进程硬编码中文错误串**（spec E3 范围控制保留）：aiHandlers.ts:1013「请先在设置页面配置AI API密钥」等设置页可见路径已可直达 UI；funasrServer.ts 深水区（:454,470,547,565,573,583,620,633 等）未动（FunASR 子进程高风险区）。后续策略：error code + renderer 翻译，主进程不持 UI 文案。
+2. **clipboard.ts 渲染层硬编码中文权限文案**（#401 顺手发现，L62/L259/L273-277）：权限页已清，剪贴板路径残留。
+3. **OpenRouter `:free` 模型条目未刷新**（#397 遗留）：免费模型 ID 轮换快、无官方稳定清单可核实，建议用 openrouter.ai/models 实拉清单单独修。
+4. ~~**settings-page.test.tsx「applies the persisted language on mount」30ms 时序窗口**~~ ✅ 已落地（2026-09-26，bd28318）：settings-page.test.tsx 已改用 `waitFor` 轮询替代固定 30ms sleep，flake 根除。
+5. **主题 system 模式 OS 深浅切换实时跟随**（#395 票外既有缺口）：主窗有 matchMedia 监听，设置/历史窗只在 apply 时刻快照。
+6. **权限徽章为查询快照**（#396 风险登记）：用户在系统设置授权后需重进设置页或点测试才刷新；后续可在窗口 focus 时重查。
+7. **影子内置模式的下拉标签**（#399 已知边界）：自定义模板覆盖内置模式时下拉显示内置 i18n 标签；精确标签需扩展 IPC 契约。
+8. **e2e 启动器 userData 未隔离**（PR #411 test 步发现）：`tests/e2e/helpers/electron-launch.ts` 以 `MURMUR_DB_PATH=:memory:` 启动不隔离 fileSync——setSetting('theme'/'language') 会写穿到真实 `~/Library/Application Support/murmur/murmur.json`。pipeline 验证 run 后已手工还原；根治需在启动 helper 里重定向 userData。

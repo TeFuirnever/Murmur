@@ -1,25 +1,14 @@
 // [20260724_TS_Migration_FileConfig] Migrated from .js to .ts (ADR-010 Phase 2).
 // Depends only on fs and path.
+// [20260926_Refactor_403_SettingsSchema] Issue #403: the key list is DERIVED
+// from the settings schema's fileSync flags (one declaration per key) instead
+// of a hand-maintained mirror. Secrets are structurally excluded — the
+// schema never sets fileSync on ai_api_key / hotwords, so colleague names
+// and keys cannot land in a plaintext dotfile. Exported at the bottom for
+// the boundary test (re-exported so existing importers keep their path).
+import { FILE_CONFIGURABLE_KEYS } from "../settings/settingsSchema";
 import fs from "fs";
 import path from "path";
-
-/** Settings keys that can be configured via ~/.murmur.json
- * [20260820_T14_Hotwords] hotwords is deliberately NOT in this list
- * (colleague names must not land in a plaintext dotfile; the encrypted
- * settings store covers them). Exported at the bottom for the boundary test. */
-const FILE_CONFIGURABLE_KEYS: readonly string[] = [
-  "ai_base_url",
-  "ai_model",
-  "ai_temperature",
-  "ai_max_tokens",
-  "hotkey",
-  "language",
-  "theme",
-  "auto_paste",
-  "auto_start",
-  "minimize_to_tray",
-  "show_notifications",
-] as const;
 
 /** A settings record keyed by string. */
 type SettingsRecord = Record<string, unknown>;

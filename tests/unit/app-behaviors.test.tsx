@@ -474,6 +474,64 @@ describe("[20260816_Test_AppBehaviors] App behavior matrix", () => {
     });
   });
 
+  // [#393] auto_paste=none must not write the clipboard nor trigger a paste;
+  // the pipeline completion is announced with a quiet notice only.
+  it("skips copying and pasting in none mode with a quiet notice", async () => {
+    apiMocks.getSetting.mockImplementation((key: string, d?: unknown) =>
+      Promise.resolve(key === "auto_paste" ? "none" : d),
+    );
+    Object.assign(modelCtl, {
+      stage: "ready",
+      isReady: true,
+      isLoading: false,
+    });
+    await mountApp();
+    act(() => {
+      recordingCtl.options?.onAIOptimizationComplete({
+        success: true,
+        enhanced_by_ai: true,
+        text: "无操作文本",
+      });
+    });
+    await waitFor(() => {
+      expect(toast.info).toHaveBeenCalledWith("已按设置不自动操作");
+      expect(apiMocks.pasteText).not.toHaveBeenCalled();
+      expect(apiMocks.copyText).not.toHaveBeenCalled();
+    });
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  // [#393] The optimization-failure fallback path must honor none mode too:
+  // the original text is shown in the panel but never delivered.
+  it("skips pasting the original text in none mode when optimization fails", async () => {
+    apiMocks.getSetting.mockImplementation((key: string, d?: unknown) =>
+      Promise.resolve(key === "auto_paste" ? "none" : d),
+    );
+    Object.assign(modelCtl, {
+      stage: "ready",
+      isReady: true,
+      isLoading: false,
+    });
+    await mountApp();
+    act(() => {
+      recordingCtl.options?.onTranscriptionComplete({
+        success: true,
+        text: "none原始文本",
+      });
+    });
+    act(() => {
+      recordingCtl.options?.onAIOptimizationComplete({ success: false });
+    });
+    await waitFor(() => {
+      expect(toast.info).toHaveBeenCalledWith("已按设置不自动操作");
+    });
+    expect(apiMocks.pasteText).not.toHaveBeenCalled();
+    expect(apiMocks.copyText).not.toHaveBeenCalled();
+    expect(toast.info).not.toHaveBeenCalledWith(
+      "AI优化失败，已粘贴原始识别文本",
+    );
+  });
+
   it("debounces identical paste payloads within the 1s window", async () => {
     Object.assign(modelCtl, {
       stage: "ready",
@@ -541,6 +599,45 @@ describe("[20260816_Test_AppBehaviors] App behavior matrix", () => {
       );
     });
     expect(i18nMocks.changeLanguage).toHaveBeenCalledWith("en");
+  });
+
+  // [20260926_Fix_395_ThemeLiveApply] The main window read the theme once at
+  // boot (main.tsx) and ignored the theme SETTINGS_UPDATE broadcast — the
+  // window kept the old colors until restart (issue #395, evidence 2). The
+  // broadcast re-apply branch must flip the document theme class live, and
+  // the value comes from the DB read-back, not the payload.
+  it("applies a theme change from SETTINGS_UPDATE live via the DB value", async () => {
+    apiMocks.getSetting.mockImplementation(async (key: string, d?: unknown) =>
+      key === "theme" ? "dark" : d,
+    );
+    Object.assign(modelCtl, {
+      stage: "ready",
+      isReady: true,
+      isLoading: false,
+    });
+    document.documentElement.classList.remove("dark");
+    await mountApp();
+    act(() => {
+      for (const cb of listeners.settingsList ?? []) {
+        (cb as (d: { key: string }) => void)({ key: "theme" });
+      }
+    });
+    await waitFor(() => {
+      expect(document.documentElement.classList.contains("dark")).toBe(true);
+    });
+
+    // And back: light must clear the class without a restart.
+    apiMocks.getSetting.mockImplementation(async (key: string, d?: unknown) =>
+      key === "theme" ? "light" : d,
+    );
+    act(() => {
+      for (const cb of listeners.settingsList ?? []) {
+        (cb as (d: { key: string }) => void)({ key: "theme" });
+      }
+    });
+    await waitFor(() => {
+      expect(document.documentElement.classList.contains("dark")).toBe(false);
+    });
   });
 
   it("reloads cached settings when the settings-update event fires", async () => {

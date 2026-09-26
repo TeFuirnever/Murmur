@@ -157,3 +157,13 @@ scripts/asr_regression_results.json
 
 # coverage.py data file (python suite gate)
 .coverage
+
+# Local-only working dirs/files (user tooling; not part of the repo)
+.azhou-cover-work/
+.azhou/
+.backpassrc.json
+hypit.runtime.json
+productions/
+# Unrelated in-progress research docs (kept local by owner)
+docs/research/2026-09-26-installer-size-and-resource-usage-best-practices.md
+docs/research/2026-09-26-mac-runtime-measurements.md

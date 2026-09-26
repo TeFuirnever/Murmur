@@ -1,14 +1,18 @@
-// [20260905_Feat_BloubSettings] Settings section exposing the bot mascot's
-// catalogue (shape / colour / expression) per spec #224 ticket 5 and decision
-// #220. Three pickers, one settings key each; writes go through the shared
-// handleInputChange so they persist immediately and broadcast to the main
-// window (onSettingsUpdate), where the mascot hot-swaps.
+// [20260905_Feat_BloubSettings] Bot mascot catalogue pickers (shape /
+// colour / expression) per spec #224 ticket 5 and decision #220.
+// [20260926_Issue409] No longer a standalone tab: GeneralSection embeds this
+// component in its appearance group. Three pickers, one settings key each;
+// writes go through the shared handleInputChange so they persist immediately
+// and broadcast to the main window (onSettingsUpdate), where the mascot
+// hot-swaps.
 // Catalogue item labels resolve via i18n keys with the capitalised id as the
 // inline default, so missing keys degrade to a readable English name.
 
 import { useTranslation } from "react-i18next";
 import type React from "react";
 import type { SettingsState } from "../useSettings";
+// [20260926_Issue407] Modified dot + reset-to-default (schema-derived).
+import { SettingResetButton } from "../SettingResetButton";
 import { COLORS, SHAPES } from "../../bot/skins";
 import { EXPRESSIONS } from "../../bot/expressions";
 
@@ -46,7 +50,9 @@ export const BotSection: React.FC<BotSectionProps> = ({
     labelKey: string;
     labelFallback: string;
     value: string;
-    key: string;
+    // [20260926_Issue407] Schema-derived: feeds SettingResetButton's
+    // keyof-SettingsState prop directly (no cast at the usage site).
+    key: keyof SettingsState;
     options: Array<{ value: string; label: string }>;
   }> = [
     {
@@ -97,18 +103,25 @@ export const BotSection: React.FC<BotSectionProps> = ({
           >
             {t(sel.labelKey, sel.labelFallback)}
           </label>
-          <select
-            id={`bot-${sel.key}`}
-            value={sel.value}
-            onChange={(e) => onInputChange(sel.key, e.target.value)}
-            className="rounded-lg border border-[#d2d2d7] dark:border-[#3a3a3c] bg-transparent px-3 py-1.5 text-sm text-[#1d1d1f] dark:text-[#f5f5f7]"
-          >
-            {sel.options.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
+          <div className="flex items-center gap-2">
+            <SettingResetButton
+              settingKey={sel.key}
+              value={sel.value}
+              onReset={onInputChange}
+            />
+            <select
+              id={`bot-${sel.key}`}
+              value={sel.value}
+              onChange={(e) => onInputChange(sel.key, e.target.value)}
+              className="rounded-lg border border-[#d2d2d7] dark:border-[#3a3a3c] bg-transparent px-3 py-1.5 text-sm text-[#1d1d1f] dark:text-[#f5f5f7]"
+            >
+              {sel.options.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       ))}
     </div>

@@ -2,9 +2,10 @@
 // The existing settings-sections.test.tsx AIConfigSection describe block
 // covers the render paths and a few click handlers but leaves the custom
 // model input, slider change handlers, test-result display branches,
-// testing/saving button states, the optimization-toggle click, and the
-// quick-start action buttons (openExternal / focus ref) uncovered. This
-// file targets exactly those branches.
+// testing button states (the #408 change removed the save button), the
+// optimization-toggle click, and the quick-start action buttons
+// (openExternal / focus ref) uncovered. This file targets exactly those
+// branches.
 //
 // Runs under jsdom because RTL render() needs a DOM.
 // @vitest-environment jsdom
@@ -97,6 +98,15 @@ function buildSettings(overrides: Partial<SettingsState> = {}): SettingsState {
     bot_shape: "circle",
     bot_color: "auto",
     bot_expression: "neutral",
+    // [20260926_Refactor_403_SettingsSchema] new SettingsState key
+    show_notifications: true,
+    // [20260926_Issue404] new SettingsState key
+    auto_start: false,
+    // [20260926_Issue406] new SettingsState key
+    model_download_path: "",
+
+    // [20260926_Issue405] new SettingsState key
+    minimize_to_tray: false,
     ...overrides,
   };
 }
@@ -121,8 +131,6 @@ function buildAIConfigProps(
     testing: false,
     testResult: null,
     testAIConfiguration: vi.fn(),
-    saveSettings: vi.fn(),
-    saving: false,
     showQuickStart: false,
     ...overrides,
   };
@@ -173,7 +181,7 @@ describe("[20260729_Test_AIConfigExpanded] AIConfigSection uncovered branches", 
 
     // The placeholder is the locale value of settings.ai.modelPlaceholder.
     const customInput = screen.getByPlaceholderText(
-      "输入自定义模型名称，如：qwen3-30b-a3b-instruct-2507",
+      "输入自定义模型名称，如：gpt-6-sol",
     );
     expect(customInput).toHaveValue("my-custom-model");
     expect(customInput).toHaveAttribute("type", "text");
@@ -187,9 +195,7 @@ describe("[20260729_Test_AIConfigExpanded] AIConfigSection uncovered branches", 
     render(<AIConfigSection {...props} />);
 
     expect(
-      screen.queryByPlaceholderText(
-        "输入自定义模型名称，如：qwen3-30b-a3b-instruct-2507",
-      ),
+      screen.queryByPlaceholderText("输入自定义模型名称，如：gpt-6-sol"),
     ).not.toBeInTheDocument();
   });
 
@@ -203,7 +209,7 @@ describe("[20260729_Test_AIConfigExpanded] AIConfigSection uncovered branches", 
     render(<AIConfigSection {...props} />);
 
     const customInput = screen.getByPlaceholderText(
-      "输入自定义模型名称，如：qwen3-30b-a3b-instruct-2507",
+      "输入自定义模型名称，如：gpt-6-sol",
     );
     fireEvent.change(customInput, { target: { value: "qwen-turbo" } });
 
@@ -344,16 +350,21 @@ describe("[20260729_Test_AIConfigExpanded] AIConfigSection uncovered branches", 
     const onInputChange = vi.fn();
     const props = buildAIConfigProps({
       customModel: false,
-      settings: buildSettings({ ai_model: "gpt-3.5-turbo" }),
+      settings: buildSettings({ ai_model: "gpt-6-sol" }),
       onInputChange,
     });
     render(<AIConfigSection {...props} />);
 
     const modelSelect = screen.getByDisplayValue(
-      "GPT-3.5 Turbo",
+      "GPT-6 Sol (推荐)",
     ) as HTMLSelectElement;
-    fireEvent.change(modelSelect, { target: { value: "gpt-4o" } });
-    expect(onInputChange).toHaveBeenCalledWith("ai_model", "gpt-4o");
+    fireEvent.change(modelSelect, { target: { value: "gpt-6-luna" } });
+    // [20260926_Perf_402_TextInputDebounce] The dropdown is a discrete
+    // select editing the text-like ai_model key — its change is flagged
+    // immediate so the hook persists it in the same tick (no 400ms wait).
+    expect(onInputChange).toHaveBeenCalledWith("ai_model", "gpt-6-luna", {
+      immediate: true,
+    });
   });
 
   // ── Base URL change ──
@@ -404,7 +415,7 @@ describe("[20260729_Test_AIConfigExpanded] AIConfigSection uncovered branches", 
     expect(setShowApiKey).toHaveBeenCalledWith(false);
   });
 
-  // ── Testing / saving button states ──
+  // ── Testing button states ──
 
   it("disables the test button and shows the testing label while testing is true", () => {
     const props = buildAIConfigProps({ testing: true });
@@ -414,15 +425,17 @@ describe("[20260729_Test_AIConfigExpanded] AIConfigSection uncovered branches", 
     expect(testingButton).toBeDisabled();
   });
 
-  it("disables the save button and shows the saving label while saving is true", () => {
-    const props = buildAIConfigProps({ saving: true });
+  it("renders no save button — every change persists immediately (issue #408)", () => {
+    // Issue #408 removed the explicit 保存设置 button: text fields persist
+    // debounced (flushed on blur/close), discrete controls persist at once,
+    // so there is no explicit save action left to disable or label.
+    const props = buildAIConfigProps();
     render(<AIConfigSection {...props} />);
 
-    // The save button carries aria-label "保存设置" (settings.save), so the
-    // accessible name is stable. The visible label text switches to "保存中...".
-    const saveButton = screen.getByRole("button", { name: "保存设置" });
-    expect(saveButton).toBeDisabled();
-    expect(screen.getByText("保存中...")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "保存设置" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("保存中...")).not.toBeInTheDocument();
   });
 
   it("does not call testAIConfiguration when the test button is disabled (testing state)", async () => {

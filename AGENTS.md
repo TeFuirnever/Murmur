@@ -146,7 +146,7 @@ Murmur targets **Windows** and **macOS**. See `CLAUDE.md` → _Cross-Platform Su
 2. No silent error swallowing in main process.
 3. No hardcoded IPC channel strings — use `ipc-contracts.ts` constants.
 4. No new IPC handler files without registering in `src/helpers/ipc/index.ts`.
-5. No adding settings without touching **all 4** places: `SettingsState` + `DEFAULT_SETTINGS` + `loadSettings` builder + `saveSettings` body in `useSettings.ts`, AND the key in `ALLOWED_SETTING_KEYS` (`settingsHandlers.ts`).
+5. No adding settings except by declaring them **once** in the schema: `src/settings/settingsSchema.ts` (key, type, default, load coercion, scope, `fileSync`/`textLike` traits). `SettingsState`, `DEFAULT_SETTINGS`, the load builder, `ALLOWED_SETTING_KEYS`, `FILE_CONFIGURABLE_KEYS` and `TEXT_INPUT_SETTING_KEYS` are all derived from the schema — a key declared anywhere else (useSettings.ts, settingsHandlers.ts, fileConfig.ts) silently breaks persistence.
 6. <!-- [20260816_Refactor_RemoveEffects] Rule removed with the visual-effects feature: ogl/motion no longer exist in the dependency tree. -->
 
 ## Verification

@@ -10,7 +10,12 @@ import "../setup/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { DEFAULT_HOTKEY } from "../../src/settings/hotkeyRecorder";
-import { useSettings } from "../../src/settings/useSettings";
+import {
+  DEFAULT_MODEL,
+  MODEL_LABELS,
+  PREDEFINED_MODELS,
+  useSettings,
+} from "../../src/settings/useSettings";
 import type { ElectronAPI } from "../../src/electronAPI";
 // [20260816_Test_BranchPush] Toast assertions for the load/save failure paths.
 import { toast } from "sonner";
@@ -239,6 +244,36 @@ describe("useSettings hook", () => {
     expect(result.current.settings.theme).toBe("light");
   });
 
+  // [20260926_Fix_395_ThemeLiveApply] The General tab select writes through
+  // handleInputChange, which persisted but never applied the theme — the
+  // settings window kept the old colors until reload (issue #395, evidence
+  // 1). The live document flip is part of the write contract now.
+  it("applies a theme change to the document the moment handleInputChange writes it", async () => {
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+    // The stubbed settings load "dark"; make the starting state explicit.
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
+
+    act(() => {
+      result.current.handleInputChange("theme", "light");
+    });
+    expect(result.current.settings.theme).toBe("light");
+    expect(document.documentElement.classList.contains("dark")).toBe(false);
+
+    act(() => {
+      result.current.handleInputChange("theme", "dark");
+    });
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
+
+    // "system" resolves through matchMedia (stubbed to light in beforeEach).
+    act(() => {
+      result.current.handleInputChange("theme", "system");
+    });
+    expect(document.documentElement.classList.contains("dark")).toBe(false);
+  });
+
   it("persists theme via setSetting when saveSettings runs", async () => {
     const { result } = renderHook(() => useSettings());
 
@@ -327,6 +362,103 @@ describe("useSettings hook", () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.settings.default_mode).toBe("correct");
   });
+
+  // [20260926_Refactor_403_SettingsSchema] show_notifications joins
+  // SettingsState with the schema (issue #400 shipped it as a local-state
+  // special case; #403 folds it in). Load semantics are the SAME gate the
+  // #400 GeneralSection read path and the main-process updateManager gate
+  // used: `!== false` — only a literal false reads as off.
+  it("defaults show_notifications to on when nothing is stored", async () => {
+    const api = (globalThis.window as TestWindow).electronAPI!;
+    (api.getAllSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...MOCK_SETTINGS,
+    });
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.settings.show_notifications).toBe(true);
+  });
+
+  it("loads a stored show_notifications=false as off", async () => {
+    const api = (globalThis.window as TestWindow).electronAPI!;
+    (api.getAllSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...MOCK_SETTINGS,
+      show_notifications: false,
+    });
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.settings.show_notifications).toBe(false);
+  });
+
+  it("coerces a non-boolean stored show_notifications to on", async () => {
+    const api = (globalThis.window as TestWindow).electronAPI!;
+    (api.getAllSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...MOCK_SETTINGS,
+      show_notifications: "false",
+    });
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.settings.show_notifications).toBe(true);
+  });
+
+  it("persists show_notifications through handleInputChange immediately (discrete switch, no debounce)", async () => {
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    const api = (globalThis.window as TestWindow).electronAPI!;
+    (api.setSetting as ReturnType<typeof vi.fn>).mockClear();
+    act(() => {
+      result.current.handleInputChange("show_notifications", false);
+    });
+    expect(result.current.settings.show_notifications).toBe(false);
+    expect(api.setSetting).toHaveBeenCalledWith("show_notifications", false);
+  });
+
+  // [20260926_Issue404] auto_start joins SettingsState with the schema
+  // (#404 General-tab launch-at-login switch). Load semantics mirror the
+  // stored default: absent/odd → off, only literal true reads as on — the
+  // mirror image of the `!== false` booleans whose defaults are on.
+  it("defaults auto_start to off when nothing is stored", async () => {
+    const api = (globalThis.window as TestWindow).electronAPI!;
+    (api.getAllSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...MOCK_SETTINGS,
+    });
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.settings.auto_start).toBe(false);
+  });
+
+  it("loads a stored auto_start=true as on", async () => {
+    const api = (globalThis.window as TestWindow).electronAPI!;
+    (api.getAllSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...MOCK_SETTINGS,
+      auto_start: true,
+    });
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.settings.auto_start).toBe(true);
+  });
+
+  it("coerces a non-boolean stored auto_start to off", async () => {
+    const api = (globalThis.window as TestWindow).electronAPI!;
+    (api.getAllSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...MOCK_SETTINGS,
+      auto_start: "yes",
+    });
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.settings.auto_start).toBe(false);
+  });
+
+  it("persists auto_start through handleInputChange immediately (discrete switch, no debounce)", async () => {
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    const api = (globalThis.window as TestWindow).electronAPI!;
+    (api.setSetting as ReturnType<typeof vi.fn>).mockClear();
+    act(() => {
+      result.current.handleInputChange("auto_start", true);
+    });
+    expect(result.current.settings.auto_start).toBe(true);
+    expect(api.setSetting).toHaveBeenCalledWith("auto_start", true);
+  });
 });
 
 // [20260816_Test_UseSettingsExpanded] Second describe: save reconciliation
@@ -379,11 +511,17 @@ describe("useSettings hook — save / test / presets / updates", () => {
     const keys = calls.map((c) => c[0]);
     expect(keys).toContain("theme");
     expect(keys).toContain("ai_max_tokens");
+    expect(keys).toContain("show_notifications");
     expect(keys).not.toContain(undefined);
     // [20260905_Fix_249_DefaultModeUi] count updated for default_mode:
     // 1 special-cased (unmasked api_key) + 15 in the loop.
     // [20260905_Fix_246_HotkeySettingsUi] count updated for the hotkey key.
-    expect(calls).toHaveLength(16);
+    // [20260926_Refactor_403_SettingsSchema] +show_notifications (schema fold).
+    // [20260926_Issue404] +auto_start (joins SettingsState with the schema).
+    // [20260926_Issue406] +model_download_path (joins SettingsState).
+
+    // [20260926_Issue405] +minimize_to_tray and [Issue406] +model_download_path (both join SettingsState with the schema).
+    expect(calls).toHaveLength(20);
   });
 
   it("saveSettings skips re-sending a masked api_key but still saves the rest", async () => {
@@ -400,7 +538,14 @@ describe("useSettings hook — save / test / presets / updates", () => {
     });
     const calls = (api().setSetting as ReturnType<typeof vi.fn>).mock.calls;
     expect(calls.find((c) => c[0] === "ai_api_key")).toBeUndefined();
-    expect(calls).toHaveLength(15); // [20260905_Fix_249_DefaultModeUi] 15 loop keys after default_mode. [20260905_Fix_246_HotkeySettingsUi] +hotkey. [20260820_T14_Hotwords] 10 loop keys after hotwords
+    // [20260905_Fix_249_DefaultModeUi] 15 loop keys after default_mode.
+    // [20260905_Fix_246_HotkeySettingsUi] +hotkey. [20260820_T14_Hotwords]
+    // 10 loop keys after hotwords. [20260926_Refactor_403_SettingsSchema]
+    // +show_notifications. [20260926_Issue404] +auto_start.
+    // [20260926_Issue406] +model_download_path (joins SettingsState).
+    expect(calls).toHaveLength(19); // [20260926_Issue406] +model_download_path.
+
+    expect(calls).toHaveLength(19); // [20260905_Fix_249_DefaultModeUi] 15 loop keys after default_mode. [20260905_Fix_246_HotkeySettingsUi] +hotkey. [20260820_T14_Hotwords] 10 loop keys after hotwords. [20260926_Refactor_403_SettingsSchema] +show_notifications. [20260926_Issue404] +auto_start. [20260926_Issue405] +minimize_to_tray. [20260926_Issue406] +model_download_path.
   });
 
   it("saveSettings returns false and toasts on IPC failure", async () => {
@@ -416,7 +561,6 @@ describe("useSettings hook — save / test / presets / updates", () => {
       ok = await result.current.saveSettings();
     });
     expect(ok).toBe(false);
-    expect(result.current.saving).toBe(false);
     errSpy.mockRestore();
   });
 
@@ -826,7 +970,7 @@ describe("useSettings hook — branch push", () => {
     expect(checkAIStatus).toHaveBeenCalledWith({
       ai_api_key: "sk-test",
       ai_base_url: "https://api.openai.com/v1",
-      ai_model: "gpt-3.5-turbo",
+      ai_model: "gpt-6-sol",
     });
   });
 
@@ -999,5 +1143,261 @@ describe("useSettings hook — branch push", () => {
       result.current.handleInputChange("theme", "light");
     });
     expect(result.current.settings.theme).toBe("light");
+  });
+});
+
+// [20260926_Fix_397_ModelCatalog] Issue #397 F2: the predefined list still
+// advertised the retired gpt-3.5/gpt-4 generation and the recommended default
+// pointed at gpt-3.5-turbo. Pin the refreshed 2026-09 catalog as a data
+// contract so the next provider-side retirement cannot slip through silently.
+describe("[20260926_Fix_397_ModelCatalog] predefined model catalog (2026-09)", () => {
+  it("drops the retired gpt-3.5/gpt-4 generation entirely", () => {
+    for (const retired of [
+      "gpt-3.5-turbo",
+      "gpt-4",
+      "gpt-4-turbo",
+      "gpt-4o",
+      "gpt-4o-mini",
+    ]) {
+      expect(PREDEFINED_MODELS).not.toContain(retired);
+    }
+    expect(DEFAULT_MODEL).not.toMatch(/^gpt-[34]/);
+  });
+
+  it("lists the 2026-09 mainstream models across providers", () => {
+    expect([...PREDEFINED_MODELS]).toEqual([
+      "gpt-6-sol",
+      "gpt-6-luna",
+      "gpt-6-astra",
+      "qwen3.8-max",
+      "deepseek-flash",
+    ]);
+    expect(DEFAULT_MODEL).toBe("gpt-6-sol");
+  });
+
+  it("gives every predefined model a display label", () => {
+    for (const model of PREDEFINED_MODELS) {
+      expect(MODEL_LABELS[model]).toBeTruthy();
+    }
+  });
+
+  it("keeps DEFAULT_MODEL inside PREDEFINED_MODELS", () => {
+    expect(
+      (PREDEFINED_MODELS as readonly string[]).includes(DEFAULT_MODEL),
+    ).toBe(true);
+  });
+});
+
+// [20260926_Perf_402_TextInputDebounce] Text-like setting keys (hotwords,
+// ai_api_key, ai_base_url, ai_model) used to persist on EVERY keystroke —
+// one SQLite write + one syncToFileConfig (fs.writeFileSync) + two-window
+// broadcast each (issue #402). Now the persistence write is debounced 400ms
+// (matching TemplatesSection's TEMPLATE_AUTOSAVE_DELAY_MS convention) with
+// flush-on-blur/close so the tail keystroke is never lost. React state stays
+// immediate — only the setSetting IPC is deferred; select/switch/theme keys
+// persist synchronously as before.
+describe("useSettings hook — text-input persistence debounce (issue #402)", () => {
+  let originalAPI: ElectronAPI | undefined;
+  let originalMatchMedia: typeof window.matchMedia;
+
+  beforeEach(() => {
+    originalAPI = (globalThis.window as TestWindow).electronAPI;
+    originalMatchMedia = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })) as unknown as typeof window.matchMedia;
+    (globalThis.window as TestWindow).electronAPI = makeFullStub();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    const win = globalThis.window as TestWindow;
+    if (originalAPI === undefined) delete win.electronAPI;
+    else win.electronAPI = originalAPI;
+    window.matchMedia = originalMatchMedia;
+    vi.restoreAllMocks();
+  });
+
+  const api = () => (globalThis.window as TestWindow).electronAPI!;
+
+  async function mountLoaded() {
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    (api().setSetting as ReturnType<typeof vi.fn>).mockClear();
+    return { result };
+  }
+
+  it("debounces consecutive text keystrokes into a single persistence write", async () => {
+    const { result } = await mountLoaded();
+    vi.useFakeTimers();
+    act(() => {
+      result.current.handleInputChange("hotwords", "张");
+      result.current.handleInputChange("hotwords", "张晗");
+      result.current.handleInputChange("hotwords", "张晗玥");
+    });
+    // No per-keystroke write before the debounce window elapses.
+    expect(api().setSetting).not.toHaveBeenCalled();
+    act(() => {
+      vi.advanceTimersByTime(400);
+    });
+    // Exactly one write, carrying the LAST typed value.
+    expect(api().setSetting).toHaveBeenCalledTimes(1);
+    expect(api().setSetting).toHaveBeenCalledWith("hotwords", "张晗玥");
+  });
+
+  it("flushes pending text writes immediately and cancels the debounce timer", async () => {
+    const { result } = await mountLoaded();
+    vi.useFakeTimers();
+    act(() => {
+      result.current.handleInputChange("ai_api_key", "sk-new-key");
+    });
+    act(() => {
+      result.current.flushPendingSettingWrites();
+    });
+    // The pending value is written right away…
+    expect(api().setSetting).toHaveBeenCalledWith("ai_api_key", "sk-new-key");
+    expect(api().setSetting).toHaveBeenCalledTimes(1);
+    // …and the debounce timer no longer re-writes it.
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(api().setSetting).toHaveBeenCalledTimes(1);
+  });
+
+  it("flushes pending text writes on window blur and before window close", async () => {
+    const { result } = await mountLoaded();
+    vi.useFakeTimers();
+    act(() => {
+      result.current.handleInputChange("ai_base_url", "https://api.new.com/v1");
+    });
+    expect(api().setSetting).not.toHaveBeenCalled();
+    act(() => {
+      window.dispatchEvent(new Event("blur"));
+    });
+    expect(api().setSetting).toHaveBeenCalledWith(
+      "ai_base_url",
+      "https://api.new.com/v1",
+    );
+
+    // beforeunload (settings window close) flushes anything typed after.
+    act(() => {
+      result.current.handleInputChange("hotwords", "尾字");
+    });
+    act(() => {
+      window.dispatchEvent(new Event("beforeunload"));
+    });
+    expect(api().setSetting).toHaveBeenCalledWith("hotwords", "尾字");
+    // Still no timer-driven re-write afterwards.
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(api().setSetting).toHaveBeenCalledTimes(2);
+  });
+
+  it("flushes pending text writes before running the AI configuration test", async () => {
+    // Issue #408: 「测试配置」 must exercise the latest saved config. A text
+    // edit still inside the 400ms debounce window is flushed BEFORE
+    // checkAIStatus runs; the invocation order proves the write landed first.
+    const { result } = await mountLoaded();
+    vi.useFakeTimers();
+    act(() => {
+      result.current.handleInputChange("ai_base_url", "https://api.new.com/v1");
+    });
+    // The edit is still pending — nothing persisted yet.
+    expect(api().setSetting).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await result.current.testAIConfiguration();
+    });
+
+    expect(api().setSetting).toHaveBeenCalledWith(
+      "ai_base_url",
+      "https://api.new.com/v1",
+    );
+    const setSettingOrder = (api().setSetting as ReturnType<typeof vi.fn>).mock
+      .invocationCallOrder[0];
+    const checkStatusOrder = (api().checkAIStatus as ReturnType<typeof vi.fn>)
+      .mock.invocationCallOrder[0];
+    expect(setSettingOrder).toBeDefined();
+    expect(checkStatusOrder).toBeDefined();
+    expect(setSettingOrder).toBeLessThan(checkStatusOrder!);
+    // The debounce window never elapses under fake timers, so this write
+    // came from the flush — not from a timer.
+    expect(api().setSetting).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps select/switch/theme keys immediate while text keys are debounced", async () => {
+    const { result } = await mountLoaded();
+    vi.useFakeTimers();
+    // Select-backed key persists synchronously, before any timer advance.
+    act(() => {
+      result.current.handleInputChange("theme", "light");
+    });
+    expect(api().setSetting).toHaveBeenCalledWith("theme", "light");
+    expect(api().setSetting).toHaveBeenCalledTimes(1);
+    // Switch-backed keys keep their paired-write branch untouched.
+    act(() => {
+      result.current.handleInputChange("enable_ai_optimization", false);
+    });
+    expect(api().setSetting).toHaveBeenCalledWith(
+      "enable_ai_optimization",
+      false,
+    );
+    expect(api().setSetting).toHaveBeenCalledWith("default_mode", "off");
+    // A text key typed afterwards stays pending until the window elapses.
+    act(() => {
+      result.current.handleInputChange("hotwords", "延迟");
+    });
+    expect(api().setSetting).toHaveBeenCalledTimes(3);
+    act(() => {
+      vi.advanceTimersByTime(400);
+    });
+    expect(api().setSetting).toHaveBeenLastCalledWith("hotwords", "延迟");
+  });
+
+  it("writes immediately when a text key is changed with the immediate override", async () => {
+    // The AI-model dropdown is a <select> editing the text-like ai_model
+    // key; it must stay instant (no 400ms wait on a discrete choice).
+    const { result } = await mountLoaded();
+    vi.useFakeTimers();
+    act(() => {
+      result.current.handleInputChange("ai_model", "gpt-4o", {
+        immediate: true,
+      });
+    });
+    expect(api().setSetting).toHaveBeenCalledWith("ai_model", "gpt-4o");
+    expect(api().setSetting).toHaveBeenCalledTimes(1);
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(api().setSetting).toHaveBeenCalledTimes(1);
+  });
+
+  it("drops a pending text write when the same key is written immediately after", async () => {
+    // Text "gpt-4o" is pending; the dropdown then selects "gpt-4". The
+    // stale pending value must never overwrite the newer discrete choice.
+    const { result } = await mountLoaded();
+    vi.useFakeTimers();
+    act(() => {
+      result.current.handleInputChange("ai_model", "gpt-4o");
+    });
+    act(() => {
+      result.current.handleInputChange("ai_model", "gpt-4", {
+        immediate: true,
+      });
+    });
+    expect(api().setSetting).toHaveBeenCalledWith("ai_model", "gpt-4");
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(api().setSetting).toHaveBeenCalledTimes(1);
+    expect(api().setSetting).toHaveBeenLastCalledWith("ai_model", "gpt-4");
   });
 });

@@ -114,6 +114,7 @@ type TestWindow = Omit<Window, "electronAPI"> & {
     exportTranscriptions: (format: string) => Promise<unknown>;
     clearAllTranscriptions: () => Promise<unknown>;
     getAllSettings: () => Promise<Record<string, unknown>>;
+    getSetting: (key: string, defaultValue?: unknown) => Promise<unknown>;
     closeHistoryWindow: () => void;
   };
 };
@@ -628,6 +629,45 @@ describe("[20260816_Test_HistoryPage] history window entry", () => {
     await mountHistory({ getSetting });
     await waitFor(() => {
       expect(historyI18nMocks.changeLanguage).toHaveBeenCalledWith("en");
+    });
+  });
+
+  // [20260926_Fix_395_ThemeLiveApply] The history window never applied the
+  // theme at all — not at boot, not on the settings broadcast (issue #395,
+  // evidence 3). Two regressions pin both arcs: the mount-time DB read-back
+  // and the live SETTINGS_UPDATE response.
+  it("applies the persisted theme on mount", async () => {
+    document.documentElement.classList.remove("dark");
+    const getSetting = vi.fn(async (key: string) =>
+      key === "theme" ? "dark" : null,
+    );
+    await mountHistory({ getSetting });
+    await waitFor(() => {
+      expect(document.documentElement.classList.contains("dark")).toBe(true);
+    });
+  });
+
+  it("applies a theme change broadcast to the history window via the DB value", async () => {
+    document.documentElement.classList.remove("dark");
+    const getSetting = vi.fn(async (key: string) =>
+      key === "theme" ? "dark" : null,
+    );
+    await mountHistory({ getSetting });
+    const cb = (
+      apiMocks.onSettingsUpdate as unknown as ReturnType<typeof vi.fn>
+    ).mock.calls[0]?.[0] as ((d: { key: string }) => void) | undefined;
+    cb?.({ key: "theme" });
+    await waitFor(() => {
+      expect(document.documentElement.classList.contains("dark")).toBe(true);
+    });
+
+    // Light must clear the class the same way.
+    (getSetting as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (key: string) => (key === "theme" ? "light" : null),
+    );
+    cb?.({ key: "theme" });
+    await waitFor(() => {
+      expect(document.documentElement.classList.contains("dark")).toBe(false);
     });
   });
 

@@ -67,14 +67,12 @@
     "loadFailed": "Failed to load settings",
     "saveSuccess": "Settings saved successfully",
     "saveFailed": "Failed to save settings",
-    "save": "Save Settings",
-    "saving": "Saving...",
-    "saved": "Saved",
-    "reset": "Reset",
     "close": "Close",
     "about": "About Murmur",
     "ai_temperature": "Creativity (Temperature)",
     "ai_max_tokens": "Max Output Length",
+    "resetToDefault": "Reset to default",
+    "resetHint": "Modified — default: {{value}}",
     "sections": {
       "general": "General",
       "ai": "AI Configuration",
@@ -83,7 +81,6 @@
       "permissions": "Permissions",
       "language": "Language",
       "about": "About Murmur",
-      "bot": "Bot",
       "templates": "Templates"
     },
     "sidebar": {
@@ -91,7 +88,6 @@
       "permissions": "Permissions",
       "ai": "AI Config",
       "about": "About",
-      "bot": "Bot",
       "templates": "Templates"
     },
     "general": {
@@ -100,6 +96,16 @@
       "hotwordsDesc": "One entry per line. Recognition prefers these terms (colleague names, product names) — improves rare proper-noun hit rate, not a guarantee.",
       "hotwordsPlaceholder": "Jane Zhang\nAcme API…",
       "hotwordsLimit": "Up to 200 lines, 32 chars each",
+      "showNotificationsLabel": "System notifications",
+      "showNotificationsDesc": "Show a system notification when an update finishes downloading",
+      "autoStartLabel": "Launch at Login",
+      "autoStartDesc": "Start Murmur automatically when you log in (runs quietly in the background)",
+      "modelDownloadPathLabel": "Model Download Directory",
+      "modelDownloadPathDesc": "Directory where speech-recognition model files are stored. Leave empty for the system default location; restart the app to apply changes.",
+      "modelDownloadPathPlaceholder": "Leave empty for the system default",
+
+      "minimizeToTrayLabel": "Minimize to Tray",
+      "minimizeToTrayDesc": "Hide to the system tray instead of the taskbar when the minimize button is clicked (Windows only)",
       "hotkeyLabel": "Recording Hotkey",
       "hotkeyDesc": "Global shortcut to start/stop recording from anywhere.",
       "hotkeyStart": "Change",
@@ -108,12 +114,8 @@
       "hotkeySpace": "Space",
       "defaultModeLabel": "Default AI mode",
       "defaultModeAuto": "Auto (by text length)",
-      "defaultModeOptimize": "Smart polish",
-      "defaultModeOptimizeLong": "Long-text cleanup",
-      "defaultModeCorrect": "Proofread",
-      "defaultModeSummarize": "Summarize",
       "defaultModeOff": "Turn AI off",
-      "defaultModeDesc": "AI processing applied automatically after recording or file import; the per-result panel still allows a one-off switch.",
+      "defaultModeDesc": "AI processing applied automatically after recording or file import; the per-result panel still allows a one-off switch. One state with the AI tab's \"Enable AI processing\" toggle.",
       "vocabTitle": "Corrections",
       "vocabPrivacy": "Privacy: correction entries are sent with polish requests to your configured AI provider to fix recurring mistakes — nowhere else. Edit or clear them here at any time.",
       "vocabEmpty": "No correction pairs yet",
@@ -121,6 +123,8 @@
       "vocabClear": "Clear all",
       "vocabCount": "{{count}} pairs",
       "vocabAddFailed": "Add failed",
+      "vocabRemoveFailed": "Delete failed",
+      "vocabClearFailed": "Clear failed",
       "vocabClearConfirm": "Clear ALL correction pairs?",
       "vocabDelete": "Delete",
       "streamDegradationTitle": "Streaming fallback memory",
@@ -129,7 +133,10 @@
       "streamDegradationCount": "{{count}} gateways",
       "streamDegradationReset": "Reset",
       "streamDegradationResetConfirm": "Reset ALL streaming fallback memory?",
-      "streamDegradationResetFailed": "Reset failed"
+      "streamDegradationResetFailed": "Reset failed",
+
+      "appearance": "Appearance",
+      "advancedSection": "Advanced"
     },
     "quickStart": {
       "title": "Quick Start",
@@ -140,17 +147,18 @@
     },
     "ai": {
       "description": "AI is used to polish and optimize recognized text — it's optional. Speech recognition itself uses the local FunASR model and doesn't need configuration here. When the API Key is invalid or empty, the raw transcription text is used directly.",
-      "enableOptimization": "Enable AI text optimization",
+      "enableOptimization": "Enable AI processing",
+      "enableOptimizationDesc": "One state with the General tab's \"Default AI mode\": switching this off equals choosing \"Turn AI off\".",
       "apiKey": "API Key",
       "apiKeyPlaceholder": "Enter your AI API Key",
       "baseUrl": "API Endpoint",
       "baseUrlDesc": "AI service API endpoint, supports OpenAI-compatible APIs",
       "model": "AI Model",
       "modelDesc": "Select the AI model for text optimization",
-      "modelPlaceholder": "Enter custom model name, e.g.: qwen3-30b-a3b-instruct-2507",
+      "modelPlaceholder": "Enter custom model name, e.g.: gpt-6-sol",
       "predefinedModel": "Predefined Model",
       "customModel": "Custom Model",
-      "qwenRecommended": "Qwen3-30B (Recommended)",
+      "modelRecommended": "GPT-6 Sol (Recommended)",
       "testConfig": "Test Configuration",
       "testing": "Testing...",
       "testSuccess": "AI configuration test passed",
@@ -174,8 +182,6 @@
       "providerLabel": "Provider",
       "precise": "Precise",
       "creative": "Creative",
-      "ai_temperature": "Creativity (Temperature)",
-      "ai_max_tokens": "Max Output Length",
       "hideApiKey": "Hide API Key",
       "showApiKey": "Show API Key"
     },
@@ -189,7 +195,7 @@
       "closeBehaviorDesc": "Behavior when clicking the window close button",
       "hideBehavior": "Hide to menu bar",
       "quitBehavior": "Quit application",
-      "alwaysOnTop": "Keep window always on top"
+      "alwaysOnTop": "Always on Top"
     },
     "appearance": {
       "theme": "Color theme",
@@ -208,11 +214,31 @@
       "granted": "Granted",
       "denied": "Not Granted",
       "testSuccess": "Permission test passed",
-      "testFailed": "Permission test failed"
+      "testFailed": "Permission test failed",
+      "micTestSuccessTitle": "✅ Microphone permission test passed",
+      "micTestSuccessDesc": "Microphone permission works! You can now record voice.",
+      "micTestSuccessAlert": "✅ Microphone permission works! You can now record voice.",
+      "micTestFailedTitle": "❌ Microphone permission required",
+      "micTestFailedDesc": "Please grant microphone access to use speech recognition.",
+      "micTestFailedAlert": "❌ Microphone permission required! Please grant microphone access to use speech recognition.",
+      "apiUnavailableTitle": "❌ Electron API unavailable",
+      "apiUnavailableDesc": "Failed to load the preload script. Please restart the app.",
+      "apiUnavailableAlert": "❌ Electron API unavailable. Please restart the app.",
+      "accessibilityPasteText": "Murmur accessibility test",
+      "accessibilityTestSuccessTitle": "✅ Accessibility permission test passed",
+      "accessibilityTestSuccessDesc": "Accessibility permission works! Check whether the test text appeared in another app.",
+      "accessibilityTestSuccessAlert": "✅ Accessibility permission works! Check whether the test text appeared in another app.",
+      "accessibilityTestFailedTitle": "❌ Accessibility permission required",
+      "accessibilityTestFailedDesc": "Grant Accessibility access in System Settings to enable auto-paste.",
+      "accessibilityTestFailedAlert": "❌ Accessibility permission required! Please grant it in System Settings."
     },
     "providers": {
+      "localSuffix": "local",
       "openai": {
         "guide": "Sign up to get an API Key, pay-as-you-go"
+      },
+      "anthropic": {
+        "guide": "Sign up for an API Key; Claude runs on the official OpenAI-compatible endpoint"
       },
       "deepseek": {
         "guide": "Free credits on sign-up, great for Chinese text"
@@ -388,6 +414,7 @@
     "unknown": "Unknown",
     "copiedToClipboard": "Text copied to clipboard",
     "autoPasteDone": "Text auto-pasted to the input field",
+    "noAutoAction": "No automatic action taken per your settings",
     "copiedManualPaste": "Text copied to clipboard — paste it manually",
     "operationFailed": "Operation failed",
     "accessibilityPasteHint": "Check accessibility permission. Text was copied to the clipboard — paste it manually with Cmd+V.",
