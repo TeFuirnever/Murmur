@@ -80,6 +80,7 @@ const resetButtonsIn = (container: HTMLElement): Element[] =>
 interface TestWindow {
   electronAPI?: {
     setAlwaysOnTop?: (v: boolean) => void;
+    getPlatform?: () => string;
   };
 }
 
@@ -245,6 +246,7 @@ describe("[20260926_Issue407] GeneralSection wiring", () => {
     ["window_always_on_top", false as const],
     ["show_notifications", false as const],
     ["auto_start", true as const],
+    ["minimize_to_tray", true as const],
     ["auto_paste", "clipboard_only"],
     ["default_mode", "off"],
     ["close_behavior", "quit"],
@@ -253,6 +255,9 @@ describe("[20260926_Issue407] GeneralSection wiring", () => {
   ])(
     "shows a reset control for %s once modified, and reset writes the schema default",
     (key, modified) => {
+      (globalThis.window as unknown as TestWindow).electronAPI = {
+        getPlatform: () => "win32",
+      };
       const settings = { ...BASE, [key]: modified } as SettingsState;
       const { container } = render(
         <GeneralSection settings={settings} onInputChange={onInputChange} />,

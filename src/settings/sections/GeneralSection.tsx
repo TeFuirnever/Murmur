@@ -298,31 +298,38 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
               )}
             </p>
           </div>
-          <button
-            type="button"
-            role="switch"
-            data-testid="minimize-to-tray"
-            aria-label={t(
-              "settings.general.minimizeToTrayLabel",
-              "最小化到托盘",
-            )}
-            aria-checked={settings.minimize_to_tray}
-            onClick={() =>
-              onInputChange("minimize_to_tray", !settings.minimize_to_tray)
-            }
-            className={`${
-              settings.minimize_to_tray
-                ? "bg-[#0071e3]"
-                : "bg-[#d2d2d7] dark:bg-[#3a3a3c]"
-            } relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-2`}
-          >
-            <span
-              aria-hidden="true"
-              className={`${
-                settings.minimize_to_tray ? "translate-x-4" : "translate-x-0"
-              } inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+          <div className="flex items-center gap-2">
+            <SettingResetButton
+              settingKey="minimize_to_tray"
+              value={settings.minimize_to_tray}
+              onReset={onInputChange}
             />
-          </button>
+            <button
+              type="button"
+              role="switch"
+              data-testid="minimize-to-tray"
+              aria-label={t(
+                "settings.general.minimizeToTrayLabel",
+                "最小化到托盘",
+              )}
+              aria-checked={settings.minimize_to_tray}
+              onClick={() =>
+                onInputChange("minimize_to_tray", !settings.minimize_to_tray)
+              }
+              className={`${
+                settings.minimize_to_tray
+                  ? "bg-[#0071e3]"
+                  : "bg-[#d2d2d7] dark:bg-[#3a3a3c]"
+              } relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-2`}
+            >
+              <span
+                aria-hidden="true"
+                className={`${
+                  settings.minimize_to_tray ? "translate-x-4" : "translate-x-0"
+                } inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+              />
+            </button>
+          </div>
         </div>
       )}
 
