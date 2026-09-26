@@ -15,6 +15,12 @@ import type { WindowVisibilityData } from "../types/ipc";
 // [20260926_Fix_BloubHiddenPause] cadence of the visibility truth-poll
 // backstop (rationale in the marker block inside createMainWindow)
 const VISIBILITY_POLL_MS = 1000;
+// [20260926_Issue405] Minimize-to-tray interception (issue #405, win32
+// only — see the module for the macOS system-convention decision).
+import {
+  interceptMinimizeToTray,
+  type MinimizeToTrayReader,
+} from "./minimizeToTray";
 
 class WindowManager {
   mainWindow: Electron.BrowserWindow | null;
@@ -47,6 +53,19 @@ class WindowManager {
 
   setDefaultAlwaysOnTop(enabled: boolean): void {
     this._alwaysOnTop = enabled;
+  }
+
+  // [20260926_Issue405] Lazy minimize_to_tray reader, injected by main.ts.
+  // Inline-initialized — the constructor is deliberately untouched. Null
+  // until wired: the interception never engages on an unwired manager.
+  private _minimizeToTrayReader: MinimizeToTrayReader | null = null;
+
+  // [20260926_Issue405] Wire the lazy setting reader; windowManager stays
+  // decoupled from storage. The reader is called at EVERY minimize event,
+  // so any settings write applies to the next minimize without IPC
+  // notification plumbing (issue #405 live-behavior requirement).
+  setMinimizeToTrayReader(reader: MinimizeToTrayReader): void {
+    this._minimizeToTrayReader = reader;
   }
 
   _setupCSP(): void {
@@ -230,6 +249,15 @@ class WindowManager {
           visible: win.isVisible() && !win.isMinimized(),
         } satisfies WindowVisibilityData);
       }, VISIBILITY_POLL_MS);
+
+      // [20260926_Issue405] Minimize-to-tray interception (issue #405):
+      // attached at creation so the Dock-recreate path
+      // (showOrCreateMainWindow) is covered by the same path. The helper
+      // gates on win32 — on macOS nothing is attached, keeping the yellow
+      // button's stock minimize-into-Dock convention.
+      if (this._minimizeToTrayReader) {
+        interceptMinimizeToTray(this.mainWindow, this._minimizeToTrayReader);
+      }
 
       // [20260820_Fix_211_KeychainBootOrder] With deferLoad the window
       // stays empty (no renderer) until loadMainWindowContent() runs; the

@@ -7,6 +7,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useWindowDrag } from "../../src/hooks/useWindowDrag";
 import { usePermissions } from "../../src/hooks/usePermissions";
+import i18n from "../../src/i18n";
 
 describe("useWindowDrag", () => {
   it("returns drag handlers and initial isDragging=false", () => {
@@ -91,7 +92,11 @@ describe("useWindowDrag", () => {
 describe("usePermissions", () => {
   let originalAlert: typeof window.alert;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    // [20260926_Fix_401_PermissionI18n] Hook copy resolves through i18n now
+    // (#401): pin zh-CN so branch assertions stay language-independent of
+    // jsdom's navigator.language (en-US would flip the copy to English).
+    await i18n.changeLanguage("zh-CN");
     originalAlert = window.alert;
     (window as unknown as { alert: typeof window.alert }).alert = vi.fn();
     // Stub mediaDevices for mic permission tests
@@ -101,10 +106,15 @@ describe("usePermissions", () => {
       },
       configurable: true,
     });
-    // Stub electronAPI
+    // Stub electronAPI. getPermissionStatus is the #396 real-status IPC —
+    // default to "not-determined" so badges stay false unless a test opts in.
     (window as unknown as { electronAPI: unknown }).electronAPI = {
       pasteText: vi.fn().mockResolvedValue(undefined),
       log: vi.fn(),
+      getPermissionStatus: vi.fn().mockResolvedValue({
+        microphone: "not-determined",
+        accessibility: "not-determined",
+      }),
     };
   });
 
@@ -113,23 +123,58 @@ describe("usePermissions", () => {
     vi.clearAllMocks();
   });
 
-  it("initializes with both permissions false", () => {
+  it("initializes with both permissions false when IPC reports not-determined", async () => {
     const { result } = renderHook(() => usePermissions());
+    await act(async () => {});
     expect(result.current.micPermissionGranted).toBe(false);
     expect(result.current.accessibilityPermissionGranted).toBe(false);
   });
 
-  it("grants mic permission when getUserMedia succeeds", async () => {
+  it("initializes both badges from the real system status via IPC (#396)", async () => {
+    (
+      window as unknown as {
+        electronAPI: { getPermissionStatus: ReturnType<typeof vi.fn> };
+      }
+    ).electronAPI.getPermissionStatus.mockResolvedValue({
+      microphone: "granted",
+      accessibility: "granted",
+    });
+
+    const { result } = renderHook(() => usePermissions());
+    await act(async () => {});
+
+    expect(result.current.micPermissionGranted).toBe(true);
+    expect(result.current.accessibilityPermissionGranted).toBe(true);
+  });
+
+  it("keeps the mic badge on the real status after a successful test probe (#396)", async () => {
+    // IPC says not granted; a successful getUserMedia probe is session
+    // feedback (toast) and must NOT fake the granted badge.
+    const { result } = renderHook(() => usePermissions());
     (
       navigator.mediaDevices.getUserMedia as unknown as ReturnType<typeof vi.fn>
     ).mockResolvedValue({});
-
-    const { result } = renderHook(() => usePermissions());
 
     await act(async () => {
       await result.current.requestMicPermission();
     });
 
+    expect(result.current.micPermissionGranted).toBe(false);
+  });
+
+  it("refreshes the mic badge to granted when the system really granted it", async () => {
+    const getPermissionStatus = (
+      window as unknown as {
+        electronAPI: { getPermissionStatus: ReturnType<typeof vi.fn> };
+      }
+    ).electronAPI.getPermissionStatus;
+    getPermissionStatus.mockResolvedValue({
+      microphone: "granted",
+      accessibility: "not-determined",
+    });
+
+    const { result } = renderHook(() => usePermissions());
+    await act(async () => {});
     expect(result.current.micPermissionGranted).toBe(true);
   });
 
@@ -147,18 +192,26 @@ describe("usePermissions", () => {
     expect(result.current.micPermissionGranted).toBe(false);
   });
 
-  it("grants accessibility permission when pasteText succeeds", async () => {
+  it("keeps the accessibility badge on the real status after a successful paste probe (#396)", async () => {
+    // pasteText succeeding is a session probe — the badge still follows the
+    // IPC-reported system status, not the probe result.
     const { result } = renderHook(() => usePermissions());
 
     await act(async () => {
       await result.current.testAccessibilityPermission();
     });
 
-    expect(result.current.accessibilityPermissionGranted).toBe(true);
+    expect(result.current.accessibilityPermissionGranted).toBe(false);
   });
 
   it("denies accessibility when electronAPI.pasteText is unavailable", async () => {
-    (window as unknown as { electronAPI: unknown }).electronAPI = {};
+    (window as unknown as { electronAPI: unknown }).electronAPI = {
+      log: vi.fn(),
+      getPermissionStatus: vi.fn().mockResolvedValue({
+        microphone: "not-determined",
+        accessibility: "not-determined",
+      }),
+    };
     const showDialog = vi.fn();
     const { result } = renderHook(() => usePermissions(showDialog));
 
@@ -169,6 +222,47 @@ describe("usePermissions", () => {
     expect(result.current.accessibilityPermissionGranted).toBe(false);
     expect(showDialog).toHaveBeenCalledWith(
       expect.objectContaining({ title: expect.stringContaining("不可用") }),
+    );
+  });
+
+  it("keeps the accessibility badge non-granted for the Windows unsupported status (#396)", async () => {
+    // Windows has no accessibility permission model: the main process
+    // reports "unsupported"; the badge must not show as granted.
+    (
+      window as unknown as {
+        electronAPI: { getPermissionStatus: ReturnType<typeof vi.fn> };
+      }
+    ).electronAPI.getPermissionStatus.mockResolvedValue({
+      microphone: "granted",
+      accessibility: "unsupported",
+    });
+
+    const { result } = renderHook(() => usePermissions());
+    await act(async () => {});
+
+    expect(result.current.micPermissionGranted).toBe(true);
+    expect(result.current.accessibilityPermissionGranted).toBe(false);
+  });
+
+  it("logs a warning and stays non-granted when getPermissionStatus rejects", async () => {
+    const electronStub = (
+      window as unknown as {
+        electronAPI: {
+          getPermissionStatus: ReturnType<typeof vi.fn>;
+          log: ReturnType<typeof vi.fn>;
+        };
+      }
+    ).electronAPI;
+    electronStub.getPermissionStatus.mockRejectedValue(new Error("ipc down"));
+
+    const { result } = renderHook(() => usePermissions());
+    await act(async () => {});
+
+    expect(result.current.micPermissionGranted).toBe(false);
+    expect(electronStub.log).toHaveBeenCalledWith(
+      "warn",
+      expect.stringContaining("权限状态"),
+      expect.anything(),
     );
   });
 

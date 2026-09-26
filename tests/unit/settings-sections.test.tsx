@@ -115,6 +115,15 @@ function buildSettings(overrides: Partial<SettingsState> = {}): SettingsState {
     bot_shape: "circle",
     bot_color: "auto",
     bot_expression: "neutral",
+    // [20260926_Refactor_403_SettingsSchema] new SettingsState key
+    show_notifications: true,
+    // [20260926_Issue404] new SettingsState key
+    auto_start: false,
+    // [20260926_Issue406] new SettingsState key
+    model_download_path: "",
+
+    // [20260926_Issue405] new SettingsState key
+    minimize_to_tray: false,
     ...overrides,
   };
 }
@@ -139,8 +148,6 @@ function buildAIConfigProps(
     testing: false,
     testResult: null,
     testAIConfiguration: vi.fn(),
-    saveSettings: vi.fn(),
-    saving: false,
     showQuickStart: false,
     ...overrides,
   };
@@ -350,8 +357,11 @@ describe("[20260729_Test_SettingsSections] PermissionsSection", () => {
     mockUsePermissions.micPermissionGranted = true;
     render(<PermissionsSection />);
 
-    // When granted, the button is replaced by a "已授予" label.
-    expect(screen.getByText("已授予")).toBeInTheDocument();
+    // When granted, the button is replaced by the i18n granted label
+    // (PermissionCard resolves it via settings.permissions.granted, #401).
+    expect(
+      screen.getByText(LOCALE["settings.permissions.granted"]!),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "测试麦克风" }),
     ).not.toBeInTheDocument();
@@ -389,6 +399,19 @@ describe("[20260729_Test_SettingsSections] AIConfigSection", () => {
 
     const toggle = screen.getByRole("switch");
     expect(toggle).toHaveAttribute("aria-checked", "true");
+  });
+
+  // [20260926_Fix_399_UnifiedKnobWording] Issue #399 evidence #3: the AI tab
+  // toggle (enable_ai_optimization) and the General tab default_mode dropdown
+  // are ONE knob (bidirectional sync in useSettings.handleInputChange). The
+  // toggle joins the dropdown's 「AI 处理」 term family and its description
+  // cross-references the dropdown instead of describing a separate feature.
+  it("labels the AI toggle with the unified AI-processing term (#399)", () => {
+    const props = buildAIConfigProps();
+    render(<AIConfigSection {...props} />);
+
+    expect(screen.getByLabelText("启用 AI 处理")).toBeInTheDocument();
+    expect(screen.getByText(/「默认 AI 处理模式」/)).toBeInTheDocument();
   });
 
   it("renders the API key input with the current value", () => {
@@ -450,11 +473,13 @@ describe("[20260729_Test_SettingsSections] AIConfigSection", () => {
   it("renders the predefined model select when customModel is false", () => {
     const props = buildAIConfigProps({
       customModel: false,
-      settings: buildSettings({ ai_model: "gpt-4o" }),
+      settings: buildSettings({ ai_model: "gpt-6-sol" }),
     });
     render(<AIConfigSection {...props} />);
 
-    const modelSelect = screen.getByDisplayValue("GPT-4o") as HTMLSelectElement;
+    const modelSelect = screen.getByDisplayValue(
+      "GPT-6 Sol (推荐)",
+    ) as HTMLSelectElement;
     expect(modelSelect).toBeInTheDocument();
     expect(modelSelect.tagName).toBe("SELECT");
   });
@@ -468,7 +493,7 @@ describe("[20260729_Test_SettingsSections] AIConfigSection", () => {
 
     // The placeholder is the locale value of settings.ai.modelPlaceholder.
     const customInput = screen.getByPlaceholderText(
-      "输入自定义模型名称，如：qwen3-30b-a3b-instruct-2507",
+      "输入自定义模型名称，如：gpt-6-sol",
     );
     expect(customInput).toHaveValue("my-custom-model");
   });
@@ -565,15 +590,19 @@ describe("[20260729_Test_SettingsSections] AIConfigSection", () => {
     expect(testAIConfiguration).toHaveBeenCalledTimes(1);
   });
 
-  it("renders and invokes the save button", async () => {
-    const user = userEvent.setup();
-    const saveSettings = vi.fn();
-    const props = buildAIConfigProps({ saveSettings });
+  it("renders no save button — AI settings apply immediately (issue #408)", () => {
+    // Issue #408: every AI-tab change persists as it is made (debounced text
+    // fields + immediate discrete controls), so the explicit 保存设置 button
+    // is gone; the 测试配置 button stays.
+    const props = buildAIConfigProps();
     render(<AIConfigSection {...props} />);
 
-    const saveButton = screen.getByRole("button", { name: "保存设置" });
-    await user.click(saveButton);
-    expect(saveSettings).toHaveBeenCalledTimes(1);
+    expect(
+      screen.queryByRole("button", { name: "保存设置" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "测试配置" }),
+    ).toBeInTheDocument();
   });
 
   it("renders the quick start panel with registration-required presets when showQuickStart is true", () => {

@@ -137,6 +137,16 @@ export const SYSTEM = {
   VERSION: "get-app-version",
   LOG: "log",
   OPEN_EXTERNAL: "open-external",
+  // [20260926_Fix_396_PermissionStatus] Real OS permission status for the
+  // settings badges (issue #396). Main process answers from Electron's
+  // systemPreferences; the renderer never fakes it from session probes.
+  PERMISSION_STATUS: "get-permission-status",
+  // [20260926_Issue404] Launch-at-login apply (issue #404): the renderer's
+  // auto_start toggle notifies the main process to (re)write the OS login
+  // item via app.setLoginItemSettings. Platform payload differences
+  // (macOS openAtLogin / Windows registry args) are encapsulated main-side
+  // (loginItem.ts) — the renderer sends only the boolean.
+  SET_LOGIN_ITEM: "set-login-item",
 } as const;
 
 export const EVENTS = {

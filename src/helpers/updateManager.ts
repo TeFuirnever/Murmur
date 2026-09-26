@@ -17,6 +17,12 @@ interface Logger {
 
 interface Managers {
   logger?: Logger;
+  // [20260926_Issue400] Optional so existing call sites without a database
+  // (and the register() harness tests) keep working; when present, its
+  // getSetting gates the download-complete system notification.
+  databaseManager?: {
+    getSetting(key: string, defaultValue: unknown): unknown;
+  };
 }
 
 interface GithubRelease {
@@ -99,7 +105,7 @@ export async function verifySHA256(
 }
 
 export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
-  const { logger } = managers;
+  const { logger, databaseManager } = managers;
   let currentDownload: DownloadState | null = null;
 
   ipcMain.handle(C.UPDATE.CHECK, async () => {
@@ -252,8 +258,13 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
           });
         }
 
-        // System notification
-        if (Notification.isSupported()) {
+        // [20260926_Issue400] show_notifications gates the app's only system
+        // notification (this one). Read at send time through the optional
+        // databaseManager; the `!== false` + absent-manager default true keeps
+        // the pre-gate behavior when no setting was ever stored.
+        const showNotifications =
+          databaseManager?.getSetting("show_notifications", true) !== false;
+        if (showNotifications && Notification.isSupported()) {
           const notification = new Notification({
             title: "Murmur 更新",
             body: `v${updateInfo.latestVersion} 已下载完成，点击查看`,

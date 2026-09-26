@@ -24,7 +24,7 @@
     "stageError": "模型错误: {{error}}",
     "stageNotReady": "模型未就绪，请稍候...",
     "toastRecognizedOptimizing": "🎤 语音识别完成，AI正在优化文本...",
-    "toastOptimizeComplete": "🤖 AI文本优化完成并已自动粘贴！",
+    "toastOptimizeComplete": "🤖 AI 文本优化完成并已自动粘贴！",
     "toastOptimizeFailedPasted": "AI优化失败，已粘贴原始识别文本",
     "aiUnavailable": "AI 优化功能不可用",
     "aiOptimizeFailed": "AI 优化失败",
@@ -67,14 +67,12 @@
     "loadFailed": "加载设置失败",
     "saveSuccess": "设置保存成功",
     "saveFailed": "保存设置失败",
-    "save": "保存设置",
-    "saving": "保存中...",
-    "saved": "已保存",
-    "reset": "重置",
     "close": "关闭",
     "about": "关于 Murmur",
     "ai_temperature": "创造性 (Temperature)",
     "ai_max_tokens": "最大输出长度",
+    "resetToDefault": "重置为默认值",
+    "resetHint": "已修改，默认值：{{value}}",
     "sections": {
       "general": "通用设置",
       "ai": "AI 配置",
@@ -83,7 +81,6 @@
       "permissions": "权限管理",
       "language": "语言",
       "about": "关于 Murmur",
-      "bot": "Bot 吉祥物",
       "templates": "模板"
     },
     "sidebar": {
@@ -91,7 +88,6 @@
       "permissions": "权限",
       "ai": "AI 配置",
       "about": "关于",
-      "bot": "Bot 吉祥物",
       "templates": "模板"
     },
     "general": {
@@ -100,6 +96,16 @@
       "hotwordsDesc": "每行一个。识别时优先匹配这些词(如同事姓名、产品名),提升生僻专名命中率,不保证全部正确。",
       "hotwordsPlaceholder": "张晗玥\n刘翀\n产品名…",
       "hotwordsLimit": "最多 200 行,每行 32 字",
+      "showNotificationsLabel": "系统通知",
+      "showNotificationsDesc": "更新下载完成后发送系统通知",
+      "autoStartLabel": "开机自启",
+      "autoStartDesc": "登录系统时自动在后台启动 Murmur，不抢占焦点",
+      "modelDownloadPathLabel": "模型下载目录",
+      "modelDownloadPathDesc": "语音识别模型文件的存放目录。留空使用系统默认位置；重启应用后生效。",
+      "modelDownloadPathPlaceholder": "留空使用系统默认位置",
+
+      "minimizeToTrayLabel": "最小化到托盘",
+      "minimizeToTrayDesc": "点击最小化按钮时隐藏到系统托盘而非任务栏（仅 Windows）",
       "hotkeyLabel": "录音快捷键",
       "hotkeyDesc": "全局快捷键,任意界面按下即可开始/停止录音。",
       "hotkeyStart": "更改",
@@ -108,12 +114,8 @@
       "hotkeySpace": "空格",
       "defaultModeLabel": "默认 AI 处理模式",
       "defaultModeAuto": "智能判断（按文本长度）",
-      "defaultModeOptimize": "智能润色",
-      "defaultModeOptimizeLong": "长文本整理",
-      "defaultModeCorrect": "校对纠错",
-      "defaultModeSummarize": "摘要总结",
       "defaultModeOff": "关闭 AI 处理",
-      "defaultModeDesc": "录音与文件导入完成后自动应用的 AI 处理方式；单次结果面板仍可临时切换。",
+      "defaultModeDesc": "录音与文件导入完成后自动应用的 AI 处理方式；单次结果面板仍可临时切换。与「AI 配置」页的「启用 AI 处理」开关为同一状态。",
       "vocabTitle": "修正表",
       "vocabPrivacy": "隐私说明：修正表内容会随润色请求发送至你所配置的 AI 服务商，用于纠正惯用错词；不会发送到其他任何地方。可随时在此编辑或清空。",
       "vocabEmpty": "暂无修正词对",
@@ -121,6 +123,8 @@
       "vocabClear": "清空全部",
       "vocabCount": "{{count}} 条词对",
       "vocabAddFailed": "添加失败",
+      "vocabRemoveFailed": "删除失败",
+      "vocabClearFailed": "清空失败",
       "vocabClearConfirm": "确定清空全部修正词对吗？",
       "vocabDelete": "删除",
       "streamDegradationTitle": "流式降级记忆",
@@ -129,7 +133,10 @@
       "streamDegradationCount": "{{count}} 个网关",
       "streamDegradationReset": "重置",
       "streamDegradationResetConfirm": "确定重置全部流式降级记忆吗？",
-      "streamDegradationResetFailed": "重置失败"
+      "streamDegradationResetFailed": "重置失败",
+
+      "appearance": "外观",
+      "advancedSection": "高级"
     },
     "quickStart": {
       "title": "快速开始",
@@ -139,18 +146,19 @@
       "pasteKey": "已有 Key？粘贴"
     },
     "ai": {
-      "description": "AI 用于对识别出的文字做润色和优化，是可选功能。语音识别本身使用本地 FunASR 模型，无需在此配置。API Key 无效或留空时，将直接使用原始转录文本。",
-      "enableOptimization": "启用AI文本优化",
-      "apiKey": "API 密钥",
+      "description": "AI 用于对识别出的文字做润色和优化，是可选功能。语音识别本身使用本地 FunASR 模型，无需在此配置。API Key 无效或留空时，将直接使用原始识别文本。",
+      "enableOptimization": "启用 AI 处理",
+      "enableOptimizationDesc": "与「通用」页的「默认 AI 处理模式」为同一状态：关闭此开关等同于选择「关闭 AI 处理」。",
+      "apiKey": "API Key",
       "apiKeyPlaceholder": "请输入您的AI API Key",
       "baseUrl": "API 地址",
       "baseUrlDesc": "AI服务的API端点地址，支持OpenAI兼容的API",
       "model": "AI 模型",
       "modelDesc": "选择用于文本优化的AI模型",
-      "modelPlaceholder": "输入自定义模型名称，如：qwen3-30b-a3b-instruct-2507",
+      "modelPlaceholder": "输入自定义模型名称，如：gpt-6-sol",
       "predefinedModel": "预定义模型",
       "customModel": "自定义模型",
-      "qwenRecommended": "Qwen3-30B (推荐)",
+      "modelRecommended": "GPT-6 Sol (推荐)",
       "testConfig": "测试配置",
       "testing": "测试中...",
       "testSuccess": "AI配置测试成功",
@@ -159,13 +167,13 @@
       "testFailed": "AI配置测试失败",
       "testFailedToast": "测试失败",
       "unknownError": "未知错误",
-      "missingKey": "请先输入API密钥",
-      "emptyKey": "API密钥不能为空",
+      "missingKey": "请先输入 API Key",
+      "emptyKey": "API Key 不能为空",
       "incomplete": "配置不完整",
-      "maskedKeyWarning": "当前显示的是已保存密钥的遮盖值，请清空后重新输入",
-      "maskedKeyAction": "请清空API密钥输入框并重新粘贴您的密钥",
-      "reenterKey": "请重新输入API密钥",
-      "reenterKeyTitle": "需要重新输入密钥",
+      "maskedKeyWarning": "当前显示的是已保存 API Key 的遮盖值，请清空后重新输入",
+      "maskedKeyAction": "请清空 API Key 输入框并重新粘贴您的 API Key",
+      "reenterKey": "请重新输入 API Key",
+      "reenterKeyTitle": "需要重新输入 API Key",
       "presetApplied": "已应用 {{label}} 预设",
       "testSuccessDesc": "模型: {{model}} - 连接正常",
       "unknownModel": "未知",
@@ -174,8 +182,6 @@
       "providerLabel": "提供商",
       "precise": "精确",
       "creative": "创造",
-      "ai_temperature": "创造性 (Temperature)",
-      "ai_max_tokens": "最大输出长度",
       "hideApiKey": "隐藏 API Key",
       "showApiKey": "显示 API Key"
     },
@@ -189,7 +195,7 @@
       "closeBehaviorDesc": "点击窗口关闭按钮时的行为",
       "hideBehavior": "隐藏到菜单栏",
       "quitBehavior": "退出应用",
-      "alwaysOnTop": "将应用窗口保持在最前面"
+      "alwaysOnTop": "窗口始终置顶"
     },
     "appearance": {
       "theme": "应用的颜色主题",
@@ -208,11 +214,31 @@
       "granted": "已授权",
       "denied": "未授权",
       "testSuccess": "权限测试成功",
-      "testFailed": "权限测试失败"
+      "testFailed": "权限测试失败",
+      "micTestSuccessTitle": "✅ 麦克风权限测试成功",
+      "micTestSuccessDesc": "麦克风权限正常工作！现在可以进行语音录制了。",
+      "micTestSuccessAlert": "✅ 麦克风权限正常工作！现在可以进行语音录制了。",
+      "micTestFailedTitle": "❌ 需要麦克风权限",
+      "micTestFailedDesc": "请授予麦克风权限以使用语音识别功能。",
+      "micTestFailedAlert": "❌ 需要麦克风权限！请授予麦克风权限以使用语音识别功能。",
+      "apiUnavailableTitle": "❌ Electron API 不可用",
+      "apiUnavailableDesc": "preload 脚本加载失败，请重启应用。",
+      "apiUnavailableAlert": "❌ Electron API 不可用，请重启应用。",
+      "accessibilityPasteText": "Murmur辅助功能测试",
+      "accessibilityTestSuccessTitle": "✅ 辅助功能权限测试成功",
+      "accessibilityTestSuccessDesc": "辅助功能权限正常工作！请检查测试文本是否出现在其他应用中。",
+      "accessibilityTestSuccessAlert": "✅ 辅助功能权限正常工作！请检查测试文本是否出现在其他应用中。",
+      "accessibilityTestFailedTitle": "❌ 需要辅助功能权限",
+      "accessibilityTestFailedDesc": "请在系统设置中授予辅助功能权限，以启用自动文本粘贴功能。",
+      "accessibilityTestFailedAlert": "❌ 需要辅助功能权限！请在系统设置中授予权限。"
     },
     "providers": {
+      "localSuffix": "本地",
       "openai": {
         "guide": "注册后获取 API Key，按量付费"
+      },
+      "anthropic": {
+        "guide": "注册获取 API Key，Claude 走官方 OpenAI 兼容端点"
       },
       "deepseek": {
         "guide": "注册即送免费额度，适合中文文本处理"
@@ -388,6 +414,7 @@
     "unknown": "未知",
     "copiedToClipboard": "文本已复制到剪贴板",
     "autoPasteDone": "文本已自动粘贴到当前输入框",
+    "noAutoAction": "已按设置不自动操作",
     "copiedManualPaste": "文本已复制到剪贴板，请手动粘贴",
     "operationFailed": "操作失败",
     "accessibilityPasteHint": "请检查辅助功能权限。文本已复制到剪贴板 - 请手动使用 Cmd+V 粘贴。",

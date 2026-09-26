@@ -46,7 +46,6 @@ vi.mock("react-i18next", () => ({
 }));
 
 // Controlled useSettings fixture — the hook itself has its own suite.
-const saveSettingsMock = vi.fn().mockResolvedValue(true);
 const handleInputChangeMock = vi.fn();
 vi.mock("../../src/settings/useSettings", async (importOriginal) => {
   // Keep the real constants (PREDEFINED_MODELS / MODEL_LABELS / applyTheme...)
@@ -71,9 +70,7 @@ vi.mock("../../src/settings/useSettings", async (importOriginal) => {
         hotkey: "CommandOrControl+Shift+Space",
       },
       loading: false,
-      saving: false,
       handleInputChange: handleInputChangeMock,
-      saveSettings: saveSettingsMock,
       customModel: false,
       setCustomModel: vi.fn(),
       providerPresets: [],
@@ -104,13 +101,16 @@ describe("[20260816_Test_SettingsPage] SettingsPage component", () => {
     vi.clearAllMocks();
   });
 
-  it("renders the General section by default with the sidebar tabs", () => {
+  it("renders five sidebar tabs after the Bot tab merges into General (#409)", () => {
     render(<SettingsPage />);
-    // Sidebar tabs (role=tab per SettingsSidebar).
-    expect(screen.getByRole("tab", { name: "通用" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "权限" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "AI 配置" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "关于" })).toBeInTheDocument();
+    // Sidebar tabs (role=tab per SettingsSidebar): general / permissions /
+    // ai / templates / about. The Bot tab is gone (issue #409) — its pickers
+    // now live in the General tab's appearance group.
+    expect(screen.getAllByRole("tab")).toHaveLength(5);
+    expect(screen.queryByRole("tab", { name: "Bot 吉祥物" })).toBeNull();
+    for (const name of ["通用", "权限", "AI 配置", "模板", "关于"]) {
+      expect(screen.getByRole("tab", { name })).toBeInTheDocument();
+    }
     // General section content is visible; AI content is not.
     expect(screen.getByText("应用的颜色主题")).toBeInTheDocument();
     expect(screen.queryByText("预定义模型")).not.toBeInTheDocument();
@@ -140,19 +140,21 @@ describe("[20260816_Test_SettingsPage] SettingsPage component", () => {
     expect(hideSettingsWindow).toHaveBeenCalledTimes(1);
   });
 
-  it("invokes saveSettings from the AI section's save button", async () => {
-    // The save button lives in AIConfigSection — switch there first.
+  it("no longer renders a save button in the AI section (issue #408)", () => {
+    // Issue #408: settings apply immediately — the AI tab has no 保存设置
+    // button; the hook-level saveSettings helper is no longer UI-bound.
     render(<SettingsPage />);
     fireEvent.click(screen.getByRole("tab", { name: "AI 配置" }));
-    fireEvent.click(screen.getByRole("button", { name: "保存设置" }));
-    await waitFor(() => {
-      expect(saveSettingsMock).toHaveBeenCalledTimes(1);
-    });
+    expect(
+      screen.queryByRole("button", { name: "保存设置" }),
+    ).not.toBeInTheDocument();
   });
 
   it("changes a general setting through the section's handler", () => {
     render(<SettingsPage />);
-    fireEvent.click(screen.getByRole("switch"));
+    // Two switches live on the General tab now (issue #400 added the
+    // show-notifications one) — target the always-on-top one by name.
+    fireEvent.click(screen.getByRole("switch", { name: "窗口始终置顶" }));
     expect(handleInputChangeMock).toHaveBeenCalledWith(
       "window_always_on_top",
       false,
@@ -200,8 +202,10 @@ describe("[20260816_Test_SettingsPage] settings entry mount", () => {
       getSetting,
     };
     await import("../../src/settings");
-    await new Promise((r) => setTimeout(r, 30));
-    expect(changeLanguage).toHaveBeenCalledWith("en");
+    // React 18 render + IPC promise chain resolve asynchronously; poll instead
+    // of a fixed 30ms sleep so cold-transform load cannot outrun the mount
+    // effect (changeLanguage called 0 times flake).
+    await waitFor(() => expect(changeLanguage).toHaveBeenCalledWith("en"));
 
     // Rejection arm: silent.
     changeLanguage.mockClear();

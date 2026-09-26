@@ -1,6 +1,6 @@
 // [20260713_Fix_NoHardcodedChinese] All user-visible strings now go through
 // t() — no hardcoded Chinese remains in JSX.
-import React, { useState, useCallback, useRef, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Eye,
@@ -9,21 +9,30 @@ import {
   TestTube,
   CheckCircle,
   XCircle,
-  Save,
   ExternalLink,
   Sparkles,
-  Check,
 } from "lucide-react";
 import type { AICheckStatusResult } from "../../types/ipc";
 import type { SettingsState, ProviderPreset } from "../useSettings";
 // [20260815_Refactor_ModelListDedup] The <option> list below renders from the
 // single PREDEFINED_MODELS/MODEL_LABELS source of truth in useSettings.ts
 // instead of a second hardcoded copy that could silently drift.
-import { PREDEFINED_MODELS, MODEL_LABELS } from "../useSettings";
+import { PREDEFINED_MODELS, MODEL_LABELS, DEFAULT_MODEL } from "../useSettings";
+// [20260926_Issue407] Modified dot + reset-to-default (schema-derived).
+import { SettingResetButton } from "../SettingResetButton";
 
 interface AIConfigSectionProps {
   settings: SettingsState;
-  onInputChange: (key: string, value: unknown) => void;
+  // [20260926_Perf_402_TextInputDebounce] The third argument flags discrete
+  // controls (the AI-model dropdown) so their write skips the debounce.
+  onInputChange: (
+    key: string,
+    value: unknown,
+    options?: { immediate?: boolean },
+  ) => void;
+  // [20260926_Perf_402_TextInputDebounce] Blur flush hook for the debounced
+  // text inputs (issue #402: persist the tail keystroke on field exit).
+  onInputBlur?: () => void;
   customModel: boolean;
   setCustomModel: (v: boolean) => void;
   resolvedProviderPresets: {
@@ -46,14 +55,17 @@ interface AIConfigSectionProps {
   // of an inline subset to prevent type drift when fields are added.
   testResult: AICheckStatusResult | null;
   testAIConfiguration: () => void;
-  saveSettings: () => Promise<boolean>;
-  saving: boolean;
+  // [20260926_Feat_408_NoSaveButton] Issue #408: saveSettings/saving props
+  // removed with the AI-tab save button — every change persists as it is
+  // made (debounced text fields + immediate discrete controls), so there is
+  // nothing left for an explicit save action to do.
   showQuickStart: boolean;
 }
 
 export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
   settings,
   onInputChange,
+  onInputBlur,
   customModel,
   setCustomModel,
   resolvedProviderPresets,
@@ -65,14 +77,9 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
   testing,
   testResult,
   testAIConfiguration,
-  saveSettings,
-  saving,
   showQuickStart,
 }) => {
   const { t } = useTranslation();
-  // [ADR-015] savedFlash: briefly show "✓ 已保存" on the save button after
-  // a successful save. Only triggers when saveSettings returns true.
-  const [savedFlash, setSavedFlash] = useState(false);
 
   // [20260907_Feat_233_ListModels] Ticket #233: derive the provider's model
   // list from ai_base_url and offer it as datalist suggestions on the custom
@@ -102,25 +109,6 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
       clearTimeout(timer);
     };
   }, [baseUrl, apiKey]);
-  // [CodeReview] Track timeout so it can be cleared on unmount to prevent
-  // React "state update on unmounted component" warning.
-  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const handleSave = useCallback(async () => {
-    const ok = await saveSettings();
-    if (ok) {
-      setSavedFlash(true);
-      if (flashTimer.current) clearTimeout(flashTimer.current);
-      flashTimer.current = setTimeout(() => setSavedFlash(false), 1500);
-    }
-  }, [saveSettings]);
-
-  // [CodeReview] Cleanup: clear any pending flash timer on unmount.
-  useEffect(() => {
-    return () => {
-      if (flashTimer.current) clearTimeout(flashTimer.current);
-    };
-  }, []);
 
   return (
     <div className="space-y-5">
@@ -132,40 +120,62 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
         )}
       </p>
 
-      {/* AI优化开关 */}
+      {/* AI优化开关 — [20260926_Fix_399_UnifiedKnobWording] issue #399: this
+          toggle and the General tab's default_mode dropdown are ONE knob
+          (bidirectional sync in useSettings.handleInputChange). The label
+          joins the dropdown's 「AI 处理」 term family and the description
+          cross-references the dropdown instead of posing as a feature of its
+          own. */}
       <div className="flex items-center justify-between">
-        <label
-          htmlFor="ai-optimization-toggle"
-          className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]"
-        >
-          {t("settings.ai.enableOptimization", "启用AI文本优化")}
-        </label>
-        <button
-          type="button"
-          id="ai-optimization-toggle"
-          role="switch"
-          aria-checked={settings.enable_ai_optimization}
-          onClick={() =>
-            onInputChange(
-              "enable_ai_optimization",
-              !settings.enable_ai_optimization,
-            )
-          }
-          className={`${
-            settings.enable_ai_optimization
-              ? "bg-[#0071e3]"
-              : "bg-[#d2d2d7] dark:bg-[#3a3a3c]"
-          } relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-2`}
-        >
-          <span
-            aria-hidden="true"
+        <div>
+          <label
+            htmlFor="ai-optimization-toggle"
+            className="text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7]"
+          >
+            {t("settings.ai.enableOptimization", "启用 AI 处理")}
+          </label>
+          <p className="text-xs text-[#6e6e73]">
+            {t(
+              "settings.ai.enableOptimizationDesc",
+              "与「通用」页的「默认 AI 处理模式」为同一状态：关闭此开关等同于选择「关闭 AI 处理」。",
+            )}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <SettingResetButton
+            settingKey="enable_ai_optimization"
+            value={settings.enable_ai_optimization}
+            onReset={(key, value) =>
+              onInputChange(key, value, { immediate: true })
+            }
+          />
+          <button
+            type="button"
+            id="ai-optimization-toggle"
+            role="switch"
+            aria-checked={settings.enable_ai_optimization}
+            onClick={() =>
+              onInputChange(
+                "enable_ai_optimization",
+                !settings.enable_ai_optimization,
+              )
+            }
             className={`${
               settings.enable_ai_optimization
-                ? "translate-x-4"
-                : "translate-x-0"
-            } inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
-          />
-        </button>
+                ? "bg-[#0071e3]"
+                : "bg-[#d2d2d7] dark:bg-[#3a3a3c]"
+            } relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#0071e3] focus:ring-offset-2`}
+          >
+            <span
+              aria-hidden="true"
+              className={`${
+                settings.enable_ai_optimization
+                  ? "translate-x-4"
+                  : "translate-x-0"
+              } inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+            />
+          </button>
+        </div>
       </div>
 
       {/* Quick Start 引导 */}
@@ -290,6 +300,7 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
             type={showApiKey ? "text" : "password"}
             value={settings.ai_api_key}
             onChange={(e) => onInputChange("ai_api_key", e.target.value)}
+            onBlur={onInputBlur}
             placeholder={t(
               "settings.ai.apiKeyPlaceholder",
               "请输入您的AI API Key",
@@ -325,6 +336,7 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
           type="url"
           value={settings.ai_base_url}
           onChange={(e) => onInputChange("ai_base_url", e.target.value)}
+          onBlur={onInputBlur}
           placeholder="https://api.openai.com/v1"
           className="w-full px-3 py-2 text-sm border border-[#d2d2d7] dark:border-[#3a3a3c] rounded-lg focus:ring-2 focus:ring-[#0071e3] focus:border-transparent bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7]"
         />
@@ -338,9 +350,18 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
 
       {/* Model */}
       <div>
-        <label className="block text-xs font-medium text-[#1d1d1f]/80 dark:text-[#f5f5f7]/80 mb-1">
-          {t("settings.ai.model", "AI模型")}
-        </label>
+        <div className="mb-1 flex items-center gap-1.5">
+          <label className="text-xs font-medium text-[#1d1d1f]/80 dark:text-[#f5f5f7]/80">
+            {t("settings.ai.model", "AI模型")}
+          </label>
+          <SettingResetButton
+            settingKey="ai_model"
+            value={settings.ai_model}
+            onReset={(key, value) =>
+              onInputChange(key, value, { immediate: true })
+            }
+          />
+        </div>
         <div className="space-y-2">
           <div className="flex items-center space-x-2">
             <input
@@ -362,13 +383,15 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
             <select
               aria-label={t("settings.ai.predefinedModel", "预定义模型")}
               value={settings.ai_model}
-              onChange={(e) => onInputChange("ai_model", e.target.value)}
+              onChange={(e) =>
+                onInputChange("ai_model", e.target.value, { immediate: true })
+              }
               className="w-full px-3 py-2 text-sm border border-[#d2d2d7] dark:border-[#3a3a3c] rounded-lg focus:ring-2 focus:ring-[#0071e3] focus:border-transparent bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7]"
             >
               {PREDEFINED_MODELS.map((model) => (
                 <option key={model} value={model}>
-                  {model.startsWith("qwen")
-                    ? t("settings.ai.qwenRecommended", "Qwen3-30B (推荐)")
+                  {model === DEFAULT_MODEL
+                    ? t("settings.ai.modelRecommended", "GPT-6 Sol (推荐)")
                     : MODEL_LABELS[model]}
                 </option>
               ))}
@@ -395,6 +418,7 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
               type="text"
               value={settings.ai_model}
               onChange={(e) => onInputChange("ai_model", e.target.value)}
+              onBlur={onInputBlur}
               list="provider-model-list"
               placeholder={t(
                 "settings.ai.modelPlaceholder",
@@ -421,9 +445,18 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
       <div className="space-y-3">
         <div>
           <div className="flex justify-between">
-            <label className="text-xs font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
-              {t("settings.ai_temperature", "创造性 (Temperature)")}
-            </label>
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
+                {t("settings.ai_temperature", "创造性 (Temperature)")}
+              </label>
+              <SettingResetButton
+                settingKey="ai_temperature"
+                value={settings.ai_temperature}
+                onReset={(key, value) =>
+                  onInputChange(key, value, { immediate: true })
+                }
+              />
+            </div>
             <span className="text-xs text-[#86868b]">
               {settings.ai_temperature.toFixed(1)}
             </span>
@@ -447,9 +480,18 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
 
         <div>
           <div className="flex justify-between">
-            <label className="text-xs font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
-              {t("settings.ai_max_tokens", "最大输出长度")}
-            </label>
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">
+                {t("settings.ai_max_tokens", "最大输出长度")}
+              </label>
+              <SettingResetButton
+                settingKey="ai_max_tokens"
+                value={settings.ai_max_tokens}
+                onReset={(key, value) =>
+                  onInputChange(key, value, { immediate: true })
+                }
+              />
+            </div>
             <span className="text-xs text-[#86868b]">
               {settings.ai_max_tokens}
             </span>
@@ -552,7 +594,10 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
         </div>
       )}
 
-      {/* 操作按钮 */}
+      {/* 操作按钮 — [20260926_Feat_408_NoSaveButton] issue #408: the explicit
+          保存设置 button is gone (changes persist as they are made); only the
+          测试配置 action remains, which flushes pending debounced writes
+          before checking so it always exercises the latest saved config. */}
       <div className="flex items-center justify-between pt-4 border-t border-[#d2d2d7] dark:border-[#3a3a3c]">
         <button
           type="button"
@@ -569,30 +614,6 @@ export const AIConfigSection: React.FC<AIConfigSectionProps> = ({
             {testing
               ? t("settings.ai.testing", "测试中...")
               : t("settings.ai.testConfig", "测试配置")}
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={handleSave}
-          aria-label={t("settings.save", "保存设置")}
-          disabled={saving}
-          className={`flex items-center space-x-2 px-4 py-1.5 text-sm text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-            savedFlash ? "bg-[#34c759]" : "bg-[#0071e3] hover:bg-[#0077ed]"
-          }`}
-        >
-          {saving ? (
-            <Loader2 className="w-3 h-3 animate-spin" />
-          ) : savedFlash ? (
-            <Check className="w-3 h-3" />
-          ) : (
-            <Save className="w-3 h-3" />
-          )}
-          <span>
-            {saving
-              ? t("settings.saving", "保存中...")
-              : savedFlash
-                ? t("settings.saved", "已保存")
-                : t("settings.save", "保存设置")}
           </span>
         </button>
       </div>

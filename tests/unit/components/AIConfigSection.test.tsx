@@ -6,7 +6,7 @@
 // (1024–16384) and pins the default 8192 onto the slider's notch grid.
 // @vitest-environment happy-dom
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { AIConfigSection } from "../../../src/settings/sections/AIConfigSection";
 import type { SettingsState } from "../../../src/settings/useSettings";
@@ -36,6 +36,15 @@ const BASE_SETTINGS: SettingsState = {
   bot_shape: "circle",
   bot_color: "auto",
   bot_expression: "neutral",
+  // [20260926_Refactor_403_SettingsSchema] new SettingsState key
+  show_notifications: true,
+  // [20260926_Issue404] new SettingsState key
+  auto_start: false,
+  // [20260926_Issue406] new SettingsState key
+  model_download_path: "",
+
+  // [20260926_Issue405] new SettingsState key
+  minimize_to_tray: false,
 };
 
 function renderSection(settings: SettingsState = BASE_SETTINGS) {
@@ -54,8 +63,6 @@ function renderSection(settings: SettingsState = BASE_SETTINGS) {
       testing={false}
       testResult={null}
       testAIConfiguration={vi.fn()}
-      saveSettings={vi.fn().mockResolvedValue(true)}
-      saving={false}
       showQuickStart={false}
     />,
   );
@@ -63,8 +70,10 @@ function renderSection(settings: SettingsState = BASE_SETTINGS) {
 
 function findMaxTokensSlider(): HTMLInputElement {
   const label = screen.getByText("最大输出长度");
-  // The label and its slider share the wrapping <div> block.
-  const block = label.closest("div")!.parentElement!;
+  // The label and its slider share the wrapping <div> block. Issue #407 put
+  // the modified/reset dot next to the label (one extra wrapper level), so
+  // the block is now two parentElement hops above the label.
+  const block = label.closest("div")!.parentElement!.parentElement!;
   const slider = block.querySelector(
     'input[type="range"]',
   ) as HTMLInputElement | null;
@@ -89,5 +98,63 @@ describe("AIConfigSection max output tokens slider", () => {
     // exactly on a notch — otherwise the thumb renders off the saved value.
     expect((8192 - min) % step).toBe(0);
     expect(slider.value).toBe("8192");
+  });
+});
+
+// [20260926_Perf_402_TextInputDebounce] The API-key, base-URL, and custom
+// model inputs persist debounced (issue #402); leaving a field flushes the
+// pending write. The AI-model dropdown stays a discrete select: its change
+// must reach onInputChange flagged immediate so the hook persists it in the
+// same tick instead of after the 400ms debounce window.
+describe("AIConfigSection text-input flush + immediate select (issue #402)", () => {
+  interface RenderOverrides {
+    onInputChange?: (
+      key: string,
+      value: unknown,
+      options?: { immediate?: boolean },
+    ) => void;
+    onInputBlur?: () => void;
+    customModel?: boolean;
+  }
+
+  function renderWithOverrides(overrides: RenderOverrides = {}) {
+    return render(
+      <AIConfigSection
+        settings={BASE_SETTINGS}
+        onInputChange={overrides.onInputChange ?? (() => undefined)}
+        onInputBlur={overrides.onInputBlur}
+        customModel={overrides.customModel ?? false}
+        setCustomModel={vi.fn()}
+        resolvedProviderPresets={[]}
+        providerPresets={[]}
+        applyProviderPreset={vi.fn()}
+        showApiKey={false}
+        setShowApiKey={vi.fn()}
+        apiKeyInputRef={{ current: null }}
+        testing={false}
+        testResult={null}
+        testAIConfiguration={vi.fn()}
+        showQuickStart={false}
+      />,
+    );
+  }
+
+  it("requests a pending-write flush when a text input blurs", () => {
+    const onInputBlur = vi.fn();
+    renderWithOverrides({ onInputBlur });
+    fireEvent.blur(screen.getByPlaceholderText("请输入您的AI API Key"));
+    fireEvent.blur(screen.getByPlaceholderText("https://api.openai.com/v1"));
+    expect(onInputBlur).toHaveBeenCalledTimes(2);
+  });
+
+  it("flags the AI-model dropdown change as immediate", () => {
+    const onInputChange = vi.fn();
+    renderWithOverrides({ onInputChange });
+    fireEvent.change(screen.getByRole("combobox"), {
+      target: { value: "gpt-6-luna" },
+    });
+    expect(onInputChange).toHaveBeenCalledWith("ai_model", "gpt-6-luna", {
+      immediate: true,
+    });
   });
 });

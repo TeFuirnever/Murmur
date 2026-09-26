@@ -37,7 +37,32 @@ const h = vi.hoisted(() => {
   // test can prove the renderer load is never skipped by a crypto failure.
   // Plain property — tests flip it directly (h.setSafeStorageThrows = true)
   // and the database mock reads it at call time.
-  return { order, resolveReady, whenReadyPromise, setSafeStorageThrows: false };
+  return {
+    order,
+    resolveReady,
+    whenReadyPromise,
+    setSafeStorageThrows: false,
+    // [20260926_Fix_394_AlwaysOnTopStartupRead] Spies for the startup
+    // alwaysOnTop contract: the persisted read (database) and the apply
+    // (windowManager) are hoisted so tests can control the persisted value
+    // (dbGetSetting) and assert call arguments/ordering.
+    dbGetSetting: vi.fn(),
+    wmSetDefaultAlwaysOnTop: vi.fn(),
+    // [20260926_Issue404] Login-item startup wiring spies: main.ts must call
+    // syncLoginItemAtStartup(db, logger) during startApp and
+    // hideMainWindowOnLoginLaunch(windowManager, logger) after the renderer
+    // has loaded (login-launch hidden window, no focus steal).
+    syncLoginItemAtStartup: vi.fn(),
+    hideMainWindowOnLoginLaunch: vi.fn(),
+    // [20260926_Issue406] Model-directory env injection spy: main.ts must
+    // call applyModelDownloadPathSetting(persisted path) before the FunASR
+    // server spawns (boot-time env injection; the empty setting is a no-op).
+    applyModelDownloadPathSetting: vi.fn(),
+    // [20260926_Issue405] Minimize-to-tray reader wiring spy: main.ts must
+    // inject the lazy setting reader BEFORE window creation (the attach
+    // itself happens inside createMainWindow).
+    wmSetMinimizeToTrayReader: vi.fn(),
+  };
 });
 
 vi.mock("electron", () => ({
@@ -108,7 +133,17 @@ vi.mock("../../src/helpers/windowManager", () => ({
   default: class {
     mainWindow = { on: vi.fn() };
     _setupCSP = vi.fn(() => h.order.push("_setupCSP"));
-    setDefaultAlwaysOnTop = vi.fn();
+    // [20260926_Fix_394_AlwaysOnTopStartupRead] Hoisted spy + boot-order
+    // marker so tests can assert the apply happens BEFORE window creation.
+    setDefaultAlwaysOnTop = h.wmSetDefaultAlwaysOnTop.mockImplementation(() => {
+      h.order.push("setDefaultAlwaysOnTop");
+    });
+    // [20260926_Issue405] Reader injection marker (before window creation).
+    setMinimizeToTrayReader = h.wmSetMinimizeToTrayReader.mockImplementation(
+      () => {
+        h.order.push("setMinimizeToTrayReader");
+      },
+    );
     createMainWindow = vi.fn(async () => {
       h.order.push("createMainWindow");
       return this.mainWindow;
@@ -125,7 +160,9 @@ vi.mock("../../src/helpers/database", () => ({
   default: class {
     initialize = vi.fn();
     setFileConfigPath = vi.fn();
-    getSetting = vi.fn(() => undefined);
+    // [20260926_Fix_394_AlwaysOnTopStartupRead] Hoisted spy — per-test
+    // implementations emulate the persisted row (or its absence).
+    getSetting = h.dbGetSetting;
     setSafeStorage = vi.fn(() => {
       h.order.push("setSafeStorage");
       if (h.setSafeStorageThrows) {
@@ -145,6 +182,8 @@ vi.mock("../../src/helpers/funasrManager", () => ({
     initializeAtStartup = vi.fn(async () => undefined);
     gracefulShutdown = vi.fn(async () => undefined);
   },
+  // [20260926_Issue406] main.ts imports the named config-side helper.
+  applyModelDownloadPathSetting: h.applyModelDownloadPathSetting,
 }));
 
 vi.mock("../../src/helpers/tray", () => ({
@@ -162,6 +201,15 @@ vi.mock("../../src/helpers/hotkeyManager", () => ({
 
 vi.mock("../../src/helpers/ipc", () => ({
   registerAll: vi.fn(),
+}));
+
+// [20260926_Issue404] The login-item module is mocked so the boot-order
+// harness asserts main.ts's WIRING (when each call happens relative to
+// window creation / renderer load); the module's internal logic (what it
+// calls on electron app, when it applies) is covered by loginItem.test.ts.
+vi.mock("../../src/helpers/loginItem", () => ({
+  syncLoginItemAtStartup: h.syncLoginItemAtStartup,
+  hideMainWindowOnLoginLaunch: h.hideMainWindowOnLoginLaunch,
 }));
 
 async function importMain(): Promise<void> {
@@ -211,5 +259,204 @@ describe("[20260820_Fix_211_KeychainBootOrder] main.ts boot order", () => {
     const loadIdx = h.order.indexOf("loadMainWindowContent");
     expect(cryptoIdx).toBeGreaterThanOrEqual(0);
     expect(loadIdx).toBeGreaterThan(cryptoIdx);
+  });
+});
+
+// ── [20260926_Fix_394_AlwaysOnTopStartupRead] Issue #394 ─────────────────
+// Contract (ticket item 2): at startup, BEFORE the main window is created,
+// main.ts must read the persisted `window_always_on_top` setting and apply
+// it through windowManager.setDefaultAlwaysOnTop(). The SET_TOP IPC handler
+// alone only covers in-session toggles — without the startup read, a user
+// who turned the floating panel off would see it resurrect on next launch.
+describe("[20260926_Fix_394_AlwaysOnTopStartupRead] main.ts startup alwaysOnTop read", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    h.order.length = 0;
+    h.setSafeStorageThrows = false;
+    vi.mocked(h_isEncryptionAvailable).mockReturnValue(true);
+    h.dbGetSetting.mockClear();
+    h.wmSetDefaultAlwaysOnTop.mockClear();
+    // No-row emulation: the real DatabaseManager.getSetting(key, default)
+    // returns the caller's default when the row is absent.
+    h.dbGetSetting.mockImplementation(
+      (_key: string, defaultValue: unknown) => defaultValue,
+    );
+    h.wmSetDefaultAlwaysOnTop.mockImplementation(() => {
+      h.order.push("setDefaultAlwaysOnTop");
+    });
+  });
+
+  it("reads window_always_on_top and applies persisted false BEFORE window creation", async () => {
+    // Persisted row: the user turned the floating panel OFF last session.
+    h.dbGetSetting.mockImplementation((key: string) =>
+      key === "window_always_on_top" ? false : undefined,
+    );
+
+    await importMain();
+    h.resolveReady();
+    await vi.waitFor(() => expect(h.order).toContain("createTray"));
+
+    expect(h.dbGetSetting).toHaveBeenCalledWith("window_always_on_top", true);
+    expect(h.wmSetDefaultAlwaysOnTop).toHaveBeenCalledWith(false);
+
+    const applyIdx = h.order.indexOf("setDefaultAlwaysOnTop");
+    const createIdx = h.order.indexOf("createMainWindow");
+    expect(applyIdx).toBeGreaterThanOrEqual(0);
+    expect(createIdx).toBeGreaterThan(applyIdx);
+  });
+
+  it("applies the default true when the setting has no persisted row", async () => {
+    await importMain();
+    h.resolveReady();
+    await vi.waitFor(() => expect(h.order).toContain("createTray"));
+
+    expect(h.dbGetSetting).toHaveBeenCalledWith("window_always_on_top", true);
+    expect(h.wmSetDefaultAlwaysOnTop).toHaveBeenCalledWith(true);
+  });
+});
+
+// ── [20260926_Issue404] Issue #404 ────────────────────────────────────────
+// Contract: at startup, main.ts must call syncLoginItemAtStartup(db, logger)
+// so the real OS login item is aligned with the persisted auto_start setting
+// (settings win), and call hideMainWindowOnLoginLaunch(windowManager,
+// logger) AFTER the renderer has loaded so a login launch ends with the
+// main window hidden (menu-bar convention, no focus steal).
+describe("[20260926_Issue404] main.ts login-item startup wiring", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    h.order.length = 0;
+    h.setSafeStorageThrows = false;
+    vi.mocked(h_isEncryptionAvailable).mockReturnValue(true);
+    h.dbGetSetting.mockClear();
+    h.wmSetDefaultAlwaysOnTop.mockClear();
+    h.dbGetSetting.mockImplementation(
+      (_key: string, defaultValue: unknown) => defaultValue,
+    );
+    h.wmSetDefaultAlwaysOnTop.mockImplementation(() => {
+      h.order.push("setDefaultAlwaysOnTop");
+    });
+    h.syncLoginItemAtStartup.mockClear();
+    h.hideMainWindowOnLoginLaunch.mockClear();
+    h.hideMainWindowOnLoginLaunch.mockImplementation(() => {
+      h.order.push("hideMainWindowOnLoginLaunch");
+    });
+  });
+
+  it("syncs the login item with the persisted auto_start setting during startApp", async () => {
+    h.dbGetSetting.mockImplementation((key: string) =>
+      key === "auto_start" ? true : undefined,
+    );
+    await importMain();
+    h.resolveReady();
+    await vi.waitFor(() => expect(h.order).toContain("createTray"));
+
+    expect(h.syncLoginItemAtStartup).toHaveBeenCalledTimes(1);
+    // First arg is the databaseManager (carries the hoisted getSetting spy);
+    // second is the logger.
+    expect(h.syncLoginItemAtStartup).toHaveBeenCalledWith(
+      expect.objectContaining({ getSetting: h.dbGetSetting }),
+      expect.objectContaining({ warn: expect.any(Function) }),
+    );
+  });
+
+  it("hides the main window on a login launch after the renderer has loaded", async () => {
+    await importMain();
+    h.resolveReady();
+    await vi.waitFor(() => expect(h.order).toContain("createTray"));
+
+    expect(h.hideMainWindowOnLoginLaunch).toHaveBeenCalledTimes(1);
+    const loadIdx = h.order.indexOf("loadMainWindowContent");
+    expect(loadIdx).toBeGreaterThanOrEqual(0);
+    // The hide runs after the renderer load — the window must already carry
+    // its content when it is hidden (a hidden empty window would strand the
+    // tray "show" action on a blank surface).
+    expect(h.hideMainWindowOnLoginLaunch.mock.calls[0]).toBeTruthy();
+    const hideIdx = h.order.indexOf("hideMainWindowOnLoginLaunch");
+    expect(hideIdx).toBeGreaterThan(loadIdx);
+  });
+});
+
+// ── [20260926_Issue406] Issue #406 ────────────────────────────────────────
+// Contract: at startup, main.ts must call applyModelDownloadPathSetting(
+// persisted model_download_path) BEFORE funasrManager.initializeAtStartup()
+// so the Python server and download subprocess inherit the configured
+// MODELSCOPE_CACHE (the whole model-path chain honors that env var). The
+// empty setting is a no-op (system default location).
+describe("[20260926_Issue406] main.ts model-directory env injection wiring", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    h.order.length = 0;
+    h.dbGetSetting.mockClear();
+    h.applyModelDownloadPathSetting.mockClear();
+    h.dbGetSetting.mockImplementation(
+      (_key: string, defaultValue: unknown) => defaultValue,
+    );
+  });
+
+  it("applies the persisted model_download_path during startApp", async () => {
+    h.dbGetSetting.mockImplementation((key: string) =>
+      key === "model_download_path" ? "/data/murmur-models" : undefined,
+    );
+    await importMain();
+    h.resolveReady();
+    await vi.waitFor(() => expect(h.order).toContain("createTray"));
+
+    expect(h.applyModelDownloadPathSetting).toHaveBeenCalledTimes(1);
+    expect(h.applyModelDownloadPathSetting).toHaveBeenCalledWith(
+      "/data/murmur-models",
+    );
+  });
+
+  it("applies the default (empty) value when the setting has no persisted row", async () => {
+    await importMain();
+    h.resolveReady();
+    await vi.waitFor(() => expect(h.order).toContain("createTray"));
+
+    expect(h.applyModelDownloadPathSetting).toHaveBeenCalledTimes(1);
+    // The empty string default flows through the same wiring — the helper
+    // treats it as a no-op (system default location).
+    expect(h.applyModelDownloadPathSetting).toHaveBeenCalledWith("");
+  });
+});
+
+// ── [20260926_Issue405] Issue #405 ────────────────────────────────────────
+// Contract: main.ts must inject the lazy minimize_to_tray reader into the
+// windowManager BEFORE window creation — the interception itself is
+// attached inside createMainWindow (so the Dock-recreate path is covered),
+// and the reader reads the persisted value at minimize time, so any
+// settings write takes effect on the next minimize without IPC plumbing.
+describe("[20260926_Issue405] main.ts minimize-to-tray reader wiring", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    h.order.length = 0;
+    h.setSafeStorageThrows = false;
+    vi.mocked(h_isEncryptionAvailable).mockReturnValue(true);
+    h.dbGetSetting.mockClear();
+    h.wmSetDefaultAlwaysOnTop.mockClear();
+    h.dbGetSetting.mockImplementation(
+      (_key: string, defaultValue: unknown) => defaultValue,
+    );
+    h.wmSetDefaultAlwaysOnTop.mockImplementation(() => {
+      h.order.push("setDefaultAlwaysOnTop");
+    });
+    h.wmSetMinimizeToTrayReader.mockClear();
+    h.wmSetMinimizeToTrayReader.mockImplementation(() => {
+      h.order.push("setMinimizeToTrayReader");
+    });
+  });
+
+  it("injects the minimize_to_tray reader before window creation", async () => {
+    await importMain();
+    h.resolveReady();
+    await vi.waitFor(() => expect(h.order).toContain("createTray"));
+
+    expect(h.wmSetMinimizeToTrayReader).toHaveBeenCalledTimes(1);
+    expect(h.wmSetMinimizeToTrayReader.mock.calls[0]![0]).toBeInstanceOf(
+      Function,
+    );
+    const wireIdx = h.order.indexOf("setMinimizeToTrayReader");
+    const createIdx = h.order.indexOf("createMainWindow");
+    expect(wireIdx).toBeGreaterThanOrEqual(0);
+    expect(createIdx).toBeGreaterThan(wireIdx);
   });
 });

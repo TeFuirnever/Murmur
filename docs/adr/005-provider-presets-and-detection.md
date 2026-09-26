@@ -4,6 +4,8 @@
 
 > [20260725_CodeReview_T1.5] 本 ADR 写于 ADR-010 big-bang 之前。下文 `.js` 文件名是写作时的快照，当前源码已迁移到 `.ts`（`providerPresets.ts`、`detectLocalModels.ts`、`aiHandlers.ts`）。见 `docs/adr/010-backend-ts-migration-strategy.md`。
 
+> [20260926_Epic392] 模型目录 2026-09 刷新 + 新增 Anthropic 预设（#397）：预设注册表现在共 12 个 provider（新增 anthropic）。上文「8 个 provider」与模型列表均为采纳时快照，现行注册表以 `src/helpers/providerPresets.ts` 为准。
+
 ## 上下文
 
 用户配置 AI 时需要手动查找并填写 base URL 和模型名称，门槛高。本地运行的模型（Ollama、LM Studio）虽然有 SSRF 支持，但用户不知道如何配置。

@@ -28,6 +28,7 @@ import type {
   TemplateListResult,
   TemplateReadResult,
   TemplateSaveResult,
+  PermissionStatusResult,
 } from "./types/ipc";
 
 export interface ElectronAPI {
@@ -234,6 +235,14 @@ export interface ElectronAPI {
 
   // System
   getAppVersion: () => Promise<string>;
+  // [20260926_Fix_396_PermissionStatus] Real OS permission status (#396).
+  getPermissionStatus: () => Promise<PermissionStatusResult>;
+  // [20260926_Issue404] Launch-at-login apply (#404): renderer sends only
+  // the boolean; platform payload differences are main-process-only.
+  setLoginItemSettings: (enabled: boolean) => Promise<OperationResult>;
+  // [20260926_Issue405] Platform gate for the Windows-only minimize-to-tray
+  // switch (#405); synchronous bridge read (no `process` in the page world).
+  getPlatform: () => string;
 
   // Update management
   checkForUpdates: () => Promise<UpdateCheckResult>;

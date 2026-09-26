@@ -22,7 +22,8 @@
 2. 在 AI 配置区域填入 API Key
 3. 选择模型提供商（支持通义千问、Kimi、智谱 AI、OpenAI 等）
 4. 填写 API 地址和模型名称
-5. 保存设置
+
+修改即时生效，无需手动保存。
 
 AI 文本优化是**可选功能**。不配置 API Key 也可以正常使用语音识别。
 
@@ -81,19 +82,20 @@ On first launch, Murmur downloads the FunASR speech recognition model (~1GB). On
 2. Enter your API Key in the AI configuration section
 3. Select a model provider (supports Qwen, Kimi, Zhipu AI, OpenAI, etc.)
 4. Fill in the API URL and model name
-5. Save settings
+
+Changes take effect immediately — no manual save needed.
 
 AI text optimization is **optional**. Voice recognition works without an API Key.
 
-### How do I install ffmpeg?
+### Does it need ffmpeg?
 
-Murmur uses ffmpeg for audio format conversion (mp3, m4a, and other non-WAV formats require ffmpeg).
+**Usually not.** Since v1.0.0, Murmur uses Python librosa/soundfile for audio format conversion and no longer depends on system ffmpeg. Conversion (mp3, m4a, etc.) happens on the Python side.
+
+ffmpeg remains an optional fallback: when Python librosa is unavailable, Murmur tries system ffmpeg. If needed:
 
 - **macOS**: `brew install ffmpeg`
 - **Windows**: Download from [ffmpeg.org](https://ffmpeg.org/download.html) or use `winget install ffmpeg`
 - **Linux**: `sudo apt install ffmpeg` or `sudo dnf install ffmpeg`
-
-If you only record in WAV format, ffmpeg is not required.
 
 ### How do I configure microphone permissions?
 

@@ -186,6 +186,17 @@ export const preloadApi: ElectronAPI = {
 
   // App info
   getAppVersion: () => ipcRenderer.invoke(C.SYSTEM.VERSION),
+  // [20260926_Fix_396_PermissionStatus] Real OS permission status for the
+  // settings permission badges (issue #396).
+  getPermissionStatus: () => ipcRenderer.invoke(C.SYSTEM.PERMISSION_STATUS),
+  // [20260926_Issue404] Launch-at-login apply (issue #404): renderer sends
+  // only the boolean; platform payload differences are main-process-only.
+  setLoginItemSettings: (enabled: boolean) =>
+    ipcRenderer.invoke(C.SYSTEM.SET_LOGIN_ITEM, enabled),
+  // [20260926_Issue405] Platform gate for the Windows-only minimize-to-tray
+  // switch: sandboxed renderers have no `process` global in the page main
+  // world, so the platform travels through the bridge synchronously.
+  getPlatform: () => process.platform,
   checkForUpdates: () => ipcRenderer.invoke(C.UPDATE.CHECK),
   downloadUpdate: (updateInfo: unknown) =>
     ipcRenderer.invoke(C.UPDATE.DOWNLOAD, updateInfo),

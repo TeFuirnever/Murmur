@@ -1,10 +1,18 @@
 // [20260724_TS_BigBang_SettingsHandlers] Migrated from .js to .ts (ADR-010).
 import * as C from "../ipc-contracts";
+// [20260926_Refactor_403_SettingsSchema] Issue #403: the settings allowlist
+// is DERIVED from the schema (one declaration per key) instead of a
+// hand-maintained mirror — a new schema key is writable through SETTINGS.SET
+// automatically. Re-exported here so importers of this module keep their
+// import path.
+import { ALLOWED_SETTING_KEYS } from "../../settings/settingsSchema";
 // [20260910_Feat_237_StreamDegradation] T10 memory list/reset handlers.
 import {
   listStreamDegradations,
   resetStreamDegradations,
 } from "../streamDegradation";
+
+export { ALLOWED_SETTING_KEYS };
 
 interface DatabaseManager {
   getSetting(key: string, defaultValue?: unknown): unknown;
@@ -42,38 +50,6 @@ interface Managers {
 // the IPC settings boundary. The CLI keeps a plain-JS mirror (cli/lib cannot
 // import TS at runtime); tests/unit/cli-config.test.ts locks the two lists
 // to set equality so drift fails CI.
-export const ALLOWED_SETTING_KEYS = new Set<string>([
-  "ai_api_key",
-  "ai_base_url",
-  "ai_model",
-  "ai_temperature",
-  "ai_max_tokens",
-  "enable_ai_optimization",
-  // [20260905_Fix_249_DefaultModeUi] Default AI processing mode — the read
-  // side (useRecording/useFileTranscription) already honored it; now writable
-  // (issue #249).
-  "default_mode",
-  "window_always_on_top",
-  "auto_paste",
-  "close_behavior",
-  "theme",
-  "hotkey",
-  "language",
-  "auto_start",
-  "minimize_to_tray",
-  "show_notifications",
-  "model_download_path",
-  // [20260820_T14_Hotwords] Hotword list (one entry per line, sanitized at
-  // both the save and injection boundaries — see src/helpers/hotwords.ts).
-  "hotwords",
-  // [20260905_Feat_BloubSettings] bot mascot catalogue keys (spec #224
-  // ticket 5); values are validated at the mascot boundary
-  "bot_shape",
-  "bot_color",
-  "bot_expression",
-  // [20260816_Refactor_RemoveEffects] effects_enabled removed from this
-  // allowlist with the visual-effects feature.
-]);
 
 const MAX_VALUE_LENGTH = 10000;
 
