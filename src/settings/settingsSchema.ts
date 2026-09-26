@@ -3,7 +3,7 @@
 // required hand-syncing five declarations (SettingsState type +
 // DEFAULT_SETTINGS + the loadSettings builder + the saveSettings body in
 // useSettings.ts, plus ALLOWED_SETTING_KEYS in settingsHandlers.ts) — miss
-// one and persistence silently broke; CLAUDE.md rule 5 existed purely to
+// one and persistence silently broke; AGENTS.md rule 5 existed purely to
 // police that discipline. Everything below is now DERIVED from this schema:
 //
 //   SettingsState (type) ......... mapped type over scope "settings-state"

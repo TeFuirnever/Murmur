@@ -28,7 +28,7 @@ Reusable policies, failure modes, and workflow corrections discovered during dev
 
 ## L3: Electron performance stalling — trace the full path before proposing fixes
 
-**Date:** (referenced from CLAUDE.md)
+**Date:** (referenced from AGENTS.md)
 **Context:** General Electron debugging
 
 When debugging "entire client is slow" issues, trace the FULL execution path from user trigger to observable symptom, step by step. Do not propose architectural solutions based on assumptions. Check wrong execution order and missing input validation first.
@@ -106,3 +106,19 @@ Three stacked root causes, each invisible to "did the build finish" checks:
 **Context:** #405's Windows-only switch gated rendering on `process.platform === "win32"` inside `GeneralSection.tsx`. All 2900+ vitest suites were green (jsdom runs under Node, which provides `process`), but the shipped app would have blanked the entire settings window on both platforms the moment the General tab mounted: renderer pages run sandbox:true + nodeIntegration:false + contextIsolation:true, so the page main world has no `process`; Vite's define only statically replaces `process.env.NODE_ENV`, leaving `process.platform` as a live reference that throws `ReferenceError`.
 
 **Rule:** `process.platform` belongs to main-process / plain-Node code only. Renderer platform gates go through the preload bridge (`window.electronAPI.getPlatform()`), undefined-safe. jsdom greens are not evidence a renderer global exists at runtime. The no-mistakes pipeline's Playwright run against the real Electron bundle caught what 17 TDD tickets did not.
+
+## 2026-09-26 · macOS 窗口可见性：事件层不可靠，跨边界正确性用低频真值轮询兜底
+
+**Date:** 2026-09-26 (PR #410, CPU 空闲 19-52% → ~0% 修复链)
+
+**Context:** BloubBot 吉祥物 rAF 循环常驻 + ADR-015 的 `backgroundThrottling: false` 导致空闲燃烧。修复过程连环踩坑：① 该 flag **同时禁掉 macOS 页面可见性翻转**——`visibilitychange` 在真机永不触发（jsdom 手动派发事件会假绿）；② app 级隐藏的事件投递每一层非确定：窗口 `hide` 事件约 50% 触发，app `hide` 事件连程序化 `app.hide()` 直调都不发（Electron 文档口径 "when the USER hides"）；③ 唯一一直可靠的是 `isVisible()` 真值读取。
+
+**Rule:** 跨事件边界的正确性别赌事件投递——用"事件快路径（派生真值、幂等）+ 1Hz 无条件轮询兜底"双层结构收敛一切状态（含挂载时已隐藏）。单测绿不等于真机行为：涉及 Chromium/Electron 平台层行为时，必须真机 cputime 差分实测（`ps cputime` 两次采样差 / wall time），`ps %CPU` 是衰减均值会漏短暂尖峰。范式见 `windowManager.ts` 的 `[20260926_Fix_BloubHiddenPause]` 标记块与 `windowManager-events.test.ts` 真值矩阵。
+
+## 2026-09-26 · rtk hook 会吞 prettier 退出码——工具链验证用原始二进制
+
+**Date:** 2026-09-26 (fps 两档实现验收)
+
+**Context:** agent 报告"prettier 通过"，本地 ci:check 的 format:check 却红。复盘：`npx prettier --check` 经 rtk hook 代理后打印成功文案但真实退出码为 1，上层 `&&` 链据此误判。同一会话更早还出现过 shell 管道 `| tail` 吞 `pnpm ci:check` 退出码（显示 exit 0 实际 2/12 失败）。
+
+**Rule:** 门禁类命令的成败判定必须用**原始二进制 + 显式退出码回显**：`./node_modules/.bin/prettier --check <files>; echo EXIT=$?`，或 `set -o pipefail` 守护带管道的长命令。凡"代理层/管道层打印成功"而未经退出码核验的通过声明，一律视为未验证。

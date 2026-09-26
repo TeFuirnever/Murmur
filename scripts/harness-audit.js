@@ -180,15 +180,15 @@ function checkContextEfficiency() {
   let pts = 0;
   const max = 10;
 
-  // CLAUDE.md exists and has structure (2 pts)
-  const claudeMd = readIf("CLAUDE.md");
-  const hasClaudeMd = claudeMd.length > 200;
+  // AGENTS.md exists and has structure (2 pts)
+  const agentsMd = readIf("AGENTS.md");
+  const hasAgentsMd = agentsMd.length > 200;
   checks.push({
-    name: "CLAUDE.md with structure",
-    pass: hasClaudeMd,
-    detail: "CLAUDE.md",
+    name: "AGENTS.md with structure",
+    pass: hasAgentsMd,
+    detail: "AGENTS.md",
   });
-  if (hasClaudeMd) pts += 2;
+  if (hasAgentsMd) pts += 2;
 
   // Rules hierarchy (2 pts)
   const hasCommonRules =
@@ -216,16 +216,6 @@ function checkContextEfficiency() {
     detail: "~/.claude/rules/{python,typescript}/",
   });
   if (hasLangRules) pts += 1;
-
-  // GBrain / semantic search (1 pt)
-  const settingsGlobal = readAbs(path.join(home(), ".claude", "settings.json"));
-  const hasGbrain = /gbrain/i.test(settingsGlobal + claudeMd);
-  checks.push({
-    name: "Semantic search (GBrain)",
-    pass: hasGbrain,
-    detail: "CLAUDE.md GBrain section",
-  });
-  if (hasGbrain) pts += 1;
 
   // CONTRIBUTING.md with architecture (1 pt)
   const contributing = readIf("CONTRIBUTING.md");
