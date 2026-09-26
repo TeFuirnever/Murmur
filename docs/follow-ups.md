@@ -86,3 +86,4 @@ dev:main 改用 `build:main && electron .`，dev/e2e/prod 加载同一 artifact�
 5. **主题 system 模式 OS 深浅切换实时跟随**（#395 票外既有缺口）：主窗有 matchMedia 监听，设置/历史窗只在 apply 时刻快照。
 6. **权限徽章为查询快照**（#396 风险登记）：用户在系统设置授权后需重进设置页或点测试才刷新；后续可在窗口 focus 时重查。
 7. **影子内置模式的下拉标签**（#399 已知边界）：自定义模板覆盖内置模式时下拉显示内置 i18n 标签；精确标签需扩展 IPC 契约。
+8. **e2e 启动器 userData 未隔离**（PR #411 test 步发现）：`tests/e2e/helpers/electron-launch.ts` 以 `MURMUR_DB_PATH=:memory:` 启动不隔离 fileSync——setSetting('theme'/'language') 会写穿到真实 `~/Library/Application Support/murmur/murmur.json`。pipeline 验证 run 后已手工还原；根治需在启动 helper 里重定向 userData。
