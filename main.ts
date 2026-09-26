@@ -69,6 +69,9 @@ import {
   syncLoginItemAtStartup,
   hideMainWindowOnLoginLaunch,
 } from "./src/helpers/loginItem";
+// [20260926_Issue405] Minimize-to-tray setting read (win32-only gate lives
+// in the module; the interception attaches inside createMainWindow).
+import { readMinimizeToTraySetting } from "./src/helpers/minimizeToTray";
 import { registerAll as registerIPCHandlers } from "./src/helpers/ipc";
 // [20260912_Feat_265_LocalChannel] Local IPC channel (ticket #265, spec
 // #258): an authenticated unix-socket/named-pipe bridge for CLI/MCP
@@ -262,6 +265,15 @@ async function startApp(): Promise<void> {
 
   // Create main window
   windowManager._setupCSP();
+  // [20260926_Issue405] Minimize-to-tray (issue #405): inject the lazy
+  // setting reader BEFORE window creation — the interception itself is
+  // attached inside createMainWindow (so the Dock-recreate path is covered
+  // by the same path), and it reads the persisted value at EVERY minimize
+  // event, so any settings write (UI, CLI, murmur.json round-trip) applies
+  // to the next minimize without IPC notification plumbing.
+  windowManager.setMinimizeToTrayReader(() =>
+    readMinimizeToTraySetting(databaseManager, logger),
+  );
   // [20260926_Issue404] Settings-win alignment BEFORE window creation (#394
   // precedent): read the persisted auto_start and force the real OS login
   // item onto it when they disagree. Never throws (loginItem module).

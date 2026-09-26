@@ -54,6 +54,10 @@ const h = vi.hoisted(() => {
     // has loaded (login-launch hidden window, no focus steal).
     syncLoginItemAtStartup: vi.fn(),
     hideMainWindowOnLoginLaunch: vi.fn(),
+    // [20260926_Issue405] Minimize-to-tray reader wiring spy: main.ts must
+    // inject the lazy setting reader BEFORE window creation (the attach
+    // itself happens inside createMainWindow).
+    wmSetMinimizeToTrayReader: vi.fn(),
   };
 });
 
@@ -130,6 +134,12 @@ vi.mock("../../src/helpers/windowManager", () => ({
     setDefaultAlwaysOnTop = h.wmSetDefaultAlwaysOnTop.mockImplementation(() => {
       h.order.push("setDefaultAlwaysOnTop");
     });
+    // [20260926_Issue405] Reader injection marker (before window creation).
+    setMinimizeToTrayReader = h.wmSetMinimizeToTrayReader.mockImplementation(
+      () => {
+        h.order.push("setMinimizeToTrayReader");
+      },
+    );
     createMainWindow = vi.fn(async () => {
       h.order.push("createMainWindow");
       return this.mainWindow;
@@ -357,5 +367,47 @@ describe("[20260926_Issue404] main.ts login-item startup wiring", () => {
     expect(h.hideMainWindowOnLoginLaunch.mock.calls[0]).toBeTruthy();
     const hideIdx = h.order.indexOf("hideMainWindowOnLoginLaunch");
     expect(hideIdx).toBeGreaterThan(loadIdx);
+  });
+});
+
+// ── [20260926_Issue405] Issue #405 ────────────────────────────────────────
+// Contract: main.ts must inject the lazy minimize_to_tray reader into the
+// windowManager BEFORE window creation — the interception itself is
+// attached inside createMainWindow (so the Dock-recreate path is covered),
+// and the reader reads the persisted value at minimize time, so any
+// settings write takes effect on the next minimize without IPC plumbing.
+describe("[20260926_Issue405] main.ts minimize-to-tray reader wiring", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    h.order.length = 0;
+    h.setSafeStorageThrows = false;
+    vi.mocked(h_isEncryptionAvailable).mockReturnValue(true);
+    h.dbGetSetting.mockClear();
+    h.wmSetDefaultAlwaysOnTop.mockClear();
+    h.dbGetSetting.mockImplementation(
+      (_key: string, defaultValue: unknown) => defaultValue,
+    );
+    h.wmSetDefaultAlwaysOnTop.mockImplementation(() => {
+      h.order.push("setDefaultAlwaysOnTop");
+    });
+    h.wmSetMinimizeToTrayReader.mockClear();
+    h.wmSetMinimizeToTrayReader.mockImplementation(() => {
+      h.order.push("setMinimizeToTrayReader");
+    });
+  });
+
+  it("injects the minimize_to_tray reader before window creation", async () => {
+    await importMain();
+    h.resolveReady();
+    await vi.waitFor(() => expect(h.order).toContain("createTray"));
+
+    expect(h.wmSetMinimizeToTrayReader).toHaveBeenCalledTimes(1);
+    expect(h.wmSetMinimizeToTrayReader.mock.calls[0]![0]).toBeInstanceOf(
+      Function,
+    );
+    const wireIdx = h.order.indexOf("setMinimizeToTrayReader");
+    const createIdx = h.order.indexOf("createMainWindow");
+    expect(wireIdx).toBeGreaterThanOrEqual(0);
+    expect(createIdx).toBeGreaterThan(wireIdx);
   });
 });

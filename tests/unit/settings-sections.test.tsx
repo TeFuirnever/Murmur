@@ -119,6 +119,8 @@ function buildSettings(overrides: Partial<SettingsState> = {}): SettingsState {
     show_notifications: true,
     // [20260926_Issue404] new SettingsState key
     auto_start: false,
+    // [20260926_Issue405] new SettingsState key
+    minimize_to_tray: false,
     ...overrides,
   };
 }
