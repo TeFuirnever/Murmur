@@ -474,6 +474,64 @@ describe("[20260816_Test_AppBehaviors] App behavior matrix", () => {
     });
   });
 
+  // [#393] auto_paste=none must not write the clipboard nor trigger a paste;
+  // the pipeline completion is announced with a quiet notice only.
+  it("skips copying and pasting in none mode with a quiet notice", async () => {
+    apiMocks.getSetting.mockImplementation((key: string, d?: unknown) =>
+      Promise.resolve(key === "auto_paste" ? "none" : d),
+    );
+    Object.assign(modelCtl, {
+      stage: "ready",
+      isReady: true,
+      isLoading: false,
+    });
+    await mountApp();
+    act(() => {
+      recordingCtl.options?.onAIOptimizationComplete({
+        success: true,
+        enhanced_by_ai: true,
+        text: "无操作文本",
+      });
+    });
+    await waitFor(() => {
+      expect(toast.info).toHaveBeenCalledWith("已按设置不自动操作");
+      expect(apiMocks.pasteText).not.toHaveBeenCalled();
+      expect(apiMocks.copyText).not.toHaveBeenCalled();
+    });
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  // [#393] The optimization-failure fallback path must honor none mode too:
+  // the original text is shown in the panel but never delivered.
+  it("skips pasting the original text in none mode when optimization fails", async () => {
+    apiMocks.getSetting.mockImplementation((key: string, d?: unknown) =>
+      Promise.resolve(key === "auto_paste" ? "none" : d),
+    );
+    Object.assign(modelCtl, {
+      stage: "ready",
+      isReady: true,
+      isLoading: false,
+    });
+    await mountApp();
+    act(() => {
+      recordingCtl.options?.onTranscriptionComplete({
+        success: true,
+        text: "none原始文本",
+      });
+    });
+    act(() => {
+      recordingCtl.options?.onAIOptimizationComplete({ success: false });
+    });
+    await waitFor(() => {
+      expect(toast.info).toHaveBeenCalledWith("已按设置不自动操作");
+    });
+    expect(apiMocks.pasteText).not.toHaveBeenCalled();
+    expect(apiMocks.copyText).not.toHaveBeenCalled();
+    expect(toast.info).not.toHaveBeenCalledWith(
+      "AI优化失败，已粘贴原始识别文本",
+    );
+  });
+
   it("debounces identical paste payloads within the 1s window", async () => {
     Object.assign(modelCtl, {
       stage: "ready",
