@@ -520,8 +520,8 @@ describe("useSettings hook — save / test / presets / updates", () => {
     // [20260926_Issue404] +auto_start (joins SettingsState with the schema).
     // [20260926_Issue406] +model_download_path (joins SettingsState).
 
-    // [20260926_Issue405] +minimize_to_tray (joins SettingsState with the schema).
-    expect(calls).toHaveLength(19);
+    // [20260926_Issue405] +minimize_to_tray and [Issue406] +model_download_path (both join SettingsState with the schema).
+    expect(calls).toHaveLength(20);
   });
 
   it("saveSettings skips re-sending a masked api_key but still saves the rest", async () => {
@@ -543,9 +543,9 @@ describe("useSettings hook — save / test / presets / updates", () => {
     // 10 loop keys after hotwords. [20260926_Refactor_403_SettingsSchema]
     // +show_notifications. [20260926_Issue404] +auto_start.
     // [20260926_Issue406] +model_download_path (joins SettingsState).
-    expect(calls).toHaveLength(18);
+    expect(calls).toHaveLength(19); // [20260926_Issue406] +model_download_path.
 
-    expect(calls).toHaveLength(18); // [20260905_Fix_249_DefaultModeUi] 15 loop keys after default_mode. [20260905_Fix_246_HotkeySettingsUi] +hotkey. [20260820_T14_Hotwords] 10 loop keys after hotwords. [20260926_Refactor_403_SettingsSchema] +show_notifications. [20260926_Issue404] +auto_start. [20260926_Issue405] +minimize_to_tray.
+    expect(calls).toHaveLength(19); // [20260905_Fix_249_DefaultModeUi] 15 loop keys after default_mode. [20260905_Fix_246_HotkeySettingsUi] +hotkey. [20260820_T14_Hotwords] 10 loop keys after hotwords. [20260926_Refactor_403_SettingsSchema] +show_notifications. [20260926_Issue404] +auto_start. [20260926_Issue405] +minimize_to_tray. [20260926_Issue406] +model_download_path.
   });
 
   it("saveSettings returns false and toasts on IPC failure", async () => {
