@@ -208,7 +208,23 @@
       "granted": "已授权",
       "denied": "未授权",
       "testSuccess": "权限测试成功",
-      "testFailed": "权限测试失败"
+      "testFailed": "权限测试失败",
+      "micTestSuccessTitle": "✅ 麦克风权限测试成功",
+      "micTestSuccessDesc": "麦克风权限正常工作！现在可以进行语音录制了。",
+      "micTestSuccessAlert": "✅ 麦克风权限正常工作！现在可以进行语音录制了。",
+      "micTestFailedTitle": "❌ 需要麦克风权限",
+      "micTestFailedDesc": "请授予麦克风权限以使用语音识别功能。",
+      "micTestFailedAlert": "❌ 需要麦克风权限！请授予麦克风权限以使用语音识别功能。",
+      "apiUnavailableTitle": "❌ Electron API 不可用",
+      "apiUnavailableDesc": "preload 脚本加载失败，请重启应用。",
+      "apiUnavailableAlert": "❌ Electron API 不可用，请重启应用。",
+      "accessibilityPasteText": "Murmur辅助功能测试",
+      "accessibilityTestSuccessTitle": "✅ 辅助功能权限测试成功",
+      "accessibilityTestSuccessDesc": "辅助功能权限正常工作！请检查测试文本是否出现在其他应用中。",
+      "accessibilityTestSuccessAlert": "✅ 辅助功能权限正常工作！请检查测试文本是否出现在其他应用中。",
+      "accessibilityTestFailedTitle": "❌ 需要辅助功能权限",
+      "accessibilityTestFailedDesc": "请在系统设置中授予辅助功能权限，以启用自动文本粘贴功能。",
+      "accessibilityTestFailedAlert": "❌ 需要辅助功能权限！请在系统设置中授予权限。"
     },
     "providers": {
       "openai": {

@@ -7,6 +7,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useWindowDrag } from "../../src/hooks/useWindowDrag";
 import { usePermissions } from "../../src/hooks/usePermissions";
+import i18n from "../../src/i18n";
 
 describe("useWindowDrag", () => {
   it("returns drag handlers and initial isDragging=false", () => {
@@ -91,7 +92,11 @@ describe("useWindowDrag", () => {
 describe("usePermissions", () => {
   let originalAlert: typeof window.alert;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    // [20260926_Fix_401_PermissionI18n] Hook copy resolves through i18n now
+    // (#401): pin zh-CN so branch assertions stay language-independent of
+    // jsdom's navigator.language (en-US would flip the copy to English).
+    await i18n.changeLanguage("zh-CN");
     originalAlert = window.alert;
     (window as unknown as { alert: typeof window.alert }).alert = vi.fn();
     // Stub mediaDevices for mic permission tests

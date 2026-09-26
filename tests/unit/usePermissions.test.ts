@@ -52,6 +52,12 @@ describe("usePermissions.testAccessibilityPermission", () => {
       // (the declared type of `globalThis.window`). No `any`.
       globalThis.window = {} as unknown as Window & typeof globalThis;
     }
+    // [20260926_Fix_401_PermissionI18n] The hook resolves its copy through
+    // i18n now (#401). Pin the reference language so the branch assertions
+    // below stay language-independent of the test host's navigator.language
+    // (Node reports en-US, which would flip the copy to English).
+    const i18n = (await import("../../src/i18n")).default;
+    await i18n.changeLanguage("zh-CN");
     ({ usePermissions } = await import("../../src/hooks/usePermissions.js"));
   });
 

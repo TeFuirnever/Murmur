@@ -350,8 +350,11 @@ describe("[20260729_Test_SettingsSections] PermissionsSection", () => {
     mockUsePermissions.micPermissionGranted = true;
     render(<PermissionsSection />);
 
-    // When granted, the button is replaced by a "已授予" label.
-    expect(screen.getByText("已授予")).toBeInTheDocument();
+    // When granted, the button is replaced by the i18n granted label
+    // (PermissionCard resolves it via settings.permissions.granted, #401).
+    expect(
+      screen.getByText(LOCALE["settings.permissions.granted"]!),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "测试麦克风" }),
     ).not.toBeInTheDocument();
