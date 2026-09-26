@@ -27,7 +27,7 @@ Any red step stops the push: the branch never reaches GitHub in a failing state.
 
 ## Agent usage
 
-Agents can invoke the same gate via the `/no-mistakes` skill (installed at user level). Prefer pushing through the gate for any non-trivial delivery; see also the delivery gates in `CLAUDE.md`.
+Agents can invoke the same gate via the `/no-mistakes` skill (installed at user level). Prefer pushing through the gate for any non-trivial delivery; see also the delivery gates in `AGENTS.md`.
 
 | Concern                        | Answer                                                                                                                                                                                       |
 | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
