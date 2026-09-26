@@ -76,7 +76,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ### Core Principles
 
-- **Verify Before Claiming Done** — evidence over assumptions.
+- **Verify Before Claiming Done** — evidence over assumptions. Don't assert repo state or past-run results (what exists, when it was created, what a command produced) from memory — confirm with a tool call.
 - **Trace Before Fix** — when debugging, trace the FULL execution path from trigger to symptom. Check the simplest explanation first.
 - **Know When to Stop** — if blocked for more than 2 attempts, or requirements remain ambiguous after clarification, escalate instead of guessing.
 
