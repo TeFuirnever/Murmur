@@ -9,6 +9,13 @@
 // useSettings stays immediate; only the persistence write is deferred.
 // Discrete controls (selects, switches, theme) never enter this scheduler.
 
+// [20260926_Refactor_403_SettingsSchema] The key set moved into the schema
+// (textLike flags); re-exported here so useSettings and its tests keep a
+// stable import path. Issue #403: one declaration per key, schema-side.
+import { TEXT_INPUT_SETTING_KEYS } from "./settingsSchema";
+
+export { TEXT_INPUT_SETTING_KEYS };
+
 /** Persist function shape matching window.electronAPI.setSetting. */
 export type SetSettingFn = (
   key: string,
@@ -68,18 +75,6 @@ export function createTextWriteScheduler(
 
   return { schedule, cancel, flush };
 }
-
-// [20260926_Perf_402_TextInputDebounce] Text-like setting keys whose
-// persistence write is debounced (issue #402 evidence: hotwords / API key /
-// Base URL). React state stays immediate — only the write is deferred.
-// Discrete controls (selects, switches, theme) are deliberately absent —
-// they stay instant.
-export const TEXT_INPUT_SETTING_KEYS: ReadonlySet<string> = new Set([
-  "ai_api_key",
-  "ai_base_url",
-  "ai_model",
-  "hotwords",
-]);
 
 // [20260926_Perf_402_TextInputDebounce] Matches TemplatesSection's
 // TEMPLATE_AUTOSAVE_DELAY_MS (repo autosave convention).

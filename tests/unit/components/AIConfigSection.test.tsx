@@ -36,6 +36,8 @@ const BASE_SETTINGS: SettingsState = {
   bot_shape: "circle",
   bot_color: "auto",
   bot_expression: "neutral",
+  // [20260926_Refactor_403_SettingsSchema] new SettingsState key
+  show_notifications: true,
 };
 
 function renderSection(settings: SettingsState = BASE_SETTINGS) {

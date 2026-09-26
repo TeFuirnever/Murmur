@@ -115,6 +115,8 @@ function buildSettings(overrides: Partial<SettingsState> = {}): SettingsState {
     bot_shape: "circle",
     bot_color: "auto",
     bot_expression: "neutral",
+    // [20260926_Refactor_403_SettingsSchema] new SettingsState key
+    show_notifications: true,
     ...overrides,
   };
 }
