@@ -24,6 +24,34 @@ function resolveIdleUnloadTimeoutMs(): number {
 
 export const IDLE_UNLOAD_TIMEOUT_MS = resolveIdleUnloadTimeoutMs();
 
+// [20260926_Issue406] FunASR model download directory (issue #406): the
+// persisted `model_download_path` setting is injected as the MODELSCOPE_CACHE
+// environment variable at main-process boot, BEFORE
+// funasrManager.initializeAtStartup() spawns any Python subprocess. That one
+// env var is already honored by the whole model-path chain:
+//   - download_models.py snapshot_download() — modelscope resolves its cache
+//     root from MODELSCOPE_CACHE (no cache_dir arg in the script);
+//   - funasr_server.py _default_damo_root() / _hub_models_roots()
+//     (funasr_server.py:354 / :456) and AutoModel's own cache resolution;
+//   - Node's modelManager.getModelCachePath() probe (modelManager.ts:189).
+// Both the server spawn (env copy in buildPythonEnvironment) and the
+// download spawn (inherits process.env) therefore see the configured
+// directory. CONFIG-SIDE ONLY — no FunASR subprocess lifecycle code is
+// touched (CLAUDE.md high-risk area); changes take effect at the next app
+// start (the UI description says so).
+// Semantics for the boot-time contract: a non-empty setting SETS the env var
+// (trimmed); an empty setting ("system default") leaves the environment
+// untouched so a developer-shell MODELSCOPE_CACHE keeps its existing
+// behavior. The helper is applied once per launch (main.ts boot wiring), so
+// there is no re-apply/clearing path.
+export const MODEL_DOWNLOAD_PATH_ENV = "MODELSCOPE_CACHE";
+
+export function applyModelDownloadPathSetting(value: unknown): void {
+  if (typeof value === "string" && value.trim()) {
+    process.env[MODEL_DOWNLOAD_PATH_ENV] = value.trim();
+  }
+}
+
 /** Logger interface (accepts console or LogManager). */
 interface Logger {
   info?(message: string, ...args: unknown[]): void;

@@ -61,6 +61,8 @@ import WindowManager from "./src/helpers/windowManager";
 import DatabaseManager from "./src/helpers/database";
 import ClipboardManager from "./src/helpers/clipboard";
 import FunASRManager from "./src/helpers/funasrManager";
+// [20260926_Issue406] Config-side model-directory env injection (#406).
+import { applyModelDownloadPathSetting } from "./src/helpers/funasrManager";
 import TrayManager from "./src/helpers/tray";
 import HotkeyManager from "./src/helpers/hotkeyManager";
 // [20260926_Issue404] Login-item startup alignment (settings win) and the
@@ -256,6 +258,14 @@ async function startApp(): Promise<void> {
 
   // Initialize FunASR manager at startup (don't wait to avoid blocking)
   logger.info("开始初始化FunASR管理器...");
+  // [20260926_Issue406] Model-directory env injection BEFORE the FunASR
+  // server/download subprocesses spawn: the persisted model_download_path
+  // setting becomes process.env.MODELSCOPE_CACHE (the env var the whole
+  // model-path chain already honors). Applied once per boot; an empty
+  // setting is a no-op. Never throws (config-side, no lifecycle code).
+  applyModelDownloadPathSetting(
+    databaseManager.getSetting("model_download_path", ""),
+  );
   funasrManager.initializeAtStartup().catch((err: unknown) => {
     logger.warn("FunASR在启动时不可用，这不是关键问题", err);
   });

@@ -41,8 +41,8 @@ export type SettingTypeTag = "string" | "number" | "boolean";
  * - "persisted-only": a legal persisted key at the IPC boundary that never
  *   enters SettingsState. `language` writes through its own special channel
  *   (i18n.changeLanguage + localStorage + SETTINGS.SET broadcast);
- *   auto_start / minimize_to_tray / model_download_path have no current
- *   in-app editor (kept writable for the CLI / murmur.json pipeline).
+ *   minimize_to_tray has no current in-app editor (kept writable for the
+ *   CLI / murmur.json pipeline).
  */
 export type SettingScope = "settings-state" | "persisted-only";
 
@@ -211,6 +211,25 @@ export const SETTINGS_SCHEMA = {
     fileSync: true,
     load: (raw: unknown): boolean => raw === true,
   },
+  // [20260926_Issue406] FunASR model download directory (General tab,
+  // advanced area). "" = system default location; a configured directory is
+  // injected at main-process boot as process.env.MODELSCOPE_CACHE — the one
+  // env var the WHOLE model-path chain already honors (download_models.py
+  // snapshot_download, funasr_server.py _default_damo_root/_hub_models_roots,
+  // and Node's modelManager.getModelCachePath probe). Non-secret path: no
+  // fileSync (stays out of the plaintext murmur.json mirror for now; the IPC
+  // allowlist and this schema cover it). textLike: path input → debounced
+  // write. Load arm is the hotwords-style type-checked passthrough: an EMPTY
+  // string is a valid stored value (system default) and a non-string stored
+  // value must not leak into the path.
+  model_download_path: {
+    type: "string",
+    scope: "settings-state",
+    default: "",
+    descriptionKey: "settings.general.modelDownloadPathDesc",
+    textLike: true,
+    load: (raw: unknown): string => (typeof raw === "string" ? raw : ""),
+  },
   auto_paste: {
     type: "string",
     scope: "settings-state",
@@ -294,20 +313,15 @@ export const SETTINGS_SCHEMA = {
     default: "zh-CN",
     fileSync: true,
   },
-  // minimize_to_tray / model_download_path: legacy configurable keys with
-  // no current in-app editor — kept persisted (murmur.json sync + CLI
-  // whitelist) so existing user files keep round-tripping. (auto_start left
-  // this group in #404 — it has a General-tab editor now.)
+  // minimize_to_tray: legacy configurable key with no current in-app editor
+  // — kept persisted (murmur.json sync + CLI whitelist) so existing user
+  // files keep round-tripping. (auto_start left this group in #404 and
+  // model_download_path in #406 — both have General-tab editors now.)
   minimize_to_tray: {
     type: "boolean",
     scope: "persisted-only",
     default: false,
     fileSync: true,
-  },
-  model_download_path: {
-    type: "string",
-    scope: "persisted-only",
-    default: "",
   },
 } as const satisfies SchemaRecord;
 

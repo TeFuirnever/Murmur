@@ -78,6 +78,9 @@ const BASE: SettingsState = {
   // [20260926_Issue404] auto_start joins SettingsState with the schema
   // (#404 General-tab launch-at-login switch).
   auto_start: false,
+  // [20260926_Issue406] model_download_path joins SettingsState with the
+  // schema (#406 General-tab model-directory input).
+  model_download_path: "",
 };
 
 type TestWindow = Omit<Window, "electronAPI"> & {
@@ -490,5 +493,53 @@ describe("[20260816_Test_GeneralSection] GeneralSection", () => {
     );
     fireEvent.blur(screen.getByLabelText("热词"));
     expect(onInputBlur).toHaveBeenCalledTimes(1);
+  });
+
+  // [20260926_Issue406] Model download directory input (General tab,
+  // advanced area): renders from settings state, edits route through
+  // onInputChange("model_download_path", ...) — the standard auto-persist
+  // pipeline (text-like → 400ms debounce + blur flush). No live side effect:
+  // the main process reads the persisted value at next boot, which the UI
+  // description states (变更后需重启应用生效).
+  it("renders the model download directory input reflecting the setting", () => {
+    render(
+      <GeneralSection
+        settings={{ ...BASE, model_download_path: "/data/murmur-models" }}
+        onInputChange={onInputChange}
+      />,
+    );
+    const input = screen.getByLabelText("模型下载目录");
+    expect(input).toHaveValue("/data/murmur-models");
+  });
+
+  it("routes model download directory edits through onInputChange", () => {
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+    fireEvent.change(screen.getByLabelText("模型下载目录"), {
+      target: { value: "/data/murmur-models" },
+    });
+    expect(onInputChange).toHaveBeenCalledWith(
+      "model_download_path",
+      "/data/murmur-models",
+    );
+  });
+
+  it("requests a pending-write flush when the model download directory input blurs", () => {
+    const onInputBlur = vi.fn();
+    render(
+      <GeneralSection
+        settings={BASE}
+        onInputChange={onInputChange}
+        onInputBlur={onInputBlur}
+      />,
+    );
+    fireEvent.blur(screen.getByLabelText("模型下载目录"));
+    expect(onInputBlur).toHaveBeenCalledTimes(1);
+  });
+
+  it("notes the restart requirement in the model directory description", () => {
+    render(<GeneralSection settings={BASE} onInputChange={onInputChange} />);
+    // The restart-required note is the issue's UI acceptance item — it must
+    // be user-visible, not only a tooltip/placeholder.
+    expect(screen.getByText(/重启应用后生效/)).toBeInTheDocument();
   });
 });

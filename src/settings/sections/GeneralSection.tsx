@@ -471,6 +471,42 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
           </div>
         )}
       </div>
+      {/* [20260926_Issue406] FunASR model download directory (issue #406):
+          General tab advanced area. Renders from settings state and edits
+          route through onInputChange — the standard auto-persist pipeline
+          (text-like → debounced write + blur flush). No live side effect:
+          the main process injects the persisted value as MODELSCOPE_CACHE at
+          next boot; the description states the restart requirement (the
+          issue's UI note requirement). */}
+      <div>
+        <label
+          htmlFor="model-download-path-input"
+          className="block text-sm font-medium text-[#1d1d1f] dark:text-[#f5f5f7] mb-1"
+        >
+          {t("settings.general.modelDownloadPathLabel", "模型下载目录")}
+        </label>
+        <p className="text-xs text-[#6e6e73] mb-2">
+          {t(
+            "settings.general.modelDownloadPathDesc",
+            "语音识别模型文件的存放目录。留空使用系统默认位置；重启应用后生效。",
+          )}
+        </p>
+        <input
+          id="model-download-path-input"
+          data-testid="model-download-path"
+          type="text"
+          value={settings.model_download_path}
+          onChange={(e) => onInputChange("model_download_path", e.target.value)}
+          onBlur={onInputBlur}
+          placeholder={t(
+            "settings.general.modelDownloadPathPlaceholder",
+            "留空使用系统默认位置",
+          )}
+          spellCheck={false}
+          className="w-full text-sm px-3 py-2 border border-[#d2d2d7] dark:border-[#3a3a3c] rounded-lg bg-[#f5f5f7] dark:bg-[#3a3a3c] text-[#1d1d1f] dark:text-[#f5f5f7] focus:ring-2 focus:ring-[#0071e3] focus:border-transparent"
+        />
+      </div>
+
       {/* [20260908_Feat_240_VocabCorrections] T13 corrections management. */}
       <VocabManager />
       {/* [20260910_Feat_237_StreamDegradation] T10 degradation memory. */}

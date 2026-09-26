@@ -102,6 +102,8 @@ function buildSettings(overrides: Partial<SettingsState> = {}): SettingsState {
     show_notifications: true,
     // [20260926_Issue404] new SettingsState key
     auto_start: false,
+    // [20260926_Issue406] new SettingsState key
+    model_download_path: "",
     ...overrides,
   };
 }

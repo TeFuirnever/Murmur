@@ -68,6 +68,10 @@ const PRE_REFACTOR_DEFAULTS = {
   // SettingsState (the #404 General-tab switch) — the one sanctioned
   // addition, like show_notifications above. Default stays false.
   auto_start: false,
+  // [20260926_Issue406] model_download_path moves from persisted-only into
+  // SettingsState (the #406 General-tab model directory input) — sanctioned
+  // addition like auto_start above. Default stays "" (system default location).
+  model_download_path: "",
 };
 
 // [20260926_Refactor_403_SettingsSchema] The pre-refactor ALLOWED_SETTING_KEYS
@@ -113,12 +117,14 @@ const PRE_REFACTOR_FILE_KEYS = [
 ];
 
 // [20260926_Refactor_403_SettingsSchema] The pre-refactor #402 debounce set
-// from textWriteScheduler.ts (4 text-like keys).
+// from textWriteScheduler.ts (4 text-like keys). [20260926_Issue406]
+// model_download_path joins the debounce set (path input, text-like).
 const PRE_REFACTOR_TEXT_INPUT_KEYS = [
   "ai_api_key",
   "ai_base_url",
   "ai_model",
   "hotwords",
+  "model_download_path",
 ];
 
 describe("[20260926_Refactor_403_SettingsSchema] schema-derived defaults", () => {
@@ -354,6 +360,25 @@ describe("[20260926_Refactor_403_SettingsSchema] migration equivalence (old stor
     { key: "auto_start", raw: { auto_start: false }, expected: false },
     { key: "auto_start", raw: {}, expected: false },
     { key: "auto_start", raw: { auto_start: "true" }, expected: false },
+    // [20260926_Issue406] model_download_path: type-checked passthrough —
+    // an EMPTY string is a valid stored value (system default location) and
+    // must stay ""; a non-string stored value must NOT leak into the path.
+    {
+      key: "model_download_path",
+      raw: { model_download_path: "/data/murmur-models" },
+      expected: "/data/murmur-models",
+    },
+    {
+      key: "model_download_path",
+      raw: { model_download_path: "" },
+      expected: "",
+    },
+    { key: "model_download_path", raw: {}, expected: "" },
+    {
+      key: "model_download_path",
+      raw: { model_download_path: 42 },
+      expected: "",
+    },
   ];
 
   it("reads every legacy stored value back unchanged", () => {
@@ -379,11 +404,29 @@ describe("[20260926_Refactor_403_SettingsSchema] migration equivalence (old stor
     const loaded = loadSettingsState({
       language: "en",
       minimize_to_tray: true,
-      model_download_path: "/tmp",
     });
     expect(Object.keys(loaded)).not.toContain("language");
     expect(Object.keys(loaded)).not.toContain("minimize_to_tray");
-    expect(Object.keys(loaded)).not.toContain("model_download_path");
+  });
+
+  // [20260926_Issue406] model_download_path joins SettingsState (#406
+  // General-tab model-directory input): a stored path surfaces in the loaded
+  // state through the schema load arm. Type-checked passthrough like hotwords
+  // — an EMPTY string is a valid stored value ("use the system default
+  // location") and must stay "", not fall back anywhere; a non-string stored
+  // value (legacy number) must NOT leak into the path.
+  it("model_download_path loads into the state with the type-checked string arm", () => {
+    expect(
+      loadSettingsState({ model_download_path: "/data/murmur-models" })
+        .model_download_path,
+    ).toBe("/data/murmur-models");
+    expect(
+      loadSettingsState({ model_download_path: "" }).model_download_path,
+    ).toBe("");
+    expect(loadSettingsState({}).model_download_path).toBe("");
+    expect(
+      loadSettingsState({ model_download_path: 42 }).model_download_path,
+    ).toBe("");
   });
 
   // [20260926_Issue404] auto_start joins SettingsState (#404 General-tab

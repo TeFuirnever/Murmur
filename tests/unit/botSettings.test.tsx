@@ -39,6 +39,8 @@ const BASE: SettingsState = {
   show_notifications: true,
   // [20260926_Issue404] new SettingsState key
   auto_start: false,
+  // [20260926_Issue406] new SettingsState key
+  model_download_path: "",
 };
 
 describe("bot settings keys are writable through the IPC allowlist", () => {

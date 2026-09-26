@@ -54,6 +54,10 @@ const h = vi.hoisted(() => {
     // has loaded (login-launch hidden window, no focus steal).
     syncLoginItemAtStartup: vi.fn(),
     hideMainWindowOnLoginLaunch: vi.fn(),
+    // [20260926_Issue406] Model-directory env injection spy: main.ts must
+    // call applyModelDownloadPathSetting(persisted path) before the FunASR
+    // server spawns (boot-time env injection; the empty setting is a no-op).
+    applyModelDownloadPathSetting: vi.fn(),
   };
 });
 
@@ -168,6 +172,8 @@ vi.mock("../../src/helpers/funasrManager", () => ({
     initializeAtStartup = vi.fn(async () => undefined);
     gracefulShutdown = vi.fn(async () => undefined);
   },
+  // [20260926_Issue406] main.ts imports the named config-side helper.
+  applyModelDownloadPathSetting: h.applyModelDownloadPathSetting,
 }));
 
 vi.mock("../../src/helpers/tray", () => ({
@@ -357,5 +363,48 @@ describe("[20260926_Issue404] main.ts login-item startup wiring", () => {
     expect(h.hideMainWindowOnLoginLaunch.mock.calls[0]).toBeTruthy();
     const hideIdx = h.order.indexOf("hideMainWindowOnLoginLaunch");
     expect(hideIdx).toBeGreaterThan(loadIdx);
+  });
+});
+
+// ── [20260926_Issue406] Issue #406 ────────────────────────────────────────
+// Contract: at startup, main.ts must call applyModelDownloadPathSetting(
+// persisted model_download_path) BEFORE funasrManager.initializeAtStartup()
+// so the Python server and download subprocess inherit the configured
+// MODELSCOPE_CACHE (the whole model-path chain honors that env var). The
+// empty setting is a no-op (system default location).
+describe("[20260926_Issue406] main.ts model-directory env injection wiring", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    h.order.length = 0;
+    h.dbGetSetting.mockClear();
+    h.applyModelDownloadPathSetting.mockClear();
+    h.dbGetSetting.mockImplementation(
+      (_key: string, defaultValue: unknown) => defaultValue,
+    );
+  });
+
+  it("applies the persisted model_download_path during startApp", async () => {
+    h.dbGetSetting.mockImplementation((key: string) =>
+      key === "model_download_path" ? "/data/murmur-models" : undefined,
+    );
+    await importMain();
+    h.resolveReady();
+    await vi.waitFor(() => expect(h.order).toContain("createTray"));
+
+    expect(h.applyModelDownloadPathSetting).toHaveBeenCalledTimes(1);
+    expect(h.applyModelDownloadPathSetting).toHaveBeenCalledWith(
+      "/data/murmur-models",
+    );
+  });
+
+  it("applies the default (empty) value when the setting has no persisted row", async () => {
+    await importMain();
+    h.resolveReady();
+    await vi.waitFor(() => expect(h.order).toContain("createTray"));
+
+    expect(h.applyModelDownloadPathSetting).toHaveBeenCalledTimes(1);
+    // The empty string default flows through the same wiring — the helper
+    // treats it as a no-op (system default location).
+    expect(h.applyModelDownloadPathSetting).toHaveBeenCalledWith("");
   });
 });
