@@ -37,7 +37,18 @@ const h = vi.hoisted(() => {
   // test can prove the renderer load is never skipped by a crypto failure.
   // Plain property — tests flip it directly (h.setSafeStorageThrows = true)
   // and the database mock reads it at call time.
-  return { order, resolveReady, whenReadyPromise, setSafeStorageThrows: false };
+  return {
+    order,
+    resolveReady,
+    whenReadyPromise,
+    setSafeStorageThrows: false,
+    // [20260926_Fix_394_AlwaysOnTopStartupRead] Spies for the startup
+    // alwaysOnTop contract: the persisted read (database) and the apply
+    // (windowManager) are hoisted so tests can control the persisted value
+    // and assert call arguments/ordering.
+    dbGetSetting: vi.fn(),
+    wmSetDefaultAlwaysOnTop: vi.fn(),
+  };
 });
 
 vi.mock("electron", () => ({
@@ -108,7 +119,11 @@ vi.mock("../../src/helpers/windowManager", () => ({
   default: class {
     mainWindow = { on: vi.fn() };
     _setupCSP = vi.fn(() => h.order.push("_setupCSP"));
-    setDefaultAlwaysOnTop = vi.fn();
+    // [20260926_Fix_394_AlwaysOnTopStartupRead] Hoisted spy + boot-order
+    // marker so tests can assert the apply happens BEFORE window creation.
+    setDefaultAlwaysOnTop = h.wmSetDefaultAlwaysOnTop.mockImplementation(() => {
+      h.order.push("setDefaultAlwaysOnTop");
+    });
     createMainWindow = vi.fn(async () => {
       h.order.push("createMainWindow");
       return this.mainWindow;
@@ -125,7 +140,9 @@ vi.mock("../../src/helpers/database", () => ({
   default: class {
     initialize = vi.fn();
     setFileConfigPath = vi.fn();
-    getSetting = vi.fn(() => undefined);
+    // [20260926_Fix_394_AlwaysOnTopStartupRead] Hoisted spy — per-test
+    // implementations emulate the persisted row (or its absence).
+    getSetting = h.dbGetSetting;
     setSafeStorage = vi.fn(() => {
       h.order.push("setSafeStorage");
       if (h.setSafeStorageThrows) {
@@ -211,5 +228,58 @@ describe("[20260820_Fix_211_KeychainBootOrder] main.ts boot order", () => {
     const loadIdx = h.order.indexOf("loadMainWindowContent");
     expect(cryptoIdx).toBeGreaterThanOrEqual(0);
     expect(loadIdx).toBeGreaterThan(cryptoIdx);
+  });
+});
+
+// ── [20260926_Fix_394_AlwaysOnTopStartupRead] Issue #394 ─────────────────
+// Contract (ticket item 2): at startup, BEFORE the main window is created,
+// main.ts must read the persisted `window_always_on_top` setting and apply
+// it through windowManager.setDefaultAlwaysOnTop(). The SET_TOP IPC handler
+// alone only covers in-session toggles — without the startup read, a user
+// who turned the floating panel off would see it resurrect on next launch.
+describe("[20260926_Fix_394_AlwaysOnTopStartupRead] main.ts startup alwaysOnTop read", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    h.order.length = 0;
+    h.setSafeStorageThrows = false;
+    vi.mocked(h_isEncryptionAvailable).mockReturnValue(true);
+    h.dbGetSetting.mockClear();
+    h.wmSetDefaultAlwaysOnTop.mockClear();
+    // No-row emulation: the real DatabaseManager.getSetting(key, default)
+    // returns the caller's default when the row is absent.
+    h.dbGetSetting.mockImplementation(
+      (_key: string, defaultValue: unknown) => defaultValue,
+    );
+    h.wmSetDefaultAlwaysOnTop.mockImplementation(() => {
+      h.order.push("setDefaultAlwaysOnTop");
+    });
+  });
+
+  it("reads window_always_on_top and applies persisted false BEFORE window creation", async () => {
+    // Persisted row: the user turned the floating panel OFF last session.
+    h.dbGetSetting.mockImplementation((key: string) =>
+      key === "window_always_on_top" ? false : undefined,
+    );
+
+    await importMain();
+    h.resolveReady();
+    await vi.waitFor(() => expect(h.order).toContain("createTray"));
+
+    expect(h.dbGetSetting).toHaveBeenCalledWith("window_always_on_top", true);
+    expect(h.wmSetDefaultAlwaysOnTop).toHaveBeenCalledWith(false);
+
+    const applyIdx = h.order.indexOf("setDefaultAlwaysOnTop");
+    const createIdx = h.order.indexOf("createMainWindow");
+    expect(applyIdx).toBeGreaterThanOrEqual(0);
+    expect(createIdx).toBeGreaterThan(applyIdx);
+  });
+
+  it("applies the default true when the setting has no persisted row", async () => {
+    await importMain();
+    h.resolveReady();
+    await vi.waitFor(() => expect(h.order).toContain("createTray"));
+
+    expect(h.dbGetSetting).toHaveBeenCalledWith("window_always_on_top", true);
+    expect(h.wmSetDefaultAlwaysOnTop).toHaveBeenCalledWith(true);
   });
 });
