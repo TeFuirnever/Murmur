@@ -148,6 +148,19 @@ mean **64ms** · median 63ms · p95 185ms · max **185ms** · 缺失 0 · 多余
 - 旧的 6 句 TTS 饱和集（`scripts/golden_set/` + `pnpm run test:asr`）保留为快速冒烟,
   本语料集自 T4 起作为发布 A/B 门禁（spec #412 S1）。
 
+### CI 取证运行（2026-10-01,macos-latest,torch 引擎）
+
+Run: https://github.com/TeFuirnever/Murmur/actions/runs/36786537761（成功,分支
+`agent/onnx-414`;因 GitHub dispatch API 只认默认分支上的 workflow 文件,取证用的是
+分支上的一枚临时 push 触发器,已随后续 commit 移除,dispatch 是预期入口）。
+
+- 逐域 CER 与热词修复率**逐位复现**本地基线（noise 23.73% / codeswitch 16.22% /
+  hotword repairRate 14.29%,still-wrong 输出文本亦一致）。
+- timestamp 维出现跨机差异：CI 上 mean 998ms / max 2830ms / 缺失 1 段,本地为
+  mean 64ms / 缺失 0——VAD 切分在不同环境（线程调度/推理后端）下边界行为不同,
+  佐证"方法学边界"第 4 条"A/B 必须同机同 commit 对跑"的约束;这也是该维应使用
+  `--compare` 同机对比而非绝对阈值的原因。
+
 ## 对 T4 的对照面小结（非判决）
 
 torch 基线给出的"必须不退步"锚点:noise mean CER 23.73% / codeswitch 16.22% /

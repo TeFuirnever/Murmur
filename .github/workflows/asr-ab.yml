@@ -12,13 +12,6 @@
 name: ASR A/B corpus
 
 on:
-  # [20261001_Feat_414_AbCorpusHarness] TEMPORARY push trigger on this
-  # branch only: GitHub's workflow_dispatch API can only discover the
-  # workflow once it exists on the default branch, so the branch needs a
-  # push trigger to produce a CI evidence run pre-merge. Removed again in
-  # the follow-up commit — dispatch is the intended surface.
-  push:
-    branches: [agent/onnx-414]
   workflow_dispatch:
     inputs:
       engine:

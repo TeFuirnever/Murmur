@@ -2,6 +2,8 @@
 
 ## In flight
 
+- [ ] 414 - T3 A/B 真实语料 harness + torch 基线 (since 2026-10-01)
+
 ## Queued
 
 ## Done
