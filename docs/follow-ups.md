@@ -88,3 +88,16 @@ dev:main 改用 `build:main && electron .`，dev/e2e/prod 加载同一 artifact�
 7. **影子内置模式的下拉标签**（#399 已知边界）：自定义模板覆盖内置模式时下拉显示内置 i18n 标签；精确标签需扩展 IPC 契约。
 8. **e2e 启动器 userData 未隔离**（PR #411 test 步发现）：`tests/e2e/helpers/electron-launch.ts` 以 `MURMUR_DB_PATH=:memory:` 启动不隔离 fileSync——setSetting('theme'/'language') 会写穿到真实 `~/Library/Application Support/murmur/murmur.json`。pipeline 验证 run 后已手工还原；根治需在启动 helper 里重定向 userData。
 9. **auto_start 的 SMAppService「requires-approval」态无 UI 反馈**（#404 遗留）：macOS 13+ 若登录项在系统设置中未获批准，开关显示开但登录项未生效，启动同步每 boot 仅记 info 日志。后续可在开关侧显示批准引导（System Settings → General → Login Items 链接）。
+
+## ONNX 迁移 T1 交付后登记（#413，2026-09-30）
+
+模型自导出管道（`scripts/onnx-export/`）与 GitHub Release 镜像
+（`models-onnx-int8-1`）已落地，仓内 pin 为
+`scripts/onnx-export/model-pin.json`。后续 T 系列工单需要接住的事项：
+
+1. **下载器接线**：modelManager 双源分发（ModelScope 官方 checkpoint 源 + 自有 Release 镜像）尚未开始；消费 pin 的 commit-SHA + 逐文件 sha256 + 精确文件名就绪锚（spec #412 决议 8/9），pin 的 schema_version=1 已由 `tests/unit/onnx-model-pin.test.ts` 守门。
+2. **funasr_onnx 返回键差异**：ONNX SeacoParaformer 返回 `preds`（空格拼接字序列）+ `timestamp`，无 torch AutoModel 的 `text` 键——服务端协议适配时不可按 `text` 取值（本次冒烟实证，`scripts/onnx-export/smoke_inference.py` 注释有记）。
+3. **campplus 无 v2.0.4 tag**：官方仓最新 tag 为 v2.0.2；funasr_server.py:1511 请求 v2.0.4 属上游静默回退，运行时接线时应改回真实 tag 或 master commit pin。
+4. **CAMPPlus int8 体积收益≈0**（29MB vs 28MB，Conv1d 为主、MatMul-only 量化不缩卷积权重）：若 T 系列需要更小 speaker 模型，需评估含 Conv 的量化配方（精度代价另行实测；本次 fp32↔int8 embedding 余弦 1.0，无精度损失）。
+5. **campplus 生产 fbank 前端**：本次冒烟用 funasr torch 侧 `extract_feature`（torchaudio kaldi fbank + CMVN）；无 torch 运行时需用 kaldi-native-fbank 复刻同一前端语义（80 维、CMVN per-utterance mean）。
+6. **导出环境 SBOM**：`scripts/onnx-export/requirements-export.txt` 已锁版本（torch 2.0.1/funasr 1.3.1/onnx 1.23.1/ort 1.30.0），但 wheel sha256 尚未记录（嵌入式 Python 侧的 SBOM 纪律在 spec #412 决议 5，属 T2 环境换血工单）。

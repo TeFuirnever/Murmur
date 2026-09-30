@@ -1,0 +1,174 @@
+{
+  "schema_version": 1,
+  "generated_utc": "2026-09-30T16:06:05+00:00",
+  "license": "Apache-2.0",
+  "attribution": "Models exported from official ModelScope iic Apache-2.0 checkpoints (FunASR / Alibaba DAMO Speech Lab, modelscope.cn). Exported with the FunASR export pipeline and quantized to ONNX int8 by the Murmur project; the upstream Apache-2.0 license ships alongside this distribution (LICENSE.upstream asset in the release).",
+  "release": {
+    "tag": "models-onnx-int8-1",
+    "url": "https://github.com/TeFuirnever/Murmur/releases/tags/models-onnx-int8-1",
+    "asset_base_url": "https://github.com/TeFuirnever/Murmur/releases/download/models-onnx-int8-1/"
+  },
+  "models": {
+    "asr": {
+      "name": "asr-seaco-paraformer",
+      "modelscope_repo": "iic/speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+      "modelscope_repo_alias": "damo/speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+      "model_revision": "v2.0.4",
+      "checkpoint_commit": "71684869ca6d8bfa59057d8a367b3fb7345a0c02",
+      "export": {
+        "funasr": "1.3.1",
+        "torch": "2.0.1",
+        "onnx": "1.23.1",
+        "onnxruntime": "1.30.0",
+        "opset": 14
+      },
+      "files": [
+        {
+          "path": "am.mvn",
+          "sha256": "29b3c740a2c0cfc6b308126d31d7f265fa2be74f3bb095cd2f143ea970896ae5",
+          "size_bytes": 11203,
+          "asset": "asr-seaco-paraformer__am.mvn"
+        },
+        {
+          "path": "config.yaml",
+          "sha256": "f4cb124f0abaff662e9e8b80e5ce54e873932d988c608dc08b344c3a71455458",
+          "size_bytes": 3420,
+          "asset": "asr-seaco-paraformer__config.yaml"
+        },
+        {
+          "path": "model_eb_quant.onnx",
+          "sha256": "2c5d845bcbc28c2516a46f5eabef908a7034ca840843109487e7ef1e19ece3a5",
+          "size_bytes": 34028131,
+          "asset": "asr-seaco-paraformer__model_eb_quant.onnx"
+        },
+        {
+          "path": "model_quant.onnx",
+          "sha256": "388829b05af1db754811c10d23a3509a89ce7c9ad3eb397d32b4dda356bdf14f",
+          "size_bytes": 345131848,
+          "asset": "asr-seaco-paraformer__model_quant.onnx",
+          "asset_parts": [
+            "asr-seaco-paraformer__model_quant.onnx.part00",
+            "asr-seaco-paraformer__model_quant.onnx.part01",
+            "asr-seaco-paraformer__model_quant.onnx.part02",
+            "asr-seaco-paraformer__model_quant.onnx.part03",
+            "asr-seaco-paraformer__model_quant.onnx.part04"
+          ]
+        },
+        {
+          "path": "seg_dict",
+          "sha256": "59a2ef803a3f1648ad03a2e1480db1c1ee0c0d7dc4ef4dbd16cea33944329022",
+          "size_bytes": 8287834,
+          "asset": "asr-seaco-paraformer__seg_dict"
+        },
+        {
+          "path": "tokens.json",
+          "sha256": "2b20c2b12572d682afff84ce1c8d560f67b8b32a4c1f21567411d141ed352127",
+          "size_bytes": 93676,
+          "asset": "asr-seaco-paraformer__tokens.json"
+        }
+      ]
+    },
+    "vad": {
+      "name": "vad-fsmn",
+      "modelscope_repo": "iic/speech_fsmn_vad_zh-cn-16k-common-pytorch",
+      "modelscope_repo_alias": "damo/speech_fsmn_vad_zh-cn-16k-common-pytorch",
+      "model_revision": "v2.0.4",
+      "checkpoint_commit": "662fc7a38813d81305085696d59eb5b1141a204a",
+      "export": {
+        "funasr": "1.3.1",
+        "torch": "2.0.1",
+        "onnx": "1.23.1",
+        "onnxruntime": "1.30.0",
+        "opset": 14
+      },
+      "files": [
+        {
+          "path": "am.mvn",
+          "sha256": "6820fef9687708c4fc3fab2530179c8fcea6262daa25514380056cd8f6eb1754",
+          "size_bytes": 8040,
+          "asset": "vad-fsmn__am.mvn"
+        },
+        {
+          "path": "config.yaml",
+          "sha256": "486861ca26ddb79081663b6179cb204c6bfae71c52f04aafc48a9e9d8dde1e93",
+          "size_bytes": 1215,
+          "asset": "vad-fsmn__config.yaml"
+        },
+        {
+          "path": "model_quant.onnx",
+          "sha256": "aaaab7aab62f871ed53019a393aca992e2493e2dacecf91f01eed9022a9f6e0f",
+          "size_bytes": 512425,
+          "asset": "vad-fsmn__model_quant.onnx"
+        }
+      ]
+    },
+    "punc": {
+      "name": "punc-ct-transformer-272727",
+      "modelscope_repo": "iic/punc_ct-transformer_zh-cn-common-vocab272727-pytorch",
+      "modelscope_repo_alias": "damo/punc_ct-transformer_zh-cn-common-vocab272727-pytorch",
+      "model_revision": "v2.0.4",
+      "checkpoint_commit": "524de490e17649ffa0900a02ab5b1a66656c7c96",
+      "export": {
+        "funasr": "1.3.1",
+        "torch": "2.0.1",
+        "onnx": "1.23.1",
+        "onnxruntime": "1.30.0",
+        "opset": 14
+      },
+      "files": [
+        {
+          "path": "config.yaml",
+          "sha256": "a56ec10925b06fa976ad51af373396be2b13e1eb8dc62a5426b5adebaba7071d",
+          "size_bytes": 810,
+          "asset": "punc-ct-transformer-272727__config.yaml"
+        },
+        {
+          "path": "model_quant.onnx",
+          "sha256": "21469c4b258b0a5f4e93b477f79c0a1c4428055b2a07c5172c2545493fc585dc",
+          "size_bytes": 282752986,
+          "asset": "punc-ct-transformer-272727__model_quant.onnx",
+          "asset_parts": [
+            "punc-ct-transformer-272727__model_quant.onnx.part00",
+            "punc-ct-transformer-272727__model_quant.onnx.part01",
+            "punc-ct-transformer-272727__model_quant.onnx.part02",
+            "punc-ct-transformer-272727__model_quant.onnx.part03"
+          ]
+        },
+        {
+          "path": "tokens.json",
+          "sha256": "c960ab87bccea4aa15cf49a59f71973c2c330b46668048cd8da253749ec71ee3",
+          "size_bytes": 4207480,
+          "asset": "punc-ct-transformer-272727__tokens.json"
+        }
+      ]
+    },
+    "speaker": {
+      "name": "speaker-campplus",
+      "modelscope_repo": "iic/speech_campplus_sv_zh-cn_16k-common",
+      "modelscope_repo_alias": "damo/speech_campplus_sv_zh-cn_16k-common",
+      "model_revision": "v2.0.2",
+      "checkpoint_commit": "930086088e5c5fa8a3f911c20795ca72f7f16397",
+      "export": {
+        "funasr": "1.3.1",
+        "torch": "2.0.1",
+        "onnx": "1.23.1",
+        "onnxruntime": "1.30.0",
+        "opset": 14
+      },
+      "files": [
+        {
+          "path": "config.yaml",
+          "sha256": "17342041bd5b22f6fd7e32f6e7a267b0bf65f018c0a721bada6547e3d28fbfc9",
+          "size_bytes": 537,
+          "asset": "speaker-campplus__config.yaml"
+        },
+        {
+          "path": "model_quant.onnx",
+          "sha256": "329bb9312609b59472dba2a5f962f017fa5b8a4a774810854f69a3ef4e5fe833",
+          "size_bytes": 28979049,
+          "asset": "speaker-campplus__model_quant.onnx"
+        }
+      ]
+    }
+  }
+}

@@ -26,6 +26,12 @@ export default tseslint.config(
       "python/",
       ".omc/",
       "website/.astro/",
+      // [20260930_T413_OnnxExportPipeline] work/ holds downloaded external
+      // repo snapshots for the ONNX export pipeline — same class as
+      // python/ and node_modules/: never lint externally-downloaded trees.
+      // (scripts/onnx-export/.venv/ needs no entry here: **/.venv/ above
+      // covers it at any depth since #436.)
+      "scripts/onnx-export/work/",
       // [20261001_Fix_CiLintScope] Machine-local, gitignored tooling
       // output (agent drafts, local productions) — never repo code, but
       // `eslint .` scans the working tree and their findings fail

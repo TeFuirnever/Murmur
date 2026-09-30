@@ -178,3 +178,8 @@ productions/
 # Unrelated in-progress research docs (kept local by owner)
 docs/research/2026-09-26-installer-size-and-resource-usage-best-practices.md
 docs/research/2026-09-26-mac-runtime-measurements.md
+
+# [20260930_T413_OnnxExportPipeline] ONNX export pipeline local state:
+# pipeline venv + export work dir (checkpoints, stages, artifacts, reports)
+scripts/onnx-export/.venv/
+scripts/onnx-export/work/
