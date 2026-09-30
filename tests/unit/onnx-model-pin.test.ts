@@ -88,11 +88,11 @@ function parsePythonSpecField(key: string, field: string): string {
     new RegExp(`"${key}":\\s*\\{([\\s\\S]*?)\\n\\s{4}\\}`, "m"),
   );
   if (!blockMatch) throw new Error(`MODEL_SPECS["${key}"] not found`);
-  const fieldMatch = blockMatch[1].match(
+  const fieldMatch = blockMatch[1]!.match(
     new RegExp(`"${field}":\\s*"([^"]+)"`),
   );
   if (!fieldMatch) throw new Error(`field ${field} missing for ${key}`);
-  return fieldMatch[1];
+  return fieldMatch[1]!;
 }
 
 function loadPin(): ModelPin {
@@ -124,6 +124,7 @@ describe("onnx model pin (ticket #413)", () => {
     (key) => {
       const pin = loadPin();
       const model = pin.models[key];
+      if (!model) throw new Error(`pin missing model ${key}`);
       expect(model.modelscope_repo).toBe(EXPECTED_REPOS[key]);
       expect(model.modelscope_repo.startsWith("iic/")).toBe(true);
       expect(model.model_revision).toMatch(/^v\d+\.\d+\.\d+$/);
@@ -135,16 +136,18 @@ describe("onnx model pin (ticket #413)", () => {
     "%s manifest covers exactly the funasr-onnx runtime file set",
     (key) => {
       const pin = loadPin();
-      const files = pin.models[key].files;
+      const entry = pin.models[key];
+      if (!entry) throw new Error(`pin missing model ${key}`);
+      const files = entry.files;
       expect(files.map((f) => f.path).sort()).toEqual(
-        [...EXPECTED_RUNTIME_FILES[key]].sort(),
+        [...EXPECTED_RUNTIME_FILES[key]!].sort(),
       );
       for (const file of files) {
         expect(file.sha256, `${key}/${file.path} sha256`).toMatch(SHA256_RE);
         expect(file.size_bytes).toBeGreaterThan(0);
         // Release asset naming convention: <model>__<path> (GitHub asset
         // names cannot contain "/").
-        expect(file.asset).toBe(`${pin.models[key].name}__${file.path}`);
+        expect(file.asset).toBe(`${entry.name}__${file.path}`);
         // Large graphs may be mirrored as ordered split parts (uplink
         // stalls kill single 300MB+ request bodies). Integrity stays
         // anchored on the assembled file's sha256 above — parts are only
@@ -162,7 +165,9 @@ describe("onnx model pin (ticket #413)", () => {
   it("records the export toolchain versions (SBOM pin discipline)", () => {
     const pin = loadPin();
     for (const key of Object.keys(pin.models)) {
-      const exported = pin.models[key].export;
+      const entry = pin.models[key];
+      if (!entry) throw new Error(`pin missing model ${key}`);
+      const exported = entry.export;
       expect(String(exported.funasr)).toMatch(/^\d+\.\d+/);
       expect(String(exported.torch)).toMatch(/^\d+\.\d+/);
       expect(String(exported.onnx)).toMatch(/^\d+\./);
@@ -187,13 +192,15 @@ describe("onnx model pin (ticket #413)", () => {
   it("MODEL_SPECS (python) and the pin agree on repo + revision", () => {
     const pin = loadPin();
     for (const key of Object.keys(EXPECTED_REPOS)) {
+      const entry = pin.models[key];
+      if (!entry) throw new Error(`pin missing model ${key}`);
       expect(parsePythonSpecField(key, "modelscope_repo")).toBe(
-        pin.models[key].modelscope_repo,
+        entry.modelscope_repo,
       );
       expect(parsePythonSpecField(key, "model_revision")).toBe(
-        pin.models[key].model_revision,
+        entry.model_revision,
       );
-      expect(parsePythonSpecField(key, "name")).toBe(pin.models[key].name);
+      expect(parsePythonSpecField(key, "name")).toBe(entry.name);
     }
   });
 });

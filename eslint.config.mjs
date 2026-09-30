@@ -22,6 +22,21 @@ export default tseslint.config(
       "python/",
       ".omc/",
       "website/.astro/",
+      // [20260930_T413_OnnxExportPipeline] The ONNX export pipeline's
+      // local state: .venv carries vendored site-packages JS (torch
+      // code.js trips no-this-alias) and work/ holds downloaded external
+      // repo snapshots — same class as python/ and node_modules/: never
+      // lint tool-owned or externally-downloaded trees.
+      "scripts/onnx-export/.venv/",
+      "scripts/onnx-export/work/",
+      // Orchestrator runtime dir (workflow drafts), same class as .omc/.
+      ".zcode/",
+      // [20260930_T413_OnnxExportPipeline] gitignored local-only dir
+      // (.gitignore:166) — never shipped, but present in dev worktrees
+      // where its vendored JS would trip --max-warnings 0. Same class as
+      // python/.omc: eslint cannot read .gitignore, so local trees are
+      // listed here explicitly.
+      "productions/",
     ],
   },
 
