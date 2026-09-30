@@ -359,76 +359,87 @@ def build_cases(include_network=True):
             "expectedSegments": None,
         })
 
-    # noise: bases 8..11 × 2 variants
-    babble_pool = None
-    for base_i, variant in [(8, NOISE_VARIANTS[0]), (9, NOISE_VARIANTS[1]),
-                            (10, NOISE_VARIANTS[0]), (11, NOISE_VARIANTS[1]),
-                            (12, NOISE_VARIANTS[0]), (13, NOISE_VARIANTS[1])]:
-        offset, transcript, data = usable[base_i]
-        kind, snr = variant[1], variant[2]
-        if kind == "babble":
-            if babble_pool is None:
-                renders = []
-                for sent in BABBLE_SENTENCES:
-                    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as t:
-                        w = t.name
-                    say_to_wav("Tingting", sent, w)
-                    renders.append(load_audio(w) / (rms(load_audio(w)) + 1e-12))
-                    os.unlink(w)
-                # overlap 4 talkers at random offsets into 30s of babble
-                babble_pool = np.zeros(SR * 30)
-                for r in renders:
-                    start = int(RNG.integers(0, len(babble_pool) - len(r)))
-                    babble_pool[start:start + len(r)] += r
-            noise = babble_pool
-        else:
-            noise = pink_noise(len(data))
-        mixed = mix_at_snr(data, noise, snr)
-        name = f"noise_{kind}_snr{int(snr):02d}_{offset:04d}"
-        write_flac(name, mixed)
-        add({
-            "id": name,
-            "audio": f"audio/{name}.flac",
-            "domain": "noise",
-            "provenance": f"{AISHELL_PROVENANCE} row {offset} + {kind} noise @{snr:.0f}dB SNR",
-            "source": {"dataset": AISHELL_DATASET, "split": "test", "rowOffset": offset},
-            "augmentation": {"type": f"additive-{kind}", "snrDb": snr},
-            "reference": {"text": transcript, "punctuatedText": None},
-            "hotword": None,
-            "expectedSegments": None,
-        })
+    # [20261001_Fix_414_NoNetworkGuard] Review fixup for #414: with
+    # include_network=False the AISHELL `usable` list is empty, and the
+    # noise/farfield loops below indexed it unconditionally — the
+    # --no-network build (advertised in the module docstring, argparse
+    # help, and the non-darwin refusal message) crashed 100% with
+    # IndexError. Guard both loops like the real-clean slice above, which
+    # already no-ops safely on the empty list.
+    if include_network:
+        # noise: bases 8..11 × 2 variants
+        babble_pool = None
+        for base_i, variant in [(8, NOISE_VARIANTS[0]), (9, NOISE_VARIANTS[1]),
+                                (10, NOISE_VARIANTS[0]), (11, NOISE_VARIANTS[1]),
+                                (12, NOISE_VARIANTS[0]), (13, NOISE_VARIANTS[1])]:
+            offset, transcript, data = usable[base_i]
+            kind, snr = variant[1], variant[2]
+            if kind == "babble":
+                if babble_pool is None:
+                    renders = []
+                    for sent in BABBLE_SENTENCES:
+                        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as t:
+                            w = t.name
+                        say_to_wav("Tingting", sent, w)
+                        renders.append(load_audio(w) / (rms(load_audio(w)) + 1e-12))
+                        os.unlink(w)
+                    # overlap 4 talkers at random offsets into 30s of babble
+                    babble_pool = np.zeros(SR * 30)
+                    for r in renders:
+                        start = int(RNG.integers(0, len(babble_pool) - len(r)))
+                        babble_pool[start:start + len(r)] += r
+                noise = babble_pool
+            else:
+                noise = pink_noise(len(data))
+            mixed = mix_at_snr(data, noise, snr)
+            name = f"noise_{kind}_snr{int(snr):02d}_{offset:04d}"
+            write_flac(name, mixed)
+            add({
+                "id": name,
+                "audio": f"audio/{name}.flac",
+                "domain": "noise",
+                "provenance": f"{AISHELL_PROVENANCE} row {offset} + {kind} noise @{snr:.0f}dB SNR",
+                "source": {"dataset": AISHELL_DATASET, "split": "test", "rowOffset": offset},
+                "augmentation": {"type": f"additive-{kind}", "snrDb": snr},
+                "reference": {"text": transcript, "punctuatedText": None},
+                "hotword": None,
+                "expectedSegments": None,
+            })
 
-    # farfield: bases 12..15
-    for base_i in range(14, 18):  # 4 farfield bases
-        offset, transcript, data = usable[base_i]
-        reverbed = np.convolve(data, synthetic_rir())[:len(data)]
-        muffled = fft_lowpass(reverbed, FARFIELD_LP_HZ)
-        attenuated = muffled * (10 ** (-FARFIELD_ATTEN_DB / 20))
-        floored = mix_at_snr(attenuated, pink_noise(len(data)),
-                             FARFIELD_FLOOR_SNR_DB)
-        name = f"farfield_sim_{offset:04d}"
-        write_flac(name, floored)
-        add({
-            "id": name,
-            "audio": f"audio/{name}.flac",
-            "domain": "farfield",
-            "provenance": (
-                f"{AISHELL_PROVENANCE} row {offset} + simulated far-field "
-                f"(synthetic RIR T60≈{FARFIELD_T60_S}s, LPF {int(FARFIELD_LP_HZ)}Hz, "
-                f"-{FARFIELD_ATTEN_DB:.0f}dB, noise floor @{FARFIELD_FLOOR_SNR_DB:.0f}dB SNR)"
-            ),
-            "source": {"dataset": AISHELL_DATASET, "split": "test", "rowOffset": offset},
-            "augmentation": {
-                "type": "farfield-sim",
-                "rirT60S": FARFIELD_T60_S,
-                "lowpassHz": FARFIELD_LP_HZ,
-                "attenuationDb": FARFIELD_ATTEN_DB,
-                "floorSnrDb": FARFIELD_FLOOR_SNR_DB,
-            },
-            "reference": {"text": transcript, "punctuatedText": None},
-            "hotword": None,
-            "expectedSegments": None,
-        })
+        # [20261001_Fix_414_NoNetworkGuard] farfield shares the same
+        # AISHELL-derived bases — same guard, same rationale as noise.
+        # farfield: bases 12..15
+        for base_i in range(14, 18):  # 4 farfield bases
+            offset, transcript, data = usable[base_i]
+            reverbed = np.convolve(data, synthetic_rir())[:len(data)]
+            muffled = fft_lowpass(reverbed, FARFIELD_LP_HZ)
+            attenuated = muffled * (10 ** (-FARFIELD_ATTEN_DB / 20))
+            floored = mix_at_snr(attenuated, pink_noise(len(data)),
+                                 FARFIELD_FLOOR_SNR_DB)
+            name = f"farfield_sim_{offset:04d}"
+            write_flac(name, floored)
+            add({
+                "id": name,
+                "audio": f"audio/{name}.flac",
+                "domain": "farfield",
+                "provenance": (
+                    f"{AISHELL_PROVENANCE} row {offset} + simulated far-field "
+                    f"(synthetic RIR T60≈{FARFIELD_T60_S}s, LPF {int(FARFIELD_LP_HZ)}Hz, "
+                    f"-{FARFIELD_ATTEN_DB:.0f}dB, noise floor @{FARFIELD_FLOOR_SNR_DB:.0f}dB SNR)"
+                ),
+                "source": {"dataset": AISHELL_DATASET, "split": "test", "rowOffset": offset},
+                "augmentation": {
+                    "type": "farfield-sim",
+                    "rirT60S": FARFIELD_T60_S,
+                    "lowpassHz": FARFIELD_LP_HZ,
+                    "attenuationDb": FARFIELD_ATTEN_DB,
+                    "floorSnrDb": FARFIELD_FLOOR_SNR_DB,
+                },
+                "reference": {"text": transcript, "punctuatedText": None},
+                "hotword": None,
+                "expectedSegments": None,
+            })
+    # [20261001_Fix_414_NoNetworkGuard] END
 
     # ---- 2. accent (TTS accent simulation) ------------------------------
     for voice, region, note in ACCENT_VOICES:
