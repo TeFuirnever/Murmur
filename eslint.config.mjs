@@ -18,10 +18,20 @@ export default tseslint.config(
       "src/dist/",
       "src/node_modules/",
       "src/coverage/",
-      ".venv/",
+      // [20261001_Fix_CiLintScope] `**/` prefix: venvs sit at any depth —
+      // the root-anchored ".venv/" let a sibling worktree's
+      // scripts/onnx-export/.venv (vendored torch/sklearn JS) fail the
+      // lint gate with errors that never exist in tracked files.
+      "**/.venv/",
       "python/",
       ".omc/",
       "website/.astro/",
+      // [20261001_Fix_CiLintScope] Machine-local, gitignored tooling
+      // output (agent drafts, local productions) — never repo code, but
+      // `eslint .` scans the working tree and their findings fail
+      // --max-warnings 0 on machines that happen to have them.
+      ".zcode/",
+      "productions/",
     ],
   },
 

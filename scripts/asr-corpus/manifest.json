@@ -1,0 +1,787 @@
+{
+  "version": 1,
+  "name": "murmur-asr-ab-corpus-v1",
+  "description": "Real-speech A/B corpus for spec #412 (torch vs ONNX engine comparison). Built by scripts/build-asr-corpus.py; composition documented in docs/research/2026-10-01-asr-ab-corpus-torch-baseline.md.",
+  "domains": [
+    {
+      "id": "real-clean",
+      "label": "真实朗读(干净)",
+      "description": "AISHELL-1 test (Apache-2.0) real recorded read speech"
+    },
+    {
+      "id": "accent",
+      "label": "口音",
+      "description": "regional-accented Mandarin (zh_TW/zh_HK TTS simulation, provenance-labeled)"
+    },
+    {
+      "id": "noise",
+      "label": "噪声",
+      "description": "real speech + additive babble/pink noise at documented SNR"
+    },
+    {
+      "id": "farfield",
+      "label": "远场",
+      "description": "real speech + simulated room (synthetic RIR + LPF + attenuation + floor)"
+    },
+    {
+      "id": "codeswitch",
+      "label": "中英混说",
+      "description": "mixed zh/en dictation sentences (stitched bilingual TTS and whole-sentence zh TTS)"
+    },
+    {
+      "id": "hotword",
+      "label": "热词判别",
+      "description": "rare-noun sentences transcribed twice (hotword off/on) by the harness"
+    },
+    {
+      "id": "timestamp",
+      "label": "时间戳黄金集",
+      "description": "multi-sentence clips with waveform-measured golden boundaries"
+    }
+  ],
+  "generator": {
+    "script": "scripts/build-asr-corpus.py",
+    "seed": 414,
+    "sampleRateHz": 16000
+  },
+  "cases": [
+    {
+      "id": "real_aishell_0000",
+      "audio": "audio/real_aishell_0000.flac",
+      "domain": "real-clean",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test, row offset 0",
+      "source": {
+        "dataset": "AudioLLMs/aishell_1_zh_test",
+        "split": "test",
+        "rowOffset": 0
+      },
+      "augmentation": null,
+      "reference": {
+        "text": "甚至出现交易几乎停滞的情况",
+        "punctuatedText": null
+      },
+      "hotword": null,
+      "expectedSegments": null
+    },
+    {
+      "id": "real_aishell_0500",
+      "audio": "audio/real_aishell_0500.flac",
+      "domain": "real-clean",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test, row offset 500",
+      "source": {
+        "dataset": "AudioLLMs/aishell_1_zh_test",
+        "split": "test",
+        "rowOffset": 500
+      },
+      "augmentation": null,
+      "reference": {
+        "text": "中国游戏产品和美国产品极为不同",
+        "punctuatedText": null
+      },
+      "hotword": null,
+      "expectedSegments": null
+    },
+    {
+      "id": "real_aishell_1000",
+      "audio": "audio/real_aishell_1000.flac",
+      "domain": "real-clean",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test, row offset 1000",
+      "source": {
+        "dataset": "AudioLLMs/aishell_1_zh_test",
+        "split": "test",
+        "rowOffset": 1000
+      },
+      "augmentation": null,
+      "reference": {
+        "text": "多了初为人母的幸福光彩",
+        "punctuatedText": null
+      },
+      "hotword": null,
+      "expectedSegments": null
+    },
+    {
+      "id": "real_aishell_1500",
+      "audio": "audio/real_aishell_1500.flac",
+      "domain": "real-clean",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test, row offset 1500",
+      "source": {
+        "dataset": "AudioLLMs/aishell_1_zh_test",
+        "split": "test",
+        "rowOffset": 1500
+      },
+      "augmentation": null,
+      "reference": {
+        "text": "投资者采取措施防范风险是成熟的表现",
+        "punctuatedText": null
+      },
+      "hotword": null,
+      "expectedSegments": null
+    },
+    {
+      "id": "real_aishell_2000",
+      "audio": "audio/real_aishell_2000.flac",
+      "domain": "real-clean",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test, row offset 2000",
+      "source": {
+        "dataset": "AudioLLMs/aishell_1_zh_test",
+        "split": "test",
+        "rowOffset": 2000
+      },
+      "augmentation": null,
+      "reference": {
+        "text": "婷婷就坦言靠传媒得知",
+        "punctuatedText": null
+      },
+      "hotword": null,
+      "expectedSegments": null
+    },
+    {
+      "id": "real_aishell_2600",
+      "audio": "audio/real_aishell_2600.flac",
+      "domain": "real-clean",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test, row offset 2600",
+      "source": {
+        "dataset": "AudioLLMs/aishell_1_zh_test",
+        "split": "test",
+        "rowOffset": 2600
+      },
+      "augmentation": null,
+      "reference": {
+        "text": "紫光集团系清华控股旗下最主要的资产",
+        "punctuatedText": null
+      },
+      "hotword": null,
+      "expectedSegments": null
+    },
+    {
+      "id": "real_aishell_3200",
+      "audio": "audio/real_aishell_3200.flac",
+      "domain": "real-clean",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test, row offset 3200",
+      "source": {
+        "dataset": "AudioLLMs/aishell_1_zh_test",
+        "split": "test",
+        "rowOffset": 3200
+      },
+      "augmentation": null,
+      "reference": {
+        "text": "加快发展生物育种战略性新兴产业",
+        "punctuatedText": null
+      },
+      "hotword": null,
+      "expectedSegments": null
+    },
+    {
+      "id": "real_aishell_3800",
+      "audio": "audio/real_aishell_3800.flac",
+      "domain": "real-clean",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test, row offset 3800",
+      "source": {
+        "dataset": "AudioLLMs/aishell_1_zh_test",
+        "split": "test",
+        "rowOffset": 3800
+      },
+      "augmentation": null,
+      "reference": {
+        "text": "并在铁塔上借助自拍杆合影",
+        "punctuatedText": null
+      },
+      "hotword": null,
+      "expectedSegments": null
+    },
+    {
+      "id": "noise_babble_snr05_4400",
+      "audio": "audio/noise_babble_snr05_4400.flac",
+      "domain": "noise",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test row 4400 + babble noise @5dB SNR",
+      "source": {
+        "dataset": "AudioLLMs/aishell_1_zh_test",
+        "split": "test",
+        "rowOffset": 4400
+      },
+      "augmentation": {
+        "type": "additive-babble",
+        "snrDb": 5.0
+      },
+      "reference": {
+        "text": "比赛开始后仅仅十馀秒",
+        "punctuatedText": null
+      },
+      "hotword": null,
+      "expectedSegments": null
+    },
+    {
+      "id": "noise_pink_snr10_4900",
+      "audio": "audio/noise_pink_snr10_4900.flac",
+      "domain": "noise",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test row 4900 + pink noise @10dB SNR",
+      "source": {
+        "dataset": "AudioLLMs/aishell_1_zh_test",
+        "split": "test",
+        "rowOffset": 4900
+      },
+      "augmentation": {
+        "type": "additive-pink",
+        "snrDb": 10.0
+      },
+      "reference": {
+        "text": "链家地产市场研究部张旭表示",
+        "punctuatedText": null
+      },
+      "hotword": null,
+      "expectedSegments": null
+    },
+    {
+      "id": "noise_babble_snr05_5400",
+      "audio": "audio/noise_babble_snr05_5400.flac",
+      "domain": "noise",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test row 5400 + babble noise @5dB SNR",
+      "source": {
+        "dataset": "AudioLLMs/aishell_1_zh_test",
+        "split": "test",
+        "rowOffset": 5400
+      },
+      "augmentation": {
+        "type": "additive-babble",
+        "snrDb": 5.0
+      },
+      "reference": {
+        "text": "冰壶项目在水立方进行",
+        "punctuatedText": null
+      },
+      "hotword": null,
+      "expectedSegments": null
+    },
+    {
+      "id": "noise_pink_snr10_5700",
+      "audio": "audio/noise_pink_snr10_5700.flac",
+      "domain": "noise",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test row 5700 + pink noise @10dB SNR",
+      "source": {
+        "dataset": "AudioLLMs/aishell_1_zh_test",
+        "split": "test",
+        "rowOffset": 5700
+      },
+      "augmentation": {
+        "type": "additive-pink",
+        "snrDb": 10.0
+      },
+      "reference": {
+        "text": "美的将美芝压缩机威灵电机合并",
+        "punctuatedText": null
+      },
+      "hotword": null,
+      "expectedSegments": null
+    },
+    {
+      "id": "noise_babble_snr05_5900",
+      "audio": "audio/noise_babble_snr05_5900.flac",
+      "domain": "noise",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test row 5900 + babble noise @5dB SNR",
+      "source": {
+        "dataset": "AudioLLMs/aishell_1_zh_test",
+        "split": "test",
+        "rowOffset": 5900
+      },
+      "augmentation": {
+        "type": "additive-babble",
+        "snrDb": 5.0
+      },
+      "reference": {
+        "text": "七月份各线城市房价分化仍然明显",
+        "punctuatedText": null
+      },
+      "hotword": null,
+      "expectedSegments": null
+    },
+    {
+      "id": "noise_pink_snr10_6300",
+      "audio": "audio/noise_pink_snr10_6300.flac",
+      "domain": "noise",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test row 6300 + pink noise @10dB SNR",
+      "source": {
+        "dataset": "AudioLLMs/aishell_1_zh_test",
+        "split": "test",
+        "rowOffset": 6300
+      },
+      "augmentation": {
+        "type": "additive-pink",
+        "snrDb": 10.0
+      },
+      "reference": {
+        "text": "国务院已经批准信贷资产证券化继续扩大试点",
+        "punctuatedText": null
+      },
+      "hotword": null,
+      "expectedSegments": null
+    },
+    {
+      "id": "farfield_sim_6600",
+      "audio": "audio/farfield_sim_6600.flac",
+      "domain": "farfield",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test row 6600 + simulated far-field (synthetic RIR T60≈0.35s, LPF 6500Hz, -12dB, noise floor @25dB SNR)",
+      "source": {
+        "dataset": "AudioLLMs/aishell_1_zh_test",
+        "split": "test",
+        "rowOffset": 6600
+      },
+      "augmentation": {
+        "type": "farfield-sim",
+        "rirT60S": 0.35,
+        "lowpassHz": 6500.0,
+        "attenuationDb": 12.0,
+        "floorSnrDb": 25.0
+      },
+      "reference": {
+        "text": "许多企业都把取得顾客个人资料当作资本",
+        "punctuatedText": null
+      },
+      "hotword": null,
+      "expectedSegments": null
+    },
+    {
+      "id": "farfield_sim_6750",
+      "audio": "audio/farfield_sim_6750.flac",
+      "domain": "farfield",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test row 6750 + simulated far-field (synthetic RIR T60≈0.35s, LPF 6500Hz, -12dB, noise floor @25dB SNR)",
+      "source": {
+        "dataset": "AudioLLMs/aishell_1_zh_test",
+        "split": "test",
+        "rowOffset": 6750
+      },
+      "augmentation": {
+        "type": "farfield-sim",
+        "rirT60S": 0.35,
+        "lowpassHz": 6500.0,
+        "attenuationDb": 12.0,
+        "floorSnrDb": 25.0
+      },
+      "reference": {
+        "text": "如何借力拥抱互联网加这一全新变量",
+        "punctuatedText": null
+      },
+      "hotword": null,
+      "expectedSegments": null
+    },
+    {
+      "id": "farfield_sim_6820",
+      "audio": "audio/farfield_sim_6820.flac",
+      "domain": "farfield",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test row 6820 + simulated far-field (synthetic RIR T60≈0.35s, LPF 6500Hz, -12dB, noise floor @25dB SNR)",
+      "source": {
+        "dataset": "AudioLLMs/aishell_1_zh_test",
+        "split": "test",
+        "rowOffset": 6820
+      },
+      "augmentation": {
+        "type": "farfield-sim",
+        "rirT60S": 0.35,
+        "lowpassHz": 6500.0,
+        "attenuationDb": 12.0,
+        "floorSnrDb": 25.0
+      },
+      "reference": {
+        "text": "拿下全场最高分的朱婷赛后表示",
+        "punctuatedText": null
+      },
+      "hotword": null,
+      "expectedSegments": null
+    },
+    {
+      "id": "farfield_sim_6850",
+      "audio": "audio/farfield_sim_6850.flac",
+      "domain": "farfield",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test row 6850 + simulated far-field (synthetic RIR T60≈0.35s, LPF 6500Hz, -12dB, noise floor @25dB SNR)",
+      "source": {
+        "dataset": "AudioLLMs/aishell_1_zh_test",
+        "split": "test",
+        "rowOffset": 6850
+      },
+      "augmentation": {
+        "type": "farfield-sim",
+        "rirT60S": 0.35,
+        "lowpassHz": 6500.0,
+        "attenuationDb": 12.0,
+        "floorSnrDb": 25.0
+      },
+      "reference": {
+        "text": "她突然就干呕",
+        "punctuatedText": null
+      },
+      "hotword": null,
+      "expectedSegments": null
+    },
+    {
+      "id": "accent_zh_tw_00",
+      "audio": "audio/accent_zh_tw_00.flac",
+      "domain": "accent",
+      "provenance": "macOS say voice Meijia (zh-TW) — Taiwan-accented Mandarin TTS",
+      "source": null,
+      "augmentation": null,
+      "reference": {
+        "text": "我们这一季度的重点，是把会议记录的整理时间缩短一半。",
+        "punctuatedText": "我们这一季度的重点，是把会议记录的整理时间缩短一半。"
+      },
+      "hotword": null,
+      "expectedSegments": null
+    },
+    {
+      "id": "accent_zh_tw_01",
+      "audio": "audio/accent_zh_tw_01.flac",
+      "domain": "accent",
+      "provenance": "macOS say voice Meijia (zh-TW) — Taiwan-accented Mandarin TTS",
+      "source": null,
+      "augmentation": null,
+      "reference": {
+        "text": "这份名单里面有好几个名字，我从来没有见过。",
+        "punctuatedText": "这份名单里面有好几个名字，我从来没有见过。"
+      },
+      "hotword": null,
+      "expectedSegments": null
+    },
+    {
+      "id": "accent_zh_tw_02",
+      "audio": "audio/accent_zh_tw_02.flac",
+      "domain": "accent",
+      "provenance": "macOS say voice Meijia (zh-TW) — Taiwan-accented Mandarin TTS",
+      "source": null,
+      "augmentation": null,
+      "reference": {
+        "text": "下一版产品要在移动端支持离线转写，对吧？",
+        "punctuatedText": "下一版产品要在移动端支持离线转写，对吧？"
+      },
+      "hotword": null,
+      "expectedSegments": null
+    },
+    {
+      "id": "accent_zh_hk_00",
+      "audio": "audio/accent_zh_hk_00.flac",
+      "domain": "accent",
+      "provenance": "macOS say voice Sinji (zh-HK) — Hong Kong-accented Mandarin TTS",
+      "source": null,
+      "augmentation": null,
+      "reference": {
+        "text": "我们这一季度的重点，是把会议记录的整理时间缩短一半。",
+        "punctuatedText": "我们这一季度的重点，是把会议记录的整理时间缩短一半。"
+      },
+      "hotword": null,
+      "expectedSegments": null
+    },
+    {
+      "id": "accent_zh_hk_01",
+      "audio": "audio/accent_zh_hk_01.flac",
+      "domain": "accent",
+      "provenance": "macOS say voice Sinji (zh-HK) — Hong Kong-accented Mandarin TTS",
+      "source": null,
+      "augmentation": null,
+      "reference": {
+        "text": "这份名单里面有好几个名字，我从来没有见过。",
+        "punctuatedText": "这份名单里面有好几个名字，我从来没有见过。"
+      },
+      "hotword": null,
+      "expectedSegments": null
+    },
+    {
+      "id": "accent_zh_hk_02",
+      "audio": "audio/accent_zh_hk_02.flac",
+      "domain": "accent",
+      "provenance": "macOS say voice Sinji (zh-HK) — Hong Kong-accented Mandarin TTS",
+      "source": null,
+      "augmentation": null,
+      "reference": {
+        "text": "下一版产品要在移动端支持离线转写，对吧？",
+        "punctuatedText": "下一版产品要在移动端支持离线转写，对吧？"
+      },
+      "hotword": null,
+      "expectedSegments": null
+    },
+    {
+      "id": "cs_stitch_00",
+      "audio": "audio/cs_stitch_00.flac",
+      "domain": "codeswitch",
+      "provenance": "macOS say stitched render (Tingting zh + Samantha en), 250ms phrase gaps",
+      "source": null,
+      "augmentation": null,
+      "reference": {
+        "text": "我们先把demo跑一遍，再讨论API的兼容性问题。",
+        "punctuatedText": "我们先把demo跑一遍，再讨论API的兼容性问题。"
+      },
+      "hotword": null,
+      "expectedSegments": null
+    },
+    {
+      "id": "cs_stitch_01",
+      "audio": "audio/cs_stitch_01.flac",
+      "domain": "codeswitch",
+      "provenance": "macOS say stitched render (Tingting zh + Samantha en), 250ms phrase gaps",
+      "source": null,
+      "augmentation": null,
+      "reference": {
+        "text": "这份PRD里，deadline定在下周五，owner是小王。",
+        "punctuatedText": "这份PRD里，deadline定在下周五，owner是小王。"
+      },
+      "hotword": null,
+      "expectedSegments": null
+    },
+    {
+      "id": "cs_stitch_02",
+      "audio": "audio/cs_stitch_02.flac",
+      "domain": "codeswitch",
+      "provenance": "macOS say stitched render (Tingting zh + Samantha en), 250ms phrase gaps",
+      "source": null,
+      "augmentation": null,
+      "reference": {
+        "text": "帮我查一下OKR的进度，顺便预约一个one-on-one。",
+        "punctuatedText": "帮我查一下OKR的进度，顺便预约一个one-on-one。"
+      },
+      "hotword": null,
+      "expectedSegments": null
+    },
+    {
+      "id": "cs_tts_00",
+      "audio": "audio/cs_tts_00.flac",
+      "domain": "codeswitch",
+      "provenance": "macOS say whole-sentence Tingting render (zh speaker reading English words)",
+      "source": null,
+      "augmentation": null,
+      "reference": {
+        "text": "客户的feedback说要支持dark mode，优先级是P1。",
+        "punctuatedText": "客户的feedback说要支持dark mode，优先级是P1。"
+      },
+      "hotword": null,
+      "expectedSegments": null
+    },
+    {
+      "id": "cs_tts_01",
+      "audio": "audio/cs_tts_01.flac",
+      "domain": "codeswitch",
+      "provenance": "macOS say whole-sentence Tingting render (zh speaker reading English words)",
+      "source": null,
+      "augmentation": null,
+      "reference": {
+        "text": "把这段meeting notes翻译成英文，发给整个team。",
+        "punctuatedText": "把这段meeting notes翻译成英文，发给整个team。"
+      },
+      "hotword": null,
+      "expectedSegments": null
+    },
+    {
+      "id": "cs_tts_02",
+      "audio": "audio/cs_tts_02.flac",
+      "domain": "codeswitch",
+      "provenance": "macOS say whole-sentence Tingting render (zh speaker reading English words)",
+      "source": null,
+      "augmentation": null,
+      "reference": {
+        "text": "下次standup的时候，同步一下release plan的进展。",
+        "punctuatedText": "下次standup的时候，同步一下release plan的进展。"
+      },
+      "hotword": null,
+      "expectedSegments": null
+    },
+    {
+      "id": "hw_zhanghanyue",
+      "audio": "audio/hw_zhanghanyue.flac",
+      "domain": "hotword",
+      "provenance": "macOS say Tingting render (rare-noun hotword discrimination, SeACo spike class)",
+      "source": null,
+      "augmentation": null,
+      "reference": {
+        "text": "请把会议纪要发给张晗玥和刘翀。",
+        "punctuatedText": "请把会议纪要发给张晗玥和刘翀。"
+      },
+      "hotword": {
+        "terms": ["张晗玥", "刘翀"],
+        "hotwordString": "张晗玥 刘翀"
+      },
+      "expectedSegments": null
+    },
+    {
+      "id": "hw_gongshen",
+      "audio": "audio/hw_gongshen.flac",
+      "domain": "hotword",
+      "provenance": "macOS say Tingting render (rare-noun hotword discrimination, SeACo spike class)",
+      "source": null,
+      "augmentation": null,
+      "reference": {
+        "text": "下周由龚燊带队去深圳湾总部。",
+        "punctuatedText": "下周由龚燊带队去深圳湾总部。"
+      },
+      "hotword": {
+        "terms": ["龚燊"],
+        "hotwordString": "龚燊"
+      },
+      "expectedSegments": null
+    },
+    {
+      "id": "hw_jedediah",
+      "audio": "audio/hw_jedediah.flac",
+      "domain": "hotword",
+      "provenance": "macOS say Tingting render (rare-noun hotword discrimination, SeACo spike class)",
+      "source": null,
+      "augmentation": null,
+      "reference": {
+        "text": "这个项目的负责人是Jedediah Kellerberg。",
+        "punctuatedText": "这个项目的负责人是Jedediah Kellerberg。"
+      },
+      "hotword": {
+        "terms": ["Jedediah Kellerberg"],
+        "hotwordString": "Jedediah Kellerberg"
+      },
+      "expectedSegments": null
+    },
+    {
+      "id": "hw_mishujuan",
+      "audio": "audio/hw_mishujuan.flac",
+      "domain": "hotword",
+      "provenance": "macOS say Tingting render (rare-noun hotword discrimination, SeACo spike class)",
+      "source": null,
+      "augmentation": null,
+      "reference": {
+        "text": "把宓淑娟的工位调整到靠窗的位置。",
+        "punctuatedText": "把宓淑娟的工位调整到靠窗的位置。"
+      },
+      "hotword": {
+        "terms": ["宓淑娟"],
+        "hotwordString": "宓淑娟"
+      },
+      "expectedSegments": null
+    },
+    {
+      "id": "hw_dazhiyuan",
+      "audio": "audio/hw_dazhiyuan.flac",
+      "domain": "hotword",
+      "provenance": "macOS say Tingting render (rare-noun hotword discrimination, SeACo spike class)",
+      "source": null,
+      "augmentation": null,
+      "reference": {
+        "text": "联系笪志远确认明天的评审时间。",
+        "punctuatedText": "联系笪志远确认明天的评审时间。"
+      },
+      "hotword": {
+        "terms": ["笪志远"],
+        "hotwordString": "笪志远"
+      },
+      "expectedSegments": null
+    },
+    {
+      "id": "hw_yunyunfei",
+      "audio": "audio/hw_yunyunfei.flac",
+      "domain": "hotword",
+      "provenance": "macOS say Tingting render (rare-noun hotword discrimination, SeACo spike class)",
+      "source": null,
+      "augmentation": null,
+      "reference": {
+        "text": "帮我把贠云飞的行程改到周四下午。",
+        "punctuatedText": "帮我把贠云飞的行程改到周四下午。"
+      },
+      "hotword": {
+        "terms": ["贠云飞"],
+        "hotwordString": "贠云飞"
+      },
+      "expectedSegments": null
+    },
+    {
+      "id": "ts_roadmap",
+      "audio": "audio/ts_roadmap.flac",
+      "domain": "timestamp",
+      "provenance": "macOS say Tingting multi-sentence render, 900ms inter-sentence silence; golden boundaries measured from the waveform (energy threshold)",
+      "source": null,
+      "augmentation": {
+        "type": "constructed-timestamp",
+        "gapMs": 900,
+        "measurement": "rms>0.03*max per 20ms window"
+      },
+      "reference": {
+        "text": "今天我们讨论第三季度的产品路线图。会议纪要需要在周五之前发给所有参会人员。下周一上午十点在三号会议室进行评审。",
+        "punctuatedText": "今天我们讨论第三季度的产品路线图。会议纪要需要在周五之前发给所有参会人员。下周一上午十点在三号会议室进行评审。"
+      },
+      "hotword": null,
+      "expectedSegments": [
+        {
+          "startMs": 220,
+          "endMs": 3680,
+          "text": "今天我们讨论第三季度的产品路线图。"
+        },
+        {
+          "startMs": 4800,
+          "endMs": 9100,
+          "text": "会议纪要需要在周五之前发给所有参会人员。"
+        },
+        {
+          "startMs": 10220,
+          "endMs": 14220,
+          "text": "下周一上午十点在三号会议室进行评审。"
+        }
+      ]
+    },
+    {
+      "id": "ts_budget",
+      "audio": "audio/ts_budget.flac",
+      "domain": "timestamp",
+      "provenance": "macOS say Tingting multi-sentence render, 900ms inter-sentence silence; golden boundaries measured from the waveform (energy threshold)",
+      "source": null,
+      "augmentation": {
+        "type": "constructed-timestamp",
+        "gapMs": 900,
+        "measurement": "rms>0.03*max per 20ms window"
+      },
+      "reference": {
+        "text": "语音识别的准确率直接影响用户体验。这个方案的预算超出了原定计划的百分之十五。客户端支持视窗和苹果双平台运行。",
+        "punctuatedText": "语音识别的准确率直接影响用户体验。这个方案的预算超出了原定计划的百分之十五。客户端支持视窗和苹果双平台运行。"
+      },
+      "hotword": null,
+      "expectedSegments": [
+        {
+          "startMs": 200,
+          "endMs": 3900,
+          "text": "语音识别的准确率直接影响用户体验。"
+        },
+        {
+          "startMs": 5000,
+          "endMs": 9180,
+          "text": "这个方案的预算超出了原定计划的百分之十五。"
+        },
+        {
+          "startMs": 10260,
+          "endMs": 14040,
+          "text": "客户端支持视窗和苹果双平台运行。"
+        }
+      ]
+    },
+    {
+      "id": "ts_daily",
+      "audio": "audio/ts_daily.flac",
+      "domain": "timestamp",
+      "provenance": "macOS say Tingting multi-sentence render, 900ms inter-sentence silence; golden boundaries measured from the waveform (energy threshold)",
+      "source": null,
+      "augmentation": {
+        "type": "constructed-timestamp",
+        "gapMs": 900,
+        "measurement": "rms>0.03*max per 20ms window"
+      },
+      "reference": {
+        "text": "晚上的航班大概十点半落地。记得提醒我给客户回电话。报告的最后一段还需要润色。",
+        "punctuatedText": "晚上的航班大概十点半落地。记得提醒我给客户回电话。报告的最后一段还需要润色。"
+      },
+      "hotword": null,
+      "expectedSegments": [
+        {
+          "startMs": 200,
+          "endMs": 2860,
+          "text": "晚上的航班大概十点半落地。"
+        },
+        {
+          "startMs": 3960,
+          "endMs": 6420,
+          "text": "记得提醒我给客户回电话。"
+        },
+        {
+          "startMs": 7520,
+          "endMs": 10100,
+          "text": "报告的最后一段还需要润色。"
+        }
+      ]
+    }
+  ]
+}
