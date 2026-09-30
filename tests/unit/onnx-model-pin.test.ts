@@ -57,6 +57,7 @@ type PinFile = {
   sha256: string;
   size_bytes: number;
   asset: string;
+  asset_parts?: string[];
 };
 
 type PinModel = {
@@ -144,6 +145,16 @@ describe("onnx model pin (ticket #413)", () => {
         // Release asset naming convention: <model>__<path> (GitHub asset
         // names cannot contain "/").
         expect(file.asset).toBe(`${pin.models[key].name}__${file.path}`);
+        // Large graphs may be mirrored as ordered split parts (uplink
+        // stalls kill single 300MB+ request bodies). Integrity stays
+        // anchored on the assembled file's sha256 above — parts are only
+        // a transport layout.
+        if (file.asset_parts !== undefined) {
+          expect(file.asset_parts.length).toBeGreaterThan(0);
+          for (const part of file.asset_parts) {
+            expect(part).toMatch(new RegExp(`^${file.asset}\\.part\\d{2}$`));
+          }
+        }
       }
     },
   );

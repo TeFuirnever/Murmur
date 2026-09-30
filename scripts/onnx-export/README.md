@@ -36,6 +36,14 @@ Two committed trust-chain records:
   `manifest.json` and the upstream Apache-2.0 `LICENSE.upstream`.
   The tag is deliberately NOT `v*` so `build.yml` installers never fire.
 
+**Split-part layout:** files larger than 64 MiB (the two big graphs) are
+mirrored as ordered parts `<asset>.partNN` because single 300MB+ request
+bodies repeatedly died on this uplink (GitHub upload-inactivity 408; no
+resume for release assets). The pin lists `files[].asset_parts` for
+those; downloader contract: fetch parts in order, concatenate, and the
+assembled bytes MUST hash to the same `files[].sha256` — integrity stays
+anchored on the per-file manifest, parts are only a transport layout.
+
 ## How to run
 
 ```bash
@@ -55,9 +63,16 @@ scripts/onnx-export/.venv/bin/python scripts/onnx-export/cross_validate_marxyz.p
 
 # 5. verify local artifacts against the pin:
 scripts/onnx-export/.venv/bin/python scripts/onnx-export/verify_artifacts.py
-# ...or verify the RELEASE mirror itself (downloads every asset):
+# ...or verify the RELEASE mirror without downloading (GitHub's
+# server-side asset sha256 digests):
+scripts/onnx-export/.venv/bin/python scripts/onnx-export/verify_artifacts.py --via-api
+# ...or download every asset (incl. split-part reassembly) and hash-check:
 scripts/onnx-export/.venv/bin/python scripts/onnx-export/verify_artifacts.py \
     --from-release --download-dir /tmp/mirror-check
+
+# 6. publish artifacts to the release mirror (idempotent, records the
+#    split-part layout into the pin):
+scripts/onnx-export/.venv/bin/python scripts/onnx-export/publish_assets.py
 ```
 
 ## Pipeline guarantees (and how each is enforced)

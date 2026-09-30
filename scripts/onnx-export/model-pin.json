@@ -45,7 +45,14 @@
           "path": "model_quant.onnx",
           "sha256": "388829b05af1db754811c10d23a3509a89ce7c9ad3eb397d32b4dda356bdf14f",
           "size_bytes": 345131848,
-          "asset": "asr-seaco-paraformer__model_quant.onnx"
+          "asset": "asr-seaco-paraformer__model_quant.onnx",
+          "asset_parts": [
+            "asr-seaco-paraformer__model_quant.onnx.part00",
+            "asr-seaco-paraformer__model_quant.onnx.part01",
+            "asr-seaco-paraformer__model_quant.onnx.part02",
+            "asr-seaco-paraformer__model_quant.onnx.part03",
+            "asr-seaco-paraformer__model_quant.onnx.part04"
+          ]
         },
         {
           "path": "seg_dict",
@@ -119,7 +126,13 @@
           "path": "model_quant.onnx",
           "sha256": "21469c4b258b0a5f4e93b477f79c0a1c4428055b2a07c5172c2545493fc585dc",
           "size_bytes": 282752986,
-          "asset": "punc-ct-transformer-272727__model_quant.onnx"
+          "asset": "punc-ct-transformer-272727__model_quant.onnx",
+          "asset_parts": [
+            "punc-ct-transformer-272727__model_quant.onnx.part00",
+            "punc-ct-transformer-272727__model_quant.onnx.part01",
+            "punc-ct-transformer-272727__model_quant.onnx.part02",
+            "punc-ct-transformer-272727__model_quant.onnx.part03"
+          ]
         },
         {
           "path": "tokens.json",

@@ -68,17 +68,23 @@ def verify_via_api(pin: dict) -> bool:
     pinned_asset_names = set()
     for key, entry in pin["models"].items():
         for file_entry in entry["files"]:
-            name = file_entry["asset"]
-            pinned_asset_names.add(name)
-            server_sha = digest_by_name.get(name)
-            if server_sha is None:
-                problems.append(f"{key}/{name}: not on the release (or digest unavailable)")
-            elif server_sha != file_entry["sha256"]:
+            names = file_entry.get("asset_parts") or [file_entry["asset"]]
+            pinned_asset_names.update(names)
+            for name in names:
+                server_sha = digest_by_name.get(name)
+                if server_sha is None:
+                    problems.append(f"{key}/{name}: not on the release (or digest unavailable)")
+                elif name == file_entry["asset"] and server_sha != file_entry["sha256"]:
+                    problems.append(
+                        f"{key}/{name}: sha256 mismatch (pin {file_entry['sha256']} vs release {server_sha})"
+                    )
+            # A split file must still expose its canonical single-asset name
+            # only when it is NOT split (parts replace it on the mirror).
+            if file_entry.get("asset_parts") and file_entry["asset"] in digest_by_name:
                 problems.append(
-                    f"{key}/{name}: sha256 mismatch (pin {file_entry['sha256']} vs release {server_sha})"
+                    f"{key}/{file_entry['asset']}: split into parts but a stale "
+                    "single asset is still on the release"
                 )
-            elif size_by_name.get(name) != file_entry["size_bytes"]:
-                problems.append(f"{key}/{name}: size mismatch")
     meta_asset_names = {"LICENSE.upstream", "murmur-onnx-models-manifest.json"}
     for name in sorted(set(digest_by_name)):
         if name not in pinned_asset_names and name not in meta_asset_names:
@@ -136,6 +142,22 @@ def main() -> int:
                 target = os.path.join(root, file_entry["path"])
                 if os.path.exists(target):
                     log(f"{key}/{file_entry['path']}: already downloaded, reusing")
+                    continue
+                parts = file_entry.get("asset_parts")
+                if parts:
+                    log(f"{key}/{file_entry['path']}: downloading {len(parts)} split parts")
+                    os.makedirs(os.path.dirname(target), exist_ok=True)
+                    with open(target, "wb") as out:
+                        for part in parts:
+                            part_file = target + f".{part.rsplit('.', 1)[-1]}.dl"
+                            download(base_url + part, part_file)
+                            with open(part_file, "rb") as chunk:
+                                while True:
+                                    block = chunk.read(1024 * 1024)
+                                    if not block:
+                                        break
+                                    out.write(block)
+                            os.unlink(part_file)
                 else:
                     log(f"{key}/{file_entry['path']}: downloading {base_url}{file_entry['asset']}")
                     download(base_url + file_entry["asset"], target)

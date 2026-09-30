@@ -208,6 +208,16 @@ class PinJsonContractTest(unittest.TestCase):
                 self.assertEqual(
                     file_entry["asset"], asset_name(entry["name"], file_entry["path"]), key
                 )
+                # Optional split-part mirror layout (large graphs); when
+                # present every part name must extend the canonical asset
+                # name in order.
+                parts = file_entry.get("asset_parts")
+                if parts is not None:
+                    self.assertGreater(len(parts), 0, key)
+                    for idx, part in enumerate(parts):
+                        self.assertEqual(
+                            part, f"{file_entry['asset']}.part{idx:02d}", key
+                        )
             self.assertEqual(
                 sorted(f["path"] for f in entry["files"]),
                 sorted(spec["runtime_files"]),
