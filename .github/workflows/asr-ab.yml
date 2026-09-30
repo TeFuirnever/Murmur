@@ -1,0 +1,68 @@
+# [20261001_Feat_414_AbCorpusHarness] Ticket #414 (spec #412 T3): makes the
+# real-corpus A/B harness CI-callable. This is a manual/dispatch gate, NOT a
+# PR gate — the model stack is far too heavy for per-PR CI (same policy as
+# scripts/asr-regression.js). The corpus integrity check that DOES run per PR
+# is tests/unit/asr-ab-corpus.test.ts via ci.yml.
+#
+# Run it on a branch:
+#   gh workflow run asr-ab.yml --ref <branch> -f engine=torch
+# Evidence for the T4 (torch vs ONNX) verdict: run once per engine on the
+# same commit, then locally:
+#   node scripts/asr-ab-harness.js --compare torch.json onnx.json
+name: ASR A/B corpus
+
+on:
+  workflow_dispatch:
+    inputs:
+      engine:
+        description: "Engine preset to drive over scripts/asr-corpus/"
+        type: choice
+        options: [torch, onnx]
+        default: torch
+      os:
+        description: "Runner (macos-latest matches the dev-machine baseline)"
+        type: choice
+        options: [macos-latest, windows-latest]
+        default: macos-latest
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  ab-run:
+    runs-on: ${{ inputs.os || 'macos-latest' }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      # The harness drives whatever python speaks the stdin/stdout protocol;
+      # CI runners have no embedded env, so a system 3.11 carries the stack.
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install torch ASR stack
+        run: python -m pip install funasr modelscope torch torchaudio librosa numpy soundfile
+
+      - name: Download models (~1.24GB, modelscope cache)
+        run: python download_models.py
+
+      - name: Run A/B harness over the real-speech corpus
+        run: >-
+          node scripts/asr-ab-harness.js
+          --engine "${{ inputs.engine || 'torch' }}"
+          --report scripts/asr_ab_run.json
+          --markdown scripts/asr_ab_run.md
+
+      - name: Upload A/B report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: asr-ab-report-${{ inputs.engine || 'torch' }}-${{ inputs.os || 'macos-latest' }}
+          path: |
+            scripts/asr_ab_run.json
+            scripts/asr_ab_run.md

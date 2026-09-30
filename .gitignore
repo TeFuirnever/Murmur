@@ -112,6 +112,12 @@ cache/
 *.aac
 *.flac
 
+# [20261001_Feat_414_AbCorpusHarness] The committed real-speech A/B corpus
+# (spec #412 T3, ticket #414) is tracked despite the global *.flac ban —
+# it is a release-gate asset, not a dev-machine artifact. The generated
+# per-run reports stay ignored.
+!scripts/asr-corpus/audio/*.flac
+
 # Database files
 *.db
 *.sqlite
@@ -154,6 +160,11 @@ design/icon-rebrand/candidates/
 
 # machine-local ASR regression run report (scripts/asr-regression.js)
 scripts/asr_regression_results.json
+
+# [20261001_Feat_414_AbCorpusHarness] machine-local A/B harness run reports
+# (scripts/asr-ab-harness.js); committed baselines live in docs/research/
+scripts/asr_ab_results.json
+scripts/asr_ab_torch_baseline.json
 
 # coverage.py data file (python suite gate)
 .coverage
