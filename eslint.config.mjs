@@ -18,24 +18,25 @@ export default tseslint.config(
       "src/dist/",
       "src/node_modules/",
       "src/coverage/",
-      ".venv/",
+      // [20261001_Fix_CiLintScope] `**/` prefix: venvs sit at any depth —
+      // the root-anchored ".venv/" let a sibling worktree's
+      // scripts/onnx-export/.venv (vendored torch/sklearn JS) fail the
+      // lint gate with errors that never exist in tracked files.
+      "**/.venv/",
       "python/",
       ".omc/",
       "website/.astro/",
-      // [20260930_T413_OnnxExportPipeline] The ONNX export pipeline's
-      // local state: .venv carries vendored site-packages JS (torch
-      // code.js trips no-this-alias) and work/ holds downloaded external
-      // repo snapshots — same class as python/ and node_modules/: never
-      // lint tool-owned or externally-downloaded trees.
-      "scripts/onnx-export/.venv/",
+      // [20260930_T413_OnnxExportPipeline] work/ holds downloaded external
+      // repo snapshots for the ONNX export pipeline — same class as
+      // python/ and node_modules/: never lint externally-downloaded trees.
+      // (scripts/onnx-export/.venv/ needs no entry here: **/.venv/ above
+      // covers it at any depth since #436.)
       "scripts/onnx-export/work/",
-      // Orchestrator runtime dir (workflow drafts), same class as .omc/.
+      // [20261001_Fix_CiLintScope] Machine-local, gitignored tooling
+      // output (agent drafts, local productions) — never repo code, but
+      // `eslint .` scans the working tree and their findings fail
+      // --max-warnings 0 on machines that happen to have them.
       ".zcode/",
-      // [20260930_T413_OnnxExportPipeline] gitignored local-only dir
-      // (.gitignore:166) — never shipped, but present in dev worktrees
-      // where its vendored JS would trip --max-warnings 0. Same class as
-      // python/.omc: eslint cannot read .gitignore, so local trees are
-      // listed here explicitly.
       "productions/",
     ],
   },
