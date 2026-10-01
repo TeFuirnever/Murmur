@@ -135,6 +135,151 @@ def _onnx_pin_set_ready(repo_dir, plain_entries):
 # [20261001_T5_OnnxGate] END
 
 
+# [20261001_T6a_OnnxEngine] Ticket #418 (spec #412 T6a): the funasr-onnx
+# engine. The production server loads the T1 self-exported ONNX int8 models
+# (scripts/onnx-export/model-pin.json) from the T5 downloader v2 layout
+# FIRST and keeps the torch AutoModel path as the rollback generation
+# (user story #412-5). Audio reaches funasr-onnx ONLY as an ndarray:
+# funasr_onnx's load_data() calls librosa.load for str/path inputs (which
+# lazily pulls numba — spec #412 decision 3), while an ndarray input is
+# passed straight through, so the adapters below read files with soundfile
+# (pure C) and feed samples. The adapters expose the torch AutoModel
+# .generate() contract and normalize the funasr-onnx result shapes
+# (preds / bare segment list / (text, ids) tuple) back to the torch shapes
+# ({"text"}/[{"value": ...}]/[{"text"}]) the transcription code consumes —
+# the stdin/stdout protocol is unchanged.
+# Subdir mirrors modelDownloader.ONNX_MODELS_DIRNAME (TS side); the model
+# dir names mirror the pin's models[*].name — parity is locked by
+# tests/python/test_onnx_engine_switch.py (dir names ↔ model-pin.json) and
+# tests/unit/onnx-pin-anchor-parity.test.ts (subdir ↔ TS constant).
+ONNX_MODELS_SUBDIR = "onnx-int8"
+ONNX_MODEL_DIR_NAMES = {
+    "asr": "asr-seaco-paraformer",
+    "vad": "vad-fsmn",
+    "punc": "punc-ct-transformer-272727",
+}
+# Generation label reported via check_status / stats / reload results
+# (the torch generation reports its repo id; nothing downstream parses it).
+ONNX_MODEL_GENERATION_NAMES = {
+    "asr": "onnx:asr-seaco-paraformer",
+    "vad": "onnx:vad-fsmn",
+    "punc": "onnx:punc-ct-transformer-272727",
+}
+ONNX_TARGET_SAMPLE_RATE = 16000
+
+# [20261001_T6a_OnnxEngine] One-shot INFO proof that the ndarray doorway is
+# the one actually used at runtime (grep-friendly acceptance evidence).
+_ONNX_NDARRAY_INPUT_LOGGED = False
+
+
+def _log_ndarray_input_once(sample_count):
+    global _ONNX_NDARRAY_INPUT_LOGGED
+    if not _ONNX_NDARRAY_INPUT_LOGGED:
+        _ONNX_NDARRAY_INPUT_LOGGED = True
+        logger.info(
+            "ONNX引擎音频输入通道: ndarray（样本数=%d）——"
+            "funasr-onnx 全程收 ndarray，内部 librosa.load 路径不可达",
+            sample_count,
+        )
+
+
+def _resample_to_16k(samples, samplerate):
+    """Resample to 16 kHz for the ONNX engines (polyphase, pure C scipy —
+    never librosa). No-op when already at the target rate."""
+    if int(samplerate) == ONNX_TARGET_SAMPLE_RATE:
+        return samples
+    from math import gcd
+
+    import scipy.signal
+
+    g = gcd(int(samplerate), ONNX_TARGET_SAMPLE_RATE)
+    return scipy.signal.resample_poly(
+        samples, ONNX_TARGET_SAMPLE_RATE // g, int(samplerate) // g
+    )
+
+
+def _load_audio_ndarray(source):
+    """Deliver audio to the funasr-onnx engines as a float32 mono ndarray.
+
+    str/bytes input is a file path — read with soundfile (libsndfile, pure
+    C), mean-stacked to mono (librosa.load's mono semantics), resampled to
+    16 kHz when needed. An ndarray input passes through untouched. This is
+    the ONLY doorway to the engines: librosa.load can never fire.
+    """
+    import numpy as np
+    import soundfile as sf
+
+    if isinstance(source, np.ndarray):
+        return np.ascontiguousarray(source, dtype=np.float32)
+    samples, samplerate = sf.read(source, dtype="float32", always_2d=True)
+    if samples.shape[1] > 1:
+        samples = samples.mean(axis=1)
+    else:
+        samples = samples[:, 0]
+    samples = _resample_to_16k(samples, samplerate)
+    samples = np.ascontiguousarray(samples, dtype=np.float32)
+    _log_ndarray_input_once(len(samples))
+    return samples
+
+
+class OnnxAsrAdapter:
+    """funasr_onnx.SeacoParaformer speaking the torch AutoModel.generate
+    contract: generate(input=<path or ndarray>, hotword=...) →
+    [{"text": ..., "timestamp": ...}] (funasr-onnx returns "preds")."""
+
+    engine_name = "onnx"
+
+    def __init__(self, engine):
+        self._engine = engine
+
+    def generate(self, input=None, hotword="", batch_size_s=None, cache=None, **_):
+        samples = _load_audio_ndarray(input)
+        result = self._engine(samples, hotword)
+        normalized = []
+        for item in result or []:
+            if isinstance(item, dict):
+                item = dict(item)
+                if "preds" in item:
+                    item["text"] = item.pop("preds")
+            normalized.append(item)
+        return normalized
+
+
+class OnnxVadAdapter:
+    """funasr_onnx.Fsmn_vad → torch VAD shape: generate(input=...) →
+    [{"value": [[start_ms, end_ms], ...]}]."""
+
+    engine_name = "onnx"
+
+    def __init__(self, engine):
+        self._engine = engine
+
+    def generate(self, input=None, batch_size_s=None, **_):
+        samples = _load_audio_ndarray(input)
+        result = self._engine(samples)
+        value = list(result[0]) if result else []
+        return [{"value": value}]
+
+
+class OnnxPuncAdapter:
+    """funasr_onnx.CT_Transformer (returns (text, punc_ids)) → torch shape:
+    generate(input=text) → [{"text": ...}]."""
+
+    engine_name = "onnx"
+
+    def __init__(self, engine):
+        self._engine = engine
+
+    def generate(self, input=None, **_):
+        result = self._engine(input)
+        if isinstance(result, (tuple, list)) and result:
+            text = result[0]
+        else:
+            text = result
+        return [{"text": text or ""}]
+# [20261001_T6a_OnnxEngine] END
+
+
 # [20260820_Fix_SuppressStdoutRace] The model loaders run in parallel
 # threads and each wraps its AutoModel call in suppress_stdout(). The
 # previous per-thread save/restore of the PROCESS-GLOBAL sys.stdout raced:
@@ -581,6 +726,34 @@ class FunASRServer:
                 return found
         return None
 
+    # [20261001_T6a_OnnxEngine] Ticket #418: T5 downloader v2 layout
+    # (<models root>/onnx-int8/<pin name>/). The explicit --damo-root wins
+    # when it carries the generation root (prod fresh installs pass
+    # <userData>/models); ELECTRON_USER_DATA (set by main.ts for the spawned
+    # server, funasr_server.get_log_path precedent) is the canonical
+    # <userData> fallback for roots resolved elsewhere (modelscope caches,
+    # dev repo models). Readiness reuses _repo_ready, whose ONNX-generation
+    # branch enforces the pinned exact file set (no wildcard, #417).
+    def _onnx_roots(self):
+        roots = []
+        if self.damo_root:
+            roots.append(os.path.join(self.damo_root, ONNX_MODELS_SUBDIR))
+        user_data = os.environ.get("ELECTRON_USER_DATA")
+        if user_data:
+            candidate = os.path.join(user_data, "models", ONNX_MODELS_SUBDIR)
+            if candidate not in roots:
+                roots.append(candidate)
+        return roots
+
+    def _resolve_onnx_model_dir(self, model_key):
+        """First pin-ready dir for a T5-layout ONNX model, else None."""
+        for root in self._onnx_roots():
+            candidate = os.path.join(root, ONNX_MODEL_DIR_NAMES[model_key])
+            if self._repo_ready(candidate):
+                return candidate
+        return None
+    # [20261001_T6a_OnnxEngine] END
+
     def _find_missing_required_models(self):
         """必需模型中就绪检查未通过的 repo 列表（run() 的启动门禁用）
 
@@ -595,16 +768,44 @@ class FunASRServer:
             "speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
             "speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
         ]
+        # [20261001_T6a_OnnxEngine] The ONNX generation satisfies the gate
+        # first (T5 layout, pin-exact readiness); the torch check below
+        # remains for the rollback era. Missing-when-nothing-exists semantics
+        # and the [asr, vad] report order are unchanged.
         missing = []
-        if not any(self._resolve_repo_dir(r) for r in asr_repos):
+        if not (
+            self._resolve_onnx_model_dir("asr")
+            or any(self._resolve_repo_dir(r) for r in asr_repos)
+        ):
             missing.append(asr_repos[0])
-        if not self._resolve_repo_dir(vad_repo):
+        if not (
+            self._resolve_onnx_model_dir("vad")
+            or self._resolve_repo_dir(vad_repo)
+        ):
             missing.append(vad_repo)
         return missing
     # [20260911_Fix_336_HubLayout] END
 
     def _load_asr_model(self):
-        """加载ASR模型（SeACo 优先，旧模型回退）"""
+        """加载ASR模型（ONNX 引擎优先，torch 生成回退）"""
+        # [20261001_T6a_OnnxEngine] Ticket #418: ONNX generation first — the
+        # pin-ready T5-layout dir is loaded through funasr-onnx and wrapped
+        # in the .generate()-contract adapter. Load failure (corrupt bytes,
+        # missing runtime) falls through to the torch rollback below.
+        onnx_dir = self._resolve_onnx_model_dir("asr")
+        if onnx_dir is not None:
+            try:
+                with suppress_stdout():
+                    from funasr_onnx import SeacoParaformer
+
+                    self.asr_model = OnnxAsrAdapter(
+                        SeacoParaformer(onnx_dir, quantize=True)
+                    )
+                self.asr_model_name = ONNX_MODEL_GENERATION_NAMES["asr"]
+                logger.info(f"ASR模型加载完成（ONNX引擎）: {onnx_dir}")
+                return True
+            except Exception as e:
+                logger.error(f"ONNX ASR模型加载失败，回退 torch 生成: {str(e)}")
         from funasr import AutoModel
 
         # [T15 review BLOCKER] Disk-presence gate: a repo id that is NOT
@@ -654,6 +855,21 @@ class FunASRServer:
 
     def _load_vad_model(self):
         """加载VAD模型"""
+        # [20261001_T6a_OnnxEngine] ONNX generation first (torch fallback
+        # below mirrors the ASR loader policy).
+        onnx_dir = self._resolve_onnx_model_dir("vad")
+        if onnx_dir is not None:
+            try:
+                with suppress_stdout():
+                    from funasr_onnx import Fsmn_vad
+
+                    self.vad_model = OnnxVadAdapter(
+                        Fsmn_vad(onnx_dir, quantize=True)
+                    )
+                logger.info(f"VAD模型加载完成（ONNX引擎）: {onnx_dir}")
+                return True
+            except Exception as e:
+                logger.error(f"ONNX VAD模型加载失败，回退 torch 生成: {str(e)}")
         try:
             # [20261001_T5_SealImplicitPull] Resolve locally FIRST: the old
             # unconditional repo-id call let funasr silently snapshot_download
@@ -685,6 +901,21 @@ class FunASRServer:
 
     def _load_punc_model(self):
         """加载标点恢复模型"""
+        # [20261001_T6a_OnnxEngine] ONNX generation first (torch fallback
+        # below mirrors the ASR loader policy; punc stays optional).
+        onnx_dir = self._resolve_onnx_model_dir("punc")
+        if onnx_dir is not None:
+            try:
+                with suppress_stdout():
+                    from funasr_onnx import CT_Transformer
+
+                    self.punc_model = OnnxPuncAdapter(
+                        CT_Transformer(onnx_dir, quantize=True)
+                    )
+                logger.info(f"标点恢复模型加载完成（ONNX引擎）: {onnx_dir}")
+                return True
+            except Exception as e:
+                logger.error(f"ONNX 标点模型加载失败，回退 torch 生成: {str(e)}")
         try:
             import time
 
@@ -923,7 +1154,12 @@ class FunASRServer:
                     ),
                     "duration": duration,
                     "language": "zh-CN",
-                    "model_type": "pytorch",  # 标识使用的是pytorch版本
+                    # [20261001_T6a_OnnxEngine] Report the loaded generation:
+                    # "onnx" for the funasr-onnx adapters, "pytorch" for the
+                    # torch rollback (protocol schema unchanged).
+                    "model_type": getattr(
+                        self.asr_model, "engine_name", "pytorch"
+                    ),
                 }
 
                 # 生产环境：每10次转录后进行内存清理

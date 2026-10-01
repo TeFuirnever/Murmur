@@ -64,6 +64,19 @@ function parsePythonPartialSuffixes(): string[] {
   return [...match[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]!);
 }
 
+// [20261001_T6a_OnnxEngine] Ticket #418: the Python server resolves the ONNX
+// generation under the SAME subdir the Node v2 downloader writes
+// (modelDownloader.ONNX_MODELS_DIRNAME). Anchor-parity: parse the Python
+// constant so a rename on either side trips this test.
+function parsePythonOnnxSubdir(): string {
+  const source = fs.readFileSync(SERVER_PY, "utf8");
+  const match = source.match(/ONNX_MODELS_SUBDIR = "([^"]+)"/);
+  if (!match || !match[1]) {
+    throw new Error("ONNX_MODELS_SUBDIR not found in funasr_server.py");
+  }
+  return match[1]!;
+}
+
 describe("[20261001_T5_OnnxGateParity] funasr_server.py gate ↔ model-pin.json", () => {
   it("Python gate covers exactly the pin's models", () => {
     const pin = loadPin();
@@ -93,6 +106,16 @@ describe("[20261001_T5_OnnxGateParity] funasr_server.py gate ↔ model-pin.json"
     return import("../../src/helpers/modelDownloader").then(
       ({ PARTIAL_SUFFIX }) => {
         expect(parsePythonPartialSuffixes()).toContain(PARTIAL_SUFFIX);
+      },
+    );
+  });
+
+  // [20261001_T6a_OnnxEngine] The server's ONNX generation root subdir must
+  // equal the downloader's layout constant (T5 layout, one name only).
+  it("Python ONNX models subdir == Node downloader's ONNX_MODELS_DIRNAME", () => {
+    return import("../../src/helpers/modelDownloader").then(
+      ({ ONNX_MODELS_DIRNAME }) => {
+        expect(parsePythonOnnxSubdir()).toBe(ONNX_MODELS_DIRNAME);
       },
     );
   });
