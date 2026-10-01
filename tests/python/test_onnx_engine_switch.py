@@ -474,9 +474,9 @@ class OnnxTranscribeNdarrayTest(EngineSwitchTestBase):
         srv = FunASRServer(damo_root=self.damo_root)
         self._load_onnx_models(srv)
         srv.response_queue = queue.Queue()
-        # deterministic duration (CI has no librosa; the value only feeds
-        # the progress payload and region clamping)
-        srv._get_audio_duration = lambda path: 1.0
+        # [20261002_T6b_NoLibrosa] duration now comes from soundfile.info
+        # (pure C, CI-safe) — the 1s fixture needs no patching, and the
+        # real probe path is exercised.
         with forbid_librosa_load():
             result = srv.transcribe_file_audio(
                 self.mic_wav,

@@ -25,6 +25,10 @@ function createFakeChild(): {
     stdin: { write: ReturnType<typeof vi.fn>; end: ReturnType<typeof vi.fn> };
     pid: number;
     killed: boolean;
+    // [20261002_T6b_HeartbeatWatchdog] Real ChildProcess contract: both
+    // stay null while the process runs.
+    exitCode: number | null;
+    signalCode: string | null;
     kill: (sig?: string) => boolean;
   };
 } {
@@ -34,6 +38,11 @@ function createFakeChild(): {
     stdin: { write: ReturnType<typeof vi.fn>; end: ReturnType<typeof vi.fn> };
     pid: number;
     killed: boolean;
+    // [20261002_T6b_HeartbeatWatchdog] Real ChildProcess contract: both
+    // stay null while the process runs — the watchdog's liveness heartbeat
+    // reads them.
+    exitCode: number | null;
+    signalCode: string | null;
     kill: (sig?: string) => boolean;
   };
   child.stdout = new EventEmitter();
@@ -41,9 +50,15 @@ function createFakeChild(): {
   child.stdin = { write: vi.fn(), end: vi.fn() };
   child.pid = 99999;
   child.killed = false;
+  child.exitCode = null;
+  child.signalCode = null;
   child.kill = vi.fn((sig?: string) => {
     child.killed = true;
-    child.emit("close", sig === "SIGKILL" ? null : 0);
+    // [20261002_T6b_HeartbeatWatchdog] Real ChildProcess NEVER emits close
+    // synchronously from kill() — the async emit (setImmediate, same
+    // discipline as funasrServer-killtree's fake) keeps the watchdog's own
+    // rejection first in the race, as on real processes.
+    setImmediate(() => child.emit("close", sig === "SIGKILL" ? null : 0));
     return true;
   });
   return { child };
@@ -291,18 +306,59 @@ describe("FunASRServer _startFunASRServer — spawn lifecycle", () => {
     await expect(promise).rejects.toThrow("启动失败");
   });
 
-  it("rejects on 120s startup timeout (timeout kills process → close fires)", async () => {
-    // [20260817_T4_CiMatrix] This test's semantics ("kill() → close fires
-    // → races the timeout reject") are the SIGKILL arm. On real Windows the
-    // timeout goes through killProcessTree's taskkill arm, which this
-    // suite's inert spawnSync mock does not simulate — force the posix arm
-    // here; the win32 arm is covered by funasrServer-killtree.test.ts.
+  // [20261002_T6b_HeartbeatWatchdog] The old "rejects on 120s startup
+  // timeout" test is replaced by the three heartbeat tests below: liveness
+  // is the process (exitCode/signalCode), not protocol silence.
+
+  function forcePosixKillArm(): () => void {
+    // [20260817_T4_CiMatrix] The kill-arm assertions below ("kill() → close
+    // fires") are the SIGKILL arm. On real Windows the watchdog goes
+    // through killProcessTree's taskkill arm, which this suite's inert
+    // spawnSync mock does not simulate — force the posix arm here; the
+    // win32 arm is covered by funasrServer-killtree.test.ts.
     const ORIG_PLATFORM = process.platform;
     Object.defineProperty(process, "platform", {
       value: "darwin",
       configurable: true,
       writable: true,
     });
+    return () => {
+      Object.defineProperty(process, "platform", {
+        value: ORIG_PLATFORM,
+        configurable: true,
+        writable: true,
+      });
+    };
+  }
+
+  it("slow init far past 120s is NOT killed while the process is alive", async () => {
+    vi.useFakeTimers();
+    const { child } = createFakeChild();
+    mockSpawnChild = child;
+
+    const s = srv(server);
+    const promise = s._startFunASRServer(
+      {},
+      "python3",
+      serverScript,
+      "/tmp/models",
+    );
+
+    // Cold-disk + antivirus first load: no init JSON for minutes while the
+    // process is healthy — the heartbeat watchdog must keep waiting (the
+    // old 120s one-shot killed exactly this startup).
+    vi.advanceTimersByTime(400_000);
+    expect(child.killed).toBe(false);
+
+    // Init finally completes → resolves normally.
+    child.stdout.emit("data", Buffer.from(JSON.stringify({ success: true })));
+    await promise;
+    expect(s.serverReady).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it("watchdog tree-kills and rejects when the process dies mid-init", async () => {
+    const restorePlatform = forcePosixKillArm();
     vi.useFakeTimers();
     try {
       const { child } = createFakeChild();
@@ -316,19 +372,42 @@ describe("FunASRServer _startFunASRServer — spawn lifecycle", () => {
         "/tmp/models",
       );
 
-      // No stdout output — simulate timeout. The timeout callback calls kill(),
-      // which emits 'close', which races with the timeout reject. Either
-      // "超时" or "异常退出" is acceptable — both indicate init never completed.
-      vi.advanceTimersByTime(121000);
+      // The process exited but close has not delivered yet (Windows pipe
+      // teardown lag): the next liveness poll must catch the dead process.
+      child.exitCode = 1;
+      vi.advanceTimersByTime(31_000);
 
-      await expect(promise).rejects.toThrow();
+      await expect(promise).rejects.toThrow("初始化期间退出");
       expect(child.killed).toBe(true);
     } finally {
-      Object.defineProperty(process, "platform", {
-        value: ORIG_PLATFORM,
-        configurable: true,
-        writable: true,
-      });
+      restorePlatform();
+      vi.useRealTimers();
+    }
+  });
+
+  it("outer cap kills an alive-but-never-initializing process", async () => {
+    const restorePlatform = forcePosixKillArm();
+    vi.useFakeTimers();
+    try {
+      const { child } = createFakeChild();
+      mockSpawnChild = child;
+
+      const s = srv(server);
+      const promise = s._startFunASRServer(
+        {},
+        "python3",
+        serverScript,
+        "/tmp/models",
+      );
+
+      // Wedged-alive: no init JSON, process still running. Bounded by the
+      // 600s outer cap (≥ 2× Python's own 300s loader-join ceiling).
+      vi.advanceTimersByTime(601_000);
+
+      await expect(promise).rejects.toThrow("启动超时");
+      expect(child.killed).toBe(true);
+    } finally {
+      restorePlatform();
       vi.useRealTimers();
     }
   });

@@ -101,3 +101,28 @@ dev:main 改用 `build:main && electron .`，dev/e2e/prod 加载同一 artifact�
 4. **CAMPPlus int8 体积收益≈0**（29MB vs 28MB，Conv1d 为主、MatMul-only 量化不缩卷积权重）：若 T 系列需要更小 speaker 模型，需评估含 Conv 的量化配方（精度代价另行实测；本次 fp32↔int8 embedding 余弦 1.0，无精度损失）。
 5. **campplus 生产 fbank 前端**：本次冒烟用 funasr torch 侧 `extract_feature`（torchaudio kaldi fbank + CMVN）；无 torch 运行时需用 kaldi-native-fbank 复刻同一前端语义（80 维、CMVN per-utterance mean）。
 6. **导出环境 SBOM**：`scripts/onnx-export/requirements-export.txt` 已锁版本（torch 2.0.1/funasr 1.3.1/onnx 1.23.1/ort 1.30.0），但 wheel sha256 尚未记录（嵌入式 Python 侧的 SBOM 纪律在 spec #412 决议 5，属 T2 环境换血工单）。
+
+## ONNX 服务端 T6b 交付后登记（#419，2026-10-02）
+
+VAD 区域 ≤60s 子分块、CAM++ campplus ONNX diarize、ORT 线程注入、
+服务端去 librosa、启动看门狗心跳判活已落地（分支 `agent/onnx-419`）。
+后续需要接住的事项：
+
+1. **长音频残余内存热点在 DSP 全文件 FFT 高通**（非推理路径）：本机实测
+   612s 真实语音全管线——三模型常驻 ~1.9GB，21 个 ≤60s ASR 分块 + 全文
+   punc 对 RSS 高水位**零增量**（分块目标达成）；高水位 ~3.1GB 的主要
+   贡献是 `audio_preprocessing.highpass_filter` 对整条音频做 float64
+   `np.fft.rfft`（瞬态 ~1.5GB，随时长线性放大，小时级录音在 8GB 机器
+   有 OOM 风险）。建议后续把 HPF 换成分块流式 IIR（scipy `sosfilt`），
+   属 `audio_preprocessing.py` 独立工单。
+2. **嵌入式依赖清单换血时必须包含 kaldi-native-fbank**：diarize 的 ONNX
+   说话人前端已依赖 `kaldi_native_fbank`（本机嵌入式环境为 spike 期手动
+   安装的 1.22.3，纯 C wheel）；`prepare-embedded-python.js` 的依赖清单
+   换血（torch/funasr → onnxruntime 等，T2 环境工单）若遗漏它，
+   打包后 diarize 将在加载期回退 torch 并失败（fbank 导入被
+   `OnnxSpeakerAdapter.__init__` 提前校验，错误显式可诊断）。
+3. **非 wav/flac 解码覆盖面变化**：`_convert_to_wav` 换 soundfile
+   （libsndfile 1.2.2）后，mp3/ogg/flac/wav 原生支持，m4a/aac/wma 从
+   "librosa+audioread 可能可用（依赖系统解码器）"变为**显式失败**（错误
+   信息指引"请确认音频文件未损坏"）。若产品要支持 m4a/aac，需要引入
+   系统解码器方案（ffmpeg 二进制或 OS 解码器桥），属独立决策。
