@@ -184,6 +184,10 @@ docs/research/2026-09-26-mac-runtime-measurements.md
 scripts/onnx-export/.venv/
 scripts/onnx-export/work/
 
+# [20261001_Feat_416_OnnxAbVerdictServer] ONNX A/B verdict local state:
+# raw run outputs (the archived evidence lives in docs/research/)
+scripts/onnx-ab/work/
+
 # [20261001_T415_OnnxWinSpike] win x64 spike local state: validation venv,
 # downloaded model bytes, local result JSON/MD (CI uploads its own copies
 # as workflow artifacts — the archived evidence lives in docs/research/)
