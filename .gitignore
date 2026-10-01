@@ -183,3 +183,9 @@ docs/research/2026-09-26-mac-runtime-measurements.md
 # pipeline venv + export work dir (checkpoints, stages, artifacts, reports)
 scripts/onnx-export/.venv/
 scripts/onnx-export/work/
+
+# [20261001_T415_OnnxWinSpike] win x64 spike local state: validation venv,
+# downloaded model bytes, local result JSON/MD (CI uploads its own copies
+# as workflow artifacts — the archived evidence lives in docs/research/)
+scripts/onnx-spike/.venv/
+scripts/onnx-spike/work/

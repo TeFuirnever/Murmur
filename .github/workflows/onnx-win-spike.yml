@@ -1,0 +1,82 @@
+# [20261001_T415_OnnxWinSpike] Ticket #415 (spec #412 T2): Windows x64
+# ONNX spike — first link of the pre-tag release evidence chain (spec
+# decision 13: win x64 spike + real-corpus A/B must both be green before a
+# dual-platform release).
+#
+# This is a manual/dispatch evidence gate, NOT a PR gate — the model stack
+# (~700MB) is far too heavy for per-PR CI (same policy as asr-ab.yml).
+# Repeatable two ways:
+#   - push to this workflow/scripts/onnx-spike (paths-filtered), and
+#   - workflow_dispatch (any branch that carries this file; the default
+#     input sample count is 5).
+#
+# Model bytes come ONLY from the T1 self-export mirror: verify_artifacts.py
+# --from-release downloads our own GitHub Release assets (split-part
+# reassembly included) and enforces the per-file sha256 strict-set pin —
+# community repos are never a download source (spec decision 6).
+name: ONNX win x64 spike
+
+on:
+  workflow_dispatch:
+    inputs:
+      samples:
+        description: "Cold-start sample count (fresh process each)"
+        default: "5"
+        type: string
+  push:
+    branches: [agent/onnx-415]
+    paths:
+      - ".github/workflows/onnx-win-spike.yml"
+      - "scripts/onnx-spike/**"
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  win-spike:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install pinned ONNX runtime env (funasr-onnx stack, no torch)
+        run: python -m pip install -r scripts/onnx-spike/requirements-runtime.txt
+
+      # T1 trust chain: download the SELF-EXPORTED release assets (split
+      # parts reassembled) and verify every file against model-pin.json's
+      # sha256 manifest — the spike refuses to run on any other bytes.
+      - name: Download self-exported models and verify sha256 manifest
+        run: >-
+          python scripts/onnx-export/verify_artifacts.py --from-release
+          --download-dir scripts/onnx-spike/work/models
+
+      - name: Run win x64 spike (install size / cold start / RSS / 40s inference)
+        run: >-
+          python scripts/onnx-spike/win_spike.py run
+          --models-dir scripts/onnx-spike/work/models
+          --wav scripts/onnx-spike/fixtures/onnx-spike-40s.wav
+          --samples ${{ inputs.samples || '5' }}
+          --out-json scripts/onnx-spike/work/win_spike_results.json
+          --out-md scripts/onnx-spike/work/win_spike_report.md
+
+      - name: Append spike report to job summary
+        if: always()
+        shell: pwsh
+        run: >-
+          if (Test-Path scripts/onnx-spike/work/win_spike_report.md) {
+            Get-Content scripts/onnx-spike/work/win_spike_report.md |
+              Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          }
+
+      - name: Upload spike evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: onnx-win-spike-evidence
+          path: |
+            scripts/onnx-spike/work/win_spike_results.json
+            scripts/onnx-spike/work/win_spike_report.md

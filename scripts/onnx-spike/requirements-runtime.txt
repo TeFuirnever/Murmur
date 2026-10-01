@@ -1,0 +1,21 @@
+# [20261001_T415_OnnxWinSpike] Pinned RUNTIME environment for the win x64
+# ONNX spike (ticket #415, spec #412 T2). This is the funasr-onnx stack the
+# production runtime will ship — NO torch in the tree (the whole point of
+# the migration; the spike's install-size measurement covers exactly this
+# env).
+#
+# Versions mirror scripts/onnx-export/requirements-export.txt where they
+# overlap (funasr-onnx 0.4.3 is the version the T1 runtime file sets were
+# source-verified against; onnxruntime 1.30.0 matches the export pin so
+# the same graph runs on both sides). Transitive deps (librosa, scipy,
+# numpy<=1.26.4, kaldi-native-fbank, PyYAML, jieba, sentencepiece) come in
+# via funasr-onnx and are recorded per-run in the results JSON via
+# `pip freeze` — the evidence report always names the resolved wheels.
+#
+# psutil is measurement-only (Windows has no getrusage ru_maxrss); requests
+# backs scripts/onnx-export/verify_artifacts.py (release-asset download).
+funasr-onnx==0.4.3
+onnxruntime==1.30.0
+soundfile==0.14.0
+requests==2.34.2
+psutil==7.1.2
