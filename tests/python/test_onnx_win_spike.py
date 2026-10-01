@@ -28,6 +28,7 @@
 #      35-45s long (the ticket's "40s wav").
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -49,8 +50,26 @@ class ImportCleanlinessTest(unittest.TestCase):
     def test_importing_module_pulls_no_heavy_runtime_dep(self):
         # The stdlib suite (and any pre-flight check) imports win_spike on
         # machines without onnxruntime — module level must stay stdlib-only.
-        for heavy in ("onnxruntime", "funasr_onnx", "psutil", "soundfile"):
-            self.assertNotIn(heavy, sys.modules, heavy)
+        # Must run in a FRESH interpreter: this suite shares one process and
+        # sibling test modules legitimately import soundfile/numpy.
+        probe = (
+            "import sys, json; "
+            f"sys.path.insert(0, {json.dumps(os.path.join(REPO_ROOT, 'scripts', 'onnx-spike'))}); "
+            "import win_spike; "
+            "print(json.dumps([m for m in "
+            "('onnxruntime', 'funasr_onnx', 'psutil', 'soundfile') "
+            "if m in sys.modules]))"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", probe],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        self.assertEqual(
+            result.returncode, 0, f"probe stderr: {result.stderr}"
+        )
+        self.assertEqual(json.loads(result.stdout.strip()), [])
 
 
 class FourModelContractTest(unittest.TestCase):
