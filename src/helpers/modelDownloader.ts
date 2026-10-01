@@ -9,9 +9,12 @@
 //      bucket (third source, placeholder until provisioned — spec #412
 //      decision 9). No geo detection; sources fail over in order.
 //   2. Byte-range resume that survives a source switch: partial bytes are
-//      appended from whichever source answers next; integrity is anchored
-//      ONLY on the pinned sha256, so cross-source byte concatenation is
-//      verified, never trusted.
+//      appended from whichever source answers next — for whole-file sources
+//      the shared .murmur-partial temp is the resume state, and for
+//      split-part mirror assets each .partNN temp resumes individually and
+//      SURVIVES a failed attempt (cleanup is success-path only). Integrity
+//      is anchored ONLY on the pinned sha256, so cross-source byte
+//      concatenation is verified, never trusted.
 //   3. ONE-SHOT whole-manifest verification after assembly: every completed
 //      download invocation hashes EVERY pinned file (strict set semantics,
 //      mirroring scripts/onnx-export/onnx_export_common.py check_manifest).
@@ -426,6 +429,18 @@ async function downloadSingleUrl(
   if (response.status === 404) {
     throw new Error(`HTTP 404 (not found): ${url}`);
   }
+  // [20261001_T5_ReviewFix] RFC 7233: a Range starting at/after EOF is
+  // unsatisfiable — the local temp already holds the complete bytes
+  // (split-part resume across retries). Read it as "already complete",
+  // report the temp's size, and move on; the one-shot sha256 gate remains
+  // the authority over whatever the temp contains.
+  if (response.status === 416) {
+    if (rangeHeader !== undefined && fs.existsSync(targetPath)) {
+      byteSink.onBytes(fs.statSync(targetPath).size);
+      return;
+    }
+    throw new Error(`HTTP 416 (range not satisfiable): ${url}`);
+  }
   if (response.status >= 400) {
     throw new Error(`HTTP ${response.status}: ${url}`);
   }
@@ -458,7 +473,14 @@ async function downloadSingleUrl(
 /** Assemble an ordered split-part layout into targetPath. Each part is
  * downloaded (individually resumable) to its own temp file, then all parts
  * are concatenated IN PIN ORDER — the part layout is transport only;
- * integrity anchors on the assembled file's sha256. */
+ * integrity anchors on the assembled file's sha256.
+ *
+ * [20261001_T5_ReviewFix] The part temps ARE the resume state: they survive
+ * a failed attempt (cleanup runs on the SUCCESS path only), and a retry
+ * resumes each existing temp via Range (a 416 answer marks it complete) —
+ * matching the AllSourcesFailedError promise (已下载部分已保留，重试将自动
+ * 断点续传). Only the assembled output is re-concatenated from the local
+ * parts, which is disk I/O, never a re-fetch. */
 async function downloadParts(
   fetchImpl: HttpFetch,
   urls: string[],
@@ -468,24 +490,21 @@ async function downloadParts(
   const partPaths = urls.map(
     (_, index) => `${targetPath}.part${String(index).padStart(2, "0")}`,
   );
-  try {
-    for (let index = 0; index < urls.length; index += 1) {
-      const url = urls[index];
-      if (!url) throw new Error(`split-part URL missing at index ${index}`);
-      await downloadSingleUrl(fetchImpl, url, partPaths[index]!, byteSink);
-    }
-    // Parts layout always rebuilds the assembled file from scratch.
-    fs.writeFileSync(targetPath, Buffer.alloc(0));
-    for (const partPath of partPaths) {
-      await pipeline(
-        fs.createReadStream(partPath),
-        fs.createWriteStream(targetPath, { flags: "a" }),
-      );
-    }
-  } finally {
-    for (const partPath of partPaths) {
-      fs.rmSync(partPath, { force: true });
-    }
+  for (let index = 0; index < urls.length; index += 1) {
+    const url = urls[index];
+    if (!url) throw new Error(`split-part URL missing at index ${index}`);
+    await downloadSingleUrl(fetchImpl, url, partPaths[index]!, byteSink);
+  }
+  // Assembly output: rebuilt from the (now complete) local part temps.
+  fs.writeFileSync(targetPath, Buffer.alloc(0));
+  for (const partPath of partPaths) {
+    await pipeline(
+      fs.createReadStream(partPath),
+      fs.createWriteStream(targetPath, { flags: "a" }),
+    );
+  }
+  for (const partPath of partPaths) {
+    fs.rmSync(partPath, { force: true });
   }
 }
 
@@ -516,7 +535,15 @@ export interface DownloadOnnxModelSetOptions {
 
 class ProgressTracker {
   private readonly totals: Record<string, number> = {};
-  private readonly doneBytes: Record<string, number> = {};
+  // [20261001_T5_ReviewFix] Per-model byte accounting that never regresses:
+  // completedFileBytes holds the pin sizes of files already verified on disk
+  // or fully fetched; currentFileBytes holds the IN-FLIGHT file's own
+  // counter. doneBytes is their SUM, so starting the next file (whose
+  // bootstrap callback reports 0 bytes) cannot reset the model's signal —
+  // the #249/#254 dip class (a regress delays re-crossing the stall
+  // watchdog's strict-growth peak and can kill a live download).
+  private readonly completedFileBytes: Record<string, number> = {};
+  private readonly currentFileBytes: Record<string, number> = {};
   private completedModels = 0;
   private readonly modelNames: string[];
 
@@ -527,25 +554,46 @@ class ProgressTracker {
         (sum, file) => sum + file.size_bytes,
         0,
       );
-      this.doneBytes[model.name] = 0;
+      this.completedFileBytes[model.name] = 0;
+      this.currentFileBytes[model.name] = 0;
     }
   }
 
-  addBytes(modelName: string, totalBytesForFile: number): void {
-    // Files already on disk count once: subtract what was registered before.
-    this.doneBytes[modelName] = totalBytesForFile;
+  /** Register files that already sit verified on disk before any fetch, so
+   * resume runs start from their byte contribution. */
+  seedCompletedBytes(modelName: string, bytes: number): void {
+    this.completedFileBytes[modelName] = bytes;
   }
 
-  /** Pin a model's byte counter at 100% (used after its files resolve from
-   * disk rather than from fresh downloads). */
-  markModelBytesComplete(modelName: string): void {
-    if (modelName in this.totals) {
-      this.doneBytes[modelName] = this.totals[modelName]!;
-    }
+  /** Mark the start of one file's fetch: its in-flight counter resets, the
+   * completed files' contribution stays untouched. */
+  beginFile(modelName: string): void {
+    this.currentFileBytes[modelName] = 0;
+  }
+
+  /** In-flight progress for the current file only (absolute byte count for
+   * that file, resume offset included). */
+  setCurrentFileBytes(modelName: string, count: number): void {
+    this.currentFileBytes[modelName] = count;
+  }
+
+  /** The current file finished: move its pinned size into the completed
+   * bucket and clear the in-flight counter. */
+  completeFile(modelName: string, fileSize: number): void {
+    this.completedFileBytes[modelName] =
+      (this.completedFileBytes[modelName] ?? 0) + fileSize;
+    this.currentFileBytes[modelName] = 0;
   }
 
   markComplete(): void {
     this.completedModels += 1;
+  }
+
+  private doneBytes(modelName: string): number {
+    return (
+      (this.completedFileBytes[modelName] ?? 0) +
+      (this.currentFileBytes[modelName] ?? 0)
+    );
   }
 
   emit(
@@ -554,25 +602,35 @@ class ProgressTracker {
     onProgress?: (progress: DownloadProgress) => void,
   ): void {
     if (!onProgress) return;
-    const model = this.models.find((m) => m.name === modelName);
-    const modelTotal = model ? this.totals[model.name]! : 0;
-    const modelDone = model ? this.doneBytes[model.name]! : 0;
-    const modelPercent = modelTotal > 0 ? (modelDone * 100.0) / modelTotal : 0;
+    // [20261001_T5_ReviewFix] The completed stage carries the protocol's
+    // exact 100 (download_models.py emits 100 there) — consumers waiting
+    // for 100% must not hang on a 99.9 clamp. In-flight stages stay below
+    // 100 so a near-done fetch cannot read as finished before verification.
+    const isCompleted = stage === "completed";
+    const cap = isCompleted ? 100 : 99.9;
+    const modelTotal = this.totals[modelName] ?? 0;
+    const modelDone = isCompleted ? modelTotal : this.doneBytes(modelName);
+    const modelPercent =
+      modelTotal > 0 ? (modelDone * 100.0) / modelTotal : isCompleted ? 100 : 0;
     const grandTotal = this.models.reduce(
       (sum, m) => sum + this.totals[m.name]!,
       0,
     );
     const grandDone = this.models.reduce(
-      (sum, m) => sum + this.doneBytes[m.name]!,
+      (sum, m) =>
+        sum +
+        (isCompleted && m.name === modelName
+          ? this.totals[m.name]!
+          : this.doneBytes(m.name)),
       0,
     );
     const overallPercent =
-      grandTotal > 0 ? (grandDone * 100.0) / grandTotal : 0;
+      grandTotal > 0 ? (grandDone * 100.0) / grandTotal : isCompleted ? 100 : 0;
     onProgress({
       stage,
       model: modelName,
-      progress: Math.min(99.9, Math.round(modelPercent * 10) / 10),
-      overall_progress: Math.min(99.9, Math.round(overallPercent * 10) / 10),
+      progress: Math.min(cap, Math.round(modelPercent * 10) / 10),
+      overall_progress: Math.min(cap, Math.round(overallPercent * 10) / 10),
       completed: this.completedModels,
       total: this.modelNames.length,
     });
@@ -686,11 +744,23 @@ export async function downloadOnnxModelSet(
       throw new ManifestVerificationError(problems);
     }
 
+    // [20261001_T5_ReviewFix] Seed the byte accounting with files already
+    // verified on disk (corrupt ones were removed above — everything left
+    // is clean), so a resume run's progress starts from their contribution.
+    let preExistingBytes = 0;
+    for (const file of model.files) {
+      if (fs.existsSync(path.join(targetDir, file.path))) {
+        preExistingBytes += file.size_bytes;
+      }
+    }
+    tracker.seedCompletedBytes(model.name, preExistingBytes);
+
     tracker.emit("downloading", model.name, onProgress);
     for (const file of model.files) {
       const destPath = path.join(targetDir, file.path);
       if (fs.existsSync(destPath)) continue; // survived verification → clean
       const sources = buildFileSources(pin, file);
+      tracker.beginFile(model.name);
       const sourceName = await fetchFileInto(
         fetchImpl,
         destPath,
@@ -698,16 +768,19 @@ export async function downloadOnnxModelSet(
         logger,
         {
           onBytes: (count) => {
-            tracker.addBytes(model.name, count);
+            // In-flight counter for THIS file only — the completed files'
+            // contribution stays in its own bucket, so the model's signal
+            // never regresses when the next file starts.
+            tracker.setCurrentFileBytes(model.name, count);
             tracker.emit("downloading", model.name, onProgress);
           },
         },
       );
+      tracker.completeFile(model.name, file.size_bytes);
       logger?.info?.(
         `模型文件下载完成: ${model.name}/${file.path}（源: ${sourceName}）`,
       );
     }
-    tracker.markModelBytesComplete(model.name);
 
     // THE one-shot post-assembly verification — unconditional, whole set.
     problems = verifyManifestDir(targetDir, model);

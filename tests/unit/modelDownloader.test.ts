@@ -582,6 +582,140 @@ describe("[20261001_T5_ModelDownloaderV2] one-shot manifest verification & downl
     expect(assembled.equals(fixture.contents["model_quant.onnx"]!)).toBe(true);
   });
 
+  // [20261001_T5_ReviewFix] Independent review: a multi-file model's progress
+  // used to RESET to the in-flight file's own byte count on every file
+  // start (addBytes overwrite + the onBytes(0) bootstrap callback) — the
+  // #249/#254 dip class that can re-cross the stall watchdog's peak and
+  // kill a live download. Lock: overall AND per-model progress are
+  // non-decreasing across the whole run, and the completed stage carries
+  // the torch protocol's 100 (download_models.py emits exactly 100 there).
+  it("never regresses progress across a model's files; completed carries 100", async () => {
+    const progress: DownloadProgress[] = [];
+    await downloadOnnxModelSet({
+      pin: fixture.pin,
+      modelsRoot,
+      fetchImpl: serveDir(fixture),
+      onProgress: (p) => progress.push({ ...p }),
+    });
+    for (let i = 1; i < progress.length; i += 1) {
+      expect(progress[i]!.overall_progress).toBeGreaterThanOrEqual(
+        progress[i - 1]!.overall_progress,
+      );
+    }
+    for (const model of Object.values(fixture.pin.models)) {
+      const stream = progress.filter((p) => p.model === model!.name);
+      expect(stream.length).toBeGreaterThan(1);
+      for (let i = 1; i < stream.length; i += 1) {
+        expect(stream[i]!.progress).toBeGreaterThanOrEqual(
+          stream[i - 1]!.progress,
+        );
+      }
+    }
+    const completed = progress.filter((p) => p.stage === "completed");
+    expect(completed.map((p) => p.model).sort()).toEqual([
+      "asr-seaco-paraformer",
+      "vad-fsmn",
+    ]);
+    for (const event of completed) {
+      expect(event.progress).toBe(100);
+    }
+    expect(progress[progress.length - 1]!.overall_progress).toBe(100);
+  });
+
+  // [20261001_T5_ReviewFix] Independent review: a failed split-part download
+  // deleted the completed part temps in a `finally` and rebuilt the assembled
+  // file from zero on retry — contradicting the module header and the
+  // AllSourcesFailedError promise (已下载部分已保留，重试将自动断点续传).
+  // The affected file is the pin's only split-part asset (model_quant.onnx,
+  // 345,131,848 bytes, 5 parts). Lock: completed part temps survive the
+  // failure, the retry resumes them (Range from the temp's size; a 416
+  // Range answer means the temp is already complete per RFC 7233), and the
+  // temps are cleaned only after a successful assembly.
+  it("keeps completed part temps on failure and resumes them on retry", async () => {
+    const bigPrimary = `${MODELSCOPE_RESOLVE_BASE}/${MODELSCOPE_MIRROR_REPO_ID}/resolve/${fixture.pin.release.tag}/model_quant.onnx`;
+    const part00Url = `${MIRROR_BASE}asr-seaco-paraformer__model_quant.onnx.part00`;
+    const part01Url = `${MIRROR_BASE}asr-seaco-paraformer__model_quant.onnx.part01`;
+    const part00Bytes =
+      fixture.partContents["asr-seaco-paraformer__model_quant.onnx.part00"]!;
+
+    // Attempt 1: primary dead; part00 completes, part01 connection dies.
+    const failing = serveDir(fixture, {
+      [bigPrimary]: statusServer(404),
+      [part01Url]: () => {
+        throw new Error("connection reset mid-part");
+      },
+    });
+    await expect(
+      downloadOnnxModelSet({
+        pin: fixture.pin,
+        modelsRoot,
+        fetchImpl: failing,
+      }),
+    ).rejects.toThrow(AllSourcesFailedError);
+    const asrDir = path.join(modelsRoot, fixture.asr.name);
+    const part00Temp = path.join(
+      asrDir,
+      "model_quant.onnx.murmur-partial.part00",
+    );
+    expect(fs.existsSync(part00Temp)).toBe(true);
+    expect(fs.statSync(part00Temp).size).toBe(part00Bytes.length);
+
+    // Attempt 2: all sources healthy — the completed part must be RESUMED
+    // (Range from its temp size), not re-fetched from zero.
+    const retry = serveDir(fixture, { [bigPrimary]: statusServer(404) });
+    const outcome = await downloadOnnxModelSet({
+      pin: fixture.pin,
+      modelsRoot,
+      fetchImpl: retry,
+    });
+    expect(outcome.success).toBe(true);
+    const part00RetryCalls = retry.calls.filter((c) => c.url === part00Url);
+    expect(part00RetryCalls.length).toBeGreaterThan(0);
+    expect(part00RetryCalls[0]!.headers["Range"]).toBe(
+      `bytes=${part00Bytes.length}-`,
+    );
+    // Assembly is byte-exact and the part temps are cleaned only now.
+    expect(
+      fs
+        .readFileSync(path.join(asrDir, "model_quant.onnx"))
+        .equals(fixture.contents["model_quant.onnx"]!),
+    ).toBe(true);
+    expect(fs.readdirSync(asrDir).filter((n) => isTempDownloadName(n))).toEqual(
+      [],
+    );
+  });
+
+  it("treats a 416 Range answer as an already-complete temp (RFC 7233)", async () => {
+    // A fully-downloaded part temp makes the retry's Range start at/after
+    // EOF; a conforming server answers 416. That must read as "complete",
+    // not as a source failure.
+    const bigPrimary = `${MODELSCOPE_RESOLVE_BASE}/${MODELSCOPE_MIRROR_REPO_ID}/resolve/${fixture.pin.release.tag}/model_quant.onnx`;
+    const part00Url = `${MIRROR_BASE}asr-seaco-paraformer__model_quant.onnx.part00`;
+    const part00Bytes =
+      fixture.partContents["asr-seaco-paraformer__model_quant.onnx.part00"]!;
+    const asrDir = path.join(modelsRoot, fixture.asr.name);
+    fs.mkdirSync(asrDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(asrDir, "model_quant.onnx.murmur-partial.part00"),
+      part00Bytes,
+    );
+    const fetcher = serveDir(fixture, {
+      [bigPrimary]: statusServer(404),
+      [part00Url]: statusServer(416),
+    });
+    const outcome = await downloadOnnxModelSet({
+      pin: fixture.pin,
+      modelsRoot,
+      fetchImpl: fetcher,
+    });
+    expect(outcome.success).toBe(true);
+    expect(
+      fs
+        .readFileSync(path.join(asrDir, "model_quant.onnx"))
+        .equals(fixture.contents["model_quant.onnx"]!),
+    ).toBe(true);
+  });
+
   it("rejects a tampered file with an actionable error and removes it for re-download", async () => {
     // Fully download once, then tamper config.yaml (same length, different
     // bytes — only the sha256 pass can catch this).
