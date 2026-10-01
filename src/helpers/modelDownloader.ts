@@ -493,7 +493,24 @@ async function downloadParts(
   for (let index = 0; index < urls.length; index += 1) {
     const url = urls[index];
     if (!url) throw new Error(`split-part URL missing at index ${index}`);
-    await downloadSingleUrl(fetchImpl, url, partPaths[index]!, byteSink);
+    // [20261001_T5_ReviewFix2] File-level progress across parts: each part's
+    // download reports PART-local absolute bytes (and bootstraps at 0), so
+    // feeding the shared sink directly reset the model's in-flight counter
+    // at every part boundary — the #249/#254 dip class, back again inside
+    // the file. The base is the sum of the preceding part temps' sizes at
+    // the moment this part starts (they are complete — parts fetch in
+    // order); the wrapper reports base + part-local absolute so the sink
+    // always sees FILE-level bytes and the signal never regresses.
+    let baseOffset = 0;
+    for (let prior = 0; prior < index; prior += 1) {
+      const priorPath = partPaths[prior]!;
+      if (fs.existsSync(priorPath)) {
+        baseOffset += fs.statSync(priorPath).size;
+      }
+    }
+    await downloadSingleUrl(fetchImpl, url, partPaths[index]!, {
+      onBytes: (count) => byteSink.onBytes(baseOffset + count),
+    });
   }
   // Assembly output: rebuilt from the (now complete) local part temps.
   fs.writeFileSync(targetPath, Buffer.alloc(0));

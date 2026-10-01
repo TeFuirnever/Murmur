@@ -622,6 +622,48 @@ describe("[20261001_T5_ModelDownloaderV2] one-shot manifest verification & downl
     expect(progress[progress.length - 1]!.overall_progress).toBe(100);
   });
 
+  // [20261001_T5_ReviewFix2] Residual dip WITHIN a split-part file: the parts
+  // loop used to feed the shared sink each part's PART-local absolute bytes,
+  // and each new part bootstraps at 0 — so the model's in-flight counter
+  // reset at every part boundary (reviewer probe: 54.5 → 9.1 → climb; in
+  // production model_quant.onnx, 345,131,848 B × 5 parts, dips ~17.8 points
+  // at each of its 4 boundaries). This variant FORCES the parts layout (the
+  // primary is down, so the big graph must come from the mirror's part
+  // URLs) and re-locks the monotonicity contract on that path.
+  it("never regresses progress across split-part boundaries either", async () => {
+    const bigPrimary = `${MODELSCOPE_RESOLVE_BASE}/${MODELSCOPE_MIRROR_REPO_ID}/resolve/${fixture.pin.release.tag}/model_quant.onnx`;
+    const progress: DownloadProgress[] = [];
+    const fetcher = serveDir(fixture, { [bigPrimary]: statusServer(404) });
+    await downloadOnnxModelSet({
+      pin: fixture.pin,
+      modelsRoot,
+      fetchImpl: fetcher,
+      onProgress: (p) => progress.push({ ...p }),
+    });
+    // The parts layout was genuinely exercised.
+    expect(
+      fetcher.calls.some((c) => c.url.endsWith("model_quant.onnx.part00")),
+    ).toBe(true);
+    expect(
+      fetcher.calls.some((c) => c.url.endsWith("model_quant.onnx.part01")),
+    ).toBe(true);
+    for (let i = 1; i < progress.length; i += 1) {
+      expect(progress[i]!.overall_progress).toBeGreaterThanOrEqual(
+        progress[i - 1]!.overall_progress,
+      );
+    }
+    for (const model of Object.values(fixture.pin.models)) {
+      const stream = progress.filter((p) => p.model === model!.name);
+      expect(stream.length).toBeGreaterThan(1);
+      for (let i = 1; i < stream.length; i += 1) {
+        expect(stream[i]!.progress).toBeGreaterThanOrEqual(
+          stream[i - 1]!.progress,
+        );
+      }
+    }
+    expect(progress[progress.length - 1]!.overall_progress).toBe(100);
+  });
+
   // [20261001_T5_ReviewFix] Independent review: a failed split-part download
   // deleted the completed part temps in a `finally` and rebuilt the assembled
   // file from zero on retry — contradicting the module header and the
