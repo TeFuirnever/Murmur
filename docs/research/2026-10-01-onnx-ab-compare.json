@@ -1,0 +1,85 @@
+{
+  "baseline": {
+    "engine": "torch",
+    "generatedAt": "2026-09-30T22:32:28.279Z"
+  },
+  "candidate": {
+    "engine": "onnx",
+    "generatedAt": "2026-10-01T00:38:01.137Z"
+  },
+  "perDomain": [
+    {
+      "domain": "accent",
+      "baselineMeanCer": 0.02314814814814815,
+      "candidateMeanCer": 0.02314814814814815,
+      "cerDelta": 0,
+      "passed": true
+    },
+    {
+      "domain": "codeswitch",
+      "baselineMeanCer": 0.16221237264965402,
+      "candidateMeanCer": 0.15625999169727306,
+      "cerDelta": -0.005952380952380959,
+      "passed": true
+    },
+    {
+      "domain": "farfield",
+      "baselineMeanCer": 0.06944444444444445,
+      "candidateMeanCer": 0.06944444444444445,
+      "cerDelta": 0,
+      "passed": true
+    },
+    {
+      "domain": "hotword",
+      "baselineMeanCer": 0.06502509835843169,
+      "candidateMeanCer": 0.09588929588929589,
+      "cerDelta": 0.030864197530864196,
+      "passed": false
+    },
+    {
+      "domain": "noise",
+      "baselineMeanCer": 0.23730158730158732,
+      "candidateMeanCer": 0.2492063492063492,
+      "cerDelta": 0.01190476190476189,
+      "passed": true
+    },
+    {
+      "domain": "real-clean",
+      "baselineMeanCer": 0,
+      "candidateMeanCer": 0,
+      "cerDelta": 0,
+      "passed": true
+    },
+    {
+      "domain": "timestamp",
+      "baselineMeanCer": 0,
+      "candidateMeanCer": 0,
+      "cerDelta": 0,
+      "passed": true
+    }
+  ],
+  "hotword": {
+    "baselineRepairRate": 0.14285714285714285,
+    "candidateRepairRate": 0.14285714285714285,
+    "repairRateDelta": 0,
+    "passed": true
+  },
+  "timestamp": {
+    "baselineMeanAbsDevMs": 63.611111111111114,
+    "candidateMeanAbsDevMs": 64.16666666666667,
+    "deltaMs": 0.5555555555555571,
+    "passed": true
+  },
+  "punc": {
+    "baselineInsertions": 5,
+    "candidateInsertions": 5,
+    "baselineDeletions": 11,
+    "candidateDeletions": 11
+  },
+  "gates": {
+    "cerDeltaTolerance": 0.02,
+    "repairRateMustNotRegress": true,
+    "timestampDeltaToleranceMs": 150
+  },
+  "passed": false
+}

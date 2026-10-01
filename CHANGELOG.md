@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **ONNX A/B 四维判决（NO-GO 单域）**（#416，Spec #412 T4）：ONNX A/B 判决服务器 `scripts/onnx-ab/funasr_server_onnx_ab.py`（funasr-onnx + T1 自导出产物说与 `funasr_server.py` 同构的 stdio 协议，pin 就绪闸门 + DSP/PCM_16/管线策略 parity，24 例单测）；T1 产物对 T3 真实语料全量 A/B：punc 插删差逐例一致、timestamp 18 边界 17 个毫秒级一致、热词修复率 14.29% = torch，**热词域逐域 CER delta +3.09pp 超门禁（+2pp）**——100% 由 `hw_jedediah` 单例贡献（英文术语热词在 ONNX 路径零效果，torch 部分修复），NO-GO 与三个下一步选项（量化敏感度定位 / B 计划官方 ONNX 对照 / 门禁口径议决）回 #412 议决。判决书 `docs/research/2026-10-01-onnx-ab-verdict.md` + 机器可读报告/对比 JSON。
 - **ONNX int8 模型自导出管道**（#413，Spec #412 T1）：`scripts/onnx-export/` 一键从官方 iic Apache-2.0 torch checkpoint 导出四模型（SeACo-Paraformer 热词 ASR / fsmn VAD / ct-transformer 272727 Punc / CAM++ 说话人）为 ONNX int8；全文件 sha256 manifest + commit-SHA pin 落仓（`model-pin.json`，CI 契约测试守门）；产物镜像至自有 GitHub Release `models-onnx-int8-1`（非 v\* tag，不触发安装包构建）；marxyz 社区仓交叉验证（非 onnx 文件字节一致、同输入转写一致）；40.8s wav 冒烟通过（热词路径可执行、RTF 0.0097、时间戳保留）。CAM++ 无官方 export 路径，自研 ONNX 等价导出（数值门禁：torch 等价 + fp32 ONNX 余弦 1.0）。
 
 ## [1.5.2] - 2026-09-17
