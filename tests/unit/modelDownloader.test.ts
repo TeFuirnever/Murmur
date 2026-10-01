@@ -36,7 +36,6 @@ import {
 import type {
   DownloadProgress,
   HttpFetch,
-  HttpFetchResult,
   ModelPin,
   PinFileEntry,
   PinModelEntry,

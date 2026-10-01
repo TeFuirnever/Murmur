@@ -544,7 +544,7 @@ class ProgressTracker {
     }
   }
 
-  markComplete(modelName: string): void {
+  markComplete(): void {
     this.completedModels += 1;
   }
 
@@ -669,7 +669,7 @@ export async function downloadOnnxModelSet(
     // full hash pass — a retry never skips it.
     let problems = verifyManifestDir(targetDir, model);
     if (problems.length === 0) {
-      tracker.markComplete(model.name);
+      tracker.markComplete();
       tracker.emit("completed", model.name, onProgress);
       verified.push(model.name);
       continue;
@@ -715,7 +715,7 @@ export async function downloadOnnxModelSet(
       removeUnverifiableFiles(targetDir, model, problems, logger);
       throw new ManifestVerificationError(problems);
     }
-    tracker.markComplete(model.name);
+    tracker.markComplete();
     tracker.emit("completed", model.name, onProgress);
     verified.push(model.name);
   }
