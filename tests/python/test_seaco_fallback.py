@@ -80,7 +80,10 @@ class AsrFallbackTest(unittest.TestCase):
             else:
                 sys.modules.pop("funasr", None)
         self.assertTrue(ok)
-        self.assertEqual(calls, [FunASRServer.ASR_MODEL_FALLBACK])
+        # [20261001_T5_SealImplicitPull] AutoModel receives the RESOLVED
+        # LOCAL DIR (never the repo id — that would let funasr pull the
+        # network on cache miss); identity reporting stays the repo id.
+        self.assertEqual(calls, [os.path.join(root, OLD_DIR)])
         self.assertEqual(srv.asr_model_name, FunASRServer.ASR_MODEL_FALLBACK)
 
     def test_seaco_load_failure_falls_back_to_old(self):
@@ -111,9 +114,11 @@ class AsrFallbackTest(unittest.TestCase):
             else:
                 sys.modules.pop("funasr", None)
         self.assertTrue(ok)
+        # [20261001_T5_SealImplicitPull] Calls carry the resolved local
+        # dirs now (no-network seal); both dirs live under the same root.
         self.assertEqual(
             calls,
-            [FunASRServer.ASR_MODEL_SEACO, FunASRServer.ASR_MODEL_FALLBACK],
+            [os.path.join(root, SEACO_DIR), os.path.join(root, OLD_DIR)],
         )
 
     def test_neither_on_disk_returns_false(self):

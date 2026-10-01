@@ -149,6 +149,7 @@
       "funasr_server.py",
       "audio_preprocessing.py",
       "download_models.py",
+      "scripts/onnx-export/model-pin.json",
       "package.json",
       "LICENSE",
       "NOTICE",
@@ -168,6 +169,7 @@
       "funasr_server.py",
       "audio_preprocessing.py",
       "download_models.py",
+      "scripts/onnx-export/model-pin.json",
       "python/**/*"
     ],
     "afterPack": "build/afterPack.js",

@@ -95,9 +95,9 @@ dev:main 改用 `build:main && electron .`，dev/e2e/prod 加载同一 artifact�
 （`models-onnx-int8-1`）已落地，仓内 pin 为
 `scripts/onnx-export/model-pin.json`。后续 T 系列工单需要接住的事项：
 
-1. **下载器接线**：modelManager 双源分发（ModelScope 官方 checkpoint 源 + 自有 Release 镜像）尚未开始；消费 pin 的 commit-SHA + 逐文件 sha256 + 精确文件名就绪锚（spec #412 决议 8/9），pin 的 schema_version=1 已由 `tests/unit/onnx-model-pin.test.ts` 守门。
+1. **下载器接线**：✅ 客户端已交付（#417，2026-10-01）：`src/helpers/modelDownloader.ts`（双源自动回退 ModelScope 主 → 自有 Release 镜像备 → OSS 第三源占位（`MURMUR_OSS_MIRROR_URL` 激活）、Range 断点续传跨源、组装后一次性全量 sha256 校验（无 skip-hash-on-retry 分支）、精确文件名就绪锚+双侧临时名排除）+ `modelManager` 的 `checkOnnxModels`/`downloadOnnxModels`/`getOnnxModelsRoot` 集成面 + `funasr_server.py` 两条隐式拉网路径封死（AutoModel 只收本地目录；ONNX 目录只认 `ONNX_PIN_FILE_SPECS` 精确集合）。**剩余接线**：v2 下载/就绪面尚未接入生产启动流（当前运行时仍为 torch，T4 判决 NO-GO 后待议决）——服务端 ONNX 工单把启动闸门与下载入口切到该面即可；ModelScope 镜像仓（`murmur-asr/murmur-models-onnx-int8`）尚未发布，发布前主源 404 自动落 GH 镜像。pin 的 schema_version=1 由 `tests/unit/onnx-model-pin.test.ts` 守门，pin↔Python 闸门一致性由 `tests/unit/onnx-pin-anchor-parity.test.ts` 守门。
 2. **funasr_onnx 返回键差异**：ONNX SeacoParaformer 返回 `preds`（空格拼接字序列）+ `timestamp`，无 torch AutoModel 的 `text` 键——服务端协议适配时不可按 `text` 取值（本次冒烟实证，`scripts/onnx-export/smoke_inference.py` 注释有记）。
-3. **campplus 无 v2.0.4 tag**：官方仓最新 tag 为 v2.0.2；funasr_server.py:1511 请求 v2.0.4 属上游静默回退，运行时接线时应改回真实 tag 或 master commit pin。
+3. **campplus 无 v2.0.4 tag**：✅ 根治（#417，2026-10-01）：`_load_cam_model` 已改为先本地解析（`_resolve_repo_dir`）再把本地目录交给 AutoModel，不再携带 `model_revision` 请求上游 tag——上游静默回退路径随隐式拉网封印一并消失；未就绪时显式报错（说话人模型未就绪，请重新下载）。
 4. **CAMPPlus int8 体积收益≈0**（29MB vs 28MB，Conv1d 为主、MatMul-only 量化不缩卷积权重）：若 T 系列需要更小 speaker 模型，需评估含 Conv 的量化配方（精度代价另行实测；本次 fp32↔int8 embedding 余弦 1.0，无精度损失）。
 5. **campplus 生产 fbank 前端**：本次冒烟用 funasr torch 侧 `extract_feature`（torchaudio kaldi fbank + CMVN）；无 torch 运行时需用 kaldi-native-fbank 复刻同一前端语义（80 维、CMVN per-utterance mean）。
 6. **导出环境 SBOM**：`scripts/onnx-export/requirements-export.txt` 已锁版本（torch 2.0.1/funasr 1.3.1/onnx 1.23.1/ort 1.30.0），但 wheel sha256 尚未记录（嵌入式 Python 侧的 SBOM 纪律在 spec #412 决议 5，属 T2 环境换血工单）。
