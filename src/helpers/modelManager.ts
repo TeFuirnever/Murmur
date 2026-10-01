@@ -7,6 +7,17 @@ import fs from "fs";
 import path from "path";
 import { spawn } from "child_process";
 import os from "os";
+// [20261001_T5_ModelManagerOnnx] v2 trust-chain downloader client (ticket
+// #417): the ONNX-generation download/readiness surface lives behind these
+// delegates; the torch-era surface below is untouched.
+import {
+  type HttpFetch,
+  type ModelPin,
+  ONNX_MODELS_DIRNAME,
+  downloadOnnxModelSet,
+  loadModelPin,
+  readinessProblems,
+} from "./modelDownloader";
 
 /** Logger interface (accepts console or LogManager). */
 interface Logger {
@@ -593,6 +604,101 @@ class ModelManager {
     globalModelCheckCache = null;
     globalModelCheckTime = 0;
   }
+
+  // [20261001_T5_ModelManagerOnnx] Ticket #417 (spec #412 T5): the v2
+  // trust-chain client surface. The ONNX generation is a SEPARATE root and
+  // a SEPARATE pipeline: the pinned artifacts (scripts/onnx-export/
+  // model-pin.json) download into <userData>/models/onnx-int8/<model-name>/
+  // via modelDownloader's dual-source + one-shot-manifest flow. The live
+  // torch-era flow above keeps serving the current runtime; wiring THIS
+  // surface into startup is the server-side ONNX ticket's flip point.
+  // Lazy require("electron") kept inside try/catch — same reason as
+  // getModelCachePath (import is hoisted; unit tests have no electron).
+
+  /** Repo-shipped pin record: dev resolves from the checkout; packaged the
+   * file ships via build.files+asarUnpack (mirroring download_models.py). */
+  getModelPinPath(): string {
+    if (process.env.NODE_ENV === "development") {
+      let devRoot: string;
+      try {
+        const { app } = require("electron");
+        devRoot = app.getAppPath();
+      } catch {
+        devRoot = process.cwd();
+      }
+      return path.join(devRoot, "scripts", "onnx-export", "model-pin.json");
+    }
+    if (typeof process.resourcesPath === "string") {
+      return path.join(
+        process.resourcesPath,
+        "app.asar.unpacked",
+        "scripts",
+        "onnx-export",
+        "model-pin.json",
+      );
+    }
+    // Plain-Node context (unit tests): resolve against the repo checkout.
+    return path.resolve(
+      process.cwd(),
+      "scripts",
+      "onnx-export",
+      "model-pin.json",
+    );
+  }
+
+  /** Root of the ONNX generation's pinned model dirs. */
+  getOnnxModelsRoot(): string {
+    let userDataPath: string;
+    try {
+      const { app } = require("electron");
+      userDataPath = app.getPath("userData");
+    } catch {
+      userDataPath = os.tmpdir();
+    }
+    return path.join(userDataPath, "models", ONNX_MODELS_DIRNAME);
+  }
+
+  /** Fast readiness audit per pinned model: exact file set, matching sizes,
+   * no hashing (the full sha256 gate runs at download completion and at
+   * server init). */
+  async checkOnnxModels(
+    pinPath?: string,
+    modelsRoot?: string,
+  ): Promise<Record<string, { ready: boolean; problems: string[] }>> {
+    const pin: ModelPin = loadModelPin(pinPath ?? this.getModelPinPath());
+    const root = modelsRoot ?? this.getOnnxModelsRoot();
+    const report: Record<string, { ready: boolean; problems: string[] }> = {};
+    for (const model of Object.values(pin.models)) {
+      const dir = path.join(root, model.name);
+      const problems = readinessProblems(dir, model);
+      report[model.name] = { ready: problems.length === 0, problems };
+    }
+    return report;
+  }
+
+  /** v2 download entry: dual-source failover + byte-range resume + one-shot
+   * whole-manifest sha256 verification (see modelDownloader). Progress uses
+   * the same shape the renderer already consumes from download_models.py. */
+  async downloadOnnxModels(
+    progressCallback: ProgressCallback | null = null,
+    deps: {
+      pinPath?: string;
+      modelsRoot?: string;
+      fetchImpl?: HttpFetch;
+    } = {},
+  ): Promise<{ success: boolean; verified: string[] }> {
+    const pin: ModelPin = loadModelPin(deps.pinPath ?? this.getModelPinPath());
+    const outcome = await downloadOnnxModelSet({
+      pin,
+      modelsRoot: deps.modelsRoot ?? this.getOnnxModelsRoot(),
+      fetchImpl: deps.fetchImpl,
+      logger: this.logger,
+      onProgress: (progress) => progressCallback?.({ ...progress }),
+    });
+    this.clearCache();
+    return outcome;
+  }
+  // [20261001_T5_ModelManagerOnnx] END
 }
 
 export default ModelManager;

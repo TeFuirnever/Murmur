@@ -104,8 +104,15 @@ class RepoReadyGateTest(unittest.TestCase):
             )
         )
 
-    def test_onnx_anchor_satisfies_gate(self):
-        self.assertTrue(FunASRServer._repo_ready(self._dir_with("model.onnx")))
+    def test_onnx_bearing_dir_needs_the_pinned_exact_set(self):
+        # [20261001_T5_OnnxGate] Ticket #417 (spec #412 decision 8): the old
+        # contract — any bare "*.onnx" file satisfies the gate — is SEALED.
+        # An .onnx-bearing dir is ONNX-generation: it is ready only with the
+        # complete pinned exact file set (funasr_server.py
+        # ONNX_PIN_FILE_SPECS), so a foreign/partial onnx repo can never
+        # slide through the torch-era wildcard again. Full-set readiness is
+        # covered by tests/python/test_onnx_pin_gate.py.
+        self.assertFalse(FunASRServer._repo_ready(self._dir_with("model.onnx")))
 
     def test_configuration_json_anchor_satisfies_gate(self):
         self.assertTrue(

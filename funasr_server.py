@@ -68,6 +68,73 @@ _READY_PATTERNS = [
 ]
 
 
+# [20261001_T5_OnnxGate] Ticket #417 (spec #412 decision 8): the ONNX
+# generation's readiness anchor is the PINNED EXACT FILE SET (names AND
+# sizes) from scripts/onnx-export/model-pin.json — never a wildcard. An
+# ".onnx"-bearing dir is ONNX-generation and is ready only when one pin
+# model's complete set is present. This closes the hole where the legacy
+# "*.onnx" torch anchor read a repo holding only the 34,028,131-byte eb
+# graph (model_eb_quant.onnx) as ready. The numbers are parity-locked with
+# the committed pin by tests/unit/onnx-pin-anchor-parity.test.ts — do not
+# hand-edit without regenerating from the pin.
+ONNX_PIN_FILE_SPECS = {
+    "asr": {
+        "am.mvn": 11203,
+        "config.yaml": 3420,
+        "model_eb_quant.onnx": 34028131,
+        "model_quant.onnx": 345131848,
+        "seg_dict": 8287834,
+        "tokens.json": 93676,
+    },
+    "vad": {
+        "am.mvn": 8040,
+        "config.yaml": 1215,
+        "model_quant.onnx": 512425,
+    },
+    "punc": {
+        "config.yaml": 810,
+        "model_quant.onnx": 282752986,
+        "tokens.json": 4207480,
+    },
+    "speaker": {
+        "config.yaml": 537,
+        "model_quant.onnx": 28979049,
+    },
+}
+_ONNX_MARKER_SUFFIX = ".onnx"
+# In-flight temp download names that must NEVER satisfy a readiness anchor
+# (spec decision 8: excluded on both sides of the name): the v2 downloader's
+# partial suffix (modelDownloader.ts PARTIAL_SUFFIX), GitHub split-part
+# chunks (<asset>.partNN), and modelscope's byte-range shard names
+# (vocab.txt_0_167772159 — the #255 class).
+_PARTIAL_TMP_SUFFIXES = (".murmur-partial",)
+_PART_TMP_SUFFIX_RE = re.compile(r"\.part\d+$")
+_TEMP_SHARD_SUFFIX_RE = re.compile(r"_\d+_\d+$")
+
+
+def _is_temp_download_name(name):
+    """True for in-flight download artifacts; never an anchor candidate."""
+    return (
+        name.endswith(_PARTIAL_TMP_SUFFIXES)
+        or _PART_TMP_SUFFIX_RE.search(name) is not None
+        or _TEMP_SHARD_SUFFIX_RE.search(name) is not None
+    )
+
+
+def _onnx_pin_set_ready(repo_dir, plain_entries):
+    """True when one pin model's COMPLETE exact file set (with pinned sizes)
+    is present in repo_dir. No wildcards, no partial sets."""
+    for specs in ONNX_PIN_FILE_SPECS.values():
+        if all(
+            name in plain_entries
+            and os.path.getsize(os.path.join(repo_dir, name)) == expected
+            for name, expected in specs.items()
+        ):
+            return True
+    return False
+# [20261001_T5_OnnxGate] END
+
+
 # [20260820_Fix_SuppressStdoutRace] The model loaders run in parallel
 # threads and each wraps its AutoModel call in suppress_stdout(). The
 # previous per-thread save/restore of the PROCESS-GLOBAL sys.stdout raced:
@@ -395,13 +462,27 @@ class FunASRServer:
     # error instead of the clean models_not_downloaded path. Matching files
     # whose name ends in a _<start>_<end> byte-range suffix never satisfy
     # the gate; real anchors (config/weights/complete vocab) still do.
-    _SHARD_SUFFIX_RE = re.compile(r"_\d+_\d+$")
+    _SHARD_SUFFIX_RE = _TEMP_SHARD_SUFFIX_RE
 
     @staticmethod
     def _repo_ready(repo_dir):
-        """目录存在且包含非分片的常见权重/配置文件即认为已就绪"""
+        """目录存在且包含非分片的常见权重/配置文件即认为已就绪
+
+        [20261001_T5_OnnxGate] Ticket #417: an ONNX-generation dir (any
+        non-temp plain *.onnx entry) is gated on the pinned EXACT file set
+        (ONNX_PIN_FILE_SPECS) — the legacy wildcards can never satisfy it,
+        so a 34MB single-file repo is NOT ready. Torch-era dirs keep the
+        legacy anchors below (rollback era, user story #412-5).
+        """
         if not os.path.isdir(repo_dir):
             return False
+        plain_entries = [
+            name
+            for name in os.listdir(repo_dir)
+            if not _is_temp_download_name(name)
+        ]
+        if any(name.endswith(_ONNX_MARKER_SUFFIX) for name in plain_entries):
+            return _onnx_pin_set_ready(repo_dir, set(plain_entries))
         # [20260913_Fix_256_AnchorParity] Same-site usage of the hoisted
         # module-level _READY_PATTERNS (list contents unchanged).
         for pat in _READY_PATTERNS:
@@ -538,21 +619,29 @@ class FunASRServer:
         # [20260911_Fix_336_HubLayout] The single-cache-path join was
         # replaced by _resolve_repo_dir: the explicit --damo-root is usually
         # an empty <userData>/models while the models live in modelscope
-        # 1.39's hub layout (issue #336). AutoModel still receives the repo
-        # id and resolves through modelscope's own cache — only the gate
-        # needed the new shapes.
-        candidates = [
-            m
-            for m in (self.ASR_MODEL_SEACO, self.ASR_MODEL_FALLBACK)
-            if self._resolve_repo_dir(m.split("/", 1)[1]) is not None
-        ]
-        for model_name in candidates:
+        # 1.39's hub layout (issue #336).
+        # [20261001_T5_SealImplicitPull] Ticket #417 (spec #412 decision 8):
+        # AutoModel now receives the RESOLVED LOCAL DIRECTORY, never the
+        # repo id. funasr only auto-downloads for non-existent local paths,
+        # so a resolved dir makes the implicit network pull impossible; an
+        # unresolvable repo is skipped with an actionable log line and no
+        # AutoModel call at all.
+        candidates = []
+        for repo_id in (self.ASR_MODEL_SEACO, self.ASR_MODEL_FALLBACK):
+            local_dir = self._resolve_repo_dir(repo_id.split("/", 1)[1])
+            if local_dir is None:
+                logger.warning(
+                    f"模型目录未就绪（缺失或残缺），跳过且不联网拉取: {repo_id}。"
+                    "请在应用内重新下载模型"
+                )
+                continue
+            candidates.append((repo_id, local_dir))
+        for model_name, local_dir in candidates:
             try:
-                logger.info(f"开始加载ASR模型: {model_name}")
+                logger.info(f"开始加载ASR模型: {model_name}（本地目录: {local_dir}）")
                 with suppress_stdout():
                     self.asr_model = AutoModel(
-                        model=model_name,
-                        model_revision="v2.0.4",
+                        model=local_dir,
                         disable_update=True,
                         device=self.device,
                     )
@@ -566,13 +655,25 @@ class FunASRServer:
     def _load_vad_model(self):
         """加载VAD模型"""
         try:
-            logger.info("开始加载VAD模型...")
+            # [20261001_T5_SealImplicitPull] Resolve locally FIRST: the old
+            # unconditional repo-id call let funasr silently snapshot_download
+            # when the repo was missing/partial (implicit network pull).
+            # Missing = explicit failure, no network.
+            local_dir = self._resolve_repo_dir(
+                "speech_fsmn_vad_zh-cn-16k-common-pytorch"
+            )
+            if local_dir is None:
+                logger.error(
+                    "VAD模型目录未就绪（缺失或残缺），不联网回退。"
+                    "请在应用内重新下载模型"
+                )
+                return False
+            logger.info(f"开始加载VAD模型...（本地目录: {local_dir}）")
             with suppress_stdout():
                 from funasr import AutoModel
 
                 self.vad_model = AutoModel(
-                    model="damo/speech_fsmn_vad_zh-cn-16k-common-pytorch",
-                    model_revision="v2.0.4",
+                    model=local_dir,
                     disable_update=True,
                     device=self.device,
                 )
@@ -590,6 +691,18 @@ class FunASRServer:
             start_time = time.time()
             logger.info("开始加载标点恢复模型...")
 
+            # [20261001_T5_SealImplicitPull] Same seal as the VAD loader:
+            # repo id → resolved local dir; unresolvable = explicit failure.
+            local_dir = self._resolve_repo_dir(
+                "punc_ct-transformer_zh-cn-common-vocab272727-pytorch"
+            )
+            if local_dir is None:
+                logger.error(
+                    "标点模型目录未就绪（缺失或残缺），不联网回退。"
+                    "请在应用内重新下载模型"
+                )
+                return False
+
             # 记录导入时间
             import_start = time.time()
             with suppress_stdout():
@@ -601,8 +714,7 @@ class FunASRServer:
             model_start = time.time()
             with suppress_stdout():
                 self.punc_model = AutoModel(
-                    model="damo/punc_ct-transformer_zh-cn-common-vocab272727-pytorch",
-                    model_revision="v2.0.4",
+                    model=local_dir,
                     disable_update=True,
                     device=self.device,
                 )
@@ -1500,16 +1612,24 @@ class FunASRServer:
                 f"内存不足，需要至少2GB可用内存，当前可用: {avail_gb:.1f}GB"
             )
 
+        # [20261001_T5_SealImplicitPull] Same seal as the other loaders: the
+        # old repo-id call silently snapshot_downloaded on cache miss (and
+        # upstream has no v2.0.4 tag for campplus, so modelscope fell back
+        # to latest — an unpinned implicit pull). Missing = explicit,
+        # actionable error surfaced through diarize_audio's response.
+        local_dir = self._resolve_repo_dir("speech_campplus_sv_zh-cn_16k-common")
+        if local_dir is None:
+            raise RuntimeError(
+                "说话人模型未就绪（缺失或残缺），不联网回退。请重新下载模型后重试"
+            )
+
         import time
 
         from funasr import AutoModel
 
         logger.info("正在加载CAM++声纹模型...")
         start = time.time()
-        self.cam_model = AutoModel(
-            model="damo/speech_campplus_sv_zh-cn_16k-common",
-            model_revision="v2.0.4",
-        )
+        self.cam_model = AutoModel(model=local_dir)
         elapsed = time.time() - start
         logger.info(f"CAM++模型加载完成，耗时: {elapsed:.2f}秒")
 

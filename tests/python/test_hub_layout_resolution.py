@@ -228,7 +228,9 @@ class HubLayoutResolutionTest(unittest.TestCase):
         real = sys.modules.get("funasr")
         sys.modules["funasr"] = fake_funasr
         try:
-            self._materialize_hub_repo(self._home_hub_root(), SEACO_DIR)
+            expected_snapshot = self._materialize_hub_repo(
+                self._home_hub_root(), SEACO_DIR
+            )
             server = FunASRServer(damo_root=self.explicit_root)
             ok = server._load_asr_model()
         finally:
@@ -237,7 +239,11 @@ class HubLayoutResolutionTest(unittest.TestCase):
             else:
                 sys.modules.pop("funasr", None)
         self.assertTrue(ok)
-        self.assertEqual(calls, [FunASRServer.ASR_MODEL_SEACO])
+        # [20261001_T5_SealImplicitPull] AutoModel receives the RESOLVED
+        # hub snapshot dir (never the repo id — that would let funasr pull
+        # the network on cache miss); identity reporting stays the repo id.
+        self.assertEqual(calls, [expected_snapshot])
+        self.assertEqual(server.asr_model_name, FunASRServer.ASR_MODEL_SEACO)
 
 
 if __name__ == "__main__":

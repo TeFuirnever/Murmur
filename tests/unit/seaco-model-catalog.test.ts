@@ -50,7 +50,11 @@ describe("[20260820_T15_SeacoSwap] source-contract sync points", () => {
       src.indexOf("def _load_asr_model"),
       src.indexOf("def _load_vad_model"),
     );
-    expect(loadBody).toContain("for model_name in");
+    // [20261001_T5_SealImplicitPull] The candidate loop now carries the
+    // resolved local dir alongside the repo id (AutoModel gets the dir —
+    // the no-network seal); the fallback-loop + identity-report contract
+    // itself is unchanged.
+    expect(loadBody).toContain("for model_name, local_dir in candidates:");
     expect(loadBody).toContain("self.asr_model_name = model_name");
   });
 
