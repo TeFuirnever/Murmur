@@ -451,21 +451,35 @@ async function downloadSingleUrl(
   const fileStream = fs.createWriteStream(targetPath, { flags });
   let received = 0;
   try {
-    // response.body is a web ReadableStream (async-iterable under DOM.iterable
-    // libs); Readable.from adapts it without copying the whole body.
-    await pipeline(
-      Readable.from(response.body),
-      async function* (chunks) {
-        for await (const chunk of chunks) {
-          received += chunk.length;
-          byteSink.onBytes(resumedFrom + received);
-          yield chunk;
-        }
-      },
-      fileStream,
-    );
+    // [20261002_T9_MigrationUx] AC #420-2 (resume across restart): manual
+    // consume instead of stream/promises pipeline — pipeline() DESTROYS
+    // every stream, including this file sink, when the source errors, which
+    // discards the write buffer so the already-received bytes never reach
+    // disk. That broke the resume promise of AllSourcesFailedError
+    // (已下载部分已保留，重试将自动断点续传): the on-disk breakpoint was
+    // nondeterministic and a post-restart retry could start from byte 0.
+    // Manual draining keeps the sink alive in the catch below, where end()
+    // flushes the queued bytes before close — the breakpoint is exact.
+    for await (const chunk of Readable.from(response.body)) {
+      received += chunk.length;
+      byteSink.onBytes(resumedFrom + received);
+      if (!fileStream.write(chunk)) {
+        await new Promise<void>((resolve) => fileStream.once("drain", resolve));
+      }
+    }
+    await new Promise<void>((resolve, reject) => {
+      fileStream.end((error?: Error | null) =>
+        error ? reject(error) : resolve(),
+      );
+    });
   } catch (error) {
-    fileStream.destroy();
+    // Flush whatever was already received, then surface the ORIGINAL
+    // failure — this cleanup never masks it. autoClose fires 'close' even
+    // when end() itself fails, so the wait is bounded.
+    await new Promise<void>((resolve) => {
+      fileStream.once("close", resolve);
+      fileStream.end();
+    });
     throw error;
   }
 }

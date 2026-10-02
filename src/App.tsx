@@ -28,6 +28,9 @@ import type { TFunction } from "i18next";
 // [20260905_Feat_BloubMascotWiring] bloub bot mascot: engine-driven status
 // avatar in the title bar (spec #224 ticket 3)
 import { BloubBot, type BloubBotRef } from "./components/BloubBot";
+// [20261002_T9_MigrationUx] Ticket #420: the old-user ONNX migration dialog
+// (explicit startup告知 + resume-able download + defer; upgrade shape only).
+import MigrationDialog from "./components/MigrationDialog";
 import type { StateId } from "./bot/states";
 import {
   COLOR_BY_ID,
@@ -1104,6 +1107,11 @@ export default function App() {
           </div>
         )}
       </div>
+
+      {/* [20261002_T9_MigrationUx] Ticket #420: upgrade first-launch prompt —
+          fixed overlay, mounted on both app modes; self-hiding (upgrade
+          shape only: ONNX missing + torch fallback present). */}
+      <MigrationDialog />
     </div>
   );
 }

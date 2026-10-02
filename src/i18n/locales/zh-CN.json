@@ -458,5 +458,17 @@
     "wrongWord": "错误词",
     "rightWord": "正确词",
     "saveCorrection": "记入修正表"
+  },
+  "migration": {
+    "title": "语音识别引擎升级",
+    "body": "新版应用需要重新下载语音识别模型（约 {{size}} MB），下载完成前无法使用新引擎转写。下载支持断点续传，中断后重试将从断点继续。",
+    "fallbackNote": "下载完成前，将继续使用旧模型进行转写；暂缓不影响当前使用。",
+    "downloadNow": "立即下载",
+    "defer": "暂缓",
+    "downloading": "正在下载语音识别模型... {{progress}}%",
+    "resumeHint": "已下载部分已保留，中断后重试将自动断点续传",
+    "errorGuidance": "请检查网络连接或代理设置；如反复失败，可打开设置指引调整后重试。",
+    "openSettings": "打开设置",
+    "retry": "重试"
   }
 }

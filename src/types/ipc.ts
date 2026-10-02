@@ -262,6 +262,39 @@ export interface DownloadProgress {
   overall_progress?: number;
 }
 
+// [20261002_T9_MigrationUx] Ticket #420 (spec #412 user stories 3/5): the
+// old-user ONNX migration status — the startup告知 payload. Shared main ↔
+// renderer; the main-process computation lives in
+// src/helpers/onnxMigration.ts (REQUIRED_PIN_MODEL_ROLES there mirrors the
+// Python startup gate _find_missing_required_models).
+export interface OnnxMigrationStatus {
+  /** True when the ONNX generation is not ready → show the migration
+   * prompt this launch (suppressed when the pin record is invalid). */
+  needed: boolean;
+  /** All required pinned models pass fast readiness (exact set + sizes). */
+  onnx_ready: boolean;
+  /** Old torch generation present — the fallback the app keeps serving
+   * while the migration is deferred. */
+  torch_fallback_available: boolean;
+  /** Whole pinned set size in bytes (dialog volume estimate). */
+  total_bytes: number;
+  /** Bytes still missing or mismatched — the resume-continuation volume. */
+  remaining_bytes: number;
+  /** Set when the pin record could not be loaded/validated. */
+  error?: string;
+}
+
+// [20261002_T9_MigrationUx] Outcome of the v2 download entry
+// (MODELS.DOWNLOAD_ONNX). `skipped` mirrors the torch flow's contract: no
+// fetch ran because the required set was already ready (no server bounce,
+// #216 review MAJOR).
+export interface OnnxDownloadResult {
+  success: boolean;
+  verified?: string[];
+  skipped?: boolean;
+  error?: string;
+}
+
 // ─── Settings ───
 
 // ─── Environment ───

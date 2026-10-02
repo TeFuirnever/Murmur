@@ -1,7 +1,11 @@
 import * as React from "react";
 // [20260725_CodeReview_OperationResult] Replaces inline `{ success; error? }`
 // on the ModelStatusContextValue.downloadModels field.
-import type { OperationResult } from "../types/ipc";
+import type {
+  OperationResult,
+  OnnxMigrationStatus,
+  OnnxDownloadResult,
+} from "../types/ipc";
 
 interface ModelProgressEntry {
   progress: number;
@@ -25,13 +29,51 @@ interface ModelStatus {
   modelProgress: Record<string, ModelProgressEntry>;
 }
 
+// [20261002_T9_MigrationUx] Ticket #420: renderer-side view of the ONNX
+// migration state (main computes it; see src/helpers/onnxMigration.ts).
+// `dismissed` is deliberately NOT persisted — "暂缓" defers to the NEXT
+// launch, which re-prompts because the check runs on every mount.
+interface MigrationState {
+  checked: boolean;
+  needed: boolean;
+  torchFallbackAvailable: boolean;
+  totalBytes: number;
+  remainingBytes: number;
+  dismissed: boolean;
+  // Download failure stays LOCAL here: while the migration is deferred or
+  // failing, the torch fallback keeps serving, so the GLOBAL stage must not
+  // flip to error (the dialog renders this message with actionable guidance).
+  error: string | null;
+}
+
+// [20261002_T9_MigrationUx] The v2 downloader reports pin model names
+// ("asr-seaco-paraformer"); the legacy per-model progress UI keys off
+// asr/vad/punc. Map the generation names onto the legacy keys; everything
+// else (speaker, unknowns) has no UI slot and is ignored. Exported for the
+// #420 hook tests.
+// eslint-disable-next-line react-refresh/only-export-components
+export function resolveModelProgressKey(
+  model: string | undefined,
+): string | null {
+  if (!model) return null;
+  if (model.startsWith("asr-") || model === "asr") return "asr";
+  if (model.startsWith("vad-") || model === "vad") return "vad";
+  if (model.startsWith("punc-") || model === "punc") return "punc";
+  return null;
+}
+
 // [20260815_Refactor_DeadIpc] Context surface trimmed to what consumers
 // actually use: the derived status fields plus downloadModels. The old
 // getDownloadProgress (dead pull chain — progress arrives via the
 // MODEL_DOWNLOAD_PROGRESS push event) and the provider-internal
 // checkModelStatus/checkModelFiles were removed from the exposed value.
+// [20261002_T9_MigrationUx] The migration surface joins the context:
+// MigrationDialog consumes it; no other consumer is affected.
 interface ModelStatusContextValue extends ModelStatus {
   downloadModels: () => Promise<OperationResult>;
+  migration: MigrationState;
+  dismissMigration: () => void;
+  downloadOnnxModels: () => Promise<OperationResult>;
 }
 
 const ModelStatusContext = React.createContext<ModelStatusContextValue | null>(
@@ -41,6 +83,21 @@ const ModelStatusContext = React.createContext<ModelStatusContextValue | null>(
 const isSettingsPage = () => {
   const urlParams = new URLSearchParams(window.location.search);
   return urlParams.get("page") === "settings";
+};
+
+// [20261002_T9_MigrationUx] Delay before re-checking status + migration
+// after a successful download (mirrors downloadModels' settle window — the
+// main process restarts the server fire-and-forget and the poll observes it).
+const MIGRATION_RECHECK_DELAY_MS = 3000;
+
+const INITIAL_MIGRATION_STATE: MigrationState = {
+  checked: false,
+  needed: false,
+  torchFallbackAvailable: false,
+  totalBytes: 0,
+  remainingBytes: 0,
+  dismissed: false,
+  error: null,
 };
 
 export function ModelStatusProvider({
@@ -61,6 +118,11 @@ export function ModelStatusProvider({
     stage: "checking",
     modelProgress: {},
   });
+
+  // [20261002_T9_MigrationUx] Migration prompt state (startup check + defer).
+  const [migration, setMigration] = React.useState<MigrationState>(
+    INITIAL_MIGRATION_STATE,
+  );
 
   const checkModelFiles = React.useCallback(async (): Promise<
     import("../types/ipc").ModelCheckResult
@@ -263,13 +325,108 @@ export function ModelStatusProvider({
     }
   }, [checkModelStatus]);
 
+  // [20261002_T9_MigrationUx] Ticket #420: the old-user migration surface.
+  // Startup check + session-scoped defer + the v2 download entry. Failure is
+  // migration-local (torch fallback keeps serving); success re-checks after
+  // the settle window so the prompt clears once the new engine is live.
+  const checkMigration = React.useCallback(async () => {
+    try {
+      if (!window.electronAPI?.checkOnnxMigration) {
+        return;
+      }
+      const status =
+        (await window.electronAPI.checkOnnxMigration()) as OnnxMigrationStatus;
+      setMigration((prev) => ({
+        ...prev,
+        checked: true,
+        needed: status.needed,
+        torchFallbackAvailable: status.torch_fallback_available,
+        totalBytes: status.total_bytes,
+        remainingBytes: status.remaining_bytes,
+        // A fresh status invalidates the previous attempt's error.
+        error: null,
+      }));
+    } catch {
+      // The migration check is advisory; failure must not disturb the app
+      // (the prompt simply stays unchecked this launch). Logged for diagnosis.
+      if (window.electronAPI?.log) {
+        void window.electronAPI.log(
+          "warn",
+          "检查 ONNX 迁移状态失败（本次启动不提示迁移）",
+        );
+      }
+      setMigration((prev) => ({ ...prev, checked: true }));
+    }
+  }, []);
+
+  const dismissMigration = React.useCallback(() => {
+    // Session-scoped on purpose: no persistence — the next launch re-asks
+    // (ticket #420 AC: "暂缓后…下次启动再次询问").
+    setMigration((prev) => ({ ...prev, dismissed: true }));
+  }, []);
+
+  const downloadOnnxModels =
+    React.useCallback(async (): Promise<OperationResult> => {
+      try {
+        if (!window.electronAPI?.downloadOnnxModels) {
+          throw new Error("Electron API 不可用");
+        }
+        setModelStatus((prev) => ({
+          ...prev,
+          isDownloading: true,
+          downloadProgress: 0,
+          error: null,
+          stage: "downloading",
+          isLoading: false,
+        }));
+        setMigration((prev) => ({ ...prev, error: null }));
+
+        const result =
+          (await window.electronAPI.downloadOnnxModels()) as OnnxDownloadResult;
+        if (!result.success) {
+          throw new Error(result.error || "下载失败");
+        }
+
+        setModelStatus((prev) => ({
+          ...prev,
+          isDownloading: false,
+          modelsDownloaded: true,
+          downloadProgress: 100,
+          stage: "loading",
+          isLoading: true,
+        }));
+        setTimeout(() => {
+          void checkModelStatus();
+          void checkMigration();
+        }, MIGRATION_RECHECK_DELAY_MS);
+        return { success: true };
+      } catch (error) {
+        // Deliberate difference from downloadModels: the migration failing
+        // must NOT put the app into the global error stage — the torch
+        // fallback still transcribes. The dialog renders the actionable
+        // message (network/proxy guidance + retry); the status check below
+        // restores the true global stage ("downloading" was only in-flight).
+        setModelStatus((prev) => ({ ...prev, isDownloading: false }));
+        setMigration((prev) => ({
+          ...prev,
+          error: (error as Error).message || "下载模型失败",
+        }));
+        void checkModelStatus();
+        return { success: false, error: (error as Error).message };
+      }
+    }, [checkModelStatus, checkMigration]);
+  // [20261002_T9_MigrationUx] END
+
   React.useEffect(() => {
     if (isSettingsPage()) {
       console.log("设置页面，跳过模型状态检查");
       return;
     }
     checkModelStatus();
-  }, [checkModelStatus]);
+    // [20261002_T9_MigrationUx] The migration prompt evaluates once per
+    // launch — "下次启动再次询问" is exactly this mount-time check.
+    void checkMigration();
+  }, [checkModelStatus, checkMigration]);
 
   React.useEffect(() => {
     if (modelStatus.isReady || modelStatus.isDownloading) {
@@ -305,7 +462,11 @@ export function ModelStatusProvider({
             model?: string;
             stage?: string;
           };
-          const modelKey = p.model || p.stage;
+          // [20261002_T9_MigrationUx] The v2 downloader reports pin model
+          // names ("asr-seaco-paraformer"); map them onto the legacy UI keys
+          // so the established per-model bars light up during a migration
+          // download too.
+          const modelKey = resolveModelProgressKey(p.model) ?? p.stage;
           setModelStatus((prev) => {
             const mp = { ...prev.modelProgress };
             if (modelKey && ["asr", "vad", "punc"].includes(modelKey)) {
@@ -348,6 +509,10 @@ export function ModelStatusProvider({
   const value = {
     ...modelStatus,
     downloadModels,
+    // [20261002_T9_MigrationUx] Migration prompt surface (#420).
+    migration,
+    dismissMigration,
+    downloadOnnxModels,
   };
 
   return (

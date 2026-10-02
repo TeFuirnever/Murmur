@@ -16,6 +16,13 @@ interface FunasrManager {
   ): Promise<unknown>;
   // [20260816_Refactor_DeadChannels] checkStatus removed from this interface:
   // its only consumer was the deleted MODELS.CURRENT placeholder handler.
+  // [20261002_T9_MigrationUx] Ticket #420: the ONNX migration surface —
+  // startup告知 state + the v2 resume-able download entry.
+  checkOnnxMigration(): Record<string, unknown>;
+  downloadOnnxModels(
+    cb: (progress: Record<string, unknown>) => void,
+  ): Promise<unknown>;
+  // [20261002_T9_MigrationUx] END
 }
 
 interface Managers {
@@ -36,6 +43,22 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
       event.sender.send(C.EVENTS.MODEL_DOWNLOAD_PROGRESS, progress);
     });
   });
+
+  // [20261002_T9_MigrationUx] Ticket #420: the ONNX migration handlers. The
+  // startup告知 check is a cheap read-only probe; the download runs the v2
+  // trust-chain pipeline and pushes progress over the EXISTING
+  // MODEL_DOWNLOAD_PROGRESS event so the renderer's established plumbing
+  // (useModelStatus push listener) stays the single consumption path.
+  ipcMain.handle(C.MODELS.MIGRATION_STATUS, async () => {
+    return await Promise.resolve(funasrManager.checkOnnxMigration());
+  });
+
+  ipcMain.handle(C.MODELS.DOWNLOAD_ONNX, async (event) => {
+    return await funasrManager.downloadOnnxModels((progress) => {
+      event.sender.send(C.EVENTS.MODEL_DOWNLOAD_PROGRESS, progress);
+    });
+  });
+  // [20261002_T9_MigrationUx] END
 
   // [20260816_Refactor_DeadChannels] The DOWNLOAD_MODEL duplicate entry and
   // the AVAILABLE/CURRENT/SWITCH placeholder handlers (hardcoded responses,
