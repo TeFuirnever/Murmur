@@ -87,7 +87,7 @@ describe("funasrServer.js — process tree kill Windows compat", () => {
     expect(shutdownSection).not.toContain("taskkill");
   });
 
-  it("crash-restart, stop fallback, and startup timeout all use killProcessTree", () => {
+  it("crash-restart, stop fallback, and startup watchdog all use killProcessTree", () => {
     const source = readHelperSource("funasrServer");
     const crashSection = source.substring(
       source.indexOf("async _handleServerCrash()"),
@@ -101,12 +101,16 @@ describe("funasrServer.js — process tree kill Windows compat", () => {
     );
     expect(stopSection).toContain("killProcessTree");
 
-    const timeoutSection = source.substring(
-      source.indexOf("FunASR服务器启动超时"),
-      source.indexOf("}, 120000);"),
+    // [20261002_T6b_HeartbeatWatchdog] The startup watchdog (liveness
+    // poll) replaced the one-shot 120s deadline; both its kill arms (outer
+    // cap, dead-process backstop) must go through killProcessTree.
+    const watchdogSection = source.substring(
+      source.indexOf("startupWatchdog = setInterval("),
+      source.indexOf("const initListener = (data: Buffer) => {"),
     );
-    expect(timeoutSection).toContain("killProcessTree");
-    expect(timeoutSection).not.toContain(".kill()");
+    expect(watchdogSection).toContain("killProcessTree");
+    expect(watchdogSection).toContain("STARTUP_MAX_WAIT_MS");
+    expect(watchdogSection).not.toContain(".kill()");
   });
 
   it("spawnSync remains imported at module level", () => {

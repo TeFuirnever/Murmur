@@ -30,6 +30,11 @@ class FakeChildProcess extends EventEmitter {
   };
   pid = 4242;
   killed = false;
+  // [20261002_T6b_HeartbeatWatchdog] Real ChildProcess contract: both stay
+  // null while the process runs — the startup watchdog's liveness
+  // heartbeat reads them (null = alive).
+  exitCode: number | null = null;
+  signalCode: string | null = null;
   kill(signal?: string): boolean {
     this.killed = true;
     // [20260817_T2_KillTreeReview] Real ChildProcess NEVER emits close
@@ -237,14 +242,15 @@ describe("[20260817_T2_KillTree] stop-fallback and startup timeout", () => {
     expect(child.killed).toBe(false);
   });
 
-  it("win32: 120s startup timeout uses taskkill tree, not bare kill", async () => {
+  it("win32: startup watchdog outer cap uses taskkill tree, not bare kill", async () => {
     vi.useFakeTimers();
     try {
       setPlatform("win32");
       vi.mocked(spawnSync).mockClear();
       const s = srv(server);
-      // spawn() returns mockSpawnChild which never emits an init response,
-      // so the 120s startup timeout arm fires.
+      // [20261002_T6b_HeartbeatWatchdog] The process stays ALIVE (no init
+      // response, exitCode null) — only the 600s outer cap kills it, via
+      // killProcessTree's taskkill arm.
       const startPromise = s._startFunASRServer(
         {},
         "python3",
@@ -261,7 +267,7 @@ describe("[20260817_T2_KillTree] stop-fallback and startup timeout", () => {
       });
       // Let the promise callbacks settle without advancing the timeout yet.
       await vi.advanceTimersByTimeAsync(0);
-      await vi.advanceTimersByTimeAsync(120_000);
+      await vi.advanceTimersByTimeAsync(601_000);
       await handled;
       expect(caught).toBeInstanceOf(Error);
       expect(caught?.message).toContain("启动超时");

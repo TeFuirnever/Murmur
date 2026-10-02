@@ -74,10 +74,14 @@ class FakeSeaco:
 
     def __call__(self, samples, hotwords="", **kwargs):
         FakeSeaco.calls.append((samples, hotwords))
+        # [20261002_T6b_SubChunk review fix] 10 chars ↔ 10 timestamps: the
+        # real engine emits one timestamp per character, and the chunk
+        # midpoint filter pairs them by index (chars beyond timestamps are
+        # dropped as unlocatable).
         return [
             {
                 "preds": "你好世界。今天的会议",
-                "timestamp": [[0, 400], [400, 800], [800, 1200], [1200, 1600], [1600, 2000], [2000, 2400], [2400, 2800], [2800, 3200], [3200, 3600]],
+                "timestamp": [[0, 400], [400, 800], [800, 1200], [1200, 1600], [1600, 2000], [2000, 2400], [2400, 2800], [2800, 3200], [3200, 3600], [3600, 4000]],
             }
         ]
 
@@ -474,9 +478,9 @@ class OnnxTranscribeNdarrayTest(EngineSwitchTestBase):
         srv = FunASRServer(damo_root=self.damo_root)
         self._load_onnx_models(srv)
         srv.response_queue = queue.Queue()
-        # deterministic duration (CI has no librosa; the value only feeds
-        # the progress payload and region clamping)
-        srv._get_audio_duration = lambda path: 1.0
+        # [20261002_T6b_NoLibrosa] duration now comes from soundfile.info
+        # (pure C, CI-safe) — the 1s fixture needs no patching, and the
+        # real probe path is exercised.
         with forbid_librosa_load():
             result = srv.transcribe_file_audio(
                 self.mic_wav,

@@ -27,6 +27,20 @@ const TIMEOUT_PER_MB_MS = 6_000; // 6s per MB of audio (RTFx ~10x on CPU)
 // ceiling and keeps the request alive through progress renewals.
 const RELOAD_COMMAND_TIMEOUT_MS = 600_000;
 
+// [20261002_T6b_HeartbeatWatchdog] Ticket #419 (spec #412 decision 12): the
+// startup watchdog judges liveness by the PROCESS HEARTBEAT (alive vs
+// exited), no longer by "init JSON within 120s". Cold-disk + antivirus
+// first loads can exceed 120s with zero protocol output while the process
+// is healthy (spike outlier 32.65s; Windows Defender first-load is slower
+// still) — the old one-shot deadline killed exactly those startups. The
+// watchdog now polls liveness every STARTUP_WATCHDOG_POLL_MS: an ALIVE
+// process keeps waiting (init still running), a process that exited
+// without delivering close is tree-killed and rejected, and an outer cap
+// bounds a wedged-alive process (600s ≥ 2× Python's own 300s loader-join
+// ceiling, which guarantees an init result line even on loader hangs).
+const STARTUP_WATCHDOG_POLL_MS = 30_000;
+const STARTUP_MAX_WAIT_MS = 600_000;
+
 /** Timeout result for transcription. */
 export interface TranscriptionTimeout {
   ms: number;
@@ -197,6 +211,59 @@ class FunASRServer {
 
         let initResponseReceived = false;
 
+        // [20261002_T6b_HeartbeatWatchdog] Liveness-polling startup
+        // watchdog (replaces the one-shot 120s init deadline). See the
+        // constant block above for the why. Stopped on every exit path
+        // (init response, close, error) so no ticks fire after resolution.
+        const startedAt = Date.now();
+        let startupWatchdog: NodeJS.Timeout | null = null;
+        const stopStartupWatchdog = () => {
+          if (startupWatchdog !== null) {
+            clearInterval(startupWatchdog);
+            startupWatchdog = null;
+          }
+        };
+        startupWatchdog = setInterval(() => {
+          if (initResponseReceived) {
+            stopStartupWatchdog();
+            return;
+          }
+          const proc = this.serverProcess;
+          // ChildProcess contract: exitCode/signalCode stay null while the
+          // process runs and flip on exit — that flip IS the heartbeat
+          // criterion (true death), not protocol silence.
+          const alive =
+            proc !== null &&
+            proc.exitCode === null &&
+            proc.signalCode === null &&
+            !proc.killed;
+          if (alive) {
+            // Heartbeat telemetry: an alive-but-slow init (cold disk / AV
+            // scan) stays visible instead of looking hung.
+            this.logger.info &&
+              this.logger.info(
+                `FunASR服务器心跳: 进程存活，初始化仍在进行（已等待 ${Math.round((Date.now() - startedAt) / 1000)}秒）`,
+              );
+            if (Date.now() - startedAt >= STARTUP_MAX_WAIT_MS) {
+              stopStartupWatchdog();
+              this.logger.warn &&
+                this.logger.warn(
+                  `FunASR服务器启动超时（进程存活但初始化仍未完成，已达 ${STARTUP_MAX_WAIT_MS / 1000}秒上限）`,
+                );
+              killProcessTree(proc);
+              reject(new Error("FunASR服务器启动超时(600秒)"));
+            }
+            return;
+          }
+          // Heartbeat lost: the process exited but the close event has not
+          // delivered yet (Windows pipe teardown can lag). Kill any
+          // surviving tree and reject — never keep the app waiting on a
+          // dead process.
+          stopStartupWatchdog();
+          killProcessTree(proc);
+          reject(new Error("FunASR服务器进程在初始化期间退出"));
+        }, STARTUP_WATCHDOG_POLL_MS);
+
         const initListener = (data: Buffer) => {
           const lines = data
             .toString()
@@ -209,6 +276,7 @@ class FunASRServer {
               const result = JSON.parse(line) as ServerCommandResult;
               if (!initResponseReceived) {
                 initResponseReceived = true;
+                stopStartupWatchdog();
                 if (result.success) {
                   this.serverReady = true;
                   this.modelsInitialized = true;
@@ -253,6 +321,7 @@ class FunASRServer {
           if (this.serverProcess !== proc) return;
           this.logger.warn &&
             this.logger.warn("FunASR服务器进程退出", { code });
+          stopStartupWatchdog();
           this._stopHealthMonitor();
           this.messageRouter.detach();
           this.serverProcess = null;
@@ -267,6 +336,7 @@ class FunASRServer {
 
         this.serverProcess.on("error", (error: Error) => {
           this.logger.error && this.logger.error("FunASR服务器进程错误", error);
+          stopStartupWatchdog();
           this.messageRouter.detach();
           this.serverProcess = null;
           this.serverReady = false;
@@ -274,16 +344,6 @@ class FunASRServer {
             reject(new Error("FunASR服务器进程启动失败: " + error.message));
           }
         });
-
-        setTimeout(() => {
-          if (!initResponseReceived) {
-            this.logger.warn && this.logger.warn("FunASR服务器启动超时");
-            // [20260817_T2_KillTree] Tree kill — bare kill() leaves the
-            // Python child tree alive on Windows.
-            killProcessTree(this.serverProcess);
-            reject(new Error("FunASR服务器启动超时(120秒)"));
-          }
-        }, 120000);
       });
     } catch (error) {
       this.logger.error && this.logger.error("启动FunASR服务器异常", error);

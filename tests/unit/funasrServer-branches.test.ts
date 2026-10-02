@@ -30,6 +30,11 @@ class FakeChildProcess extends EventEmitter {
   };
   pid = 4242;
   killed = false;
+  // [20261002_T6b_HeartbeatWatchdog] Real ChildProcess contract: both stay
+  // null while the process runs — the startup watchdog's liveness
+  // heartbeat reads them (null = alive).
+  exitCode: number | null = null;
+  signalCode: string | null = null;
   kill(signal?: string): boolean {
     this.killed = true;
     this.emit("close", signal === "SIGKILL" ? null : 0);
@@ -242,7 +247,7 @@ describe("[20260816_Test_BranchPush] FunASRServer branch coverage", () => {
       ).rejects.toThrow("spawn ENOENT");
     });
 
-    it("startup timeout skips kill when the process is already gone", async () => {
+    it("spawn error stops the startup watchdog (no ticks after rejection)", async () => {
       const s = srv(server);
       const promise = s._startFunASRServer(
         {},
@@ -250,12 +255,16 @@ describe("[20260816_Test_BranchPush] FunASRServer branch coverage", () => {
         serverScript,
         "/tmp/models",
       );
-      // Spawn error rejects the startup promise AND nulls serverProcess, so
-      // the 120s timeout's `if (this.serverProcess)` guard is false.
+      // [20261002_T6b_HeartbeatWatchdog] Spawn error rejects the startup
+      // promise AND clears the liveness-poll watchdog — no further tick may
+      // fire after rejection (the old test expected a 120s timeout warn
+      // from the then-unstopped one-shot deadline).
       mockSpawnChild.emit("error", new Error("ENOENT"));
       await expect(promise).rejects.toThrow("启动失败");
-      vi.advanceTimersByTime(121000);
-      expect(logger.warn).toHaveBeenCalledWith("FunASR服务器启动超时");
+      vi.advanceTimersByTime(610_000);
+      expect(logger.warn).not.toHaveBeenCalledWith(
+        expect.stringContaining("启动超时"),
+      );
     });
   });
 

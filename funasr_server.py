@@ -157,6 +157,10 @@ ONNX_MODEL_DIR_NAMES = {
     "asr": "asr-seaco-paraformer",
     "vad": "vad-fsmn",
     "punc": "punc-ct-transformer-272727",
+    # [20261002_T6b_SpeakerOnnx] Ticket #419: the CAM++ speaker model joins
+    # the ONNX generation (dir name mirrors the pin's models.speaker.name —
+    # parity locked by tests/python/test_speaker_onnx.py).
+    "speaker": "speaker-campplus",
 }
 # Generation label reported via check_status / stats / reload results
 # (the torch generation reports its repo id; nothing downstream parses it).
@@ -222,6 +226,124 @@ def _load_audio_ndarray(source):
     return samples
 
 
+# [20261002_T6b_SubChunk] Ticket #419 (spec #412 decision 2): the ONNX path
+# has NO torch-style batch_size_s time batching — every generate() feeds the
+# WHOLE input through the encoder in one shot and self-attention activation
+# memory grows quadratically, so a 300s region spiked to GB-level transient
+# memory on long meetings. ASR regions are therefore capped at 60s: gaps
+# < 300ms merge into speech regions (unchanged), over-long regions
+# re-accumulate at VAD boundaries (unchanged), and a region that STILL
+# exceeds the cap (one continuous-speech VAD segment) is hard-split into
+# fixed <=60s windows. The per-chunk read buffer (REGION_BUFFER_MS) gives
+# the engine recognition context at window edges, and because adjacent
+# hard-split windows then share 2×REGION_BUFFER_MS of identical audio, each
+# chunk's output is midpoint-filtered to the region interior
+# (_filter_chunk_to_region) — the buffered overlap is transcribed exactly
+# once instead of being concatenated twice.
+VAD_MERGE_GAP_MS = 300
+MAX_REGION_MS = 60_000
+REGION_BUFFER_MS = 200
+
+
+def _filter_chunk_to_region(text, timestamps, time_offset_ms,
+                            region_start_ms, region_end_ms):
+    """Assign a chunk's ASR output to the region that OWNS it (midpoint rule).
+
+    [20261002_T6b_SubChunk review fix] Adjacent chunks share the
+    ±REGION_BUFFER_MS read buffer — 400ms of identical (voiced) audio
+    between two hard-split windows — so the engine emits the boundary words
+    in BOTH chunks and naive concatenation duplicated them. Ownership is
+    decided per character from its word timestamp: the character belongs to
+    the region containing its midpoint. Midpoints partition the timeline
+    across the tiling hard-split windows, so every character is emitted
+    exactly once while the buffer still improves recognition. Characters
+    without a timestamp (mismatched engine output) are dropped — timestamps
+    are the same authority _build_segments_from_timestamps pairs against.
+    Returns (kept_text, kept_timestamps).
+    """
+    chars = list(text.replace(" ", ""))
+    kept_chars = []
+    kept_timestamps = []
+    for idx, ts in enumerate(timestamps or []):
+        if idx >= len(chars):
+            break
+        midpoint_ms = (ts[0] + ts[1]) / 2.0 + time_offset_ms
+        if region_start_ms <= midpoint_ms < region_end_ms:
+            kept_chars.append(chars[idx])
+            kept_timestamps.append(ts)
+    return "".join(kept_chars), kept_timestamps
+
+
+def _merge_vad_regions(vad_segments, merge_gap_ms):
+    """Merge adjacent/overlapping VAD segments separated by < merge_gap_ms
+    into contiguous speech regions."""
+    regions = []
+    cur_start = vad_segments[0][0]
+    cur_end = vad_segments[0][1]
+    for vs, ve in vad_segments[1:]:
+        if vs - cur_end < merge_gap_ms:
+            cur_end = max(cur_end, ve)
+        else:
+            regions.append([cur_start, cur_end])
+            cur_start = vs
+            cur_end = ve
+    regions.append([cur_start, cur_end])
+    return regions
+
+
+def _hard_split_region(start_ms, end_ms, max_region_ms):
+    """Fixed-window split for a region with no usable VAD boundary (one
+    continuous-speech VAD segment longer than the cap): consecutive windows
+    of max_region_ms, the last one carrying the remainder."""
+    windows = []
+    cursor = start_ms
+    while end_ms - cursor > max_region_ms:
+        windows.append([cursor, cursor + max_region_ms])
+        cursor += max_region_ms
+    windows.append([cursor, end_ms])
+    return windows
+
+
+def build_asr_regions(vad_segments, merge_gap_ms=VAD_MERGE_GAP_MS,
+                      max_region_ms=MAX_REGION_MS):
+    """VAD segments → ASR inference regions, every region <= max_region_ms.
+
+    Three passes over the VAD output (all previously inline in
+    transcribe_file_audio, extracted here so the sub-chunking contract is
+    directly testable):
+      1. merge segments separated by < merge_gap_ms of silence;
+      2. split over-long regions at VAD boundaries (re-accumulate whole
+         segments up to the cap);
+      3. hard-split any region that still exceeds the cap (a single VAD
+         segment of continuous speech has no boundary to split at).
+    """
+    if not vad_segments:
+        return []
+    regions = _merge_vad_regions(vad_segments, merge_gap_ms)
+    split_regions = []
+    for rs, re_ in regions:
+        if re_ - rs <= max_region_ms:
+            split_regions.append([rs, re_])
+            continue
+        # 从原始 vad_segments 中找到属于该区域的子段，累加合并直到超过上限
+        sub_segs = [
+            [vs, ve] for vs, ve in vad_segments if vs >= rs and ve <= re_
+        ]
+        chunk_start = sub_segs[0][0]
+        chunk_end = sub_segs[0][1]
+        for ss, se in sub_segs[1:]:
+            if se - chunk_start > max_region_ms:
+                split_regions.append([chunk_start, chunk_end])
+                chunk_start = ss
+            chunk_end = se
+        split_regions.append([chunk_start, chunk_end])
+    final_regions = []
+    for rs, re_ in split_regions:
+        final_regions.extend(_hard_split_region(rs, re_, max_region_ms))
+    return final_regions
+# [20261002_T6b_SubChunk] END
+
+
 class OnnxAsrAdapter:
     """funasr_onnx.SeacoParaformer speaking the torch AutoModel.generate
     contract: generate(input=<path or ndarray>, hotword=...) →
@@ -278,6 +400,95 @@ class OnnxPuncAdapter:
             text = result
         return [{"text": text or ""}]
 # [20261001_T6a_OnnxEngine] END
+
+
+# [20261002_T6b_SpeakerOnnx] Ticket #419: the CAM++ speaker model is driven
+# STRAIGHT through onnxruntime — funasr-onnx ships NO speaker loader
+# (onnx_export_common.py records that verification). The int8 graph takes
+# Kaldi-compatible 80-bin fbank features ("feats": [batch, T, 80]) and emits
+# a 192-dim "embedding". kaldi_native_fbank (pure C, already in the embedded
+# runtime) reproduces the torchaudio.compliance.kaldi features the export
+# smoke test verified with: max abs diff 1.1e-4, embedding-path cosine 1.0.
+ONNX_SPEAKER_MODEL_FILE = "model_quant.onnx"
+SPEAKER_FEAT_DIM = 80
+
+
+def _fbank_module():
+    """Import kaldi_native_fbank (single point, so load-time fail-fast has
+    one hook and the torch fallback policy applies on ImportError)."""
+    import kaldi_native_fbank as knf
+
+    return knf
+
+
+def _extract_fbank(samples, knf=None):
+    """CAM++ frontend: Kaldi fbank (povey window, 25ms/10ms, dither off),
+    80 bins, per-bin mean-normalized over the utterance — the exact feature
+    contract of funasr's torch-side campplus extract_feature."""
+    import numpy as np
+
+    if knf is None:
+        knf = _fbank_module()
+    opts = knf.FbankOptions()
+    opts.frame_opts.samp_freq = ONNX_TARGET_SAMPLE_RATE
+    opts.frame_opts.dither = 0.0
+    opts.mel_opts.num_bins = SPEAKER_FEAT_DIM
+    fbank = knf.OnlineFbank(opts)
+    fbank.accept_waveform(ONNX_TARGET_SAMPLE_RATE, samples.tolist())
+    frame_count = fbank.num_frames_ready
+    if frame_count <= 0:
+        return np.zeros((0, SPEAKER_FEAT_DIM), dtype=np.float32)
+    feats = np.stack(
+        [
+            np.asarray(fbank.get_frame(i), dtype=np.float32)
+            for i in range(frame_count)
+        ]
+    )
+    feats = feats - feats.mean(axis=0, keepdims=True)
+    return feats.astype(np.float32, copy=False)
+
+
+class OnnxSpeakerAdapter:
+    """CAM++ int8 ONNX session speaking the torch AutoModel call contract
+    the diarize path already uses: adapter(samples, output_dir=None) →
+    [{"spk_embedding": [float, ...]}] (192-dim)."""
+
+    engine_name = "onnx"
+
+    def __init__(self, model_dir, intra_op_num_threads=1):
+        import onnxruntime as ort
+
+        # Fail fast at LOAD time (the caller falls back to torch there);
+        # a missing fbank runtime must not surface mid-diarize.
+        self._knf = _fbank_module()
+        options = ort.SessionOptions()
+        # [20261002_T6b_OrtThreads] Thread count from the one derivation
+        # function (compute_inference_threads), same as the three
+        # funasr_onnx sessions — the library default was a hard-coded 4.
+        options.intra_op_num_threads = intra_op_num_threads
+        self._session = ort.InferenceSession(
+            os.path.join(model_dir, ONNX_SPEAKER_MODEL_FILE),
+            sess_options=options,
+            providers=["CPUExecutionProvider"],
+        )
+        self._input_name = self._session.get_inputs()[0].name
+
+    def __call__(self, samples, output_dir=None, **_):
+        import numpy as np
+
+        samples = _load_audio_ndarray(samples)
+        feats = _extract_fbank(samples, knf=self._knf)
+        if feats.shape[0] == 0:
+            return []
+        embedding = self._session.run(
+            None, {self._input_name: feats[np.newaxis, ...]}
+        )[0]
+        # Plain list — the diarize consumer does
+        # `emb = r.get("spk_embedding") or r.get("embedding")`, and a numpy
+        # array there would raise on the truthiness check (the torch path
+        # handed back a list-like, so the contract stays list-like).
+        return [{"spk_embedding": np.asarray(embedding[0]).flatten().tolist()}]
+# [20261002_T6b_SpeakerOnnx] END
 
 
 # [20260820_Fix_SuppressStdoutRace] The model loaders run in parallel
@@ -798,8 +1009,15 @@ class FunASRServer:
                 with suppress_stdout():
                     from funasr_onnx import SeacoParaformer
 
+                    # [20261002_T6b_OrtThreads] Threads from the one
+                    # derivation function (the library default was a
+                    # hard-coded 4 — spec #412 decision 4).
                     self.asr_model = OnnxAsrAdapter(
-                        SeacoParaformer(onnx_dir, quantize=True)
+                        SeacoParaformer(
+                            onnx_dir,
+                            quantize=True,
+                            intra_op_num_threads=self.inference_threads,
+                        )
                     )
                 self.asr_model_name = ONNX_MODEL_GENERATION_NAMES["asr"]
                 logger.info(f"ASR模型加载完成（ONNX引擎）: {onnx_dir}")
@@ -863,8 +1081,13 @@ class FunASRServer:
                 with suppress_stdout():
                     from funasr_onnx import Fsmn_vad
 
+                    # [20261002_T6b_OrtThreads] Same derivation as ASR.
                     self.vad_model = OnnxVadAdapter(
-                        Fsmn_vad(onnx_dir, quantize=True)
+                        Fsmn_vad(
+                            onnx_dir,
+                            quantize=True,
+                            intra_op_num_threads=self.inference_threads,
+                        )
                     )
                 logger.info(f"VAD模型加载完成（ONNX引擎）: {onnx_dir}")
                 return True
@@ -909,8 +1132,13 @@ class FunASRServer:
                 with suppress_stdout():
                     from funasr_onnx import CT_Transformer
 
+                    # [20261002_T6b_OrtThreads] Same derivation as ASR.
                     self.punc_model = OnnxPuncAdapter(
-                        CT_Transformer(onnx_dir, quantize=True)
+                        CT_Transformer(
+                            onnx_dir,
+                            quantize=True,
+                            intra_op_num_threads=self.inference_threads,
+                        )
                     )
                 logger.info(f"标点恢复模型加载完成（ONNX引擎）: {onnx_dir}")
                 return True
@@ -1232,7 +1460,7 @@ class FunASRServer:
                 return {"success": False, "error": result}
             audio_path = result
 
-            # 使用 librosa 将非 WAV 转为 16kHz 单声道 WAV
+            # 使用 soundfile 将非 WAV 转为 16kHz 单声道 WAV
             # 注意：格式列表需与 _convert_to_wav() 保持同步
             ext = os.path.splitext(audio_path)[1].lower()
             needs_convert = ext not in ('.wav', '.flac')
@@ -1333,51 +1561,20 @@ class FunASRServer:
                     })
                 return segs
 
-            # --- VAD 分段推理 ---
+            # --- VAD 分段推理（无可用 VAD 输出时回退：全文件仍按 ≤60s 硬分块） ---
+            # [20261002_T6b_SubChunk] Region selection for BOTH branches:
+            # VAD segments when we have them, otherwise the whole file
+            # duration hard-split — a full-file one-shot is exactly the
+            # GB-level transient memory the ≤60s cap exists to prevent.
             if vad_segments:
-                logger.info(f"ASR phase START (VAD-segmented) request_id={request_id} vad_segments={len(vad_segments)}")
+                regions = build_asr_regions(vad_segments)
+            else:
+                regions = (
+                    build_asr_regions([[0, total_ms]]) if total_ms > 0 else []
+                )
 
-                # 合并相邻/重叠 VAD 段（间隔 < 300ms）为连续语音区域
-                MERGE_GAP_MS = 300
-                MAX_REGION_MS = 300_000  # 300s 上限
-                BUFFER_MS = 200  # 每侧缓冲
-                SR = 16000  # 采样率
-
-                regions = []
-                cur_start = vad_segments[0][0]
-                cur_end = vad_segments[0][1]
-                for vs, ve in vad_segments[1:]:
-                    if vs - cur_end < MERGE_GAP_MS:
-                        cur_end = max(cur_end, ve)
-                    else:
-                        regions.append([cur_start, cur_end])
-                        cur_start = vs
-                        cur_end = ve
-                regions.append([cur_start, cur_end])
-
-                # 在 VAD 边界处拆分超长区域
-                split_regions = []
-                for rs, re_ in regions:
-                    if re_ - rs <= MAX_REGION_MS:
-                        split_regions.append([rs, re_])
-                    else:
-                        # 从原始 vad_segments 中找到属于该区域的子段
-                        sub_segs = []
-                        for vs, ve in vad_segments:
-                            if vs >= rs and ve <= re_:
-                                sub_segs.append([vs, ve])
-                        # 累加合并直到超过上限
-                        chunk_start = sub_segs[0][0]
-                        chunk_end = sub_segs[0][1]
-                        for ss, se in sub_segs[1:]:
-                            if se - chunk_start > MAX_REGION_MS:
-                                split_regions.append([chunk_start, chunk_end])
-                                chunk_start = ss
-                                chunk_end = se
-                            else:
-                                chunk_end = se
-                        split_regions.append([chunk_start, chunk_end])
-                regions = split_regions
+            if regions:
+                logger.info(f"ASR phase START (chunked) request_id={request_id} regions={len(regions)} vad_segments={len(vad_segments)}")
 
                 total_chunks = len(regions)
                 chunk_temp_files = []
@@ -1396,8 +1593,8 @@ class FunASRServer:
                             break
 
                         # 添加缓冲，但不超出音频边界
-                        buf_start_ms = max(0, region_start - BUFFER_MS)
-                        buf_end_ms = min(total_ms, region_end + BUFFER_MS)
+                        buf_start_ms = max(0, region_start - REGION_BUFFER_MS)
+                        buf_end_ms = min(total_ms, region_end + REGION_BUFFER_MS)
 
                         # 帧级读取
                         start_frame = int(buf_start_ms / 1000.0 * wav_sr)
@@ -1426,10 +1623,20 @@ class FunASRServer:
 
                         if asr_result and len(asr_result) > 0:
                             chunk_text = asr_result[0].get("text", "")
+                            timestamps = asr_result[0].get("timestamp")
+                            if chunk_text and timestamps:
+                                # [20261002_T6b_SubChunk review fix] 相邻
+                                # 分块共享 ±REGION_BUFFER_MS 的缓冲音频，
+                                # 引擎会在两个 chunk 里都输出边界词——按
+                                # 字级时间戳中点把输出归属到唯一所属
+                                # 区域后再拼接，重叠区文本只保留一份。
+                                chunk_text, timestamps = _filter_chunk_to_region(
+                                    chunk_text, timestamps, buf_start_ms,
+                                    region_start, region_end,
+                                )
                             if chunk_text:
                                 raw_text += chunk_text
 
-                            timestamps = asr_result[0].get("timestamp")
                             if timestamps and chunk_text:
                                 # 时间戳偏移：chunk 内偏移 + 缓冲区域起始
                                 offset_ms = buf_start_ms
@@ -1470,10 +1677,10 @@ class FunASRServer:
                                 unlink_error,
                             )
 
-                logger.info(f"ASR phase END (VAD-segmented) request_id={request_id} "
+                logger.info(f"ASR phase END (chunked) request_id={request_id} "
                             f"elapsed={time.time()-_t_asr:.2f}s chunks={total_chunks} text_len={len(raw_text)}")
 
-            # --- 回退：全文件单次推理 ---
+            # --- 回退：短音频全文件单次推理（仅 ≤60s 时） ---
             else:
                 logger.info(f"ASR phase START (fallback full-file) request_id={request_id} total_ms={total_ms}")
                 estimated_time_s = max(total_ms * rtf_estimate / 1000, 2)
@@ -1626,43 +1833,55 @@ class FunASRServer:
             return wav_path
 
     def _convert_to_wav(self, audio_path):
-        """使用 librosa/soundfile 将非 WAV 音频转为 16kHz 单声道 WAV 临时文件
+        """使用 soundfile 将非 WAV 音频转为 16kHz 单声道 WAV 临时文件
 
-        FLAC 直接返回，依赖 FunASR/soundfile 原生支持。
-        WAV 以外的格式转换失败时抛出 RuntimeError。
+        [20261002_T6b_NoLibrosa] Ticket #419 (spec #412 decision 3): decode
+        runs on soundfile (libsndfile, pure C) through the shared ndarray
+        doorway — read + mono-mean + scipy resample — instead of
+        librosa.load, so packaging can trim the numba/llvmlite tree.
+        FLAC 直接返回，依赖引擎原生支持；WAV 以外的格式解码失败时抛出
+        RuntimeError（m4a/aac/wma 等需要系统解码器的格式会在此显式失败）。
         """
         ext = os.path.splitext(audio_path)[1].lower()
         if ext in ('.wav', '.flac'):
             return audio_path, False
 
         try:
-            import librosa
             import soundfile as sf
 
-            y, sr = librosa.load(audio_path, sr=16000, mono=True)
+            samples = _load_audio_ndarray(audio_path)
             tmp = tempfile.NamedTemporaryFile(
                 suffix='.wav', delete=False,
                 prefix='murmur_conv_', dir=tempfile.gettempdir()
             )
-            sf.write(tmp.name, y, 16000)
+            sf.write(tmp.name, samples, ONNX_TARGET_SAMPLE_RATE)
             tmp.close()
-            logger.info(f"librosa 转换完成: {audio_path} -> {tmp.name}")
+            logger.info(f"音频转换完成: {audio_path} -> {tmp.name}")
             return tmp.name, True
         except Exception as e:
-            logger.warning(f"librosa 转换失败: {e}")
-            raise RuntimeError(f"音频格式转换失败（{ext}）: {e}。请确认已安装 librosa 和 soundfile") from e
+            logger.warning(f"音频转换失败: {e}")
+            raise RuntimeError(
+                f"音频格式转换失败（{ext}）: {e}。请确认音频文件未损坏"
+            ) from e
 
     def _get_audio_duration(self, audio_path):
-        """获取音频时长"""
-        try:
-            import librosa
+        """获取音频时长（soundfile 元信息，纯 C 读取）
 
-            duration = librosa.get_duration(filename=audio_path)
-            self.total_audio_duration += duration  # 累计音频时长
-            return duration
+        [20261002_T6b_NoLibrosa] Replaces librosa.get_duration. A probe
+        failure now RAISES instead of silently returning 0: a file whose
+        duration cannot be read is broken, and the silent 0 corrupted
+        progress reporting (total_ms) and the usage stats downstream.
+        """
+        import soundfile as sf
+
+        try:
+            info = sf.info(audio_path)
+            duration = info.frames / float(info.samplerate)
         except Exception as e:
-            logger.warning(f"获取音频时长失败: {e}")
-            return 0.0
+            logger.error(f"获取音频时长失败: {e}")
+            raise RuntimeError(f"音频时长探测失败: {audio_path}（{e}）") from e
+        self.total_audio_duration += duration  # 累计音频时长
+        return duration
 
     def _cleanup_memory(self):
         """生产环境内存清理"""
@@ -1839,14 +2058,27 @@ class FunASRServer:
         if self.cam_model is not None:
             return
 
-        import psutil
-
-        mem = psutil.virtual_memory()
-        avail_gb = mem.available / (1024 ** 3)
-        if avail_gb < 2.0:
-            raise RuntimeError(
-                f"内存不足，需要至少2GB可用内存，当前可用: {avail_gb:.1f}GB"
-            )
+        # [20261002_T6b_SpeakerOnnx] The old psutil-based <2GB memory
+        # precheck is gone: psutil was NEVER in the embedded runtime, so
+        # the import failed before the check ever ran — diarize shipped
+        # broken because of it. The int8 ONNX speaker session adds only
+        # ~tens of MB on top of the already-resident ASR stack, so a
+        # per-load memory gate has nothing left to protect here.
+        # ONNX generation first: the pin-ready T5-layout speaker-campplus
+        # dir is driven straight through onnxruntime (funasr-onnx has no
+        # speaker loader). Load failure (missing fbank runtime, corrupt
+        # bytes) falls through to the torch rollback below — same policy
+        # as the other loaders.
+        onnx_dir = self._resolve_onnx_model_dir("speaker")
+        if onnx_dir is not None:
+            try:
+                self.cam_model = OnnxSpeakerAdapter(
+                    onnx_dir, intra_op_num_threads=self.inference_threads
+                )
+                logger.info(f"CAM++声纹模型加载完成（ONNX引擎）: {onnx_dir}")
+                return
+            except Exception as e:
+                logger.error(f"ONNX 说话人模型加载失败，回退 torch 生成: {str(e)}")
 
         # [20261001_T5_SealImplicitPull] Same seal as the other loaders: the
         # old repo-id call silently snapshot_downloaded on cache miss (and
@@ -1882,7 +2114,6 @@ class FunASRServer:
         # diarize runs on the read loop too, unload must defer.
         with self._init_lock:
 
-            import librosa
             import numpy as np
 
             if not segments or len(segments) == 0:
@@ -1893,8 +2124,12 @@ class FunASRServer:
             except RuntimeError as e:
                 return {"success": False, "error": str(e)}
 
-            # 加载整个音频文件到内存
-            audio, sr = librosa.load(audio_path, sr=16000, mono=True)
+            # [20261002_T6b_SpeakerOnnx] Whole-file load through the shared
+            # soundfile→ndarray doorway (soundfile pure C read + scipy
+            # resample to 16k mono) — the librosa.load call is gone
+            # (spec #412 decision 3). Samples are float32 mono at 16 kHz.
+            audio = _load_audio_ndarray(audio_path)
+            sr = ONNX_TARGET_SAMPLE_RATE
 
             embeddings = []
             valid_indices = []
