@@ -307,28 +307,36 @@ describe("[20261002_T9_MigrationUx] resume across restart (#420 AC2)", () => {
   // dead in-flight promise and the migration dialog spun with no actionable
   // error. The download must instead reject through the normal failure path
   // (source failover -> AllSourcesFailedError). Deterministic write-side
-  // error: the destination "file" is a directory (open fails with EISDIR),
+  // error: the model directory is made UNWRITABLE (open fails with EACCES)
   // with every network source healthy - the ONLY failure is the write side.
-  it("write-side failure (EACCES/ENOSPC shape) rejects - never hangs or crashes", async () => {
-    const asrDir = path.join(modelsRoot, asrName);
-    fs.mkdirSync(asrDir, { recursive: true });
-    // The ASR dir exists but is UNWRITABLE: every pinned file is "missing"
-    // (so the one-shot verification orders a download) and the first
-    // createWriteStream open fails with EACCES - the error fires on the
-    // FILE stream, not the network, which is the production shape under
-    // review (ENOSPC / EACCES / antivirus lock mid-download).
-    fs.chmodSync(asrDir, 0o555);
-    const fetcher = makeFetch(healthyRoutes());
-    try {
-      await expect(
-        downloadOnnxModelSet({ pin, modelsRoot, fetchImpl: fetcher }),
-      ).rejects.toBeInstanceOf(AllSourcesFailedError);
-    } finally {
-      fs.chmodSync(asrDir, 0o755);
-    }
-    // Reaching these lines proves the promise settled (no hang) with no
-    // uncaughtException - vitest fails the run on either.
-  });
+  // [20261002_T9_ReviewFix2] Unix-only self-guard (ci.yml runs this suite on
+  // windows-latest; AGENTS.md cross-platform rule + the audioPathValidator
+  // precedent): Windows has no directory-write permission bit — the read-only
+  // attribute does NOT stop file creation inside the dir, so createWriteStream
+  // would succeed there and the EACCES scenario below could not exist.
+  it.skipIf(process.platform === "win32")(
+    "write-side failure (EACCES/ENOSPC shape) rejects - never hangs or crashes",
+    async () => {
+      const asrDir = path.join(modelsRoot, asrName);
+      fs.mkdirSync(asrDir, { recursive: true });
+      // The ASR dir exists but is UNWRITABLE: every pinned file is "missing"
+      // (so the one-shot verification orders a download) and the first
+      // createWriteStream open fails with EACCES - the error fires on the
+      // FILE stream, not the network, which is the production shape under
+      // review (ENOSPC / EACCES / antivirus lock mid-download).
+      fs.chmodSync(asrDir, 0o555);
+      const fetcher = makeFetch(healthyRoutes());
+      try {
+        await expect(
+          downloadOnnxModelSet({ pin, modelsRoot, fetchImpl: fetcher }),
+        ).rejects.toBeInstanceOf(AllSourcesFailedError);
+      } finally {
+        fs.chmodSync(asrDir, 0o755);
+      }
+      // Reaching these lines proves the promise settled (no hang) with no
+      // uncaughtException - vitest fails the run on either.
+    },
+  );
 
   // [20261002_T9_MigrationUx] AC5: the main-process failure messages must be
   // actionable on their own (the migration dialog appends the settings
