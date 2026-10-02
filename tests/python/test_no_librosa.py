@@ -56,7 +56,15 @@ class FakeSeaco:
         pass
 
     def __call__(self, samples, hotwords="", **kwargs):
-        return [{"preds": "你好世界", "timestamp": [[0, 400]]}]
+        # [20261002_T6b_SubChunk review fix] 4 chars ↔ 4 timestamps (the real
+        # engine's per-char contract); all midpoints inside the fixture's
+        # 1s region so the full text survives the chunk midpoint filter.
+        return [
+            {
+                "preds": "你好世界",
+                "timestamp": [[0, 250], [250, 500], [500, 750], [750, 1000]],
+            }
+        ]
 
 
 class FakeFsmn:

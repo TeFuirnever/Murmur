@@ -234,12 +234,44 @@ def _load_audio_ndarray(source):
 # < 300ms merge into speech regions (unchanged), over-long regions
 # re-accumulate at VAD boundaries (unchanged), and a region that STILL
 # exceeds the cap (one continuous-speech VAD segment) is hard-split into
-# fixed <=60s windows. The per-chunk read buffer (REGION_BUFFER_MS) keeps
-# edge context; timestamps anchor at the buffered window start, so the
-# overlap never duplicates text.
+# fixed <=60s windows. The per-chunk read buffer (REGION_BUFFER_MS) gives
+# the engine recognition context at window edges, and because adjacent
+# hard-split windows then share 2×REGION_BUFFER_MS of identical audio, each
+# chunk's output is midpoint-filtered to the region interior
+# (_filter_chunk_to_region) — the buffered overlap is transcribed exactly
+# once instead of being concatenated twice.
 VAD_MERGE_GAP_MS = 300
 MAX_REGION_MS = 60_000
 REGION_BUFFER_MS = 200
+
+
+def _filter_chunk_to_region(text, timestamps, time_offset_ms,
+                            region_start_ms, region_end_ms):
+    """Assign a chunk's ASR output to the region that OWNS it (midpoint rule).
+
+    [20261002_T6b_SubChunk review fix] Adjacent chunks share the
+    ±REGION_BUFFER_MS read buffer — 400ms of identical (voiced) audio
+    between two hard-split windows — so the engine emits the boundary words
+    in BOTH chunks and naive concatenation duplicated them. Ownership is
+    decided per character from its word timestamp: the character belongs to
+    the region containing its midpoint. Midpoints partition the timeline
+    across the tiling hard-split windows, so every character is emitted
+    exactly once while the buffer still improves recognition. Characters
+    without a timestamp (mismatched engine output) are dropped — timestamps
+    are the same authority _build_segments_from_timestamps pairs against.
+    Returns (kept_text, kept_timestamps).
+    """
+    chars = list(text.replace(" ", ""))
+    kept_chars = []
+    kept_timestamps = []
+    for idx, ts in enumerate(timestamps or []):
+        if idx >= len(chars):
+            break
+        midpoint_ms = (ts[0] + ts[1]) / 2.0 + time_offset_ms
+        if region_start_ms <= midpoint_ms < region_end_ms:
+            kept_chars.append(chars[idx])
+            kept_timestamps.append(ts)
+    return "".join(kept_chars), kept_timestamps
 
 
 def _merge_vad_regions(vad_segments, merge_gap_ms):
@@ -1428,7 +1460,7 @@ class FunASRServer:
                 return {"success": False, "error": result}
             audio_path = result
 
-            # 使用 librosa 将非 WAV 转为 16kHz 单声道 WAV
+            # 使用 soundfile 将非 WAV 转为 16kHz 单声道 WAV
             # 注意：格式列表需与 _convert_to_wav() 保持同步
             ext = os.path.splitext(audio_path)[1].lower()
             needs_convert = ext not in ('.wav', '.flac')
@@ -1591,10 +1623,20 @@ class FunASRServer:
 
                         if asr_result and len(asr_result) > 0:
                             chunk_text = asr_result[0].get("text", "")
+                            timestamps = asr_result[0].get("timestamp")
+                            if chunk_text and timestamps:
+                                # [20261002_T6b_SubChunk review fix] 相邻
+                                # 分块共享 ±REGION_BUFFER_MS 的缓冲音频，
+                                # 引擎会在两个 chunk 里都输出边界词——按
+                                # 字级时间戳中点把输出归属到唯一所属
+                                # 区域后再拼接，重叠区文本只保留一份。
+                                chunk_text, timestamps = _filter_chunk_to_region(
+                                    chunk_text, timestamps, buf_start_ms,
+                                    region_start, region_end,
+                                )
                             if chunk_text:
                                 raw_text += chunk_text
 
-                            timestamps = asr_result[0].get("timestamp")
                             if timestamps and chunk_text:
                                 # 时间戳偏移：chunk 内偏移 + 缓冲区域起始
                                 offset_ms = buf_start_ms

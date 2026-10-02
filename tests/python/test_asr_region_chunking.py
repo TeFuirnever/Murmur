@@ -33,6 +33,40 @@ from funasr_server import (  # noqa: E402
 )
 
 
+class SequencedSeaco:
+    """funasr_onnx.SeacoParaformer stand-in that emits ONE character per full
+    second of the audio it received, with per-char timestamps RELATIVE to the
+    chunk start (the real engine's contract). Chunk k marks its chars with
+    "abc"[k], so the boundary overlap between adjacent windows becomes
+    observable: without dedupe the shared 400ms buffer yields an extra char
+    per chunk edge."""
+
+    call_count = 0
+    calls = []
+
+    @classmethod
+    def reset(cls):
+        cls.call_count = 0
+        cls.calls = []
+
+    def __init__(self, model_or_dir="<engine>", quantize=False, **kwargs):
+        pass
+
+    def __call__(self, samples, hotwords="", **kwargs):
+        SequencedSeaco.calls.append(samples)
+        marker = "abc"[min(SequencedSeaco.call_count, 2)]
+        SequencedSeaco.call_count += 1
+        seconds = max(1, -(-len(samples) // 16000))
+        return [
+            {
+                "preds": marker * seconds,
+                "timestamp": [
+                    [j * 1000, j * 1000 + 500] for j in range(seconds)
+                ],
+            }
+        ]
+
+
 class FakeSeaco:
     """funasr_onnx.SeacoParaformer stand-in recording per-chunk input."""
 
@@ -171,6 +205,54 @@ class BuildAsrRegionsTest(unittest.TestCase):
         self.assertEqual(regions[5], [260_000, 280_000])
 
 
+class FilterChunkToRegionTest(unittest.TestCase):
+    """Unit contract of the overlap-dedupe filter: each character is owned by
+    the region containing its timestamp MIDPOINT, so tiling hard-split windows
+    emit every character exactly once."""
+
+    def test_char_assigned_to_region_by_midpoint(self):
+        # boundary-spanning char [59900, 60100] (mid 60000) belongs to the
+        # SECOND window [60000, 120000), not the first [0, 60000).
+        text, ts = funasr_server._filter_chunk_to_region(
+            "甲乙", [[59800, 59900], [59900, 60100]], 0, 0, 60_000
+        )
+        self.assertEqual(text, "甲")
+        self.assertEqual(ts, [[59800, 59900]])
+        text, ts = funasr_server._filter_chunk_to_region(
+            "甲乙", [[59800, 59900], [59900, 60100]], 0, 60_000, 120_000
+        )
+        self.assertEqual(text, "乙")
+        self.assertEqual(ts, [[59900, 60100]])
+
+    def test_offset_applies_before_region_check(self):
+        # timestamps are relative to the buffered chunk start: 甲's midpoint
+        # lands at 59_950 (owned by the PREVIOUS window), 乙's at 60_350
+        text, ts = funasr_server._filter_chunk_to_region(
+            "甲乙", [[0, 300], [300, 800]], 59_800, 60_000, 120_000
+        )
+        self.assertEqual(text, "乙")
+        self.assertEqual(ts, [[300, 800]])
+
+    def test_mismatched_chars_beyond_timestamps_dropped(self):
+        # timestamps are the authority (same pairing _build_segments_
+        # from_timestamps applies); unlocatable chars must not survive —
+        # they could be overlap duplicates with no coordinates.
+        text, ts = funasr_server._filter_chunk_to_region(
+            "甲乙丙", [[0, 400]], 0, 0, 60_000
+        )
+        self.assertEqual(text, "甲")
+        self.assertEqual(len(ts), 1)
+
+    def test_no_timestamps_drops_unlocatable_chars(self):
+        # the caller only filters when timestamps exist; with none, no char
+        # has coordinates so nothing survives (timestamps are the authority)
+        text, ts = funasr_server._filter_chunk_to_region(
+            "甲乙", [], 0, 0, 60_000
+        )
+        self.assertEqual(text, "")
+        self.assertEqual(ts, [])
+
+
 class TranscribeFileSubChunkTest(unittest.TestCase):
     """End-to-end: a >60s continuous-speech file is transcribed through
     multiple <=60s ASR chunks with correct concatenation and offsets."""
@@ -282,6 +364,56 @@ class TranscribeFileSubChunkTest(unittest.TestCase):
         # full-file single generate() this ticket removes. It must go
         # through the same ≤60s hard split.
         self._run_chunked_transcription([])
+
+    def test_hard_window_overlap_text_appears_exactly_once(self):
+        # [20261002_T6b_SubChunk review fix] Adjacent hard-split windows
+        # share ±REGION_BUFFER_MS of audio (400ms of identical speech between
+        # two 60s windows). The engine receives the overlap in BOTH chunks;
+        # the final text must contain every second's char EXACTLY ONCE —
+        # the midpoint filter drops each boundary char's duplicate copy.
+        import numpy as np
+        import soundfile as sf
+
+        duration_s = 130
+        t = np.arange(16000 * duration_s, dtype=np.float64) / 16000.0
+        speech = (0.05 * np.sin(2 * np.pi * 300.0 * t)).astype(np.float32)
+        tmp = tempfile.NamedTemporaryFile(
+            suffix=".wav", delete=False, dir=tempfile.gettempdir()
+        )
+        sf.write(tmp.name, speech, 16000, subtype="PCM_16")
+        tmp.close()
+        self.addCleanup(
+            lambda: os.path.exists(tmp.name) and os.unlink(tmp.name)
+        )
+        FakeFsmn.segments = [[0, duration_s * 1000]]
+        SequencedSeaco.reset()
+
+        srv = FunASRServer(damo_root=self.damo_root)
+        self._make_onnx_dir("asr")
+        self._make_onnx_dir("vad")
+        with fake_module("funasr", AutoModel=NeverAutoModel), fake_module(
+            "funasr_onnx", SeacoParaformer=SequencedSeaco
+        ):
+            self.assertTrue(srv._load_asr_model())
+        with fake_module("funasr", AutoModel=NeverAutoModel), fake_module(
+            "funasr_onnx", Fsmn_vad=FakeFsmn
+        ):
+            self.assertTrue(srv._load_vad_model())
+        srv.initialized = True
+        srv.response_queue = queue.Queue()
+
+        result = srv.transcribe_file_audio(tmp.name, {"request_id": "r419"})
+        self.assertTrue(result["success"], result)
+
+        # 3 windows → chunks read [0,60.2s]/[59.8s,120.2s]/[119.8s,130s]:
+        # each engine call sees 61/61/11 seconds of audio, but the final
+        # text keeps exactly the 130 in-region seconds — one char per
+        # second of the file, no duplicates from the shared buffers.
+        self.assertEqual(len(SequencedSeaco.calls), 3)
+        self.assertEqual(result["raw_text"], "a" * 60 + "b" * 60 + "c" * 10)
+        # no leaked neighbor marker anywhere
+        self.assertNotIn("a", result["raw_text"][60:])
+        self.assertNotIn("b", result["raw_text"][:60])
 
 
 if __name__ == "__main__":
