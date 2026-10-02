@@ -51,6 +51,16 @@ def poisoned_librosa():
             sys.modules.pop("librosa", None)
 
 
+def _scipy_available():
+    # [20261002_T6b_CiScipyGuard] Resampling fixtures need scipy's polyphase
+    # resampler (_resample_to_16k). CI installs numpy + soundfile only
+    # (ci.yml); the embedded runtime ships scipy — same skip discipline as
+    # test_onnx_engine_switch's resample test.
+    import importlib.util
+
+    return importlib.util.find_spec("scipy") is not None
+
+
 class FakeSeaco:
     def __init__(self, model_or_dir="<engine>", quantize=False, **kwargs):
         pass
@@ -211,6 +221,7 @@ class NoLibrosaTranscribeTest(NoLibrosaTestBase):
 
 
 class NoLibrosaConvertTest(NoLibrosaTestBase):
+    @unittest.skipUnless(_scipy_available(), "scipy required for resampling")
     def test_convert_ogg_to_16k_mono_wav(self):
         import numpy as np
         import soundfile as sf
