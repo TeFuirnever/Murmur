@@ -419,6 +419,54 @@ class ModelManager {
     }
   }
 
+  // [20261002_T9_MigrationUx] Ticket #420: torch-fallback probe for the
+  // migration state (onnxMigration.torch_fallback_available). The old torch
+  // generation stays on disk one version cycle as the rollback path while
+  // the ONNX migration is deferred (spec #412 user story 5 / decision 11) —
+  // "usable fallback" mirrors the Python startup gate's policy
+  // (_find_missing_required_models): ASR any generation + VAD ready, punc
+  // optional. Resolution goes through _resolveRepoDir so the modelscope 1.39
+  // hub layout and mid-download shard part-files are judged identically to
+  // the readiness checks (#336/#255 class).
+  isTorchGenerationPresent(): boolean {
+    let cachePath: string;
+    try {
+      cachePath = this.getModelCachePath();
+    } catch {
+      return false;
+    }
+    if (!fs.existsSync(cachePath)) return false;
+    const asrConfig = this.modelConfigs["asr"];
+    const vadConfig = this.modelConfigs["vad"];
+    if (!asrConfig || !vadConfig) return false;
+    const asrReady = this._isRepoReady(cachePath, asrConfig.cache_path);
+    if (!asrReady && asrConfig.fallback_name) {
+      const fallbackDirName = asrConfig.fallback_name
+        .split("/")
+        .slice(1)
+        .join("/");
+      return (
+        this._isRepoReady(cachePath, fallbackDirName) &&
+        this._isRepoReady(cachePath, vadConfig.cache_path)
+      );
+    }
+    return asrReady && this._isRepoReady(cachePath, vadConfig.cache_path);
+  }
+
+  /** Readiness of one torch-era repo (dir-present + anchor-marker) under
+   * the resolved cache root. Shared by the fallback probe. */
+  private _isRepoReady(cachePath: string, repoDirName: string): boolean {
+    const dir = this._resolveRepoDir(cachePath, repoDirName);
+    if (!dir) return false;
+    return this._verifyModel(dir, {
+      name: repoDirName,
+      cache_path: repoDirName,
+      expected_size: 0,
+      required: false,
+    });
+  }
+  // [20261002_T9_MigrationUx] END
+
   // [20260815_Refactor_DeadIpc] getDownloadProgress removed — the renderer
   // consumes download progress exclusively via the MODEL_DOWNLOAD_PROGRESS
   // push event; this pull-based method had zero end-to-end callers.
