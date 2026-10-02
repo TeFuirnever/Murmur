@@ -1,5 +1,5 @@
 // [20261002_T9_MigrationUx] Ticket #420 acceptance criterion 2 (S2 download
-// seam): 断点续传 — an interrupted download must resume from the breakpoint
+// seam): resume from the breakpoint — an interrupted download must continue
 // after an app RESTART, not start over. The on-disk `.murmur-partial` temps
 // and completed files ARE the resume state; each downloadOnnxModelSet call
 // below is a fresh "process" with no in-memory carryover:
@@ -297,6 +297,37 @@ describe("[20261002_T9_MigrationUx] resume across restart (#420 AC2)", () => {
     });
     expect(run3.success).toBe(true);
     expect(run3Fetch.calls).toEqual([]);
+  });
+
+  // [20261002_T9_ReviewFix] A WRITE-side failure (production shapes: ENOSPC,
+  // EACCES / antivirus lock mid-660MB-download) fires on the FILE stream,
+  // not the network. Without an error listener on the write stream, the
+  // first such error escaped as an uncaughtException AND the pending
+  // drain/end waits hung forever - every later retry then folded onto the
+  // dead in-flight promise and the migration dialog spun with no actionable
+  // error. The download must instead reject through the normal failure path
+  // (source failover -> AllSourcesFailedError). Deterministic write-side
+  // error: the destination "file" is a directory (open fails with EISDIR),
+  // with every network source healthy - the ONLY failure is the write side.
+  it("write-side failure (EACCES/ENOSPC shape) rejects - never hangs or crashes", async () => {
+    const asrDir = path.join(modelsRoot, asrName);
+    fs.mkdirSync(asrDir, { recursive: true });
+    // The ASR dir exists but is UNWRITABLE: every pinned file is "missing"
+    // (so the one-shot verification orders a download) and the first
+    // createWriteStream open fails with EACCES - the error fires on the
+    // FILE stream, not the network, which is the production shape under
+    // review (ENOSPC / EACCES / antivirus lock mid-download).
+    fs.chmodSync(asrDir, 0o555);
+    const fetcher = makeFetch(healthyRoutes());
+    try {
+      await expect(
+        downloadOnnxModelSet({ pin, modelsRoot, fetchImpl: fetcher }),
+      ).rejects.toBeInstanceOf(AllSourcesFailedError);
+    } finally {
+      fs.chmodSync(asrDir, 0o755);
+    }
+    // Reaching these lines proves the promise settled (no hang) with no
+    // uncaughtException - vitest fails the run on either.
   });
 
   // [20261002_T9_MigrationUx] AC5: the main-process failure messages must be

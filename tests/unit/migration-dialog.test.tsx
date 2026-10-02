@@ -1,7 +1,7 @@
 // [20261002_T9_MigrationUx] Ticket #420: the migration dialog. AC coverage:
-//   AC1 — the upgrade first-launch prompt shows the explicit告知 (volume +
+//   AC1 — the upgrade first-launch prompt shows the explicit notice (volume +
 //          impact), and NO download ever starts on its own;
-//   AC3 — "暂缓" dismisses without any download call (the app keeps working
+//   AC3 — "defer" dismisses without any download call (the app keeps working
 //          on the torch fallback; the next launch re-prompts via the
 //          provider's mount-time check);
 //   AC5 — a failed download renders the actionable error (the main-process
@@ -119,7 +119,7 @@ describe("[20261002_T9_MigrationUx] MigrationDialog (#420)", () => {
     }
   });
 
-  it("AC1: shows the explicit告知 (volume + impact) and never auto-downloads", async () => {
+  it("AC1: shows the explicit notice (volume + impact) and never auto-downloads", async () => {
     const downloadOnnxModels = vi.fn().mockResolvedValue({ success: true });
     renderDialog(
       makeElectronAPIStub({
@@ -133,7 +133,7 @@ describe("[20261002_T9_MigrationUx] MigrationDialog (#420)", () => {
     // Volume interpolated from the computed status (704000000 → 671 MB).
     expect(screen.getByTestId("migration-body").textContent).toContain("671");
     expect(screen.getByTestId("migration-body").textContent).toContain("转写");
-    // The resume promise is part of the告知.
+    // The resume promise is part of the notice.
     expect(screen.getByTestId("migration-body").textContent).toContain(
       "断点续传",
     );
@@ -163,7 +163,7 @@ describe("[20261002_T9_MigrationUx] MigrationDialog (#420)", () => {
     });
   });
 
-  it("AC3: 暂缓 dismisses the dialog without any download call", async () => {
+  it("AC3: defer dismisses the dialog without any download call", async () => {
     const downloadOnnxModels = vi.fn().mockResolvedValue({ success: true });
     const user = userEvent.setup();
     renderDialog(
@@ -183,7 +183,7 @@ describe("[20261002_T9_MigrationUx] MigrationDialog (#420)", () => {
     expect(screen.getByTestId("probe-dismissed").textContent).toBe("yes");
   });
 
-  it("AC1: 立即下载 triggers the download and shows progress", async () => {
+  it("AC1: download-now triggers the download and shows progress", async () => {
     let progressCb: ((...args: unknown[]) => void) | undefined;
     let resolveDownload: (r: { success: boolean }) => void = () => {};
     const downloadOnnxModels = vi.fn().mockImplementation(

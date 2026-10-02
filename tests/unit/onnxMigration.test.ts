@@ -1,7 +1,7 @@
 // [20261002_T9_MigrationUx] Ticket #420 (spec #412 user stories 3/5): the
 // old-user migration state module. On first launch after the ONNX upgrade the
 // app must TELL the user a ~660MB model re-download is required (explicit
-//告知, never a silent background pull) and whether the old torch generation
+// notice, never a silent background pull) and whether the old torch generation
 // is still available as the fallback while the download is deferred. These
 // tests pin the state computation: readiness against the pinned exact sets,
 // the required-model policy (asr + vad — mirroring the Python startup gate

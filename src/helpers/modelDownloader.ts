@@ -450,22 +450,52 @@ async function downloadSingleUrl(
   const flags = resumedFrom > 0 ? "a" : "w";
   const fileStream = fs.createWriteStream(targetPath, { flags });
   let received = 0;
+  // [20261002_T9_ReviewFix] Write-side errors (production shapes: ENOSPC,
+  // EACCES / antivirus lock mid-660MB-download) fire on THIS stream. The
+  // pipeline() form implicitly attached an error handler that routed them
+  // to the caller; the manual-consume form below removed that handler, so
+  // the first write error escaped as an uncaughtException AND the pending
+  // drain wait hung forever — every later retry folded onto the dead
+  // in-flight promise (funasrManager's in-flight dedup) and the migration
+  // dialog spun with no actionable error. Capture the first error and route
+  // it into the normal failure path, coexisting with the flush-on-failure
+  // cleanup in the catch below.
+  let firstWriteError: Error | null = null;
+  fileStream.on("error", (error: Error) => {
+    if (firstWriteError === null) {
+      firstWriteError = error;
+    }
+  });
   try {
     // [20261002_T9_MigrationUx] AC #420-2 (resume across restart): manual
     // consume instead of stream/promises pipeline — pipeline() DESTROYS
     // every stream, including this file sink, when the source errors, which
     // discards the write buffer so the already-received bytes never reach
-    // disk. That broke the resume promise of AllSourcesFailedError
-    // (已下载部分已保留，重试将自动断点续传): the on-disk breakpoint was
+    // disk. That broke the AllSourcesFailedError resume promise (bytes
+    // already downloaded are kept; a retry resumes from the breakpoint):
+    // the on-disk breakpoint was
     // nondeterministic and a post-restart retry could start from byte 0.
     // Manual draining keeps the sink alive in the catch below, where end()
     // flushes the queued bytes before close — the breakpoint is exact.
     for await (const chunk of Readable.from(response.body)) {
+      // A write error landed while we were awaiting the network: stop
+      // feeding a dead stream and fail through the normal path.
+      if (firstWriteError) break;
       received += chunk.length;
       byteSink.onBytes(resumedFrom + received);
       if (!fileStream.write(chunk)) {
-        await new Promise<void>((resolve) => fileStream.once("drain", resolve));
+        await new Promise<void>((resolve) => {
+          fileStream.once("drain", resolve);
+          // An errored stream never drains — autoClose turns the error
+          // into 'close'; the firstWriteError check below rethrows the
+          // real cause instead of hanging on a drain that never comes.
+          fileStream.once("close", resolve);
+        });
       }
+      if (firstWriteError) break;
+    }
+    if (firstWriteError) {
+      throw firstWriteError;
     }
     await new Promise<void>((resolve, reject) => {
       fileStream.end((error?: Error | null) =>
@@ -474,9 +504,15 @@ async function downloadSingleUrl(
     });
   } catch (error) {
     // Flush whatever was already received, then surface the ORIGINAL
-    // failure — this cleanup never masks it. autoClose fires 'close' even
-    // when end() itself fails, so the wait is bounded.
+    // failure — this cleanup never masks it. A stream already destroyed by
+    // a write error has no buffer left to flush, and its 'close' may have
+    // fired before this handler registers — waiting on it would hang, so
+    // resolve directly and let the scheduled close finish the teardown.
     await new Promise<void>((resolve) => {
+      if (fileStream.destroyed) {
+        resolve();
+        return;
+      }
       fileStream.once("close", resolve);
       fileStream.end();
     });

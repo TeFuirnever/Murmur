@@ -44,7 +44,7 @@ const MigrationDialog: React.FC = () => {
     migration.torchFallbackAvailable &&
     !migration.dismissed;
 
-  // MB volume for the告知; clamped so a weird status never renders "0 MB".
+  // MB volume for the notice; clamped so a weird status never renders "0 MB".
   const sizeMb = Math.max(1, Math.round(migration.totalBytes / BYTES_PER_MB));
 
   if (!visible) return null;

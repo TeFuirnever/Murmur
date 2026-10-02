@@ -31,7 +31,7 @@ interface ModelStatus {
 
 // [20261002_T9_MigrationUx] Ticket #420: renderer-side view of the ONNX
 // migration state (main computes it; see src/helpers/onnxMigration.ts).
-// `dismissed` is deliberately NOT persisted — "暂缓" defers to the NEXT
+// `dismissed` is deliberately NOT persisted — "defer" defers to the NEXT
 // launch, which re-prompts because the check runs on every mount.
 interface MigrationState {
   checked: boolean;
@@ -361,7 +361,7 @@ export function ModelStatusProvider({
 
   const dismissMigration = React.useCallback(() => {
     // Session-scoped on purpose: no persistence — the next launch re-asks
-    // (ticket #420 AC: "暂缓后…下次启动再次询问").
+    // (ticket #420 AC: after deferring, the app is asked again on the next launch).
     setMigration((prev) => ({ ...prev, dismissed: true }));
   }, []);
 
@@ -424,7 +424,8 @@ export function ModelStatusProvider({
     }
     checkModelStatus();
     // [20261002_T9_MigrationUx] The migration prompt evaluates once per
-    // launch — "下次启动再次询问" is exactly this mount-time check.
+    // launch — the AC's "ask again on the next launch" is exactly this
+    // mount-time check.
     void checkMigration();
   }, [checkModelStatus, checkMigration]);
 

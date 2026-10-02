@@ -17,7 +17,7 @@ interface FunasrManager {
   // [20260816_Refactor_DeadChannels] checkStatus removed from this interface:
   // its only consumer was the deleted MODELS.CURRENT placeholder handler.
   // [20261002_T9_MigrationUx] Ticket #420: the ONNX migration surface —
-  // startup告知 state + the v2 resume-able download entry.
+  // startup notice state + the v2 resume-able download entry.
   checkOnnxMigration(): Record<string, unknown>;
   downloadOnnxModels(
     cb: (progress: Record<string, unknown>) => void,
@@ -45,7 +45,7 @@ export function register(ipcMain: Electron.IpcMain, managers: Managers): void {
   });
 
   // [20261002_T9_MigrationUx] Ticket #420: the ONNX migration handlers. The
-  // startup告知 check is a cheap read-only probe; the download runs the v2
+  // startup notice check is a cheap read-only probe; the download runs the v2
   // trust-chain pipeline and pushes progress over the EXISTING
   // MODEL_DOWNLOAD_PROGRESS event so the renderer's established plumbing
   // (useModelStatus push listener) stays the single consumption path.

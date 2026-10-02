@@ -30,7 +30,7 @@ import type {
   TemplateSaveResult,
   PermissionStatusResult,
   // [20261002_T9_MigrationUx] Ticket #420: the old-user ONNX migration
-  // surface (startup告知 state + v2 download outcome).
+  // surface (startup notice state + v2 download outcome).
   OnnxMigrationStatus,
   OnnxDownloadResult,
 } from "./types/ipc";
@@ -71,7 +71,7 @@ export interface ElectronAPI {
     callback?: (progress: DownloadProgress) => void,
   ) => Promise<ModelCheckResult>;
   // [20261002_T9_MigrationUx] Ticket #420: the old-user ONNX migration.
-  // checkOnnxMigration feeds the startup告知 dialog (volume + impact +
+  // checkOnnxMigration feeds the startup notice dialog (volume + impact +
   // torch-fallback availability); downloadOnnxModels runs the v2
   // resume-able pipeline and pushes progress over MODEL_DOWNLOAD_PROGRESS.
   checkOnnxMigration: () => Promise<OnnxMigrationStatus>;

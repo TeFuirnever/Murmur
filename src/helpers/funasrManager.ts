@@ -5,7 +5,7 @@ import PythonEnvironment from "./pythonEnvironment";
 import ModelManager from "./modelManager";
 import FunASRServer from "./funasrServer";
 // [20261002_T9_MigrationUx] Ticket #420 (spec #412 user stories 3/5): the
-// old-user ONNX migration surface — explicit startup告知 state + the v2
+// old-user ONNX migration surface — explicit startup notice state + the v2
 // resume-able download entry.
 import {
   getOnnxMigrationStatus,
@@ -223,7 +223,7 @@ class FunASRManager {
   // blocking the IPC response (restartServer never rejects; the renderer's
   // status poll picks up the new engine state).
 
-  /** Migration prompt state for the startup告知 (read-only, no network). */
+  /** Migration prompt state for the startup notice (read-only, no network). */
   checkOnnxMigration(): OnnxMigrationStatus {
     return getOnnxMigrationStatus({
       pinPath: this.modelManager.getModelPinPath(),

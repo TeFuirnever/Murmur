@@ -37,7 +37,7 @@ export const MODELS = {
   CHECK: "check-model-files",
   DOWNLOAD: "download-models",
   // [20261002_T9_MigrationUx] Ticket #420 (spec #412 user stories 3/5): the
-  // old-user ONNX migration — an explicit startup告知 (volume + impact,
+  // old-user ONNX migration — an explicit startup notice (volume + impact,
   // never a silent background pull), resume-able download, and defer. The
   // status check feeds the migration prompt; the download runs the v2
   // trust-chain pipeline (modelDownloader) and pushes progress over the

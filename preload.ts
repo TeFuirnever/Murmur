@@ -79,7 +79,7 @@ export const preloadApi: ElectronAPI = {
   checkModelFiles: () => ipcRenderer.invoke(C.MODELS.CHECK),
   downloadModels: () => ipcRenderer.invoke(C.MODELS.DOWNLOAD),
   // [20261002_T9_MigrationUx] Ticket #420: the old-user ONNX migration —
-  // startup告知 state + the v2 resume-able download (progress rides the
+  // startup notice state + the v2 resume-able download (progress rides the
   // existing MODEL_DOWNLOAD_PROGRESS push event below).
   checkOnnxMigration: () => ipcRenderer.invoke(C.MODELS.MIGRATION_STATUS),
   downloadOnnxModels: (callback?: (progress: DownloadProgress) => void) => {

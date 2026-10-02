@@ -29,7 +29,7 @@ import type { TFunction } from "i18next";
 // avatar in the title bar (spec #224 ticket 3)
 import { BloubBot, type BloubBotRef } from "./components/BloubBot";
 // [20261002_T9_MigrationUx] Ticket #420: the old-user ONNX migration dialog
-// (explicit startup告知 + resume-able download + defer; upgrade shape only).
+// (explicit startup notice + resume-able download + defer; upgrade shape only).
 import MigrationDialog from "./components/MigrationDialog";
 import type { StateId } from "./bot/states";
 import {

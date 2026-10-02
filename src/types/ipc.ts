@@ -263,7 +263,7 @@ export interface DownloadProgress {
 }
 
 // [20261002_T9_MigrationUx] Ticket #420 (spec #412 user stories 3/5): the
-// old-user ONNX migration status — the startup告知 payload. Shared main ↔
+// old-user ONNX migration status — the startup notice payload. Shared main ↔
 // renderer; the main-process computation lives in
 // src/helpers/onnxMigration.ts (REQUIRED_PIN_MODEL_ROLES there mirrors the
 // Python startup gate _find_missing_required_models).
