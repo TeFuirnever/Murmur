@@ -171,35 +171,68 @@ class LifecycleGuardsTest(unittest.TestCase):
         self.assertEqual(stats["models_loaded"]["asr_model"], "damo/speech_seaco")
 
 
+# [20261006_T8_PackagingSlimdown] Ticket #422 (spec #412 decision 14, list
+# entry 1/5 — server-side status self-check import): the packaged runtime
+# stack is the funasr-onnx generation, so check_status must probe
+# funasr_onnx + onnxruntime (NOT the torch-era `import funasr`, which the
+# slimmed embedded env no longer contains and which would report a working
+# ONNX-only install as "FunASR未安装"). RED first: these fail while
+# check_status still imports funasr.
 class CheckStatusTest(unittest.TestCase):
     def setUp(self):
-        self.real_funasr = sys.modules.get("funasr")
+        self._saved = {
+            name: sys.modules.get(name)
+            for name in ("funasr_onnx", "onnxruntime")
+        }
 
     def tearDown(self):
-        if self.real_funasr is not None:
-            sys.modules["funasr"] = self.real_funasr
-        else:
-            sys.modules.pop("funasr", None)
+        for name, module in self._saved.items():
+            if module is not None:
+                sys.modules[name] = module
+            else:
+                sys.modules.pop(name, None)
 
-    def test_reports_installed_with_version_and_models(self):
+    def test_reports_installed_with_onnx_stack_versions(self):
         import types
 
-        fake = types.ModuleType("funasr")
-        fake.__version__ = "9.9.9"
-        sys.modules["funasr"] = fake
+        fake_onnx = types.ModuleType("funasr_onnx")
+        fake_onnx.__version__ = "0.4.3"
+        fake_ort = types.ModuleType("onnxruntime")
+        fake_ort.__version__ = "1.30.0"
+        sys.modules["funasr_onnx"] = fake_onnx
+        sys.modules["onnxruntime"] = fake_ort
         srv = make_server(
             initialized=True,
             asr_model=object(),
-            asr_model_name="damo/x",
+            asr_model_name="onnx:asr-seaco-paraformer",
         )
         status = srv.check_status()
         self.assertTrue(status["success"])
         self.assertTrue(status["installed"])
-        self.assertEqual(status["version"], "9.9.9")
+        # Both stack versions are named so a support log identifies the
+        # exact runtime generation without guessing.
+        self.assertIn("0.4.3", status["version"])
+        self.assertIn("1.30.0", status["version"])
         self.assertTrue(status["models"]["asr"])
 
-    def test_reports_not_installed_when_funasr_import_fails(self):
-        sys.modules["funasr"] = None  # forces ImportError on `import funasr`
+    def test_reports_unknown_when_funasr_onnx_lacks_version(self):
+        import types
+
+        fake_onnx = types.ModuleType("funasr_onnx")  # no __version__ attr
+        fake_ort = types.ModuleType("onnxruntime")
+        fake_ort.__version__ = "1.30.0"
+        sys.modules["funasr_onnx"] = fake_onnx
+        sys.modules["onnxruntime"] = fake_ort
+        srv = make_server()
+        status = srv.check_status()
+        self.assertTrue(status["success"])
+        self.assertTrue(status["installed"])
+        self.assertIn("unknown", status["version"])
+
+    def test_reports_not_installed_when_onnx_stack_missing(self):
+        # None in sys.modules forces ImportError on `import funasr_onnx` —
+        # the slimmed packaging failure mode this self-check must surface.
+        sys.modules["funasr_onnx"] = None
         srv = make_server()
         status = srv.check_status()
         self.assertFalse(status["success"])

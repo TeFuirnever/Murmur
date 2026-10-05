@@ -80,24 +80,57 @@ jobs:
           ELECTRON_RUN_AS_NODE=1 npx electron -e "const {DatabaseSync}=require('node:sqlite'); new DatabaseSync(':memory:').prepare('select 1 as ok').get(); console.log('sqlite gate passed')"
       # [20260905_Feat_NodeSqlite] END
       # [20260818_T3_PythonPackagingGate] Ticket #184: cache the embedded
-      # Python env (torch/funasr wheels are the slow, disk-hungry part) and
-      # HARD-gate the package on it. This combo replaces the old
-      # continue-on-error on the Windows job, which let installers ship
-      # without a Python env while the build stayed green (spec #177 B-0).
+      # Python env (wheels are the slow, disk-hungry part) and HARD-gate the
+      # package on it. This combo replaces the old continue-on-error on the
+      # Windows job, which let installers ship without a Python env while
+      # the build stayed green (spec #177 B-0).
+      # [20261006_T8_PackagingSlimdown] Ticket #422: the cache key now also
+      # covers the sha256-pinned wheel lock, and the gate models (T1
+      # self-exported bytes, pin-keyed) feed the numba/llvmlite prune gate
+      # that prepare runs behind real inference.
+      - name: Cache packaging gate models
+        id: cache-gate-models
+        uses: actions/cache@v6
+        with:
+          path: scripts/onnx-export/work/gate-models
+          key: gate-models-${{ hashFiles('scripts/onnx-export/model-pin.json') }}
+      - name: Download gate models (pin-verified, prune gate input)
+        if: steps.cache-gate-models.outputs.cache-hit != 'true'
+        continue-on-error: true
+        shell: bash
+        run: |
+          # Self-exported bytes from our own release mirror, verified
+          # against model-pin.json's sha256 manifest. Soft step: a mirror
+          # outage degrades to an UNPRUNED env (recorded in the packaging
+          # marker), never to unpruned-and-unchecked. A failed download
+          # must leave no partial dir behind for the cache to trap.
+          python -m pip install requests
+          mkdir -p scripts/onnx-export/work/gate-models
+          python scripts/onnx-export/verify_artifacts.py --from-release \
+            --download-dir scripts/onnx-export/work/gate-models \
+            || { echo "::warning::gate model download failed — packaging continues with an unpruned env"; rm -rf scripts/onnx-export/work/gate-models; }
       - name: Cache embedded Python
         id: cache-python
         uses: actions/cache@v6
         with:
           path: python
-          key: embedded-python-${{ runner.os }}-${{ hashFiles('scripts/prepare-embedded-python.js') }}
+          key: embedded-python-${{ runner.os }}-${{ hashFiles('scripts/prepare-embedded-python.js', 'scripts/embedded-python/requirements.lock') }}
       - name: Prepare embedded Python
         if: steps.cache-python.outputs.cache-hit != 'true'
         run: pnpm run prepare:python:embedded
+        env:
+          MURMUR_ONNX_GATE_MODELS_DIR: ${{ github.workspace }}/scripts/onnx-export/work/gate-models
 
       # [20260818_T3_PythonPackagingGate] Gate: the env that will ship inside
       # the installer must actually import the transcription stack (numpy
-      # feeds the DSP path, soundfile the audio decode, funasr the models).
-      # A 0-byte or pip-metadata-polluted env fails HERE, not in users' hands.
+      # feeds the DSP path, soundfile the audio decode, funasr_onnx +
+      # onnxruntime the models). A 0-byte or pip-metadata-polluted env fails
+      # HERE, not in users' hands.
+      # [20261006_T8_PackagingSlimdown] Ticket #422: the gate is the
+      # committed import_gate.py (--check-only): same imports, plus marker/
+      # filesystem consistency for the numba/llvmlite prune — a cached env
+      # whose marker says "pruned" but whose bytes still carry numba fails
+      # here instead of shipping.
       - name: Verify embedded Python deps (packaging gate)
         shell: bash
         run: |
@@ -106,7 +139,7 @@ jobs:
           # reports uname as MINGW*_NT-**, NOT "Windows_NT" — match on _NT.
           if uname -s | grep -q "_NT"; then PY=python/python.exe; else PY=python/bin/python3.11; fi
           test -f "$PY" || { echo "::error::embedded interpreter missing: $PY"; exit 1; }
-          "$PY" -c "import numpy, soundfile, funasr" || { echo "::error::embedded python dependency import failed (if this persists across runs, the python/ cache entry may be corrupt — run: gh cache delete embedded-python-\${{ runner.os }}-\$(git hash-object scripts/prepare-embedded-python.js))"; exit 1; }
+          "$PY" scripts/embedded-python/import_gate.py --check-only --state-file python/.murmur-packaging-state.json || { echo "::error::embedded python import gate failed (if this persists across runs, the python/ cache entry may be corrupt — run: gh cache delete embedded-python-\${{ runner.os }}-\$(git hash-object scripts/embedded-python/requirements.lock))"; exit 1; }
           echo "embedded python deps gate passed"
 
       - name: Build main bundle
@@ -202,20 +235,26 @@ jobs:
           rm -f "$HOME/Library/Application Support/Murmur/logs/app.log"
           # [20260905_Fix_150SmokeColdCache] Warm the embedded python's page
           # cache before booting the app. On a cache-hit run the unpacked
-          # environment is freshly extracted (cold disk): `import funasr`
-          # pulls several hundred MB of torch through the filesystem and on
-          # the runner exceeded the whole 180s smoke window — twice, while
-          # the same import took ~5s when warm. Warming is not a gate
-          # relaxation: every milestone assertion below still applies, the
-          # self-check still has to genuinely pass on top of a warm cache.
-          /tmp/murmur-smoke/Murmur.app/Contents/Resources/app.asar.unpacked/python/bin/python3.11 -c "import funasr" || true
+          # environment is freshly extracted (cold disk): importing the
+          # runtime stack pulls several hundred MB of onnxruntime/scipy
+          # through the filesystem and on the runner exceeded the whole 180s
+          # smoke window — twice, while the same import took ~5s when warm.
+          # Warming is not a gate relaxation: every milestone assertion
+          # below still applies, the self-check still has to genuinely pass
+          # on top of a warm cache.
+          # [20261006_T8_PackagingSlimdown] Ticket #422 (five-reference list
+          # entry 3/5): the ONNX runtime stack replaced torch/funasr in the
+          # env (and in this warm-up) — a torch-era import would fail here
+          # and poison the smoke's page-cache premise.
+          /tmp/murmur-smoke/Murmur.app/Contents/Resources/app.asar.unpacked/python/bin/python3.11 -c "import funasr_onnx, onnxruntime, soundfile" || true
           /tmp/murmur-smoke/Murmur.app/Contents/MacOS/Murmur > /tmp/murmur-smoke/stdout.log 2>&1 &
           APP_PID=$!
           LOG="$HOME/Library/Application Support/Murmur/logs/app.log"
           # [20260818_T3_PythonSelfCheckMilestone] Poll for milestones instead
-          # of a fixed sleep: the python self-check spawns `import funasr`
-          # (cold torch load) which can exceed a fixed 60s window on a cold
-          # runner disk. Poll up to 360s, break as soon as all are present.
+          # of a fixed sleep: the python self-check imports the runtime
+          # stack (a cold, disk-cold load) which can exceed a fixed 60s
+          # window on a cold runner disk. Poll up to 360s, break as soon as
+          # all are present.
           # Review fixup: a missing app.log must count as NOT present — the
           # first draft broke out after one 5s tick when the log had not been
           # created yet, shrinking the old 60s grace window to 5s.
@@ -328,27 +367,49 @@ jobs:
           ELECTRON_RUN_AS_NODE=1 npx electron -e "const {DatabaseSync}=require('node:sqlite'); new DatabaseSync(':memory:').prepare('select 1 as ok').get(); console.log('sqlite gate passed')"
       # [20260905_Feat_NodeSqlite] END
       # [20260818_T3_PythonPackagingGate] Ticket #184: the old
-      # continue-on-error here (torch/funasr pip may exceed CI time/disk)
-      # shipped v1.2.0-v1.3.2 Windows installers whose Python env was
-      # silently missing while builds stayed green (spec #177 B-0). Now:
+      # continue-on-error here (pip of the heavy wheels may exceed CI
+      # time/disk) shipped v1.2.0-v1.3.2 Windows installers whose Python env
+      # was silently missing while builds stayed green (spec #177 B-0). Now:
       # cache the env (kills the time/disk pressure that motivated the
       # soft-fail), prepare is a hard step, and the import gate below must
       # pass before packaging. If the env cannot be produced, the build
       # fails — a package without Python cannot transcribe at all.
+      # [20261006_T8_PackagingSlimdown] Ticket #422: same gate-models cache
+      # + pinned-lock cache key + import_gate.py gate as the mac job.
+      - name: Cache packaging gate models
+        id: cache-gate-models
+        uses: actions/cache@v6
+        with:
+          path: scripts/onnx-export/work/gate-models
+          key: gate-models-${{ hashFiles('scripts/onnx-export/model-pin.json') }}
+      - name: Download gate models (pin-verified, prune gate input)
+        if: steps.cache-gate-models.outputs.cache-hit != 'true'
+        continue-on-error: true
+        shell: bash
+        run: |
+          python -m pip install requests
+          mkdir -p scripts/onnx-export/work/gate-models
+          python scripts/onnx-export/verify_artifacts.py --from-release \
+            --download-dir scripts/onnx-export/work/gate-models \
+            || { echo "::warning::gate model download failed — packaging continues with an unpruned env"; rm -rf scripts/onnx-export/work/gate-models; }
       - name: Cache embedded Python
         id: cache-python
         uses: actions/cache@v6
         with:
           path: python
-          key: embedded-python-${{ runner.os }}-${{ hashFiles('scripts/prepare-embedded-python.js') }}
+          key: embedded-python-${{ runner.os }}-${{ hashFiles('scripts/prepare-embedded-python.js', 'scripts/embedded-python/requirements.lock') }}
       - name: Prepare embedded Python
         if: steps.cache-python.outputs.cache-hit != 'true'
         run: pnpm run prepare:python:embedded
+        env:
+          MURMUR_ONNX_GATE_MODELS_DIR: ${{ github.workspace }}/scripts/onnx-export/work/gate-models
 
       # [20260818_T3_PythonPackagingGate] Gate: interpreter present AND the
-      # full transcription stack imports (numpy/soundfile/funasr) before we
-      # are allowed to package. Platform layout mirrors the runtime's
-      # embeddedPythonLayout (win32: python/python.exe).
+      # full transcription stack imports (numpy/soundfile/funasr_onnx/
+      # onnxruntime) before we are allowed to package. Platform layout
+      # mirrors the runtime's embeddedPythonLayout (win32: python/python.exe).
+      # [20261006_T8_PackagingSlimdown] Ticket #422: import_gate.py owns the
+      # import list and the prune-marker consistency check.
       - name: Verify embedded Python deps (packaging gate)
         shell: bash
         run: |
@@ -357,7 +418,7 @@ jobs:
           # reports uname as MINGW*_NT-**, NOT "Windows_NT" — match on _NT.
           if uname -s | grep -q "_NT"; then PY=python/python.exe; else PY=python/bin/python3.11; fi
           test -f "$PY" || { echo "::error::embedded interpreter missing: $PY"; exit 1; }
-          "$PY" -c "import numpy, soundfile, funasr" || { echo "::error::embedded python dependency import failed (if this persists across runs, the python/ cache entry may be corrupt — run: gh cache delete embedded-python-\${{ runner.os }}-\$(git hash-object scripts/prepare-embedded-python.js))"; exit 1; }
+          "$PY" scripts/embedded-python/import_gate.py --check-only --state-file python/.murmur-packaging-state.json || { echo "::error::embedded python import gate failed (if this persists across runs, the python/ cache entry may be corrupt — run: gh cache delete embedded-python-\${{ runner.os }}-\$(git hash-object scripts/embedded-python/requirements.lock))"; exit 1; }
           echo "embedded python deps gate passed"
 
       - name: Build main bundle
@@ -412,14 +473,17 @@ jobs:
           Remove-Item (Join-Path $logDir 'app.log') -ErrorAction SilentlyContinue
           # [20260905_Fix_150SmokeColdCache] Warm the embedded python page
           # cache (parity with the mac smoke): a cache-hit unpack is cold on
-          # disk and `import funasr` pulls several hundred MB of torch.
+          # disk and the runtime stack import pulls several hundred MB.
           # Milestone assertions below still apply in full.
+          # [20261006_T8_PackagingSlimdown] Ticket #422 (five-reference list
+          # entry 3/5): the ONNX runtime stack import replaces the torch-era
+          # warm-up import.
           $warmPy = Join-Path $env:LOCALAPPDATA 'Programs\murmur\resources\app.asar.unpacked\python\python.exe'
-          if (Test-Path $warmPy) { & $warmPy -c "import funasr" 2>$null }
+          if (Test-Path $warmPy) { & $warmPy -c "import funasr_onnx, onnxruntime, soundfile" 2>$null }
           Start-Process -FilePath $appExe
           $log = Join-Path $logDir 'app.log'
           # [20260818_T3_PythonSelfCheckMilestone] Poll for milestones
-          # instead of a fixed sleep — cold `import funasr` (torch) can
+          # instead of a fixed sleep — a cold stack import can
           # outrun a fixed window. Poll up to 360s, break when all present.
           $milestones = @('主窗口创建成功','应用启动完成','注册成功','Python链路自检通过')
           $missing = @($milestones)

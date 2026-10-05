@@ -2,6 +2,8 @@
 
 ## In flight
 
+- [ ] t422 - T8 打包瘦身 + gate 换血:安装包 ≤260MB 兑现 (#422) (since 2026-10-06)
+
 ## Queued
 
 ## Done

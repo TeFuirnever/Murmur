@@ -306,9 +306,16 @@ class PythonEnvironment {
       const pythonCmd = await this.findPythonExecutable();
       const result = await new Promise<FunASRInstallResult>((resolve) => {
         const pythonEnv = this.buildPythonEnvironment();
+        // [20261006_T8_PackagingSlimdown] Ticket #422 (spec #412 decision
+        // 14, list entry 2/5 — TS startup precheck): probe the ONNX
+        // runtime stack the slimmed embedded env ships. The torch-era
+        // `import funasr` would report every post-swap install as broken.
         const checkProcess = spawn(
           pythonCmd,
-          ["-c", 'import funasr; print("OK")'],
+          [
+            "-c",
+            'import numpy, soundfile, onnxruntime, funasr_onnx; print("OK")',
+          ],
           { env: pythonEnv },
         );
         let output = "";
@@ -386,15 +393,25 @@ class PythonEnvironment {
     if (progressCallback)
       progressCallback({ stage: "安装 FunASR...", percentage: 30 });
 
+    // [20261006_T8_PackagingSlimdown] Ticket #422: dev-fallback installer
+    // targets the ONNX runtime stack (soundfile/scipy/librosa ride along
+    // as funasr-onnx deps); the torch-era funasr+librosa pair is gone.
     try {
-      await runCommand(pythonCmd, ["-m", "pip", "install", "-U", "funasr"], {
-        timeout: TIMEOUTS.DOWNLOAD,
-      });
-      if (progressCallback)
-        progressCallback({ stage: "安装 librosa...", percentage: 60 });
-      await runCommand(pythonCmd, ["-m", "pip", "install", "-U", "librosa"], {
-        timeout: TIMEOUTS.DOWNLOAD,
-      });
+      await runCommand(
+        pythonCmd,
+        [
+          "-m",
+          "pip",
+          "install",
+          "-U",
+          "funasr-onnx",
+          "onnxruntime",
+          "soundfile",
+        ],
+        {
+          timeout: TIMEOUTS.DOWNLOAD,
+        },
+      );
       if (progressCallback)
         progressCallback({ stage: "安装完成！", percentage: 100 });
       this.funasrInstalled = null;
@@ -408,12 +425,16 @@ class PythonEnvironment {
         try {
           await runCommand(
             pythonCmd,
-            ["-m", "pip", "install", "--user", "-U", "funasr"],
-            { timeout: TIMEOUTS.DOWNLOAD },
-          );
-          await runCommand(
-            pythonCmd,
-            ["-m", "pip", "install", "--user", "-U", "librosa"],
+            [
+              "-m",
+              "pip",
+              "install",
+              "--user",
+              "-U",
+              "funasr-onnx",
+              "onnxruntime",
+              "soundfile",
+            ],
             { timeout: TIMEOUTS.DOWNLOAD },
           );
           if (progressCallback)
