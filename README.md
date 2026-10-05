@@ -121,18 +121,17 @@ macOS app UI:
 
 ## 🎬 Demo Video
 
-<!-- [20261006_README_IntroVideo] 15s product intro, archived in-repo at
-     docs/promotion/intro-video/ (source & asset licenses in that folder's
-     README). GitHub does not inline-play repo-relative MP4s inside READMEs —
-     the link opens the file page with a built-in player. To embed an
-     auto-playing player instead, upload the MP4 to any issue via drag & drop
-     and swap the URL below for the github.com/user-attachments/... URL.
-     Music: "Deep Urban" by Eugenio Mininni — Mixkit License (free commercial
-     use, no attribution required); source checksum-verified. -->
+<!-- [20261006_README_IntroVideo] 15s product intro; the inline player is a
+     GitHub user-attachments upload (issue attachment), so the video plays
+     right in the README. The MP4 is also archived in-repo at
+     docs/promotion/intro-video/ (production project & asset licenses in that
+     folder's README). Music: "Deep Urban" by Eugenio Mininni — Mixkit
+     License (free commercial use, no attribution required); source
+     checksum-verified. -->
 
-[![Murmur intro video — speak to type, AI polish, fully local](docs/promotion/intro-video/murmur-intro-15s-poster.jpg)](docs/promotion/intro-video/murmur-intro-15s.mp4)
+https://github.com/user-attachments/assets/5c6f1292-9494-4188-b419-083dc0e463da
 
-**▶ Watch the 15-second intro** — speak to type, AI polish, fully local ([MP4](docs/promotion/intro-video/murmur-intro-15s.mp4), a no-BGM version for your own soundtrack is archived alongside).
+**▶ Watch the 15-second intro** — speak to type, AI polish, fully local. Also archived in-repo: [MP4](docs/promotion/intro-video/murmur-intro-15s.mp4) and a [no-BGM version](docs/promotion/intro-video/murmur-intro-15s-nobgm.mp4) for your own soundtrack.
 
 ## 🚀 Install
 
