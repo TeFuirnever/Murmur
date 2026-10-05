@@ -48,7 +48,7 @@ function parseLock(content: string): LockEntry[] {
     if (tokens.length !== hashes.length + 1) {
       throw new Error(`unexpected token in lock line: ${line}`);
     }
-    entries.push({ name: match[1], version: match[2], hashes });
+    entries.push({ name: match[1]!, version: match[2]!, hashes });
   }
   return entries;
 }
