@@ -3,11 +3,11 @@
 
 # Murmur 15s 产品介绍视频 · 归档
 
-| 文件                          | 说明                                      |
-| ----------------------------- | ----------------------------------------- |
-| `murmur-intro-15s.mp4`        | 发布版（带 BGM），README 引用             |
-| `murmur-intro-15s-nobgm.mp4`  | 无 BGM 版（保留全部 SFX），供平台自配音乐 |
-| `murmur-intro-15s-poster.jpg` | README 链接封面帧（f300，润色对比画面）   |
+| 文件                          | 说明                                                                                    |
+| ----------------------------- | --------------------------------------------------------------------------------------- |
+| `murmur-intro-15s.mp4`        | 发布版（带 BGM），README 引用                                                           |
+| `murmur-intro-15s-nobgm.mp4`  | 无 BGM 版（保留全部 SFX），供平台自配音乐                                               |
+| `murmur-intro-15s-poster.jpg` | 备用封面帧（f300，润色对比画面；README 现用 user-attachments 内嵌播放器，此图留作备用） |
 
 - 规格：15.0s / 1920×1080 / 30fps / H.264 + AAC
 - 制作工程（可编辑重渲）：`productions/intro-15s-remotion/`（Remotion，时间线事实源 `src/timeline.ts`）
