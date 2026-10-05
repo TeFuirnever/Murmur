@@ -423,11 +423,13 @@ export function ModelStatusProvider({
       return;
     }
     checkModelStatus();
-    // [20261002_T9_MigrationUx] The migration prompt evaluates once per
-    // launch — the AC's "ask again on the next launch" is exactly this
-    // mount-time check.
-    void checkMigration();
-  }, [checkModelStatus, checkMigration]);
+    // [20261005_T9_CiBisect] TEMPORARY diagnostic: the mount-time migration
+    // check is the ONLY new boot-time behavior on this branch, and CI's
+    // windows leg quit cleanly (will-quit exit 0) ~100ms after test 0.5's
+    // reload on every attempt. This commit disables ONLY this call to bisect
+    // causality; restore it once the root cause is fixed.
+    // void checkMigration();
+  }, [checkModelStatus]);
 
   React.useEffect(() => {
     if (modelStatus.isReady || modelStatus.isDownloading) {
