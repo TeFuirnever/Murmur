@@ -426,16 +426,15 @@ export function ModelStatusProvider({
     // [20261002_T9_MigrationUx] The migration prompt evaluates once per
     // launch — the AC's "ask again on the next launch" is exactly this
     // mount-time check.
-    // [20261005_T9_CiBisect2] Diagnostic bisect (unit-safe, unlike the
-    // ae76e33 attempt whose unit-test fallout prevented e2e from ever
-    // running): the e2e app boots with NODE_ENV=test, so this gate skips
-    // ONLY the app-under-test's mount-time migration IPC. Unit tests keep
-    // NODE_ENV unset → the call fires → suites stay green. If the e2e
-    // boot-health suite goes green with this gate, the mount-time
-    // checkOnnxMigration invocation is causally implicated in the
-    // electronApp.evaluate context-destroyed failure.
-    if (process.env.NODE_ENV === "test") {
-      console.log("[t9-bisect] skip mount-time checkMigration (NODE_ENV=test)");
+    // [20261005_T9_CiBisect2] Diagnostic bisect: skip the mount-time
+    // migration IPC ONLY inside the e2e app-under-test (marked by the
+    // MURMUR_DB_PATH=:memory: launch env, electron-launch.ts). NODE_ENV is
+    // NOT usable as the marker — vitest workers also run with NODE_ENV=test.
+    // Unit tests (marker unset) keep the call → suites stay green, so the
+    // e2e result carries causal weight (unlike the invalid ae76e33 attempt
+    // whose unit-test fallout aborted CI before e2e ever ran).
+    if (process.env.MURMUR_DB_PATH === ":memory:") {
+      console.log("[t9-bisect] skip mount-time checkMigration (e2e app)");
     } else {
       void checkMigration();
     }
