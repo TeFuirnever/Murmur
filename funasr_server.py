@@ -243,6 +243,9 @@ def _load_audio_ndarray(source):
 VAD_MERGE_GAP_MS = 300
 MAX_REGION_MS = 60_000
 REGION_BUFFER_MS = 200
+# [20261006_Fix_421_VadWindowing] VAD passes run on windows of this size
+# (see OnnxVadAdapter._vad_segments) — same 60s cap the ASR regions use.
+VAD_STREAM_WINDOW_MS = 60_000
 
 
 def _filter_chunk_to_region(text, timestamps, time_offset_ms,
@@ -378,9 +381,32 @@ class OnnxVadAdapter:
 
     def generate(self, input=None, batch_size_s=None, **_):
         samples = _load_audio_ndarray(input)
-        result = self._engine(samples)
-        value = list(result[0]) if result else []
-        return [{"value": value}]
+        return [{"value": self._vad_segments(samples)}]
+
+    def _vad_segments(self, samples):
+        # [20261006_Fix_421_VadWindowing] Ticket #421 review: the whole file
+        # went to funasr_onnx in ONE call — the online frontend + scorer
+        # materialized O(audio_length) buffers (~1GB transient RSS on a
+        # 10-minute file). Instead: an INDEPENDENT whole-style VAD pass per
+        # <=VAD_STREAM_WINDOW_MS window (each pass sees exactly the old
+        # whole-file semantics, so memory is O(window)), with each pass's
+        # segments offset by the window start. The only downstream consumer
+        # (build_asr_regions) re-merges boundary-adjacent segments via the
+        # <300ms gap rule — verified identical regions vs the whole-file
+        # pass on a 612s real-model fixture.
+        window_samples = int(
+            VAD_STREAM_WINDOW_MS / 1000.0 * ONNX_TARGET_SAMPLE_RATE
+        )
+        value = []
+        for window_index, start in enumerate(
+            range(0, len(samples), window_samples)
+        ):
+            out = self._engine(samples[start : start + window_samples])
+            if out and len(out) > 0:
+                offset_ms = window_index * VAD_STREAM_WINDOW_MS
+                for seg in out[0]:
+                    value.append([seg[0] + offset_ms, seg[1] + offset_ms])
+        return value
 
 
 class OnnxPuncAdapter:
@@ -571,6 +597,25 @@ HOTWORD_MAX_CHARS = 4096
 
 # [T11 review NIT] Shared error message for failed (re)initialization.
 INIT_FAILED_MESSAGE = "模型初始化失败"
+
+
+# [20261006_Fix_421_SchemaLockAnchors] Ticket #421 review: the
+# models_not_downloaded startup payload (run()'s missing-models arm) and the
+# invalid-JSON payload (run()'s read loop) were both built inline, so the
+# schema regression suite could only pin dictionary LITERALS — a shape drift
+# in either payload shipped unnoticed. Hoisted here as the single
+# construction point: run() and tests/python/test_protocol_schema_regression.py
+# both consume these functions, so the lock is on the real source.
+def models_not_downloaded_result():
+    return {
+        "success": False,
+        "error": "模型文件未下载，请先下载模型",
+        "type": "models_not_downloaded",
+    }
+
+
+def invalid_json_result():
+    return {"success": False, "error": "无效的JSON命令"}
 
 
 def sanitize_hotword(value):
@@ -2274,11 +2319,9 @@ class FunASRServer:
             init_result = self.initialize()
         else:
             logger.info(f"必需模型文件不存在或不完整：{', '.join(missing_required)}，跳过初始化")
-            init_result = {
-                "success": False,
-                "error": "模型文件未下载，请先下载模型",
-                "type": "models_not_downloaded"
-            }
+            # [20261006_Fix_421_SchemaLockAnchors] payload construction via
+            # the module function the schema regression suite locks.
+            init_result = models_not_downloaded_result()
         # [20260905_Fix_208_ProtocolStreamImmune] Startup stream: reload
         # re-initialization can be in flight while this init result prints.
         _protocol_print(init_result)
@@ -2303,7 +2346,9 @@ class FunASRServer:
                 try:
                     command = json.loads(line)
                 except json.JSONDecodeError:
-                    result = {"success": False, "error": "无效的JSON命令"}
+                    # [20261006_Fix_421_SchemaLockAnchors] payload via the
+                    # module function the schema regression suite locks.
+                    result = invalid_json_result()
                     # [20260905_Fix_208_ProtocolStreamImmune]
                     _protocol_print(result)
                     continue

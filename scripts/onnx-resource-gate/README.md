@@ -46,10 +46,25 @@ release evidence chain's resource items:
 - The gate constants (1700 MB / RTF 0.1 / 600 s / watchdog parity) are
   pinned by `tests/python/test_resource_gates.py` — do not loosen them
   without a spec decision; the numbers are release-evidence items.
-- 2026-10-06 macOS arm64 first measurement (10 logical cores, embedded
-  python 3.11): long-audio RTF 0.011–0.016 (PASS), cold-start p95 2.2 s
-  warm-cache (PASS), **long-audio peak RSS ≈ 2.8–3.9 GB (FAIL vs 1700 MB)**
-  and dual-task peak ≈ 1.73 GB (marginal FAIL). Attribution runs (punc
-  removed, VAD disabled) point at the chunked-ASR loop's ORT arena
-  ratcheting across chunks, not at a single phase — engine-scope follow-up
-  needed before the RSS item can go green; see the ticket's evidence report.
+- 2026-10-06 review round (ticket #421): the first measurement round showed
+  ~2.8–3.9 GB long-audio peaks. Root-caused to two whole-file pipeline
+  transients — the DSP high-pass ran ONE global float64 rfft over the full
+  signal (~1 GB), and the VAD adapter fed the WHOLE file to funasr_onnx in
+  one shot (~1 GB) — both now bounded (block overlap-add FIR HPF in
+  `audio_preprocessing.py`; per-60s-window VAD passes with explicit offsets
+  in `OnnxVadAdapter`, regions re-merge identically downstream). Post-fix
+  macOS arm64 (10 logical cores, embedded python 3.11, production protocol
+  path, 4–5 runs each): long-audio peak **1658–1682 MB** (gate 1700 — thin
+  margin), RTF 0.010–0.016; dual-task concurrency **1455–1473 MB**, no
+  deadlock; cold-start p95 ≈ 2 s. Occasional ~+300–500 MB allocator-layout
+  excursions are observed on some runs (also load-order dependent in
+  hand-rolled harnesses — the production `initialize()` path measures
+  stable). Residual structural fact for the envelope decision: the three
+  pinned ONNX models co-resident idle at ~1.3 GB (protocol path), the punc
+  session alone holding ~880–920 MB for a 283 MB int8 file — verified
+  ORT-version-independent (1.24.1 / 1.27.0 / 1.30.0) and immune to every
+  ORT session-config lever; `enable_cpu_mem_arena` is already disabled by
+  funasr-onnx itself. If a platform exceeds the gate, the remaining
+  in-engine option is a punc/ASR phase-swap lifecycle (latency +
+  check_status semantics cost — needs its own spec decision), otherwise the
+  envelope number needs revisiting with this evidence.

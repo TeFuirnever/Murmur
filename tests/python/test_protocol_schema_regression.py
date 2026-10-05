@@ -406,16 +406,19 @@ class InitializeSchemaTest(SchemaRegressionBase):
 
     def test_models_missing_payload_fields(self):
         # Startup gate arm: nothing downloaded -> run() prints exactly this
-        # shape before any worker exists. Pin its field set.
+        # shape before any worker exists. [20261006_Fix_421_SchemaLockAnchors]
+        # Review fix: the payload is asserted from its REAL construction
+        # point (funasr_server.models_not_downloaded_result, consumed by
+        # run()), not from a dictionary literal — a drift in either field
+        # set or values now fails here.
         srv = FunASRServer(damo_root=self.damo_root)
         missing = srv._find_missing_required_models()
         self.assertTrue(missing)
-        expected = {
-            "success": False,
-            "error": "模型文件未下载，请先下载模型",
-            "type": "models_not_downloaded",
-        }
-        self.assertEqual(set(expected.keys()), INIT_FAILURE_FIELDS)
+        payload = funasr_server.models_not_downloaded_result()
+        self.assertEqual(set(payload.keys()), INIT_FAILURE_FIELDS)
+        self.assertFalse(payload["success"])
+        self.assertTrue(payload["error"])
+        self.assertEqual(payload["type"], "models_not_downloaded")
 
 
 class ReadLoopResponseSchemaTest(unittest.TestCase):
@@ -447,9 +450,52 @@ class ReadLoopResponseSchemaTest(unittest.TestCase):
         self.assertTrue(keep)
 
     def test_invalid_json_shape(self):
-        # run() constructs this inline; lock the fields the TS side checks.
-        expected = {"success": False, "error": "无效的JSON命令"}
-        self.assertEqual(set(expected.keys()), {"success", "error"})
+        # [20261006_Fix_421_SchemaLockAnchors] Review fix: run()'s read loop
+        # builds the invalid-JSON response via
+        # funasr_server.invalid_json_result — assert the REAL construction
+        # point (field set + failure flag), no longer a dictionary literal.
+        payload = funasr_server.invalid_json_result()
+        self.assertEqual(set(payload.keys()), {"success", "error"})
+        self.assertFalse(payload["success"])
+        self.assertTrue(payload["error"])
+
+
+class RunLoopPayloadTest(SchemaRegressionBase):
+    """[20261006_Fix_421_SchemaLockAnchors] Drives the REAL run() loop with
+    a stubbed stdin so the two payloads the review called out — the
+    models_not_downloaded startup line and the invalid-JSON response — are
+    locked at their actual print site, not at construction-time only.
+    Inherits the env isolation: with the real modelscope cache visible,
+    _find_missing_required_models would resolve and run() would boot the
+    actual model load instead of the missing-models arm."""
+
+    def test_run_prints_locked_payloads_for_missing_models_and_bad_json(self):
+        server = FunASRServer(damo_root=self.damo_root)
+        lines = iter(['{"action": broken json', ""])  # bad line, then EOF
+
+        class StubStdin:
+            def readline(self):
+                return next(lines)
+
+        captured = []
+        real_print = funasr_server._protocol_print
+        real_stdin = sys.stdin
+        funasr_server._protocol_print = captured.append
+        sys.stdin = StubStdin()
+        try:
+            server.run()
+        finally:
+            funasr_server._protocol_print = real_print
+            sys.stdin = real_stdin
+
+        # Startup arm: damo root has no models -> run() prints the locked
+        # models_not_downloaded payload, then the invalid-JSON payload for
+        # the malformed line, then exits on EOF.
+        self.assertEqual(
+            captured[0], funasr_server.models_not_downloaded_result()
+        )
+        self.assertEqual(captured[1], funasr_server.invalid_json_result())
+        self.assertEqual(len(captured), 2)
 
 
 if __name__ == "__main__":
