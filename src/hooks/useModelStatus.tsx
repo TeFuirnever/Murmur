@@ -426,14 +426,13 @@ export function ModelStatusProvider({
     // [20261002_T9_MigrationUx] The migration prompt evaluates once per
     // launch — the AC's "ask again on the next launch" is exactly this
     // mount-time check.
-    // [20261005_T9_CiBisect2] Diagnostic bisect: skip the mount-time
-    // migration IPC ONLY inside the e2e app-under-test (marked by the
-    // MURMUR_DB_PATH=:memory: launch env, electron-launch.ts). NODE_ENV is
-    // NOT usable as the marker — vitest workers also run with NODE_ENV=test.
-    // Unit tests (marker unset) keep the call → suites stay green, so the
-    // e2e result carries causal weight (unlike the invalid ae76e33 attempt
-    // whose unit-test fallout aborted CI before e2e ever ran).
-    if (process.env.MURMUR_DB_PATH === ":memory:") {
+    // [20261005_T9_CiBisect3] Diagnostic bisect: skip the mount-time
+    // migration IPC inside the REAL app only. The marker must survive the
+    // renderer build (vite folds `process.env.X` to undefined — bisect2's
+    // env gate compiled to a no-op) and stay OFF under vitest/jsdom (unit
+    // tests must keep the call so suites stay green). The runtime UA check
+    // does both: Electron's UA contains "Electron", jsdom's does not.
+    if (navigator.userAgent.includes("Electron")) {
       console.log("[t9-bisect] skip mount-time checkMigration (e2e app)");
     } else {
       void checkMigration();
