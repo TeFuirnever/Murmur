@@ -73,6 +73,9 @@ function wrapWithRateLimits(ipcMain: Electron.IpcMain): Electron.IpcMain {
     // budget as the sibling SAVE row.
     [C.TRANSCRIPTION.UPDATE]: { maxCalls: 30, windowMs: 60_000 },
     [C.MODELS.DOWNLOAD]: { maxCalls: 3, windowMs: 300_000 },
+    // [20261002_T9_MigrationUx] Ticket #420: same budget as MODELS.DOWNLOAD —
+    // the migration dialog's retry button is the only rapid re-invoker.
+    [C.MODELS.DOWNLOAD_ONNX]: { maxCalls: 3, windowMs: 300_000 },
     // [20260906_Refactor_DeadChannelCleanup] Ticket #250: the FUNASR.INSTALL
     // rate-limit entry was removed with the channel (zero renderer callers).
   };

@@ -4,6 +4,13 @@
 import PythonEnvironment from "./pythonEnvironment";
 import ModelManager from "./modelManager";
 import FunASRServer from "./funasrServer";
+// [20261002_T9_MigrationUx] Ticket #420 (spec #412 user stories 3/5): the
+// old-user ONNX migration surface — explicit startup notice state + the v2
+// resume-able download entry.
+import {
+  getOnnxMigrationStatus,
+  type OnnxMigrationStatus,
+} from "./onnxMigration";
 
 // [20260822_T12_IdleUnload] Ticket #190 (spec #177 T12): idle-unload
 // constants. MURMUR_IDLE_UNLOAD_MS overrides the default (ADR-006
@@ -204,6 +211,70 @@ class FunASRManager {
 
     return result;
   }
+
+  // [20261002_T9_MigrationUx] Ticket #420 (spec #412 user stories 3/5): the
+  // old-user ONNX migration surface. checkOnnxMigration composes the pure
+  // state module (onnxMigration.ts) with the modelManager collaborators; the
+  // download entry runs the v2 trust-chain pipeline (modelDownloader) under
+  // the SAME contracts the torch flow established here: concurrent invokes
+  // collapse onto the first promise, a ready set skips everything (no fetch,
+  // no server bounce — #216 review MAJOR), and success triggers a
+  // fire-and-forget restartServer so the ONNX generation takes over without
+  // blocking the IPC response (restartServer never rejects; the renderer's
+  // status poll picks up the new engine state).
+
+  /** Migration prompt state for the startup notice (read-only, no network). */
+  checkOnnxMigration(): OnnxMigrationStatus {
+    return getOnnxMigrationStatus({
+      pinPath: this.modelManager.getModelPinPath(),
+      modelsRoot: this.modelManager.getOnnxModelsRoot(),
+      torchFallbackPresent: () => this.modelManager.isTorchGenerationPresent(),
+    });
+  }
+
+  private _onnxDownloadInFlight: Promise<unknown> | null = null;
+
+  async downloadOnnxModels(
+    cb: ((progress: Record<string, unknown>) => void) | null,
+  ): Promise<unknown> {
+    if (this._onnxDownloadInFlight) {
+      return this._onnxDownloadInFlight;
+    }
+    this._onnxDownloadInFlight = this._downloadOnnxModelsInner(cb).finally(
+      () => {
+        this._onnxDownloadInFlight = null;
+      },
+    );
+    return this._onnxDownloadInFlight;
+  }
+
+  private async _downloadOnnxModelsInner(
+    cb: ((progress: Record<string, unknown>) => void) | null,
+  ): Promise<unknown> {
+    // Ready-set fast path: nothing to fetch → skip the whole pipeline so a
+    // healthy server is never bounced for nothing (same skipped contract as
+    // the torch flow's #216 fix).
+    if (this.checkOnnxMigration().onnx_ready) {
+      return { success: true, skipped: true, verified: [] };
+    }
+    const result = (await this.modelManager.downloadOnnxModels(cb)) as {
+      success?: boolean;
+      verified?: string[];
+    };
+    if (result?.success) {
+      void this.restartServer().then((r) => {
+        if (!r?.success) {
+          this.logger.warn &&
+            this.logger.warn(
+              "ONNX 模型下载完成后重启服务器失败（非致命，等待状态轮询恢复）:",
+              r?.error,
+            );
+        }
+      });
+    }
+    return result;
+  }
+  // [20261002_T9_MigrationUx] END
 
   // Transcription delegation — each entry point arms the idle-unload
   // timer and guards the busy flag around the in-flight window

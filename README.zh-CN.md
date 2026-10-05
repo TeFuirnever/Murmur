@@ -112,6 +112,20 @@ macOS 应用界面：
 
 <img src="docs/promotion/screenshots/screenshot-macos.jpg" width="640" alt="Murmur macOS 应用界面" />
 
+## 🎬 产品视频
+
+<!-- [20261006_README_IntroVideo] 15 秒产品介绍视频，仓库内归档于
+     docs/promotion/intro-video/（制作工程与素材授权见该目录 README）。
+     GitHub README 不内联播放仓库内相对路径 MP4——点击会打开自带播放器的
+     文件页；若想要内嵌自动播放，把 MP4 拖进任一 issue 上传，用
+     github.com/user-attachments/... 链接替换下方地址即可。
+     BGM：Deep Urban — Eugenio Mininni，Mixkit License（免费商用、免署名），
+     来源已做校验和比对。 -->
+
+[![Murmur 产品视频——说话即打字，AI 润色，全程本地](docs/promotion/intro-video/murmur-intro-15s-poster.jpg)](docs/promotion/intro-video/murmur-intro-15s.mp4)
+
+**▶ 观看 15 秒产品介绍**——说话即打字，AI 润色，全程本地（[MP4](docs/promotion/intro-video/murmur-intro-15s.mp4)，另有无 BGM 版可自行配乐，在同一目录）。
+
 ## 🚀 安装
 
 <!-- [20260803_InstallHonesty] Homebrew/Winget 发布计划进行中（见 docs/homebrew、docs/winget），

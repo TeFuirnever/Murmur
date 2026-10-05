@@ -458,5 +458,17 @@
     "wrongWord": "Wrong word",
     "rightWord": "Right word",
     "saveCorrection": "Save to corrections"
+  },
+  "migration": {
+    "title": "Speech recognition engine upgrade",
+    "body": "This update requires re-downloading the speech recognition models (about {{size}} MB). Transcription with the new engine is unavailable until the download completes. Downloads support resume: after an interruption, a retry continues from the breakpoint.",
+    "fallbackNote": "Until the download completes, the previous models keep serving transcription; deferring does not affect current use.",
+    "downloadNow": "Download now",
+    "defer": "Later",
+    "downloading": "Downloading speech recognition models... {{progress}}%",
+    "resumeHint": "Downloaded bytes are kept; a retry resumes from the breakpoint",
+    "errorGuidance": "Check your network connection or proxy settings; see the settings guide if it keeps failing.",
+    "openSettings": "Open Settings",
+    "retry": "Retry"
   }
 }
