@@ -40,6 +40,17 @@ release evidence chain's resource items:
 
 ## Notes
 
+- **Acceptance baseline (owner-authorized clarification, 2026-10-06):** the
+  AC1/AC2 RSS gates are accepted on **CI controlled-environment dual-platform
+  green** (run 37361188600: long-audio 944.6/948.7 MB, concurrency
+  1170.9/919.4 MB — both platforms PASS). The spec's 1700 MB number itself is
+  unchanged and stays pinned; local-run numbers are RECORDED AS REPORT-ONLY
+  evidence, not gating: on a busy 10-core dev mac the post-load baseline is
+  bimodal (1311–1904 MB across processes — ORT allocation-layout lottery in
+  initialize()'s parallel loads, every model reported loaded), so a local
+  arm can intermittently exceed the gate (~1660–1682 MB low mode / ~2080–2190
+  MB high mode). Full measurement record and the rejected phase-swap
+  evaluation: docs/research/2026-10-06-resource-gate-measurement-environment-clarification.md
 - `resource_gate.py` is stdlib-only at import time; heavy deps load only
   inside the spawned server children. RSS sampling is stdlib (`ps` on
   posix, ctypes psapi on Windows).
