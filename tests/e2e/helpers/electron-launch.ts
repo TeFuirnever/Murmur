@@ -120,6 +120,31 @@ function attachDiagnosticListeners(app, label) {
   app.on("close", () => {
     console.log(`${DIAG_PREFIX} [main:${label}] close event (app terminated)`);
   });
+
+  // [20261005_T9_QuitTrace] CI diagnostic: the windows boot-health failure
+  // shows the app entering will-quit (clean exit 0) with NO window-all-closed
+  // log and no startApp-failed phase — the quit REQUESTER is invisible.
+  // Wrap app.quit/app.exit to capture the JS stack of whoever asks, so the
+  // CI log names the caller. Test-infrastructure only; never ships.
+  app
+    .evaluate(({ app: electronApp }) => {
+      const diag = "[e2e-quit-trace]";
+      const origQuit = electronApp.quit.bind(electronApp);
+      electronApp.quit = (...args) => {
+        console.error(`${diag} app.quit() requested by:`);
+        console.error(new Error().stack);
+        return origQuit(...args);
+      };
+      const origExit = electronApp.exit.bind(electronApp);
+      electronApp.exit = (exitCode) => {
+        console.error(`${diag} app.exit(${exitCode}) requested by:`);
+        console.error(new Error().stack);
+        return origExit(exitCode);
+      };
+    })
+    .catch(() => {
+      // Tracing is best-effort: an evaluate failure must not break the launch.
+    });
 }
 // [20260725_E2E_LaunchDiagnosis] END
 
