@@ -23,6 +23,23 @@ const fs = require("fs");
 const { execSync } = require("child_process");
 // [20260726_Tier43_E2EHelpers] END
 
+// [20261005_T9_WorkerTrace] CI diagnostic: the windows boot-health failure
+// tears the app down via Playwright's own close() ~150ms after test 0.5
+// passes, with NO test failure before it and NO window-all-closed log —
+// the signature of the WORKER process dying between tests. Node swallows
+// stray uncaughtException/unhandledRejection details in Playwright workers
+// unless they are explicitly logged; surface them with stacks here so the
+// CI log names the aborting error. Test-infrastructure only; never ships.
+process.on("uncaughtException", (err) => {
+  console.error(`[e2e-worker-trace] uncaughtException: ${err && err.stack}`);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error(
+    `[e2e-worker-trace] unhandledRejection: ${reason instanceof Error ? reason.stack : String(reason)}`,
+  );
+});
+// [20261005_T9_WorkerTrace] END
+
 // [20260724_TS_BigBang_TestFix] Fix PROJECT_ROOT: tests/e2e/helpers is 3
 // levels below project root (helpers → e2e → tests → Murmur). The original
 // "../../../.." (4 levels) resolved to the parent of Murmur, which was
