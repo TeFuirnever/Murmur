@@ -23,23 +23,6 @@ const fs = require("fs");
 const { execSync } = require("child_process");
 // [20260726_Tier43_E2EHelpers] END
 
-// [20261005_T9_WorkerTrace] CI diagnostic: the windows boot-health failure
-// tears the app down via Playwright's own close() ~150ms after test 0.5
-// passes, with NO test failure before it and NO window-all-closed log —
-// the signature of the WORKER process dying between tests. Node swallows
-// stray uncaughtException/unhandledRejection details in Playwright workers
-// unless they are explicitly logged; surface them with stacks here so the
-// CI log names the aborting error. Test-infrastructure only; never ships.
-process.on("uncaughtException", (err) => {
-  console.error(`[e2e-worker-trace] uncaughtException: ${err && err.stack}`);
-});
-process.on("unhandledRejection", (reason) => {
-  console.error(
-    `[e2e-worker-trace] unhandledRejection: ${reason instanceof Error ? reason.stack : String(reason)}`,
-  );
-});
-// [20261005_T9_WorkerTrace] END
-
 // [20260724_TS_BigBang_TestFix] Fix PROJECT_ROOT: tests/e2e/helpers is 3
 // levels below project root (helpers → e2e → tests → Murmur). The original
 // "../../../.." (4 levels) resolved to the parent of Murmur, which was
@@ -137,31 +120,6 @@ function attachDiagnosticListeners(app, label) {
   app.on("close", () => {
     console.log(`${DIAG_PREFIX} [main:${label}] close event (app terminated)`);
   });
-
-  // [20261005_T9_QuitTrace] CI diagnostic: the windows boot-health failure
-  // shows the app entering will-quit (clean exit 0) with NO window-all-closed
-  // log and no startApp-failed phase — the quit REQUESTER is invisible.
-  // Wrap app.quit/app.exit to capture the JS stack of whoever asks, so the
-  // CI log names the caller. Test-infrastructure only; never ships.
-  app
-    .evaluate(({ app: electronApp }) => {
-      const diag = "[e2e-quit-trace]";
-      const origQuit = electronApp.quit.bind(electronApp);
-      electronApp.quit = (...args) => {
-        console.error(`${diag} app.quit() requested by:`);
-        console.error(new Error().stack);
-        return origQuit(...args);
-      };
-      const origExit = electronApp.exit.bind(electronApp);
-      electronApp.exit = (exitCode) => {
-        console.error(`${diag} app.exit(${exitCode}) requested by:`);
-        console.error(new Error().stack);
-        return origExit(exitCode);
-      };
-    })
-    .catch(() => {
-      // Tracing is best-effort: an evaluate failure must not break the launch.
-    });
 }
 // [20260725_E2E_LaunchDiagnosis] END
 

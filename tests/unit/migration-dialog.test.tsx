@@ -28,11 +28,11 @@ import {
   beforeEach,
   afterEach,
 } from "vitest";
-import { render, screen, waitFor, act } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { render, screen, act, fireEvent } from "@testing-library/react";
 import {
   ModelStatusProvider,
   useModelStatus,
+  MIGRATION_CHECK_DEFER_MS,
 } from "../../src/hooks/useModelStatus";
 import MigrationDialog from "../../src/components/MigrationDialog";
 import type { ElectronAPI } from "../../src/electronAPI";
@@ -92,13 +92,39 @@ function DialogHarness() {
   );
 }
 
-function renderDialog(stub: ElectronAPI) {
+// [20261005_T9_MigrationCheckDefer] The provider defers the migration check
+// past the boot window (MIGRATION_CHECK_DEFER_MS); dialog tests therefore run
+// under FAKE TIMERS and advance past the defer before asserting. Under fake
+// timers testing-library's waitFor/findBy never fire (they schedule real
+// timers), so every test flushes promises with `await act(async () => {})`
+// and asserts synchronously via getBy*/queryBy*. userEvent is wired to the
+// same fake clock so clicks keep working.
+async function renderDialog(stub: ElectronAPI): Promise<void> {
+  vi.useFakeTimers();
   (globalThis.window as TestWindow).electronAPI = stub;
-  return render(
+  render(
     <ModelStatusProvider>
       <DialogHarness />
     </ModelStatusProvider>,
   );
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(MIGRATION_CHECK_DEFER_MS);
+  });
+}
+
+/** Click helper: fireEvent (synchronous, no timer machinery) + flush. */
+async function click(testId: string) {
+  act(() => {
+    fireEvent.click(screen.getByTestId(testId));
+  });
+  await flush();
+}
+
+/** Flush pending promise continuations under fake timers. */
+async function flush() {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  });
 }
 
 describe("[20261002_T9_MigrationUx] MigrationDialog (#420)", () => {
@@ -113,6 +139,7 @@ describe("[20261002_T9_MigrationUx] MigrationDialog (#420)", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     const win = globalThis.window as TestWindow;
     if (originalAPI !== undefined) {
       win.electronAPI = originalAPI;
@@ -121,14 +148,14 @@ describe("[20261002_T9_MigrationUx] MigrationDialog (#420)", () => {
 
   it("AC1: shows the explicit notice (volume + impact) and never auto-downloads", async () => {
     const downloadOnnxModels = vi.fn().mockResolvedValue({ success: true });
-    renderDialog(
+    await renderDialog(
       makeElectronAPIStub({
         checkOnnxMigration: vi.fn().mockResolvedValue(MIGRATION_NEEDED),
         downloadOnnxModels,
       }),
     );
 
-    const overlay = await screen.findByTestId("migration-overlay");
+    const overlay = screen.getByTestId("migration-overlay");
     expect(overlay).toBeDefined();
     // Volume interpolated from the computed status (704000000 → 671 MB).
     expect(screen.getByTestId("migration-body").textContent).toContain("671");
@@ -141,16 +168,14 @@ describe("[20261002_T9_MigrationUx] MigrationDialog (#420)", () => {
     expect(screen.getByTestId("migration-fallback-note")).toBeDefined();
 
     // No silent background pull: the download must wait for the explicit CTA.
-    await waitFor(() => {
-      expect(
-        screen.getByTestId("migration-download").getAttribute("disabled"),
-      ).toBeNull();
-    });
+    expect(
+      screen.getByTestId("migration-download").getAttribute("disabled"),
+    ).toBeNull();
     expect(downloadOnnxModels).not.toHaveBeenCalled();
   });
 
   it("AC1-fresh: no torch fallback (fresh install shape) → dialog stays hidden", async () => {
-    renderDialog(
+    await renderDialog(
       makeElectronAPIStub({
         checkOnnxMigration: vi.fn().mockResolvedValue({
           ...MIGRATION_NEEDED,
@@ -158,27 +183,21 @@ describe("[20261002_T9_MigrationUx] MigrationDialog (#420)", () => {
         }),
       }),
     );
-    await waitFor(() => {
-      expect(screen.queryByTestId("migration-overlay")).toBeNull();
-    });
+    expect(screen.queryByTestId("migration-overlay")).toBeNull();
   });
 
   it("AC3: defer dismisses the dialog without any download call", async () => {
     const downloadOnnxModels = vi.fn().mockResolvedValue({ success: true });
-    const user = userEvent.setup();
-    renderDialog(
+    await renderDialog(
       makeElectronAPIStub({
         checkOnnxMigration: vi.fn().mockResolvedValue(MIGRATION_NEEDED),
         downloadOnnxModels,
       }),
     );
 
-    const defer = await screen.findByTestId("migration-defer");
-    await user.click(defer);
+    await click("migration-defer");
 
-    await waitFor(() => {
-      expect(screen.queryByTestId("migration-overlay")).toBeNull();
-    });
+    expect(screen.queryByTestId("migration-overlay")).toBeNull();
     expect(downloadOnnxModels).not.toHaveBeenCalled();
     expect(screen.getByTestId("probe-dismissed").textContent).toBe("yes");
   });
@@ -192,8 +211,7 @@ describe("[20261002_T9_MigrationUx] MigrationDialog (#420)", () => {
           resolveDownload = resolve;
         }),
     );
-    const user = userEvent.setup();
-    renderDialog(
+    await renderDialog(
       makeElectronAPIStub({
         checkOnnxMigration: vi.fn().mockResolvedValue(MIGRATION_NEEDED),
         downloadOnnxModels,
@@ -204,14 +222,10 @@ describe("[20261002_T9_MigrationUx] MigrationDialog (#420)", () => {
       }),
     );
 
-    const download = await screen.findByTestId("migration-download");
-    await user.click(download);
+    await click("migration-download");
     expect(downloadOnnxModels).toHaveBeenCalledTimes(1);
 
     // While the download promise is pending, progress events drive the bar.
-    await waitFor(() => {
-      expect(screen.getByTestId("migration-progress")).toBeDefined();
-    });
     act(() => {
       progressCb?.(undefined, {
         model: "asr-seaco-paraformer",
@@ -228,10 +242,9 @@ describe("[20261002_T9_MigrationUx] MigrationDialog (#420)", () => {
     // clears the prompt itself is main-poll business, covered hook-side).
     await act(async () => {
       resolveDownload({ success: true });
+      await flush();
     });
-    await waitFor(() => {
-      expect(screen.queryByTestId("migration-progress")).toBeNull();
-    });
+    expect(screen.queryByTestId("migration-progress")).toBeNull();
   });
 
   it("AC5: a failed download shows the actionable error, settings pointer and retry", async () => {
@@ -244,8 +257,7 @@ describe("[20261002_T9_MigrationUx] MigrationDialog (#420)", () => {
       )
       .mockResolvedValue({ success: true });
     const openSettingsWindow = vi.fn().mockResolvedValue(undefined);
-    const user = userEvent.setup();
-    renderDialog(
+    await renderDialog(
       makeElectronAPIStub({
         checkOnnxMigration: vi.fn().mockResolvedValue(MIGRATION_NEEDED),
         downloadOnnxModels,
@@ -253,30 +265,27 @@ describe("[20261002_T9_MigrationUx] MigrationDialog (#420)", () => {
       }),
     );
 
-    const download = await screen.findByTestId("migration-download");
-    await user.click(download);
+    await click("migration-download");
 
     // The main-process message (proxy guidance + resume promise) is shown.
-    const errorNode = await screen.findByTestId("migration-error");
+    const errorNode = screen.getByTestId("migration-error");
     expect(errorNode.textContent).toContain("代理");
     expect(errorNode.textContent).toContain("断点续传");
     // Actionable pointer: the settings guide button.
     expect(screen.getByTestId("migration-open-settings")).toBeDefined();
     expect(screen.getByTestId("migration-error-guidance")).toBeDefined();
 
-    await user.click(screen.getByTestId("migration-open-settings"));
+    await click("migration-open-settings");
     expect(openSettingsWindow).toHaveBeenCalledTimes(1);
 
     // Retry keeps partial bytes and completes.
-    await user.click(screen.getByTestId("migration-download"));
+    await click("migration-download");
     expect(downloadOnnxModels).toHaveBeenCalledTimes(2);
-    await waitFor(() => {
-      expect(screen.queryByTestId("migration-error")).toBeNull();
-    });
+    expect(screen.queryByTestId("migration-error")).toBeNull();
   });
 
   it("hides entirely when the ONNX set is already ready", async () => {
-    renderDialog(
+    await renderDialog(
       makeElectronAPIStub({
         checkOnnxMigration: vi.fn().mockResolvedValue({
           needed: false,
@@ -287,8 +296,6 @@ describe("[20261002_T9_MigrationUx] MigrationDialog (#420)", () => {
         }),
       }),
     );
-    await waitFor(() => {
-      expect(screen.queryByTestId("migration-overlay")).toBeNull();
-    });
+    expect(screen.queryByTestId("migration-overlay")).toBeNull();
   });
 });

@@ -90,6 +90,19 @@ const isSettingsPage = () => {
 // main process restarts the server fire-and-forget and the poll observes it).
 const MIGRATION_RECHECK_DELAY_MS = 3000;
 
+// [20261005_T9_MigrationCheckDefer] Ticket #420 CI root cause: invoking
+// checkOnnxMigration IPC at PROVIDER-MOUNT deterministically broke the e2e
+// boot-health gate (CI runs 37340352103/37343086050 pair: identical commit,
+// gate off → electronApp.evaluate "Execution context was destroyed" at
+// boot+~1.4s on BOTH platforms; runtime-gated skip → 9/9 green both
+// platforms). The mount fires exactly while the boot window's renderer
+// reload and status probes race the main process. The check is therefore
+// DEFERRED out of that window: the prompt still appears on the first launch
+// (5s in, imperceptible for a non-blocking notice) and still re-asks every
+// launch (per-mount timer), so the AC's "ask again on the next launch"
+// semantics are unchanged.
+export const MIGRATION_CHECK_DEFER_MS = 5000;
+
 const INITIAL_MIGRATION_STATE: MigrationState = {
   checked: false,
   needed: false,
@@ -425,18 +438,14 @@ export function ModelStatusProvider({
     checkModelStatus();
     // [20261002_T9_MigrationUx] The migration prompt evaluates once per
     // launch — the AC's "ask again on the next launch" is exactly this
-    // mount-time check.
-    // [20261005_T9_CiBisect3] Diagnostic bisect: skip the mount-time
-    // migration IPC inside the REAL app only. The marker must survive the
-    // renderer build (vite folds `process.env.X` to undefined — bisect2's
-    // env gate compiled to a no-op) and stay OFF under vitest/jsdom (unit
-    // tests must keep the call so suites stay green). The runtime UA check
-    // does both: Electron's UA contains "Electron", jsdom's does not.
-    if (navigator.userAgent.includes("Electron")) {
-      console.log("[t9-bisect] skip mount-time checkMigration (e2e app)");
-    } else {
+    // mount-time check. [20261005_T9_MigrationCheckDefer] The CALL is
+    // deferred past the boot-critical window (see MIGRATION_CHECK_DEFER_MS
+    // root-cause note above); cleanup cancels it if the window unmounts
+    // first (e.g. the e2e suite closes the app before the timer fires).
+    const deferTimer = setTimeout(() => {
       void checkMigration();
-    }
+    }, MIGRATION_CHECK_DEFER_MS);
+    return () => clearTimeout(deferTimer);
   }, [checkModelStatus, checkMigration]);
 
   React.useEffect(() => {

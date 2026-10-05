@@ -13,6 +13,7 @@ import {
   ModelStatusProvider,
   useModelStatus,
   resolveModelProgressKey,
+  MIGRATION_CHECK_DEFER_MS,
 } from "../../src/hooks/useModelStatus";
 import type { ElectronAPI } from "../../src/electronAPI";
 import type { ModelCheckResult, FunASRStatusResult } from "../../src/types/ipc";
@@ -81,7 +82,8 @@ describe("[20261002_T9_MigrationUx] useModelStatus migration surface (#420)", ()
     vi.useRealTimers();
   });
 
-  it("checks the ONNX migration state on mount and exposes it", async () => {
+  it("checks the ONNX migration state after the boot-window defer and exposes it", async () => {
+    vi.useFakeTimers();
     const checkOnnxMigration = vi.fn().mockResolvedValue(MIGRATION_NEEDED);
     (globalThis.window as TestWindow).electronAPI = makeElectronAPIStub({
       checkOnnxMigration,
@@ -89,10 +91,17 @@ describe("[20261002_T9_MigrationUx] useModelStatus migration surface (#420)", ()
 
     const { result } = renderProviderHook();
 
-    await waitFor(() => {
-      expect(result.current.migration.checked).toBe(true);
+    // [20261005_T9_MigrationCheckDefer] The mount-time IPC moved off the
+    // boot-critical window (e2e boot-health root cause); the check fires
+    // after MIGRATION_CHECK_DEFER_MS.
+    expect(checkOnnxMigration).not.toHaveBeenCalled();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(MIGRATION_CHECK_DEFER_MS);
     });
     expect(checkOnnxMigration).toHaveBeenCalledTimes(1);
+    // waitFor hangs under fake timers — the state update is flushed by the
+    // act above, so assert directly.
+    expect(result.current.migration.checked).toBe(true);
     expect(result.current.migration.needed).toBe(true);
     expect(result.current.migration.torchFallbackAvailable).toBe(true);
     expect(result.current.migration.totalBytes).toBe(704_000_000);
@@ -103,14 +112,17 @@ describe("[20261002_T9_MigrationUx] useModelStatus migration surface (#420)", ()
   });
 
   it("dismissMigration scopes the defer to the session (next launch re-asks)", async () => {
+    vi.useFakeTimers();
     (globalThis.window as TestWindow).electronAPI = makeElectronAPIStub({
       checkOnnxMigration: vi.fn().mockResolvedValue(MIGRATION_NEEDED),
     });
 
     const { result } = renderProviderHook();
-    await waitFor(() => {
-      expect(result.current.migration.checked).toBe(true);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(MIGRATION_CHECK_DEFER_MS);
     });
+    // Same fake-timer constraint: direct assertion after the flush.
+    expect(result.current.migration.checked).toBe(true);
 
     act(() => {
       result.current.dismissMigration();
@@ -140,10 +152,12 @@ describe("[20261002_T9_MigrationUx] useModelStatus migration surface (#420)", ()
     });
 
     const { result } = renderProviderHook();
-    // Flush the mount effects (checking → ready) without real timers.
+    // Flush the mount effects (checking → ready) without real timers, then
+    // run the deferred migration check ([20261005_T9_MigrationCheckDefer]).
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(MIGRATION_CHECK_DEFER_MS);
     });
     expect(result.current.stage).toBe("ready");
     expect(result.current.migration.needed).toBe(true);
