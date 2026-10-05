@@ -119,6 +119,21 @@ macOS app UI:
 
 <img src="docs/promotion/screenshots/screenshot-macos.jpg" width="640" alt="Murmur macOS app UI" />
 
+## 🎬 Demo Video
+
+<!-- [20261006_README_IntroVideo] 15s product intro, archived in-repo at
+     docs/promotion/intro-video/ (source & asset licenses in that folder's
+     README). GitHub does not inline-play repo-relative MP4s inside READMEs —
+     the link opens the file page with a built-in player. To embed an
+     auto-playing player instead, upload the MP4 to any issue via drag & drop
+     and swap the URL below for the github.com/user-attachments/... URL.
+     Music: "Deep Urban" by Eugenio Mininni — Mixkit License (free commercial
+     use, no attribution required); source checksum-verified. -->
+
+[![Murmur intro video — speak to type, AI polish, fully local](docs/promotion/intro-video/murmur-intro-15s-poster.jpg)](docs/promotion/intro-video/murmur-intro-15s.mp4)
+
+**▶ Watch the 15-second intro** — speak to type, AI polish, fully local ([MP4](docs/promotion/intro-video/murmur-intro-15s.mp4), a no-BGM version for your own soundtrack is archived alongside).
+
 ## 🚀 Install
 
 <!-- [20260803_InstallHonesty] Homebrew/Winget are planned (see docs/homebrew, docs/winget)
