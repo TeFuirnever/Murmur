@@ -320,8 +320,14 @@ jobs:
             python scripts/onnx-export/verify_artifacts.py --from-release --download-dir "$MODELS_DIR"
           fi
           SMOKE_HOME="/tmp/murmur-smoke/Murmur.app/Contents/Resources/app.asar.unpacked/python"
+          # [20261006_T11_EvidenceChainInferenceSmoke] PYTHONIOENCODING: the
+          # verdict JSON embeds the recognized Chinese text; on Windows the
+          # default console codec (cp1252) cannot encode it and the SUCCESS
+          # print itself crashes (run 37418367379). prepare-embedded-python's
+          # pythonEnv carries the same setting for the same reason.
           PYTHONHOME="$SMOKE_HOME" \
           PYTHONPATH="$SMOKE_HOME/lib/python3.11:$SMOKE_HOME/lib/python3.11/site-packages" \
+          PYTHONIOENCODING=utf-8 \
           PYTHONDONTWRITEBYTECODE=1 \
             "$SMOKE_PY" scripts/embedded-python/import_gate.py \
             --models-dir "$MODELS_DIR" \
@@ -600,6 +606,12 @@ jobs:
           }
           $env:PYTHONHOME = $smokeHome
           $env:PYTHONPATH = (Join-Path $smokeHome 'Lib') + ';' + (Join-Path $smokeHome 'Lib\site-packages')
+          # [20261006_T11_EvidenceChainInferenceSmoke] PYTHONIOENCODING: the
+          # verdict JSON embeds the recognized Chinese text and the Windows
+          # default console codec (cp1252) cannot encode it — the SUCCESS
+          # print itself crashed in run 37418367379. Same setting as
+          # prepare-embedded-python's pythonEnv.
+          $env:PYTHONIOENCODING = 'utf-8'
           $env:PYTHONDONTWRITEBYTECODE = '1'
           & $smokePy scripts/embedded-python/import_gate.py `
             --models-dir $modelsDir `

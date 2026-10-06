@@ -437,4 +437,15 @@ describe("[20261006_T11_EvidenceChainChecklist] build.yml evidence wiring", () =
       BUILD_YML.match(/packaged-inference-smoke-(mac|win)\.json/g)?.length,
     ).toBeGreaterThanOrEqual(4);
   });
+
+  it("the inference smoke pins PYTHONIOENCODING=utf-8 on both platforms", () => {
+    // Regression guard for run 37418367379: the gate's SUCCESS verdict
+    // embeds the recognized Chinese text; Windows' default console codec
+    // (cp1252) cannot encode it, so without PYTHONIOENCODING the print of
+    // a PASSING verdict crashes the step.
+    expect(BUILD_YML.match(/PYTHONIOENCODING=utf-8/g)?.length).toBe(1);
+    expect(BUILD_YML.match(/\$env:PYTHONIOENCODING = 'utf-8'/g)?.length).toBe(
+      1,
+    );
+  });
 });
