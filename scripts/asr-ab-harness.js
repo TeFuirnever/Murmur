@@ -70,6 +70,21 @@ const ENGINE_PRESETS = {
 const CER_DELTA_TOLERANCE = 0.02;
 const TIMESTAMP_DELTA_TOLERANCE_MS = 150;
 
+// [20261006_Feat_443_HotwordSubdomainGates] Ticket #443 (spec #412 T4a):
+// owner verdict 2026-10-01 (#412 comment, recorded in
+// docs/research/2026-10-01-onnx-ab-verdict.md 议决记录) splits the hotword
+// domain's per-domain CER gate by language — hotword-zh keeps the hard +2pp
+// gate, hotword-en (hw_jedediah, the single English case) becomes
+// observation-only because torch never repaired that term either. The global
+// term-level repair-rate gate is unchanged. Legacy T3/T4 run.json reports
+// still carry the combined `hotword` domain, so --compare synthesizes the
+// zh/en split from their per-case records; reports generated after the
+// manifest split carry hotword-zh/hotword-en domains natively.
+const HOTWORD_DOMAIN = "hotword";
+const HOTWORD_ZH_DOMAIN = "hotword-zh";
+const HOTWORD_EN_DOMAIN = "hotword-en";
+const OBSERVATION_ONLY_DOMAINS = new Set([HOTWORD_EN_DOMAIN]);
+
 // Punctuation width equivalence: full/half-width variants of the same mark
 // are the same punctuation decision (the punc model may emit either).
 // Distinct marks (、 vs ，) never collapse — a swap is a real diff.
@@ -942,21 +957,67 @@ function runCorpus(options, callbacks = {}) {
 // torch vs ONNX comparison (spec #412 T4 verdict input)
 // ---------------------------------------------------------------------------
 
+// [20261006_Feat_443_HotwordSubdomainGates] Language of a hotword case.
+// Reports generated before the manifest split carry no language metadata, so
+// it is inferred from the case material: English proper-noun hotword cases
+// contain Latin letters in the reference text, the Chinese rare-noun cases
+// never do (the corpus gate pins every term to appear inside its reference).
+function hotwordCaseLanguage(scoredCase) {
+  return /[A-Za-z]/.test(String(scoredCase?.reference ?? "")) ? "en" : "zh";
+}
+
+// Re-aggregate a legacy report's combined hotword cases into the zh/en
+// sub-domains, reusing aggregateByDomain so CER/punc semantics (including
+// failed-transcription CER = 1) stay identical to single-run reports.
+// Returns null when the report has no per-case hotword records to split.
+function hotwordSubdomainAggregates(report) {
+  const hotwordCases = (report.cases ?? []).filter(
+    (c) => c && c.domain === HOTWORD_DOMAIN,
+  );
+  if (hotwordCases.length === 0) return null;
+  const remapped = hotwordCases.map((c) => ({
+    domain:
+      hotwordCaseLanguage(c) === "en" ? HOTWORD_EN_DOMAIN : HOTWORD_ZH_DOMAIN,
+    cer: c.cer,
+    punc: c.punc,
+  }));
+  return aggregateByDomain(remapped);
+}
+
+// Effective per-domain aggregates for gating: a legacy combined `hotword`
+// domain is replaced by its zh/en sub-domain aggregates when the report
+// carries the per-case data needed for the split; otherwise it passes
+// through unchanged (hard-gated, the conservative pre-#443 behavior).
+function effectiveDomainsForGating(report) {
+  const domains = { ...(report.domains ?? {}) };
+  if (!Object.prototype.hasOwnProperty.call(domains, HOTWORD_DOMAIN)) {
+    return domains;
+  }
+  const subdomains = hotwordSubdomainAggregates(report);
+  if (!subdomains) return domains;
+  delete domains[HOTWORD_DOMAIN];
+  return { ...domains, ...subdomains };
+}
+
 function compareReports(baseline, candidate) {
-  const domains = new Set([
-    ...Object.keys(baseline.domains ?? {}),
-    ...Object.keys(candidate.domains ?? {}),
-  ]);
+  const bDomains = effectiveDomainsForGating(baseline);
+  const cDomains = effectiveDomainsForGating(candidate);
+  const domains = new Set([...Object.keys(bDomains), ...Object.keys(cDomains)]);
   const perDomain = [...domains].sort().map((domain) => {
-    const b = baseline.domains?.[domain];
-    const c = candidate.domains?.[domain];
+    const b = bDomains[domain];
+    const c = cDomains[domain];
+    const observationOnly = OBSERVATION_ONLY_DOMAINS.has(domain);
     if (!b || !c) {
       return {
         domain,
         baselineMeanCer: b?.meanCer ?? null,
         candidateMeanCer: c?.meanCer ?? null,
         cerDelta: null,
+        // Missing sub-domain data means corpus/manifest drift between the
+        // runs — that fails even for an observation-only domain (no data,
+        // nothing to observe).
         passed: false,
+        observationOnly,
         note: "domain missing in one report — corpus/manifest drifted between runs",
       };
     }
@@ -966,7 +1027,10 @@ function compareReports(baseline, candidate) {
       baselineMeanCer: b.meanCer,
       candidateMeanCer: c.meanCer,
       cerDelta,
-      passed: cerDelta <= CER_DELTA_TOLERANCE,
+      // [20261006_Feat_443_HotwordSubdomainGates] Observation-only domains
+      // report their numbers but never gate the verdict (#412, 2026-10-01).
+      passed: observationOnly || cerDelta <= CER_DELTA_TOLERANCE,
+      observationOnly,
     };
   });
   const bHotword = baseline.hotword ?? {};
@@ -982,19 +1046,21 @@ function compareReports(baseline, candidate) {
   const tsDeltaMs = cTs.meanAbsDevMs - bTs.meanAbsDevMs;
   const tsPassed = tsDeltaMs <= TIMESTAMP_DELTA_TOLERANCE_MS;
   const punc = {
-    baselineInsertions: Object.values(baseline.domains ?? {}).reduce(
+    // Effective maps: for legacy reports the combined hotword domain was
+    // replaced by sub-domain aggregates that preserve the punc sums.
+    baselineInsertions: Object.values(bDomains).reduce(
       (sum, d) => sum + d.puncInsertions,
       0,
     ),
-    candidateInsertions: Object.values(candidate.domains ?? {}).reduce(
+    candidateInsertions: Object.values(cDomains).reduce(
       (sum, d) => sum + d.puncInsertions,
       0,
     ),
-    baselineDeletions: Object.values(baseline.domains ?? {}).reduce(
+    baselineDeletions: Object.values(bDomains).reduce(
       (sum, d) => sum + d.puncDeletions,
       0,
     ),
-    candidateDeletions: Object.values(candidate.domains ?? {}).reduce(
+    candidateDeletions: Object.values(cDomains).reduce(
       (sum, d) => sum + d.puncDeletions,
       0,
     ),
@@ -1026,6 +1092,10 @@ function compareReports(baseline, candidate) {
       cerDeltaTolerance: CER_DELTA_TOLERANCE,
       repairRateMustNotRegress: true,
       timestampDeltaToleranceMs: TIMESTAMP_DELTA_TOLERANCE_MS,
+      // [20261006_Feat_443_HotwordSubdomainGates] Gate classes after the
+      // #412 owner verdict (2026-10-01); the repair-rate gate above stays
+      // GLOBAL across both hotword sub-domains.
+      hotwordSubdomains: { zh: "hard", en: "observation-only" },
     },
     passed: perDomain.every((d) => d.passed) && hotwordPassed && tsPassed,
   };
@@ -1195,8 +1265,12 @@ function printCompareSummary(cmp) {
   for (const d of cmp.perDomain) {
     const delta =
       d.cerDelta === null ? "n/a" : `${(d.cerDelta * 100).toFixed(2)}pp`;
+    // [20261006_Feat_443_HotwordSubdomainGates] Observation-only domains
+    // render OBSERVE instead of PASS/FAIL so the numbers stay visible
+    // without implying a gate.
+    const verdict = d.observationOnly ? "OBSERVE" : d.passed ? "PASS" : "FAIL";
     console.log(
-      `  ${d.domain.padEnd(14)} ${pct(d.baselineMeanCer ?? 0)} -> ${pct(d.candidateMeanCer ?? 0)} delta=${delta} ${d.passed ? "PASS" : "FAIL"}`,
+      `  ${d.domain.padEnd(14)} ${pct(d.baselineMeanCer ?? 0)} -> ${pct(d.candidateMeanCer ?? 0)} delta=${delta} ${verdict}`,
     );
   }
   console.log(
@@ -1300,6 +1374,7 @@ module.exports = {
   classifyHotwordCase,
   timestampDeviation,
   aggregateByDomain,
+  hotwordCaseLanguage,
   compareReports,
   loadCorpusManifest,
   runCorpus,

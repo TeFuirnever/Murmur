@@ -1,0 +1,104 @@
+{
+  "baseline": {
+    "engine": "torch",
+    "generatedAt": "2026-09-30T22:32:28.279Z"
+  },
+  "candidate": {
+    "engine": "onnx",
+    "generatedAt": "2026-10-01T00:38:01.137Z"
+  },
+  "perDomain": [
+    {
+      "domain": "accent",
+      "baselineMeanCer": 0.02314814814814815,
+      "candidateMeanCer": 0.02314814814814815,
+      "cerDelta": 0,
+      "passed": true,
+      "observationOnly": false
+    },
+    {
+      "domain": "codeswitch",
+      "baselineMeanCer": 0.16221237264965402,
+      "candidateMeanCer": 0.15625999169727306,
+      "cerDelta": -0.005952380952380959,
+      "passed": true,
+      "observationOnly": false
+    },
+    {
+      "domain": "farfield",
+      "baselineMeanCer": 0.06944444444444445,
+      "candidateMeanCer": 0.06944444444444445,
+      "cerDelta": 0,
+      "passed": true,
+      "observationOnly": false
+    },
+    {
+      "domain": "hotword-en",
+      "baselineMeanCer": 0.037037037037037035,
+      "candidateMeanCer": 0.2222222222222222,
+      "cerDelta": 0.18518518518518517,
+      "passed": true,
+      "observationOnly": true
+    },
+    {
+      "domain": "hotword-zh",
+      "baselineMeanCer": 0.07062271062271061,
+      "candidateMeanCer": 0.07062271062271061,
+      "cerDelta": 0,
+      "passed": true,
+      "observationOnly": false
+    },
+    {
+      "domain": "noise",
+      "baselineMeanCer": 0.23730158730158732,
+      "candidateMeanCer": 0.2492063492063492,
+      "cerDelta": 0.01190476190476189,
+      "passed": true,
+      "observationOnly": false
+    },
+    {
+      "domain": "real-clean",
+      "baselineMeanCer": 0,
+      "candidateMeanCer": 0,
+      "cerDelta": 0,
+      "passed": true,
+      "observationOnly": false
+    },
+    {
+      "domain": "timestamp",
+      "baselineMeanCer": 0,
+      "candidateMeanCer": 0,
+      "cerDelta": 0,
+      "passed": true,
+      "observationOnly": false
+    }
+  ],
+  "hotword": {
+    "baselineRepairRate": 0.14285714285714285,
+    "candidateRepairRate": 0.14285714285714285,
+    "repairRateDelta": 0,
+    "passed": true
+  },
+  "timestamp": {
+    "baselineMeanAbsDevMs": 63.611111111111114,
+    "candidateMeanAbsDevMs": 64.16666666666667,
+    "deltaMs": 0.5555555555555571,
+    "passed": true
+  },
+  "punc": {
+    "baselineInsertions": 5,
+    "candidateInsertions": 5,
+    "baselineDeletions": 11,
+    "candidateDeletions": 11
+  },
+  "gates": {
+    "cerDeltaTolerance": 0.02,
+    "repairRateMustNotRegress": true,
+    "timestampDeltaToleranceMs": 150,
+    "hotwordSubdomains": {
+      "zh": "hard",
+      "en": "observation-only"
+    }
+  },
+  "passed": true
+}
