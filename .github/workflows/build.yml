@@ -95,6 +95,7 @@ jobs:
           path: scripts/onnx-export/work/gate-models
           key: gate-models-${{ hashFiles('scripts/onnx-export/model-pin.json') }}
       - name: Download gate models (pin-verified, prune gate input)
+        id: gate-models-dl
         if: steps.cache-gate-models.outputs.cache-hit != 'true'
         continue-on-error: true
         shell: bash
@@ -103,15 +104,31 @@ jobs:
           # against model-pin.json's sha256 manifest. Soft step: a mirror
           # outage degrades to an UNPRUNED env (recorded in the packaging
           # marker), never to unpruned-and-unchecked. A failed download
-          # must leave no partial dir behind for the cache to trap.
+          # must leave no partial dir behind for the cache to trap — and
+          # must REPORT its outcome: the python-cache save step below
+          # refuses to persist an env built without the models.
+          # [20261007_Fix_CiCachePoison] models-ok output added.
           python -m pip install requests
           mkdir -p scripts/onnx-export/work/gate-models
-          python scripts/onnx-export/verify_artifacts.py --from-release \
-            --download-dir scripts/onnx-export/work/gate-models \
-            || { echo "::warning::gate model download failed — packaging continues with an unpruned env"; rm -rf scripts/onnx-export/work/gate-models; }
-      - name: Cache embedded Python
+          if python scripts/onnx-export/verify_artifacts.py --from-release \
+            --download-dir scripts/onnx-export/work/gate-models; then
+            echo "models-ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::gate model download failed — packaging continues with an unpruned env"
+            rm -rf scripts/onnx-export/work/gate-models
+            echo "models-ok=false" >> "$GITHUB_OUTPUT"
+          fi
+      # [20261007_Fix_CiCachePoison] Incident run 37460146665 attempts 1-3:
+      # monolithic actions/cache saves in its post step unconditionally, so
+      # the UNPRUNED env produced by a degraded gate-models download got
+      # cached under the unchanged key — every rerun hit the poisoned cache
+      # (Prepare skipped on cache-hit) and reproduced the over-budget dmg
+      # forever. Split into restore + save; the save refuses to persist an
+      # env built without gate models (empty output = download skipped on a
+      # gate-models cache hit = models present, so it saves).
+      - name: Restore embedded Python cache
         id: cache-python
-        uses: actions/cache@v6
+        uses: actions/cache/restore@v6
         with:
           path: python
           key: embedded-python-${{ runner.os }}-${{ hashFiles('scripts/prepare-embedded-python.js', 'scripts/embedded-python/requirements.lock') }}
@@ -120,6 +137,12 @@ jobs:
         run: pnpm run prepare:python:embedded
         env:
           MURMUR_ONNX_GATE_MODELS_DIR: ${{ github.workspace }}/scripts/onnx-export/work/gate-models
+      - name: Save embedded Python cache (only when gate models were present)
+        if: steps.cache-python.outputs.cache-hit != 'true' && steps.gate-models-dl.outputs.models-ok != 'false'
+        uses: actions/cache/save@v6
+        with:
+          path: python
+          key: embedded-python-${{ runner.os }}-${{ hashFiles('scripts/prepare-embedded-python.js', 'scripts/embedded-python/requirements.lock') }}
 
       # [20260818_T3_PythonPackagingGate] Gate: the env that will ship inside
       # the installer must actually import the transcription stack (numpy
@@ -451,18 +474,29 @@ jobs:
           path: scripts/onnx-export/work/gate-models
           key: gate-models-${{ hashFiles('scripts/onnx-export/model-pin.json') }}
       - name: Download gate models (pin-verified, prune gate input)
+        id: gate-models-dl
         if: steps.cache-gate-models.outputs.cache-hit != 'true'
         continue-on-error: true
         shell: bash
         run: |
+          # Same contract as the mac job: soft-degrade on mirror outage, but
+          # report the outcome — [20261007_Fix_CiCachePoison] models-ok gates
+          # the python-cache save below.
           python -m pip install requests
           mkdir -p scripts/onnx-export/work/gate-models
-          python scripts/onnx-export/verify_artifacts.py --from-release \
-            --download-dir scripts/onnx-export/work/gate-models \
-            || { echo "::warning::gate model download failed — packaging continues with an unpruned env"; rm -rf scripts/onnx-export/work/gate-models; }
-      - name: Cache embedded Python
+          if python scripts/onnx-export/verify_artifacts.py --from-release \
+            --download-dir scripts/onnx-export/work/gate-models; then
+            echo "models-ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::gate model download failed — packaging continues with an unpruned env"
+            rm -rf scripts/onnx-export/work/gate-models
+            echo "models-ok=false" >> "$GITHUB_OUTPUT"
+          fi
+      # [20261007_Fix_CiCachePoison] Same restore/save split as the mac job:
+      # never cache the env produced by a degraded (unpruned) prepare.
+      - name: Restore embedded Python cache
         id: cache-python
-        uses: actions/cache@v6
+        uses: actions/cache/restore@v6
         with:
           path: python
           key: embedded-python-${{ runner.os }}-${{ hashFiles('scripts/prepare-embedded-python.js', 'scripts/embedded-python/requirements.lock') }}
@@ -471,6 +505,12 @@ jobs:
         run: pnpm run prepare:python:embedded
         env:
           MURMUR_ONNX_GATE_MODELS_DIR: ${{ github.workspace }}/scripts/onnx-export/work/gate-models
+      - name: Save embedded Python cache (only when gate models were present)
+        if: steps.cache-python.outputs.cache-hit != 'true' && steps.gate-models-dl.outputs.models-ok != 'false'
+        uses: actions/cache/save@v6
+        with:
+          path: python
+          key: embedded-python-${{ runner.os }}-${{ hashFiles('scripts/prepare-embedded-python.js', 'scripts/embedded-python/requirements.lock') }}
 
       # [20260818_T3_PythonPackagingGate] Gate: interpreter present AND the
       # full transcription stack imports (numpy/soundfile/funasr_onnx/

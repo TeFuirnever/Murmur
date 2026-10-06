@@ -449,3 +449,47 @@ describe("[20261006_T11_EvidenceChainChecklist] build.yml evidence wiring", () =
     );
   });
 });
+
+// --- build.yml python-cache gating -----------------------------------------
+
+// [20261007_Fix_CiCachePoison] Incident run 37460146665 attempts 1-3: the
+// gate-models soft download degraded on a transient mirror 500, prepare
+// skipped the numba/llvmlite prune (by design), and the resulting UNPRUNED
+// env was still saved to the python cache under the unchanged key — every
+// rerun then hit the poisoned cache (Prepare skipped on cache-hit) and
+// reproduced the over-budget dmg forever. The python cache save must be
+// conditioned on the gate models having been present at prepare time.
+describe("[20261007_Fix_CiCachePoison] build.yml python-cache gating", () => {
+  it("python cache is a restore/save split, not a monolithic save-in-post", () => {
+    // Monolithic actions/cache saves unconditionally in its post step —
+    // no condition can reach it. Only the gate-models cache may stay
+    // monolithic (its degraded path removes the dir, so nothing is saved).
+    expect(BUILD_YML.match(/uses: actions\/cache\/restore@v\d+/g)?.length).toBe(
+      2,
+    );
+    expect(BUILD_YML.match(/uses: actions\/cache\/save@v\d+/g)?.length).toBe(2);
+  });
+
+  it("the save step refuses to persist an env built without gate models", () => {
+    // The save condition must reference the download step's degraded-outcome
+    // output on BOTH jobs; an empty output (cache hit → download skipped)
+    // counts as present.
+    expect(
+      BUILD_YML.match(/steps\.gate-models-dl\.outputs\.models-ok != 'false'/g)
+        ?.length,
+    ).toBe(2);
+    // ...and must not save over a restored cache either.
+    expect(
+      BUILD_YML.match(
+        /steps\.cache-python\.outputs\.cache-hit != 'true' && steps\.gate-models-dl\.outputs\.models-ok != 'false'/g,
+      )?.length,
+    ).toBe(2);
+  });
+
+  it("the gate-models download records its degraded outcome as a step output", () => {
+    // The failure branch of the soft download emits models-ok=false (the
+    // save gate reads it); both jobs.
+    expect(BUILD_YML.match(/models-ok=false/g)?.length).toBe(2);
+    expect(BUILD_YML.match(/id: gate-models-dl/g)?.length).toBe(2);
+  });
+});

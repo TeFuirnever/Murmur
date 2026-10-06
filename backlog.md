@@ -2,7 +2,11 @@
 
 ## In flight
 
+- [ ] followup-ci-cache-poison - CI: gate-models 软降级 + python 缓存固化复合故障——镜像 500 时未裁剪环境入库，同 key 重跑永久红；建议下载失败 attempt 不保存 python 缓存或改硬失败 (since 2026-10-06)
+
 ## Queued
+
+- [ ] followup-flaky-userecording - test: useRecording.test.tsx:1737 flaky——waitFor 超时 error 停留 null（v1.6.0 tag run attempt2 实证，同 commit 3 绿 1 红） (since 2026-10-06)
 
 ## Done
 
