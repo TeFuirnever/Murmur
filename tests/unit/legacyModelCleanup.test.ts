@@ -172,15 +172,19 @@ describe("[20261006_T12_LegacyCacheCleanup] root enumeration (Python parity)", (
   });
 
   it("probes the explicit userData root in both shapes plus its damo layer", () => {
+    // Build the dep with path.join so the verbatim-add contract is asserted
+    // in native separators on every platform (a literal "/ud/models" keeps
+    // POSIX separators on Windows and can never equal path.join output).
+    const userDataModels = path.join("/ud", "models");
     const { damoStyleRoots, hubStyleRoots } = enumerateLegacyTorchCacheRoots({
       homeDir: "/home/tester",
-      userDataModelsRoot: "/ud/models",
+      userDataModelsRoot: userDataModels,
     });
     const damoPaths = damoStyleRoots.map((root) => root.path);
     const hubPaths = hubStyleRoots.map((root) => root.path);
-    expect(damoPaths).toContain(path.join("/ud", "models"));
-    expect(damoPaths).toContain(path.join("/ud", "models", "damo"));
-    expect(hubPaths).toContain(path.join("/ud", "models"));
+    expect(damoPaths).toContain(userDataModels);
+    expect(damoPaths).toContain(path.join(userDataModels, "damo"));
+    expect(hubPaths).toContain(userDataModels);
   });
 
   it("skips env/userData groups when the dep is absent", () => {
@@ -188,7 +192,10 @@ describe("[20261006_T12_LegacyCacheCleanup] root enumeration (Python parity)", (
     const allPaths = [...roots.damoStyleRoots, ...roots.hubStyleRoots].map(
       (root) => root.path,
     );
-    expect(allPaths.every((p) => p.startsWith("/home/tester"))).toBe(true);
+    // path.join normalizes the prefix into the platform's separators, so
+    // the startsWith holds on Windows (backslashes) too.
+    const homePrefix = path.join("/home/tester");
+    expect(allPaths.every((p) => p.startsWith(homePrefix))).toBe(true);
   });
 });
 
