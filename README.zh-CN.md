@@ -150,7 +150,10 @@ https://github.com/user-attachments/assets/5c6f1292-9494-4188-b419-083dc0e463da
 
 ## ⚡ 30 秒上手
 
-1. 启动 Murmur，等待模型下载完成（首次约 1GB，后续秒开）
+<!-- [20261006_Docs_423_T10] spec #412 (T10)：体积对齐 ONNX int8 模型 pin
+     （scripts/onnx-export/model-pin.json；原为 fp32 torch 时代 ~1GB）。 -->
+
+1. 启动 Murmur，等待模型下载完成（首次约 671 MB，后续秒开）
 2. 按下 `Cmd+Shift+Space`（macOS）或 `Ctrl+Shift+Space`（Windows）开始说话
 3. 文字自动出现在光标处
 
@@ -198,7 +201,10 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync && uv run python download_models.py
 
 # 方案 B: 系统 Python
-pip install funasr modelscope torch torchaudio librosa numpy
+# [20261006_Docs_423_T10] spec #412 (T10)：旧的手写 pip 清单
+# （funasr modelscope torch torchaudio librosa numpy）已与 pyproject.toml
+# 脱节——改为按声明安装（modelscope 由 funasr 传递引入）。
+uv pip install -r pyproject.toml
 python download_models.py
 
 pnpm dev

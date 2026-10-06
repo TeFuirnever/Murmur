@@ -159,7 +159,10 @@ Download the latest build from [Releases](https://github.com/TeFuirnever/Murmur/
 
 ## ⚡ Quick Start
 
-1. Launch Murmur and wait for the model download (~1GB the first time, instant afterwards)
+<!-- [20261006_Docs_423_T10] spec #412 (T10): size aligned to the ONNX int8
+     model pin (scripts/onnx-export/model-pin.json; was ~1GB fp32 torch). -->
+
+1. Launch Murmur and wait for the model download (~671 MB the first time, instant afterwards)
 2. Press `Cmd+Shift+Space` (macOS) or `Ctrl+Shift+Space` (Windows) and start speaking
 3. Text appears at your cursor
 
@@ -207,7 +210,11 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync && uv run python download_models.py
 
 # Option B: system Python
-pip install funasr modelscope torch torchaudio librosa numpy
+# [20261006_Docs_423_T10] spec #412 (T10): the old hand-rolled pip line
+# (`funasr modelscope torch torchaudio librosa numpy`) drifted from
+# pyproject.toml — install exactly what it declares instead (modelscope
+# arrives transitively via funasr).
+uv pip install -r pyproject.toml
 python download_models.py
 
 pnpm dev

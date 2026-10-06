@@ -418,7 +418,9 @@ describe("[20260816_Test_BranchPush] model-status-indicator branch coverage", ()
         <ModelStatusIcon modelStatus={{ stage: "need_download" } as never} />,
       );
       expect(
-        screen.getByText("📥 需要下载语音识别模型（约1.1GB）"),
+        // [20261006_Docs_423_T10] size pinned to the ONNX int8 model pin
+        // (tests/unit/onnx-docs-sync.test.ts), was torch-era 1.1GB.
+        screen.getByText("📥 需要下载语音识别模型（约671MB）"),
       ).toBeInTheDocument();
     });
 
