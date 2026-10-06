@@ -706,6 +706,26 @@ class ModelManager {
     return path.join(userDataPath, "models", ONNX_MODELS_DIRNAME);
   }
 
+  // [20261006_T12_LegacyCacheCleanup] Ticket #425: the explicit
+  // <userData>/models damo root (the --damo-root value the server is
+  // started with). The legacy-cache cleaner (legacyModelCleanup.ts) must
+  // probe it directly — getModelCachePath() returns whichever candidate
+  // WINS the resolution, while the cleaner enumerates every root across
+  // all historical layout generations. Lazy require("electron") kept
+  // inside try/catch — same reason as getModelCachePath (import is
+  // hoisted; unit tests have no electron).
+  getUserDataModelsRoot(): string {
+    let userDataPath: string;
+    try {
+      const { app } = require("electron");
+      userDataPath = app.getPath("userData");
+    } catch {
+      userDataPath = os.tmpdir();
+    }
+    return path.join(userDataPath, "models");
+  }
+  // [20261006_T12_LegacyCacheCleanup] END
+
   /** Fast readiness audit per pinned model: exact file set, matching sizes,
    * no hashing (the full sha256 gate runs at download completion and at
    * server init). */

@@ -11,6 +11,9 @@ import {
   getOnnxMigrationStatus,
   type OnnxMigrationStatus,
 } from "./onnxMigration";
+// [20261006_T12_LegacyCacheCleanup] Ticket #425 (spec #412 decision 11):
+// the N+1 boot-time reclaim of the rollback-era torch model caches.
+import { cleanupLegacyTorchCaches } from "./legacyModelCleanup";
 
 // [20260822_T12_IdleUnload] Ticket #190 (spec #177 T12): idle-unload
 // constants. MURMUR_IDLE_UNLOAD_MS overrides the default (ADR-006
@@ -80,6 +83,12 @@ class FunASRManager {
   // transcriptions finishes, letting the idle unload fire mid-flight on
   // the second) — the idle deadline defers while any work is active.
   private _transcriptionCount = 0;
+
+  // [20261006_T12_LegacyCacheCleanup] Ticket #425: the boot-time legacy
+  // torch cache reclaim runs at most once per launch (initializeAtStartup
+  // schedules it after the server-boot promise settles; see
+  // _scheduleLegacyTorchCacheCleanup).
+  private _legacyTorchCleanupAttempted = false;
 
   constructor(logger: Logger | null = null) {
     this.logger = logger || console;
@@ -408,7 +417,10 @@ class FunASRManager {
           this.logger.warn("Python链路自检失败", funasrStatus);
       }
       this.isInitialized = true;
-      this.preInitializeModels();
+      // [20261006_T12_LegacyCacheCleanup] Ticket #425: schedule the legacy
+      // torch cache reclaim on BOTH boot branches (success and failure) —
+      // it is gated on ONNX readiness, not on python health.
+      this._scheduleLegacyTorchCacheCleanup(this.preInitializeModels());
       this.logger.info && this.logger.info("FunASR管理器启动初始化完成");
     } catch (error) {
       // [20260818_T3_PythonSelfCheckMilestone] Same milestone on the
@@ -417,9 +429,66 @@ class FunASRManager {
       this.logger.warn && this.logger.warn("Python链路自检失败", error);
       this.logger.warn &&
         this.logger.warn("FunASR启动初始化失败，但不影响应用启动", error);
-      this.preInitializeModels();
+      this._scheduleLegacyTorchCacheCleanup(this.preInitializeModels());
     }
   }
+
+  // [20261006_T12_LegacyCacheCleanup] Ticket #425 (spec #412 decision 11):
+  // reclaim the old torch model caches ONE version cycle after the ONNX
+  // cutover shipped them as the rollback path — the N+1 release IS that
+  // cycle's end. Chained AFTER the server-boot promise (settle or fail) so
+  // the deletion never overlaps a model load; fire-and-forget so it never
+  // blocks startup.
+  private _scheduleLegacyTorchCacheCleanup(
+    serverBoot: Promise<unknown> | null,
+  ): void {
+    void Promise.resolve(serverBoot)
+      .catch(() => {
+        // Boot failure must neither skip the cleanup chain nor surface as
+        // an unhandled rejection — initializeAtStartup already logged it.
+      })
+      .then(() => {
+        void this._cleanupLegacyTorchCachesOnce();
+      });
+  }
+
+  /** One-shot legacy torch cache reclaim. Gated on the ONNX generation
+   * being pin-ready — the only in-process signal that the torch dirs are
+   * truly obsolete on this machine (spec "确认无用后"); a not-ready check
+   * simply retries on the next launch. Never throws: failures are logged
+   * and app availability is untouched (acceptance criterion 4). Returns
+   * the in-flight promise so tests can await completion. */
+  _cleanupLegacyTorchCachesOnce(): Promise<void> {
+    if (this._legacyTorchCleanupAttempted) return Promise.resolve();
+    this._legacyTorchCleanupAttempted = true;
+    try {
+      if (!this.checkOnnxMigration().onnx_ready) {
+        this.logger.debug?.(
+          "ONNX 模型未就绪，本次跳过旧 torch 模型缓存清理（下次启动重试）",
+        );
+        return Promise.resolve();
+      }
+      return cleanupLegacyTorchCaches({
+        userDataModelsRoot: this.modelManager.getUserDataModelsRoot(),
+        modelscopeCacheRoot: process.env.MODELSCOPE_CACHE ?? null,
+        logger: this.logger,
+      }).then(
+        () => undefined,
+        (error: unknown) => {
+          // The executor is written never to reject; this guard exists so
+          // an unexpected failure still cannot touch app availability.
+          this.logger.warn?.(
+            "旧 torch 模型缓存清理异常（不影响应用使用）:",
+            error,
+          );
+        },
+      );
+    } catch (error) {
+      this.logger.warn?.("旧 torch 模型缓存清理异常（不影响应用使用）:", error);
+      return Promise.resolve();
+    }
+  }
+  // [20261006_T12_LegacyCacheCleanup] END
 
   async preInitializeModels(): Promise<Promise<void | unknown> | null> {
     if (this.server.initializationPromise)
