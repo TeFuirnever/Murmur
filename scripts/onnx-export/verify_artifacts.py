@@ -118,9 +118,20 @@ def main() -> int:
     parser.add_argument("--via-api", action="store_true",
                         help="verify the release mirror via GitHub server-side asset digests")
     parser.add_argument("--download-dir", default=os.path.join(HERE, "work", "mirror-check"))
+    # [20261006_Diag_444_Fp32AsrVariant] Ticket #444 (T4b): verify a local
+    # tree against a STANDALONE pin-shaped manifest instead of the committed
+    # int8 pin — the fp32 diagnostic variant (stage_fp32_asr.py output) is
+    # not described by model-pin.json and must never be.
+    parser.add_argument("--manifest", default=None,
+                        help="verify against a standalone manifest JSON "
+                        "(e.g. work/artifacts-fp32/manifest.json) instead of "
+                        "the committed pin; release modes are unavailable")
     args = parser.parse_args()
 
-    with open(args.pin, encoding="utf-8") as f:
+    if args.manifest and (args.from_release or args.via_api):
+        parser.error("--manifest cannot be combined with --from-release/--via-api")
+
+    with open(args.manifest or args.pin, encoding="utf-8") as f:
         pin = json.load(f)
 
     if args.via_api:
@@ -128,7 +139,9 @@ def main() -> int:
         print("VERIFY:", "PASS" if all_ok else "FAIL")
         return 0 if all_ok else 1
 
-    base_url = pin["release"]["asset_base_url"]
+    # Standalone manifests (e.g. the fp32 diagnostic variant) carry no
+    # release section — the mirror URL is only needed when downloading.
+    base_url = (pin.get("release") or {}).get("asset_base_url", "")
 
     all_ok = True
     for key, entry in pin["models"].items():
