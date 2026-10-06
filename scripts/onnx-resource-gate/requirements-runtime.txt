@@ -1,0 +1,10 @@
+# [20261006_Ci_421_ResourceGateWorkflow] Ticket #421: pinned RUNTIME env for
+# the resource-gate evidence workflow (.github/workflows/onnx-resource-gate.yml).
+# Same funasr-onnx stack as scripts/onnx-spike/requirements-runtime.txt —
+# NO torch in the tree. RSS sampling is stdlib-only (ps on posix, ctypes
+# psapi on Windows), so psutil is deliberately NOT a dependency here
+# (unlike the spike, which predates the stdlib sampler).
+funasr-onnx==0.4.3
+onnxruntime==1.30.0
+soundfile==0.14.0
+requests==2.34.2

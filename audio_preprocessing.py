@@ -45,6 +45,22 @@ NORMALIZE_WINDOW_SECONDS = 30.0
 # add crossfade windows if real speech ever lands on a boundary audibly.
 RTF_BUDGET = 0.05
 
+# [20261006_Fix_421_HpfBlockOla] Ticket #421 review: the high-pass used to
+# run ONE global rfft over the WHOLE signal — O(audio_length) float64
+# buffers (~1GB transient RSS for a 10-minute file) that stacked onto the
+# models' resident footprint and blew the <=1700MB release envelope. The
+# filter is now a windowed-sinc FIR (Hamming, sharp enough that the 40Hz
+# test tone sits deep in the stopband) applied via block overlap-add: the
+# FFT never sees more than HPF_FFT_BLOCK_SIZE samples, so the internal
+# working set is O(block) regardless of file length. Signals shorter than
+# one block take the identical single-block path. Numeric contract
+# (80Hz cutoff incl. DC, float32 in/out, isfinite rejection upstream) is
+# unchanged; the brickwall becomes a ~26Hz-transition FIR — inaudible and
+# within every pinned property below.
+HPF_TAPS = 4001
+HPF_BLOCK_SAMPLES = 65536  # 4s @16k per overlap-add block
+HPF_FFT_BLOCK_SIZE = HPF_BLOCK_SAMPLES + HPF_TAPS - 1
+
 _INT16_SCALE = 32768.0
 
 
@@ -56,22 +72,46 @@ def to_float32(samples):
     return arr.astype(np.float32)
 
 
-def highpass_filter(samples, sr, cutoff_hz=HPF_CUTOFF_HZ):
-    """FFT-domain high-pass: zero out spectrum below cutoff_hz (incl. DC).
+def _highpass_taps(sr):
+    """Hamming-windowed-sinc high-pass taps at HPF_CUTOFF_HZ (numpy-only —
+    scipy is not a CI dependency of this module). Spectral-inversion form:
+    delta minus the windowed low-pass, so DC is killed exactly (taps sum 0)
+    and the passband gain is ~1."""
+    m = HPF_TAPS - 1
+    n = np.arange(HPF_TAPS, dtype=np.float64) - m / 2.0
+    fc = HPF_CUTOFF_HZ / float(sr)
+    lowpass = 2.0 * fc * np.sinc(2.0 * fc * n) * np.hamming(HPF_TAPS)
+    delta = np.zeros(HPF_TAPS, dtype=np.float64)
+    delta[m // 2] = 1.0
+    return (delta - lowpass).astype(np.float32)
 
-    Vectorized O(n log n) — a per-sample IIR loop would blow the RTF budget
-    on hour-long imports. Offline path only (whole array in memory, which
-    the pipeline already requires for file transcription).
+
+def highpass_filter(samples, sr, cutoff_hz=HPF_CUTOFF_HZ):
+    """Block overlap-add FIR high-pass at cutoff_hz (incl. DC).
+
+    [20261006_Fix_421_HpfBlockOla] Replaces the whole-signal rfft brickwall:
+    the FIR taps carry the same 80Hz cutoff semantics at O(block) internal
+    memory. Blocks are transformed independently and overlap-added; the
+    linear-phase group delay ((HPF_TAPS-1)/2 samples) is trimmed by the
+    "same"-mode alignment below. Degenerate inputs (0-frame) pass through.
     """
-    x = np.asarray(samples, dtype=np.float64)
+    x = np.asarray(samples, dtype=np.float32)
     if len(x) == 0:
-        # Degenerate input (0-frame file): nothing to filter (review
-        # fixup — numpy's rfft would raise a bare FFT error otherwise).
         return np.asarray(samples, dtype=np.float32)
-    spec = np.fft.rfft(x)
-    freqs = np.fft.rfftfreq(len(x), 1.0 / sr)
-    spec[freqs < cutoff_hz] = 0.0
-    return np.fft.irfft(spec, n=len(x)).astype(np.float32)
+    taps = _highpass_taps(sr)
+    fft_size = HPF_FFT_BLOCK_SIZE
+    spectrum = np.fft.rfft(taps, fft_size)
+    out = np.zeros(len(x) + HPF_TAPS - 1, dtype=np.float32)
+    for start in range(0, len(x), HPF_BLOCK_SAMPLES):
+        block = x[start : start + HPF_BLOCK_SAMPLES]
+        filtered = np.fft.irfft(
+            np.fft.rfft(block, fft_size) * spectrum, fft_size
+        )
+        out[start : start + fft_size] += filtered[: len(out) - start]
+    # Linear-phase delay compensation: drop the first (HPF_TAPS-1)/2
+    # samples so the output aligns with the input ("same" semantics).
+    delay = (HPF_TAPS - 1) // 2
+    return out[delay : delay + len(x)]
 
 
 def normalize_segment(samples):

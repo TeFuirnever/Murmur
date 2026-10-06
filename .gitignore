@@ -193,3 +193,8 @@ scripts/onnx-ab/work/
 # as workflow artifacts — the archived evidence lives in docs/research/)
 scripts/onnx-spike/.venv/
 scripts/onnx-spike/work/
+
+# [20261006_Ci_421_ResourceGateWorkflow] resource-gate local state: the
+# runner's default work dir (tiled 10-min wav, downloaded model bytes,
+# result JSON/MD — CI uploads its own copies as workflow artifacts)
+scripts/onnx-resource-gate/work/

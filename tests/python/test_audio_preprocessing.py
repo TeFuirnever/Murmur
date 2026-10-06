@@ -61,6 +61,48 @@ class HighpassTest(unittest.TestCase):
         # at least 90% of it.
         self.assertGreater(float(np.sqrt(np.mean(y**2))), 0.32)
 
+    def test_removes_dc_offset(self):
+        # [20261006_Fix_421_HpfBlockOla] The filter must keep killing DC
+        # (the old docstring contract: "incl. DC") — a constant offset on a
+        # passband sine must not survive.
+        x = sine(1000, 1.0, amp=0.3) + 0.2
+        y = ap.highpass_filter(x, SR)
+        self.assertLess(abs(float(np.mean(y.astype(np.float64)))), 1e-3)
+
+
+class HighpassMemoryBoundTest(unittest.TestCase):
+    """[20261006_Fix_421_HpfBlockOla] Ticket #421 review: the HPF used to
+    run ONE global rfft over the whole signal — O(audio_length) float64
+    buffers (~1GB transient for 10 minutes), stacking onto the models'
+    resident footprint and blowing the <=1700MB release envelope. The block
+    overlap-add implementation must never transform more than the pinned
+    FFT block size, whatever the input length."""
+
+    def test_transform_size_bounded_regardless_of_input_length(self):
+        recorded = []
+        real_rfft = np.fft.rfft
+
+        def counting_rfft(a, n=None, axis=-1, norm=None):
+            recorded.append(n if n is not None else len(a))
+            return real_rfft(a, n=n, axis=axis, norm=norm)
+
+        np.fft.rfft = counting_rfft
+        try:
+            long_signal = sine(500, 60.0, amp=0.3)  # 960k samples
+            y = ap.highpass_filter(long_signal, SR)
+        finally:
+            np.fft.rfft = real_rfft
+        self.assertEqual(len(y), len(long_signal))
+        self.assertTrue(recorded, "HPF must run its FFT blocks")
+        self.assertLessEqual(
+            max(recorded), ap.HPF_FFT_BLOCK_SIZE, sorted(set(recorded))[-3:]
+        )
+
+    def test_block_constant_is_bounded(self):
+        # The block size IS the memory contract — pin it well under any
+        # plausible audio length (a 4s FFT window ≈ 0.7MB float64).
+        self.assertLessEqual(ap.HPF_FFT_BLOCK_SIZE, 131072)
+
 
 class ValidationTest(unittest.TestCase):
     def test_rejects_nan_input(self):
@@ -136,10 +178,16 @@ class NormalizeLoudnessTest(unittest.TestCase):
 
 class OrderTest(unittest.TestCase):
     def test_hpf_before_normalize(self):
-        # Quiet mix of rumble + speech-band. After preprocessing the
-        # speech band must reach ~target while the rumble stays attenuated.
-        # If normalization ran FIRST, the rumble would be amplified before
+        # Quiet mix of rumble + speech-band. After preprocessing the speech
+        # band must reach ~target while the rumble stays far below it. If
+        # normalization ran FIRST, the rumble would be amplified before
         # filtering — observable as high residual energy below 80Hz.
+        # [20261006_Fix_421_HpfBlockOla] The residual-rumble arm is now
+        # RELATIVE to the speech band: under the old whole-signal brickwall
+        # it was vacuously green (the exact spectral zeroing left ~1e-13),
+        # so the absolute floor pinned an implementation artifact, not the
+        # order semantics. The block-OLA FIR leaves a real ~-60dB stopband,
+        # and the invariant the pipeline needs is rumble << speech.
         x = sine(40, 1.0, amp=0.02) + sine(1000, 1.0, amp=0.02)
         y = ap.preprocess_audio(x.astype(np.float32), SR)
         speech = band_rms(y, SR, 300, 3000)
@@ -147,7 +195,7 @@ class OrderTest(unittest.TestCase):
         target = 10 ** (ap.TARGET_RMS_DBFS / 20)
         # Speech band lifted toward target; rumble far below it.
         self.assertGreater(speech, target * 0.5)
-        self.assertLess(rumble, target * 0.05)
+        self.assertLess(rumble, speech * 0.05)
 
 
 class LoadAndFileTest(unittest.TestCase):

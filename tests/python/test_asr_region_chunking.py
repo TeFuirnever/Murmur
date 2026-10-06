@@ -94,7 +94,12 @@ class FakeSeaco:
 
 
 class FakeFsmn:
-    """funasr_onnx.Fsmn_vad stand-in: one configurable segment list."""
+    """funasr_onnx.Fsmn_vad stand-in.
+    [20261006_Fix_421_VadWindowing] The adapter feeds <=60s windows; the
+    real engine emits segments RELATIVE to each window it receives, so the
+    fake does the same: a voiced window is one segment spanning the slice
+    ([0, window_ms]); .segments == [] means silence (no segments). The
+    adapter owns the window-start offsets."""
 
     instances = []
     segments = [[0, 16000]]
@@ -109,7 +114,10 @@ class FakeFsmn:
         FakeFsmn.instances.append(self)
 
     def __call__(self, samples, **kwargs):
-        return [list(FakeFsmn.segments)]
+        if not FakeFsmn.segments:
+            return [list(FakeFsmn.segments)]
+        window_ms = int(len(samples) / 16000.0 * 1000)
+        return [[[0, window_ms]]]
 
 
 class FakeCt:
@@ -251,6 +259,100 @@ class FilterChunkToRegionTest(unittest.TestCase):
         )
         self.assertEqual(text, "")
         self.assertEqual(ts, [])
+
+
+class WindowRecordingFsmn:
+    """funasr_onnx.Fsmn_vad stand-in recording each call's input size and
+    returning a configurable per-call segment list (the [segments] shape
+    the real engine's __call__ emits)."""
+
+    calls = []  # (sample_count, engine_instance_index)
+    per_call_segments = [[]]  # one entry per call, cycled
+
+    @classmethod
+    def reset(cls):
+        cls.calls = []
+        cls.per_call_segments = [[]]
+
+    def __init__(self, model_or_dir="<engine>", quantize=False, **kwargs):
+        pass
+
+    def __call__(self, samples, **kwargs):
+        WindowRecordingFsmn.calls.append(len(samples))
+        index = (len(WindowRecordingFsmn.calls) - 1) % len(
+            WindowRecordingFsmn.per_call_segments
+        )
+        return [list(WindowRecordingFsmn.per_call_segments[index])]
+
+
+class VadWindowingTest(unittest.TestCase):
+    """[20261006_Fix_421_VadWindowing] Ticket #421 review: the VAD adapter
+    must feed the engine <=60s windows (independent passes with explicit
+    window-start offsets) instead of the whole file in one shot — the
+    whole-file pass materialized O(audio_length) buffers (~1GB transient
+    RSS on a 10-minute file)."""
+
+    def setUp(self):
+        WindowRecordingFsmn.reset()
+
+    def _adapter(self):
+        return funasr_server.OnnxVadAdapter(
+            WindowRecordingFsmn("<engine>", quantize=False)
+        )
+
+    def test_long_input_split_into_60s_windows_with_offsets(self):
+        import numpy as np
+
+        adapter = self._adapter()
+        WindowRecordingFsmn.per_call_segments = [[[0, 500]]]
+        samples = np.zeros(16000 * 130, dtype=np.float32)  # 130s
+
+        result = adapter.generate(input=samples)
+
+        # 130s -> 3 windows: 60s + 60s + 10s
+        self.assertEqual(
+            WindowRecordingFsmn.calls,
+            [16000 * 60, 16000 * 60, 16000 * 10],
+        )
+        # each window's segments offset by its window start (ms)
+        self.assertEqual(
+            result[0]["value"],
+            [[0, 500], [60000, 60500], [120000, 120500]],
+        )
+
+    def test_short_input_single_pass_no_offset_change(self):
+        import numpy as np
+
+        adapter = self._adapter()
+        WindowRecordingFsmn.per_call_segments = [[[100, 900]]]
+        samples = np.zeros(16000 * 5, dtype=np.float32)
+
+        result = adapter.generate(input=samples)
+
+        self.assertEqual(WindowRecordingFsmn.calls, [16000 * 5])
+        self.assertEqual(result[0]["value"], [[100, 900]])
+
+    def test_window_with_no_segments_is_skipped(self):
+        import numpy as np
+
+        adapter = self._adapter()
+        # first window silent (no segments), second voiced
+        WindowRecordingFsmn.per_call_segments = [[], [[10, 800]]]
+        samples = np.zeros(16000 * 130, dtype=np.float32)
+
+        result = adapter.generate(input=samples)
+
+        self.assertEqual(
+            result[0]["value"], [[60010, 60800]]
+        )
+
+    def test_empty_input_yields_empty_value_without_engine_call(self):
+        import numpy as np
+
+        adapter = self._adapter()
+        result = adapter.generate(input=np.zeros(0, dtype=np.float32))
+        self.assertEqual(result, [{"value": []}])
+        self.assertEqual(WindowRecordingFsmn.calls, [])
 
 
 class TranscribeFileSubChunkTest(unittest.TestCase):
