@@ -109,7 +109,7 @@
     "playwright-core": "^1.60.0",
     "postcss": "^8.5.26",
     "prettier": "^3.8.3",
-    "tailwindcss": "^4.1.10",
+    "tailwindcss": "^4.3.3",
     "tailwindcss-animate": "^1.0.7",
     "tar": "^7.5.22",
     "tsx": "^4.23.13",
