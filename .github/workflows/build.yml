@@ -310,6 +310,24 @@ jobs:
           shasum -a 256 *.dmg *.zip 2>/dev/null > checksums-sha256.txt || true
           cat checksums-sha256.txt
 
+      # [20261006_T8_PackagingSlimdown] Ticket #422 AC1: record the exact
+      # installer byte sizes as packaging evidence (budgets: mac ≤260MB /
+      # win ≤270MB). The number lands in the job log AND the summary so a
+      # release-evidence chain can cite it without downloading artifacts.
+      # wc -c is portable across BSD stat (mac) and Git Bash (win).
+      - name: Record installer sizes (packaging evidence)
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "### Installer sizes (bytes) — #422 budgets: mac ≤260MB / win ≤270MB" >> "$GITHUB_STEP_SUMMARY"
+          for f in dist/*.dmg dist/*.exe dist/*.zip; do
+            [ -f "$f" ] || continue
+            bytes=$(wc -c < "$f" | tr -d '[:space:]')
+            mb=$(awk -v b="$bytes" 'BEGIN { printf "%.1f", b/1024/1024 }')
+            echo "installer-size: $(basename "$f") ${bytes} bytes (${mb} MB)"
+            echo "- \`$(basename "$f")\`: **${bytes} bytes** (${mb} MB)" >> "$GITHUB_STEP_SUMMARY"
+          done
+
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v7
         with:
@@ -536,6 +554,22 @@ jobs:
           }
           $hashes | Out-File -Encoding utf8 checksums-sha256.txt
           Get-Content checksums-sha256.txt
+
+      # [20261006_T8_PackagingSlimdown] Ticket #422 AC1: exact installer byte
+      # sizes as packaging evidence (win ≤270MB budget) — parity with the
+      # mac job's step; lands in the log and the job summary.
+      - name: Record installer sizes (packaging evidence)
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "### Installer sizes (bytes) — #422 budgets: mac ≤260MB / win ≤270MB" >> "$GITHUB_STEP_SUMMARY"
+          for f in dist/*.dmg dist/*.exe dist/*.zip; do
+            [ -f "$f" ] || continue
+            bytes=$(wc -c < "$f" | tr -d '[:space:]')
+            mb=$(awk -v b="$bytes" 'BEGIN { printf "%.1f", b/1024/1024 }')
+            echo "installer-size: $(basename "$f") ${bytes} bytes (${mb} MB)"
+            echo "- \`$(basename "$f")\`: **${bytes} bytes** (${mb} MB)" >> "$GITHUB_STEP_SUMMARY"
+          done
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v7

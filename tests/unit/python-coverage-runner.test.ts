@@ -68,11 +68,12 @@ describe("[20260906_Spec259_T4] python coverage runner", () => {
     expect(runner.COVERAGE_INCLUDE).toContain("funasr_server.py");
   });
 
-  // [20261006_T8_PackagingSlimdown] Ticket #422: the slimmed embedded env
-  // no longer carries dev-only tooling (coverage), so interpreter
-  // resolution must SKIP a coverage-less candidate and fall through to the
-  // next one (CI equips the system python). RED first: resolution returned
-  // the first existing interpreter and the runner hard-failed.
+  // [20261006_T8_PackagingSlimdown] Ticket #422: the embedded env SHIPS
+  // coverage via the wheel lock (scripts/embedded-python/requirements.in),
+  // but envs built before that convention — and bare system pythons — may
+  // lack it, so interpreter resolution must SKIP a coverage-less candidate
+  // and fall through to the next one. RED first: resolution returned the
+  // first existing interpreter and the runner hard-failed.
   describe("resolveInterpreter coverage fall-through", () => {
     function candidateScript(states: Record<string, number>) {
       // spawnSync(cmd, args): --version probes the interpreter, the

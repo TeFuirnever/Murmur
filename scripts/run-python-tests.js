@@ -142,9 +142,11 @@ function main() {
   }
   const interpreter = resolveInterpreter();
   if (!interpreter) {
-    // [20261006_T8_PackagingSlimdown] The slimmed embedded env carries no
-    // coverage module (dev-only tooling stays out of the installer), so
-    // resolution needs a system python with coverage installed.
+    // [20261006_T8_PackagingSlimdown] The embedded env SHIPS coverage via
+    // the wheel lock (scripts/embedded-python/requirements.in), so this
+    // branch means the env predates that convention or every candidate is
+    // a bare system python — install coverage into the interpreter that
+    // should run the suite.
     console.error(
       "run-python-tests: no python interpreter with the coverage module found " +
         "(tried the embedded env, python3, python)",
