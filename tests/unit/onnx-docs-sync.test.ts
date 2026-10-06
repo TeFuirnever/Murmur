@@ -200,6 +200,52 @@ describe("ONNX docs sync (#423 / spec #412 T10)", () => {
       const rendered = readRenderedRepoFile("docs/faq.md");
       expect(rendered).not.toMatch(/\blibrosa\b/);
     });
+
+    // [20261006_Docs_423_T10] Review fix: the install snippets still told
+    // developers to run `python download_models.py` — that script
+    // snapshot-downloads the legacy fp32 damo/* torch checkpoints, which
+    // the ONNX engine never reads (it serves only the pin-anchored
+    // onnx-int8 set fetched in-app, modelManager.ts downloadOnnxModels).
+    // Following the README verbatim wasted ~1.24GB of never-read
+    // downloads. Command invocations are banned in fenced blocks; a `#`
+    // comment mention (rollback-cache-only) is allowed.
+    function fencedCodeBlockLines(markdown: string): string[] {
+      const lines: string[] = [];
+      let inside = false;
+      for (const line of markdown.split("\n")) {
+        if (line.trimStart().startsWith("```")) {
+          inside = !inside;
+          continue;
+        }
+        if (inside) lines.push(line);
+      }
+      return lines;
+    }
+
+    it("install snippets never invoke download_models.py as a command", () => {
+      for (const file of ["README.md", "README.zh-CN.md", "CONTRIBUTING.md"]) {
+        const commandLines = fencedCodeBlockLines(readRepoFile(file)).filter(
+          (line) =>
+            line.includes("download_models.py") &&
+            !line.trimStart().startsWith("#"),
+        );
+        expect(
+          commandLines,
+          `${file} must not run download_models.py (legacy fp32 torch checkpoints the ONNX engine never reads)`,
+        ).toEqual([]);
+      }
+    });
+
+    it("troubleshooting.md no longer advises the HTTP_PROXY env vars", () => {
+      // Review fix: the download transport is bare global fetch
+      // (modelDownloader.ts defaultHttpFetch) — no EnvHttpProxyAgent
+      // anywhere in src, and Node's undici ignores HTTP_PROXY/HTTPS_PROXY.
+      // Advising those env vars sent proxy users into a dead end; the copy
+      // must ask for reachability of the two sources instead.
+      const rendered = readRenderedRepoFile("docs/troubleshooting.md");
+      expect(rendered).not.toContain("HTTP_PROXY");
+      expect(rendered).not.toContain("HTTPS_PROXY");
+    });
   });
 
   describe("dual-source download description", () => {

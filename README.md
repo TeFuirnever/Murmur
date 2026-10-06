@@ -207,15 +207,18 @@ pnpm install
 # Python setup (choose one)
 # Option A: uv (recommended, manages the virtualenv for you)
 curl -LsSf https://astral.sh/uv/install.sh | sh
-uv sync && uv run python download_models.py
+uv sync
 
 # Option B: system Python
-# [20261006_Docs_423_T10] spec #412 (T10): the old hand-rolled pip line
-# (`funasr modelscope torch torchaudio librosa numpy`) drifted from
-# pyproject.toml — install exactly what it declares instead (modelscope
-# arrives transitively via funasr).
+# [20261006_Docs_423_T10] spec #412 (T10): install exactly what
+# pyproject.toml declares (modelscope arrives transitively via funasr).
 uv pip install -r pyproject.toml
-python download_models.py
+
+# [20261006_Docs_423_T10] spec #412 (T10): ONNX models need NO manual
+# download — the first `pnpm dev` fetches the pin-anchored onnx-int8 set
+# in-app (~671MB, resumable). `uv run python download_models.py` would only
+# pre-seed the LEGACY fp32 torch fallback cache, which the new engine never
+# reads; it stays available solely to seed that one-version-cycle rollback.
 
 pnpm dev
 ```

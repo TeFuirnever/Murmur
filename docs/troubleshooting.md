@@ -38,7 +38,7 @@ xattr -cr /Applications/Murmur.app && codesign --force --deep --sign - /Applicat
 **解决方案**:
 
 1. 检查网络连接，确保能访问 ModelScope（`modelscope.cn`）和 GitHub Release 镜像——下载支持双源自动回退：ModelScope 主源失败时自动切换到 GitHub Release 镜像（同一 sha256 清单，逐字节一致）
-2. 如果使用代理，请让应用进程能读到 `HTTP_PROXY` / `HTTPS_PROXY` 环境变量（下载失败的应用内提示也会指引检查代理设置）
+2. 如果使用代理或 VPN，请检查其对 ModelScope（`modelscope.cn`）和 GitHub（`github.com`）的连通性（下载失败的应用内提示也会指引检查网络与代理设置）
 3. 下载支持断点续传：失败后在应用内重试，将从断点继续，无需从头下载
 4. 检查磁盘空间（需要至少 2GB 可用空间）
 5. 模型完整性逐文件 sha256 校验：若提示"模型损坏"，删除模型下载目录后在应用内重新下载
@@ -150,7 +150,7 @@ The first command clears the quarantine attribute, the second rebuilds the seal 
 **Solutions**:
 
 1. Check network access to ModelScope (`modelscope.cn`) and the GitHub Release mirror — downloads use dual sources with automatic failover: when the ModelScope primary fails, the GitHub Release mirror takes over (same sha256 manifest, byte-identical)
-2. If you use a proxy, make sure the app process can read the `HTTP_PROXY` / `HTTPS_PROXY` environment variables (the in-app failure hint also points at proxy settings)
+2. If you use a proxy or VPN, verify it can reach ModelScope (`modelscope.cn`) and GitHub (`github.com`) (the in-app failure hint also points at network and proxy settings)
 3. Downloads resume from the breakpoint: retry in the app after a failure and it continues — no need to start over
 4. Ensure at least 2GB free disk space
 5. Integrity is verified per file against sha256: if the app reports "model corrupted", delete the model download directory and download again in the app

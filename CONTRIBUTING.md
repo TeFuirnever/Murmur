@@ -32,9 +32,12 @@ cd Murmur
 pnpm install
 
 # Python 环境（推荐 uv）
+# [20261006_Docs_423_T10] spec #412 (T10)：ONNX 模型无需手动下载——首次
+# `pnpm dev` 时应用内自动下载 pin 锚定的 onnx-int8 文件集（约 671MB，断点
+# 续传）。旧脚本 `uv run python download_models.py` 只会预置旧版 fp32
+# torch 回退缓存（新引擎不读取），勿作为开发安装步骤执行。
 curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync
-uv run python download_models.py
 
 # 启动
 pnpm dev

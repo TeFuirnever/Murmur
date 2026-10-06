@@ -198,14 +198,17 @@ pnpm install
 # Python 环境（二选一）
 # 方案 A: uv（推荐，自动管理虚拟环境）
 curl -LsSf https://astral.sh/uv/install.sh | sh
-uv sync && uv run python download_models.py
+uv sync
 
 # 方案 B: 系统 Python
-# [20261006_Docs_423_T10] spec #412 (T10)：旧的手写 pip 清单
-# （funasr modelscope torch torchaudio librosa numpy）已与 pyproject.toml
-# 脱节——改为按声明安装（modelscope 由 funasr 传递引入）。
+# [20261006_Docs_423_T10] spec #412 (T10)：按 pyproject.toml 的声明安装
+# （modelscope 由 funasr 传递引入）。
 uv pip install -r pyproject.toml
-python download_models.py
+
+# [20261006_Docs_423_T10] spec #412 (T10)：ONNX 模型无需手动下载——首次
+# `pnpm dev` 时应用内自动下载 pin 锚定的 onnx-int8 文件集（约 671MB，断点
+# 续传）。`uv run python download_models.py` 只会预置旧版 fp32 torch 回退
+# 缓存（新引擎不读取），仅为该一个版本周期的回退保留。
 
 pnpm dev
 ```
