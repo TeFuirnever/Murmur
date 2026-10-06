@@ -163,6 +163,84 @@ describe("README contract", () => {
     }
   });
 
+  // [20261006_Docs_IntroVideoContract] Ticket #449: the 15s intro video is
+  // delivered as an inline GitHub user-attachments player (the asset is
+  // hosted by issue #449 itself) plus an in-repo archive under
+  // docs/promotion/intro-video/. Nothing else pins that delivery: a URL
+  // swap in one language file, or a vanished archive file, would otherwise
+  // ship silently. Same pin-not-scan philosophy as the Spec #299 pins
+  // above — assertions are added incrementally per ticket.
+  describe("intro video delivery (ticket #449)", () => {
+    // Source of record for the inline player: the user-attachments asset
+    // uploaded to issue #449. If a re-upload ever changes this UUID, the
+    // pin going red is the signal to update BOTH language files in one
+    // commit — never let them point at two different uploads.
+    const INTRO_VIDEO_ASSET_URL =
+      "https://github.com/user-attachments/assets/5c6f1292-9494-4188-b419-083dc0e463da";
+    const introVideoReadmeFiles = ["README.md", "README.zh-CN.md"];
+
+    // Rendered standalone-paragraph URLs only (HTML comments stripped by
+    // readRenderedRootFile, so the prose mention inside the change-tag
+    // comment cannot double-count).
+    function embeddedIntroVideoUrls(markdown: string): string[] {
+      const rendered = stripHtmlComments(markdown);
+      return [
+        ...rendered.matchAll(
+          /^https:\/\/github\.com\/user-attachments\/\S+$/gm,
+        ),
+      ].map((match) => match[0] ?? "");
+    }
+
+    for (const file of introVideoReadmeFiles) {
+      it(`${file}: embeds exactly the pinned issue-#449 player URL`, () => {
+        const urls = embeddedIntroVideoUrls(readRenderedRootFile(file));
+        expect(
+          urls,
+          `${file} must embed the intro video player URL exactly once`,
+        ).toEqual([INTRO_VIDEO_ASSET_URL]);
+      });
+    }
+
+    // The archive folder's declared deliverables must exist on disk. The
+    // two MP4 links in the root READMEs are already covered by the
+    // link-integrity contract; this pin adds the poster, which is declared
+    // only in the archive README (in backticks, invisible to link
+    // extraction), and keeps the declared trio from silently shrinking.
+    // Deliberately NOT scanned: path-like backtick strings in the archive
+    // README (e.g. the Remotion production project) — that project is
+    // intentionally maintainer-local, excluded by .gitignore's
+    // `productions/` entry, so it is not an in-repo contract.
+    const introVideoArchiveDir = path.join("docs", "promotion", "intro-video");
+    const introVideoArchiveFiles = [
+      "murmur-intro-15s.mp4",
+      "murmur-intro-15s-nobgm.mp4",
+      "murmur-intro-15s-poster.jpg",
+    ];
+
+    it("archive README declares every archived deliverable", () => {
+      const archiveReadme = readRootFile(
+        path.join(introVideoArchiveDir, "README.md"),
+      );
+      for (const fileName of introVideoArchiveFiles) {
+        expect(
+          archiveReadme.includes(fileName),
+          `archive README must declare ${fileName}`,
+        ).toBe(true);
+      }
+    });
+
+    it("every declared archive deliverable exists on disk", () => {
+      const missing = introVideoArchiveFiles.filter(
+        (fileName) => !fs.existsSync(path.join(introVideoArchiveDir, fileName)),
+      );
+      expect(
+        missing,
+        `archived intro-video deliverables missing from ${introVideoArchiveDir}: ${missing.join(", ")}`,
+      ).toEqual([]);
+    });
+  });
+  // [20261006_Docs_IntroVideoContract] END
+
   // [20260907_Spec299_HeadingsParity] T3: the single bilingual file drifted
   // (the en half lagged zh by 9 items) because nothing detected structural
   // divergence. After the split, both files must keep a 1:1 section
