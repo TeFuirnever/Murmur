@@ -150,10 +150,30 @@ chore: 升级 Electron 到 v36
 1. **SQLite gate**（[20260905_Feat_NodeSqlite] 引擎已换 node:sqlite，spec #226）— 打包前必须在 Electron 运行时（`ELECTRON_RUN_AS_NODE`）下用 `node:sqlite` 真实打开内存库（历史：better-sqlite3 时代拦截系统 Node ABI 二进制，v1.3.0 macOS 事故；引擎内置后无 ABI 可错，门禁保留为打包前真实开库验证）
 2. **Preload presence gate** — `dist-preload/preload.js` 不存在则拒绝打包（electron-builder files 通配会静默跳过缺失文件，v1.3.1 及更早全部缺 preload）
 3. **Python packaging gate** — 嵌入式 Python 环境准备是硬性步骤（actions/cache 缓存环境本体，准备失败即中止打包，取代旧版 Windows `continue-on-error`——正是它让 v1.2.0–v1.3.2 的 Windows 包静默缺 Python 环境而构建保持全绿，spec #177 B-0 / issues #176 #196）；打包前必须用该环境真实 import numpy/soundfile/funasr
-4. **Packaged boot smoke（mac）** — 挂载刚构建的 DMG、真实启动 app，轮询断言启动日志含"主窗口创建成功/应用启动完成/注册成功/Python链路自检通过"（热键注册来自渲染进程 IPC 证明 preload 桥；Python 自检是独立 spawn 嵌入式解释器跑 `import funasr`，证明解释器解析 + 依赖栈整体可用），且无致命模式（`NODE_MODULE_VERSION` / `Uncaught Exception` / `Unhandled Rejection` / preload 失败 / Python自检失败）
-5. **Packaged boot smoke（win）** — 静默安装（`/S`）刚构建的 EXE 后同样断言
+4. **Packaged boot smoke（mac）** — 挂载刚构建的 DMG、真实启动 app，轮询断言启动日志含"主窗口创建成功/应用启动完成/注册成功/Python链路自检通过"（热键注册来自渲染进程 IPC 证明 preload 桥；Python 自检是独立 spawn 嵌入式解释器跑 `import funasr`，证明解释器解析 + 依赖栈整体可用），且无致命模式（`NODE_MODULE_VERSION` / `Uncaught Exception` / `Unhandled Rejection` / preload 失败 / Python自检失败）。<!-- [20261006_T11_EvidenceChainInferenceSmoke] issue #424 -->自 #424（spec #412 T11）起 boot smoke 还包含一段**真实 ONNX 推理**：安装产物内的嵌入式解释器以 app 同款隔离环境变量（`PYTHONHOME`/`PYTHONPATH`）跑 `scripts/embedded-python/import_gate.py` full 模式，对提交的 40s 语音 fixture 完成 ASR+VAD+Punc 转写并断言文本非空——证明打包（asar 解包/签名/安装）没有破坏推理环境；门禁模型字节（T1 自导出、sha256 pin）缺失时在 smoke 内**硬拉取**，镜像故障即构建红（缺项即红，不静默跳过）<!-- [20261006_T11_EvidenceChainInferenceSmoke] END -->
+5. **Packaged boot smoke（win）** — 静默安装（`/S`）刚构建的 EXE 后同样断言（含 #424 起的同款打包后 ONNX 真推理段，解释器取自 NSIS 安装目录）
 6. **Packaged boot-health probes（mac/win，Spec #266 T11）** — 以已安装产物为启动目标运行 boot-health 探针套件（preload 桥/麦克风按钮/mascot/CSP/6s 退出），打包态 asar 布局对 dev 模式 e2e 不可见
 7. <!-- [20260911_Gate_MacSignature] issue #337：v1.5.0 dmg 无资源密封被 Gatekeeper 判"已损坏" -->**macOS signature gate（mac）** — DMG 构建后对 `dist/**/Murmur.app` 执行 `codesign --verify --deep --strict`，密封损坏即中止发布；有效 ad-hoc 密封可通过（无需证书），根治需维护者在 CI secrets 配置 Developer ID（`CSC_LINK` 等）并开启公证<!-- [20260911_Gate_MacSignature] END -->
+8. <!-- [20261006_T11_EvidenceChainChecklist] issue #424 (spec #412 决议 13) -->**发布证据链 checklist（release 前最后一道闸）** — `evidence-checklist` job 在 release 之前运行 `scripts/release-evidence/check-evidence-chain.js`：五项各引用归属工单的已录得产物，**缺项即红并阻断 release**；报告工件 `release-evidence-chain-report.json` 随 run 上传留档。五项清单：
+   - **T2 win x64 ONNX spike（#415）** — 判决文档 `docs/research/2026-10-01-onnx-win-x64-spike.md` 含 `WIN-SPIKE: PASS`，且 `onnx-win-spike.yml` 有已录得的绿色 run；
+   - **T4 A/B 判决（#416 + #443）** — 判决书 `docs/research/2026-10-01-onnx-ab-verdict.md` 含「议决记录」与翻 GO 后口径（`PASS (all gates)`），机器可读判决 `docs/research/2026-10-06-onnx-ab-compare-t4a.json` 为 GO 且热词子域门禁为 zh=hard / en=observation-only，ONNX 全语料 run.json 在库，`asr-ab.yml` 有绿色 run；
+   - **T7 资源门禁（#421）** — 测量环境澄清文档含 `RESOURCE-GATE: PASS`，且 `onnx-resource-gate.yml` 有绿色 run（run 级 success 即双平台 matrix 腿全绿）；
+   - **T8 打包（#422）** — 本次构建的 mac/win job 全绿（`needs` 硬前置，含 import gate 与打包后 ONNX 推理 smoke），`installer-sizes.json` 证据工件存在且**主安装包**（mac dmg / win setup exe）落在预算内（mac ≤260MB / win ≤270MB），wheel sha256 lock（`scripts/embedded-python/requirements.lock`）在库；
+   - **T9 迁移 UX（#420）** — 显式迁移模块（MigrationDialog/modelDownloader/onnxMigration/useModelStatus）与回归锁测试（migration-dialog / onnx-migration-resume / modelManager-torch-fallback）在库（测试本体在 `test` job 已执行，此处钉住证据链防漂移）。
+
+   注意语义：证据链是**已录得证据链**（heavy 证据 workflow 为 dispatch-only，模型栈 ~700MB 不进常规 CI），checklist 断言"链条存在且全绿"，不强制在 tag commit 上重跑 heavy workflow；是否在 release candidate 上重跑由 owner 按发布节奏决定。<!-- [20261006_T11_EvidenceChainChecklist] END -->
+
+### 分发预案（证据缺项时 mac 先发，spec #412 决议 13）
+
+<!-- [20261006_T11_EvidenceChainChecklist] issue #424 -->
+
+五项证据全绿才允许同版本双平台发布。若证据链存在缺项（典型：win spike 或资源门禁 win 腿未过、win 安装包超预算），按以下**错位分发**流程执行：
+
+1. **mac 先发 N** — mac 侧证据齐全即可发布 mac 版本号 N；release note 注明 win 侧缺项与原因，不静默漏发。
+2. **win 随 N+1** — win 侧缺项修复、证据补齐后随下一版本 N+1 发布，release note 回链 N 的预案说明。
+3. **记录义务** — 缺项内容、归属工单与预期补齐版本记入 `docs/follow-ups.md`；`release-evidence-chain-report.json` 作为缺项凭据留档。
+4. **判定边界** — checklist job 只判"五项是否齐绿"，不替 owner 判断缺项可否接受；"放行 mac N / win N+1"的决定由 owner 依据报告做出。
+<!-- [20261006_T11_EvidenceChainChecklist] END -->
 
 经验教训：**构建全绿 ≠ 产物可用**。发布流水线的验收对象是"安装后的 app"，不是"dist/ 里有文件"。
 

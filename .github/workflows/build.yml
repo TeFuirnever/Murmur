@@ -295,6 +295,47 @@ jobs:
           pkill -f "murmur-smoke/Murmur.app" 2>/dev/null || true
           echo "packaged app smoke passed: boot milestones + preload bridge verified"
       # [20260816_Gate_PackagedBootSmoke] END
+      # [20261006_T11_EvidenceChainInferenceSmoke] Ticket #424 (spec #412
+      # testing decision S3): the boot smoke gains a REAL ONNX inference
+      # driven by the PACKAGED interpreter — the exact python env that ships
+      # inside this installer runs ASR+VAD+Punc over the committed 40s
+      # fixture via import_gate.py full mode and must produce non-empty
+      # text. The pre-package prune gate proves the env BEFORE packaging;
+      # this proves packaging (asar unpack, signing, install) did not break
+      # it. Gate model bytes are HARD-required here (缺项即红): the soft
+      # download earlier in the job may degrade to an unpruned env, but a
+      # release must never skip the inference evidence — absent bytes are
+      # re-fetched and a mirror failure fails the build. Env mirrors the
+      # app's setupIsolatedEnvironment (PYTHONHOME/PYTHONPATH), the same
+      # configuration the boot milestones above already proved.
+      - name: ONNX inference smoke against packaged Python (mac)
+        run: |
+          set -euo pipefail
+          SMOKE_PY="/tmp/murmur-smoke/Murmur.app/Contents/Resources/app.asar.unpacked/python/bin/python3.11"
+          test -x "$SMOKE_PY" || { echo "::error::packaged python missing at $SMOKE_PY"; exit 1; }
+          MODELS_DIR="scripts/onnx-export/work/gate-models"
+          if [ ! -f "$MODELS_DIR/asr-seaco-paraformer/model_quant.onnx" ]; then
+            echo "gate models absent (soft download degraded) — hard fetch for the inference gate"
+            python -m pip install requests
+            python scripts/onnx-export/verify_artifacts.py --from-release --download-dir "$MODELS_DIR"
+          fi
+          SMOKE_HOME="/tmp/murmur-smoke/Murmur.app/Contents/Resources/app.asar.unpacked/python"
+          PYTHONHOME="$SMOKE_HOME" \
+          PYTHONPATH="$SMOKE_HOME/lib/python3.11:$SMOKE_HOME/lib/python3.11/site-packages" \
+          PYTHONDONTWRITEBYTECODE=1 \
+            "$SMOKE_PY" scripts/embedded-python/import_gate.py \
+            --models-dir "$MODELS_DIR" \
+            --fixture-wav scripts/onnx-spike/fixtures/onnx-spike-40s.wav \
+            | tee scripts/onnx-export/work/packaged-inference-smoke-mac.json
+          echo "packaged ONNX inference smoke passed (mac): non-empty ASR/VAD/punc verdict above"
+      # [20261006_T11_EvidenceChainInferenceSmoke] END
+      - name: Upload packaged inference smoke evidence (mac)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: packaged-inference-smoke-macos
+          path: scripts/onnx-export/work/packaged-inference-smoke-mac.json
+          if-no-files-found: ignore
       # [20260906_Test_PackagedBootHealth] Spec #266 T11 (#288): run the full
       # boot-health probes (preload bridge surface, mic button, mascot,
       # CSP, 6s quit) against the INSTALLED app copied by the smoke step
@@ -314,19 +355,22 @@ jobs:
       # installer byte sizes as packaging evidence (budgets: mac ≤260MB /
       # win ≤270MB). The number lands in the job log AND the summary so a
       # release-evidence chain can cite it without downloading artifacts.
-      # wc -c is portable across BSD stat (mac) and Git Bash (win).
+      # [20261006_T11_EvidenceChainChecklist] Ticket #424: the sizes also
+      # land in a machine-readable installer-sizes.json, uploaded as a
+      # dedicated small artifact the evidence-checklist job enforces
+      # against the #422 budgets (portable node instead of per-shell wc).
       - name: Record installer sizes (packaging evidence)
         shell: bash
         run: |
           set -euo pipefail
           echo "### Installer sizes (bytes) — #422 budgets: mac ≤260MB / win ≤270MB" >> "$GITHUB_STEP_SUMMARY"
-          for f in dist/*.dmg dist/*.exe dist/*.zip; do
-            [ -f "$f" ] || continue
-            bytes=$(wc -c < "$f" | tr -d '[:space:]')
-            mb=$(awk -v b="$bytes" 'BEGIN { printf "%.1f", b/1024/1024 }')
-            echo "installer-size: $(basename "$f") ${bytes} bytes (${mb} MB)"
-            echo "- \`$(basename "$f")\`: **${bytes} bytes** (${mb} MB)" >> "$GITHUB_STEP_SUMMARY"
-          done
+          node scripts/release-evidence/installer-sizes.js dist
+
+      - name: Upload installer size evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: installer-sizes-macos
+          path: dist/installer-sizes.json
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v7
@@ -533,6 +577,44 @@ jobs:
           Stop-Process -Name 'Murmur' -Force -ErrorAction SilentlyContinue
           Write-Host 'packaged installer smoke passed: boot milestones + preload bridge verified'
       # [20260816_Gate_PackagedBootSmoke] END
+      # [20261006_T11_EvidenceChainInferenceSmoke] Windows counterpart of
+      # the mac packaged-inference smoke (parity; see that step for the
+      # rationale): the NSIS-installed interpreter must drive a real
+      # ASR+VAD+Punc transcription of the committed fixture to non-empty
+      # text. Native exit codes are checked explicitly — pwsh does not
+      # throw on non-zero native commands.
+      - name: ONNX inference smoke against packaged Python (win)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $resources = Join-Path $env:LOCALAPPDATA 'Programs\murmur\resources'
+          $smokeHome = Join-Path $resources 'app.asar.unpacked\python'
+          $smokePy = Join-Path $smokeHome 'python.exe'
+          if (-not (Test-Path $smokePy)) { throw "packaged python missing at $smokePy" }
+          $modelsDir = 'scripts/onnx-export/work/gate-models'
+          if (-not (Test-Path (Join-Path $modelsDir 'asr-seaco-paraformer/model_quant.onnx'))) {
+            Write-Host 'gate models absent (soft download degraded) — hard fetch for the inference gate'
+            python -m pip install requests
+            python scripts/onnx-export/verify_artifacts.py --from-release --download-dir $modelsDir
+            if ($LASTEXITCODE -ne 0) { throw "gate model hard fetch failed (exit $LASTEXITCODE)" }
+          }
+          $env:PYTHONHOME = $smokeHome
+          $env:PYTHONPATH = (Join-Path $smokeHome 'Lib') + ';' + (Join-Path $smokeHome 'Lib\site-packages')
+          $env:PYTHONDONTWRITEBYTECODE = '1'
+          & $smokePy scripts/embedded-python/import_gate.py `
+            --models-dir $modelsDir `
+            --fixture-wav scripts/onnx-spike/fixtures/onnx-spike-40s.wav |
+            Tee-Object -FilePath scripts/onnx-export/work/packaged-inference-smoke-win.json
+          if ($LASTEXITCODE -ne 0) { throw "packaged ONNX inference gate failed (exit $LASTEXITCODE)" }
+          Write-Host 'packaged ONNX inference smoke passed (win): non-empty ASR/VAD/punc verdict above'
+      # [20261006_T11_EvidenceChainInferenceSmoke] END
+      - name: Upload packaged inference smoke evidence (win)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: packaged-inference-smoke-windows
+          path: scripts/onnx-export/work/packaged-inference-smoke-win.json
+          if-no-files-found: ignore
       # [20260906_Test_PackagedBootHealth] Spec #266 T11 (#288): Windows
       # counterpart — boot-health probes against the NSIS-installed exe.
       # Stop the smoke's leftover process first so the probes boot a fresh
@@ -558,18 +640,20 @@ jobs:
       # [20261006_T8_PackagingSlimdown] Ticket #422 AC1: exact installer byte
       # sizes as packaging evidence (win ≤270MB budget) — parity with the
       # mac job's step; lands in the log and the job summary.
+      # [20261006_T11_EvidenceChainChecklist] Ticket #424: same machine-
+      # readable installer-sizes.json + dedicated artifact as the mac job.
       - name: Record installer sizes (packaging evidence)
         shell: bash
         run: |
           set -euo pipefail
           echo "### Installer sizes (bytes) — #422 budgets: mac ≤260MB / win ≤270MB" >> "$GITHUB_STEP_SUMMARY"
-          for f in dist/*.dmg dist/*.exe dist/*.zip; do
-            [ -f "$f" ] || continue
-            bytes=$(wc -c < "$f" | tr -d '[:space:]')
-            mb=$(awk -v b="$bytes" 'BEGIN { printf "%.1f", b/1024/1024 }')
-            echo "installer-size: $(basename "$f") ${bytes} bytes (${mb} MB)"
-            echo "- \`$(basename "$f")\`: **${bytes} bytes** (${mb} MB)" >> "$GITHUB_STEP_SUMMARY"
-          done
+          node scripts/release-evidence/installer-sizes.js dist
+
+      - name: Upload installer size evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: installer-sizes-windows
+          path: dist/installer-sizes.json
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v7
@@ -580,8 +664,51 @@ jobs:
             dist/*.zip
             dist/checksums-sha256.txt
 
+  # [20261006_T11_EvidenceChainChecklist] Ticket #424 (spec #412 decision
+  # 13): the pre-tag evidence chain gate — the LAST gate before release.
+  # Five items, each referencing the owning ticket's recorded artifacts; a
+  # missing item turns this job red and blocks the release (缺项即红):
+  #   T2 #415 win spike · T4 #416+#443 A/B verdict (GO 口径) ·
+  #   T7 #421 resource gates · T8 #422 packaging (this run's build jobs are
+  #   hard `needs` prerequisites — including the packaged-inference smoke —
+  #   and the installer-size artifacts are enforced against the #422
+  #   budgets) · T9 #420 migration UX locks.
+  # Runs on every build (workflow_dispatch included) so the chain can be
+  # rehearsed as a dry-run without tagging.
+  evidence-checklist:
+    needs: [test, build-mac, build-win]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download installer size evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: installer-sizes-macos
+          path: Murmur-macOS
+
+      - name: Download installer size evidence (win)
+        uses: actions/download-artifact@v4
+        with:
+          name: installer-sizes-windows
+          path: Murmur-Windows
+
+      - name: Run release evidence chain checklist
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MURMUR_RELEASE_EVIDENCE_REPO: ${{ github.repository }}
+        run: node scripts/release-evidence/check-evidence-chain.js --out release-evidence-chain-report.json
+
+      - name: Upload evidence chain report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-evidence-chain-report
+          path: release-evidence-chain-report.json
+          if-no-files-found: ignore
+
   release:
-    needs: [build-mac, build-win]
+    needs: [build-mac, build-win, evidence-checklist]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
