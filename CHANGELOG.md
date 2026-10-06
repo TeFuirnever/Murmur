@@ -5,12 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.6.0] - 2026-10-06
+
+本版本主题：**ASR 推理栈 ONNX 迁移全量落地（Spec #412，T1–T12）**——嵌入式 Python 从 torch 栈切换到 funasr-onnx 栈，安装包体积近乎腰斩（mac dmg 342.8MB→约 225MB / win NSIS 357.5MB→约 195MB，T11 dry-run 实测），转写质量经四维 A/B 判决守门。
 
 ### Added
 
-- **ONNX A/B 四维判决（NO-GO 单域）**（#416，Spec #412 T4）：ONNX A/B 判决服务器 `scripts/onnx-ab/funasr_server_onnx_ab.py`（funasr-onnx + T1 自导出产物说与 `funasr_server.py` 同构的 stdio 协议，pin 就绪闸门 + DSP/PCM_16/管线策略 parity，24 例单测）；T1 产物对 T3 真实语料全量 A/B：punc 插删差逐例一致、timestamp 18 边界 17 个毫秒级一致、热词修复率 14.29% = torch，**热词域逐域 CER delta +3.09pp 超门禁（+2pp）**——100% 由 `hw_jedediah` 单例贡献（英文术语热词在 ONNX 路径零效果，torch 部分修复），NO-GO 与三个下一步选项（量化敏感度定位 / B 计划官方 ONNX 对照 / 门禁口径议决）回 #412 议决。判决书 `docs/research/2026-10-01-onnx-ab-verdict.md` + 机器可读报告/对比 JSON。
 - **ONNX int8 模型自导出管道**（#413，Spec #412 T1）：`scripts/onnx-export/` 一键从官方 iic Apache-2.0 torch checkpoint 导出四模型（SeACo-Paraformer 热词 ASR / fsmn VAD / ct-transformer 272727 Punc / CAM++ 说话人）为 ONNX int8；全文件 sha256 manifest + commit-SHA pin 落仓（`model-pin.json`，CI 契约测试守门）；产物镜像至自有 GitHub Release `models-onnx-int8-1`（非 v\* tag，不触发安装包构建）；marxyz 社区仓交叉验证（非 onnx 文件字节一致、同输入转写一致）；40.8s wav 冒烟通过（热词路径可执行、RTF 0.0097、时间戳保留）。CAM++ 无官方 export 路径，自研 ONNX 等价导出（数值门禁：torch 等价 + fp32 ONNX 余弦 1.0）。
+- **win x64 ONNX spike**（#415，Spec #412 T2）：CI 在 windows x64 真机验证 funasr-onnx 依赖栈 import 与推理可行（`WIN-SPIKE: PASS` 证据报告落库）——迁移可行性证据链第一环。
+- **ONNX A/B 四维判决 + 口径议决翻 GO**（#416 #443 #444，Spec #412 T4/T4a/T4b）：A/B 判决服务器（funasr-onnx + T1 产物，与 `funasr_server.py` 同构 stdio 协议）对真实语料全量 A/B——punc 插删差逐例一致、timestamp 18 边界 17 个毫秒级一致、热词修复率 = torch；初判 NO-GO（英文术语热词单例 CER delta +3.09pp 超门禁），经 #443 议决热词门禁拆分 zh=hard / en=observation-only 后翻 `PASS (all gates)`，#444 fp32 诊断定位根因为运行时热词分词缺口（非量化、非导出缺陷）。判决书 + 机器可读判决/对比 JSON 落库，`asr-ab.yml` 可重放。
+- **模型下载器 v2**（#417，Spec #412 T5）：双源回退（自有镜像 ↔ modelscope）、全量 manifest 一次性 sha256 校验、精确就绪锚点、封死隐式拉网；修复多文件下载进度回退归零与分片失败弃件。
+- **推理引擎切换 tracer**（#418，Spec #412 T6a）：嵌入式 Python 推理栈切 funasr-onnx 三模型（Paraformer/VAD/Punc），ndarray 全程喂入，stdio 协议字节级不变——上层 Node/渲染进程零改动。
+- **说话人分离 ONNX 化 + 长音频健壮性**（#419，Spec #412 T6b）：CAM++ diarize 走自研 ONNX 导出、长音频 ≤60s 子分块（重叠区按时间戳中点归属去重）、ORT 线程注入。
+- **升级迁移 UX**（#420，Spec #412 T9）：升级后首启显式迁移对话框（进度可见、断点续传、可暂缓）+ 旧 torch 布局回退验证——不再有隐式后台迁移。
+- **资源验收门禁**（#421，Spec #412 T7）：长音频/并发/冷启动三域 Python 测试族 + 长音频 RSS 引擎侧根因治理（`onnx-resource-gate.yml` 可重放）。
+- **发布证据链 checklist**（#424，Spec #412 T11）：release 前最后一道闸——五项已录得证据（T2/T4/T7/T8/T9）缺项即红并阻断发布；打包后 boot smoke 新增真实 ONNX 推理段（40s fixture 完整 ASR+VAD+Punc，文本非空断言），证明打包/签名/安装未破坏推理环境。
+
+### Changed
+
+- **安装包瘦身：嵌入式 Python 换 funasr-onnx 栈**（#422，Spec #412 T8）：移除 torch/numba/llvmlite 重依赖，安装包 mac dmg 342.8MB→约 225MB（≤260MB 预算）/ win NSIS 357.5MB→约 195MB（≤270MB 预算，T11 dry-run 实测 225.4/195.1MB）；wheel sha256 lock（`scripts/embedded-python/requirements.lock`）入库（SBOM 纪律）。
+- **文档与安全口径同步**（#423，Spec #412 T10）：README/troubleshooting/SECURITY/ADR 同步——模型供应链（自有镜像 + sha256 pin）、体积数字与三篇决策记录；安装步骤去 `download_models.py`。
+- **README 产品介绍视频**：双语同步的 15 秒产品介绍视频区块（user-attachments 内嵌播放器）。
+
+### Fixed
+
+- **N+1 旧缓存精确清理**（#425，Spec #412 T12）：按历史布局解析器生成清单精确删除旧 torch 模型目录（symlink 清单项按链接自身计字节），启动门控接线——升级不留孤儿缓存。
+- **CI 双平台修复**（#425）：根枚举测试改 `path.join` 构造路径，平台中立（win32 不再红）。
 
 ## [1.5.2] - 2026-09-17
 
