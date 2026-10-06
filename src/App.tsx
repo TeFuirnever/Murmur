@@ -1035,7 +1035,10 @@ export default function App() {
                 <div className="mt-3 text-xs text-[#86868b] dark:text-[#98989d] space-y-1">
                   <p>{t("app.steps.title", "使用步骤：")}</p>
                   <p>
-                    {t("app.steps.step1", "① 下载语音识别模型（必需，约1GB）")}
+                    {t(
+                      "app.steps.step1",
+                      "① 下载语音识别模型（必需，约671MB）",
+                    )}
                   </p>
                   <p>{t("app.steps.step2", "② 授权麦克风权限")}</p>
                   <p>

@@ -24,45 +24,48 @@ xattr -cr /Applications/Murmur.app && codesign --force --deep --sign - /Applicat
 
 <!-- [20260911_Fix_DamagedAppWorkaround] END -->
 
-### FunASR 模型下载失败
+### 模型下载失败
+
+<!-- [20261006_Docs_423_T10] spec #412 (T10): rewritten for the ONNX int8
+     engine's dual-source downloader (modelDownloader.ts). The old advice to
+     run `python download_models.py` fetched the legacy fp32 torch
+     checkpoints, which the new engine never reads — removed. Sources,
+     resume and the integrity manifest are pinned by
+     tests/unit/onnx-docs-sync.test.ts. -->
 
 **症状**: 首次启动时一直显示"正在下载模型"或下载失败
 
 **解决方案**:
 
-1. 检查网络连接，确保能访问 ModelScope（`modelscope.cn`）
-2. 如果使用代理，在 `.env` 文件中设置 `HTTP_PROXY` 和 `HTTPS_PROXY`
-3. 手动下载模型：
-   ```bash
-   python download_models.py
-   ```
+1. 检查网络连接，确保能访问 ModelScope（`modelscope.cn`）和 GitHub Release 镜像——下载支持双源自动回退：ModelScope 主源失败时自动切换到 GitHub Release 镜像（同一 sha256 清单，逐字节一致）
+2. 如果使用代理或 VPN，请检查其对 ModelScope（`modelscope.cn`）和 GitHub（`github.com`）的连通性（下载失败的应用内提示也会指引检查网络与代理设置）
+3. 下载支持断点续传：失败后在应用内重试，将从断点继续，无需从头下载
 4. 检查磁盘空间（需要至少 2GB 可用空间）
+5. 模型完整性逐文件 sha256 校验：若提示"模型损坏"，删除模型下载目录后在应用内重新下载
 
 ### Python 环境问题
 
 **症状**: 提示"找不到 Python"或 Python 模块导入失败
 
+**说明**: 桌面应用自带嵌入式 Python（funasr-onnx 运行时），普通用户无需安装任何 Python 环境。以下步骤仅适用于从源码运行的开发场景。
+
 **解决方案**:
 
 1. 确保安装了 Python 3.11+（与 `pyproject.toml` 的 requires-python 一致）
-2. 推荐使用 `uv` 管理环境：
+2. 推荐使用 `uv` 按依赖声明安装：
    ```bash
    curl -LsSf https://astral.sh/uv/install.sh | sh
    uv sync
    ```
-3. 或手动安装依赖：
-   ```bash
-   pip install funasr modelscope torch torchaudio librosa numpy
-   ```
 
-### FunASR 服务启动失败
+### 语音识别服务启动失败
 
-**症状**: 设置中显示 FunASR 状态为"错误"或"未就绪"
+**症状**: 设置中显示语音识别状态为"错误"或"未就绪"
 
 **解决方案**:
 
-1. 检查 Python 依赖是否完整：`pip install funasr modelscope torch`
-2. 检查模型文件是否存在：`ls models/` 目录
+1. 从源码运行时，先用 `uv sync` 按 `pyproject.toml` 完成依赖安装；打包应用使用内置运行时，无需手动安装依赖
+2. 检查模型文件是否存在（应用数据目录下 `models/onnx-int8/`，或设置中的模型下载目录）
 3. Murmur 内置健康监控，会自动尝试重启（最多 3 次）
 4. 重启 Murmur 应用
 
@@ -135,45 +138,46 @@ The first command clears the quarantine attribute, the second rebuilds the seal 
 
 <!-- [20260911_Fix_DamagedAppWorkaround] END -->
 
-### FunASR Model Download Fails
+### Model Download Fails
+
+<!-- [20261006_Docs_423_T10] spec #412 (T10): rewritten for the ONNX int8
+     engine's dual-source downloader (modelDownloader.ts). The old advice to
+     run `python download_models.py` fetched the legacy fp32 torch
+     checkpoints, which the new engine never reads — removed. -->
 
 **Symptom**: First launch shows "downloading model" indefinitely or fails
 
 **Solutions**:
 
-1. Check network connection and access to ModelScope (`modelscope.cn`)
-2. If using a proxy, set `HTTP_PROXY` and `HTTPS_PROXY` in `.env`
-3. Download models manually:
-   ```bash
-   python download_models.py
-   ```
+1. Check network access to ModelScope (`modelscope.cn`) and the GitHub Release mirror — downloads use dual sources with automatic failover: when the ModelScope primary fails, the GitHub Release mirror takes over (same sha256 manifest, byte-identical)
+2. If you use a proxy or VPN, verify it can reach ModelScope (`modelscope.cn`) and GitHub (`github.com`) (the in-app failure hint also points at network and proxy settings)
+3. Downloads resume from the breakpoint: retry in the app after a failure and it continues — no need to start over
 4. Ensure at least 2GB free disk space
+5. Integrity is verified per file against sha256: if the app reports "model corrupted", delete the model download directory and download again in the app
 
 ### Python Environment Issues
 
 **Symptom**: "Python not found" or module import errors
 
+**Note**: The desktop app ships an embedded Python (the funasr-onnx runtime) — end users never need to install Python. The steps below apply only to running from source.
+
 **Solutions**:
 
 1. Install Python 3.11+ (matches the `pyproject.toml` requires-python)
-2. Use `uv` for environment management:
+2. Use `uv` to install the declared dependencies:
    ```bash
    curl -LsSf https://astral.sh/uv/install.sh | sh
    uv sync
    ```
-3. Or install dependencies manually:
-   ```bash
-   pip install funasr modelscope torch torchaudio librosa numpy
-   ```
 
-### FunASR Service Won't Start
+### Speech Recognition Service Won't Start
 
-**Symptom**: Settings shows FunASR status as "error" or "not ready"
+**Symptom**: Settings shows the speech recognition status as "error" or "not ready"
 
 **Solutions**:
 
-1. Verify Python dependencies: `pip install funasr modelscope torch`
-2. Check model files exist: `ls models/`
+1. When running from source, install dependencies via `uv sync` per `pyproject.toml` first; the packaged app uses the embedded runtime and needs no manual dependency install
+2. Check the model files exist (`models/onnx-int8/` under the app data directory, or the model download directory shown in Settings)
 3. Murmur has a built-in health monitor with auto-restart (up to 3 attempts)
 4. Restart Murmur
 

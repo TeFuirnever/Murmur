@@ -77,6 +77,8 @@ describe("ModelDownloadProgress", () => {
         onDownload={vi.fn()}
       />,
     );
-    expect(screen.getByText(/1\.1GB/)).toBeTruthy();
+    // [20261006_Docs_423_T10] size pinned to the ONNX int8 model pin
+    // (tests/unit/onnx-docs-sync.test.ts), was torch-era 1.1GB.
+    expect(screen.getByText(/671MB/)).toBeTruthy();
   });
 });

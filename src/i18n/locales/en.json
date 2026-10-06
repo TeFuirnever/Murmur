@@ -12,7 +12,7 @@
     "optimizing": "AI is optimizing text...",
     "steps": {
       "title": "Getting started:",
-      "step1": "① Download the speech recognition model (required, ~1GB)",
+      "step1": "① Download the speech recognition model (required, ~671 MB)",
       "step2": "② Grant microphone permission",
       "step3": "③ Configure AI API Key in settings (optional)"
     },

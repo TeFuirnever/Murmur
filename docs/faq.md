@@ -12,9 +12,16 @@
 
 ### 首次启动很慢，需要下载什么？
 
-首次启动时 Murmur 需要下载 FunASR 语音识别模型（约 1GB）。模型下载完成后会缓存在本地，后续启动不再需要下载。
+<!-- [20261006_Docs_423_T10] spec #412 (T10): engine switched from fp32 torch
+     (~1.24GB first-launch download) to ONNX int8. Size, sources and storage
+     location below are pinned to scripts/onnx-export/model-pin.json by
+     tests/unit/onnx-docs-sync.test.ts. -->
 
-模型下载位置：`./models/` 目录（项目根目录）或应用数据目录。
+首次启动时 Murmur 需要下载语音识别模型（ONNX int8 量化版，约 671 MB）。模型下载完成后会缓存在本地，后续启动不再需要下载。
+
+模型下载位置：应用数据目录下的 `models/onnx-int8/`（macOS `~/Library/Application Support/murmur/models/onnx-int8/`；Windows `%APPDATA%/murmur/models/onnx-int8/`）。
+
+模型下载支持双源自动回退：默认从 ModelScope 下载（国内速度快），失败时自动切换到 GitHub Release 官方镜像（同一 sha256 清单校验，逐字节一致）。模型供应链（来源、pin 策略、完整性保证）详见 [`SECURITY.md`](../SECURITY.md) 的"模型供应链"章节与 [`docs/adr/017`](../docs/adr/017-self-export-model-trust-chain.md)。
 
 ### 如何配置 AI 文本优化？
 
@@ -29,9 +36,13 @@ AI 文本优化是**可选功能**。不配置 API Key 也可以正常使用语�
 
 ### 需要安装 ffmpeg 吗？
 
-**通常不需要。** Murmur 从 v1.0.0 起使用 Python librosa/soundfile 处理音频格式转换，不再依赖系统 ffmpeg。音频格式转换（mp3、m4a 等）在 Python 端完成。
+**通常不需要。** Murmur 使用 Python soundfile 处理音频格式转换，不再依赖系统 ffmpeg。音频格式转换（mp3、m4a 等）在 Python 端完成。
 
-ffmpeg 仅作为可选回退方案：当 Python librosa 不可用时，Murmur 会尝试使用系统 ffmpeg。如需安装：
+<!-- [20261006_Docs_423_T10] spec #412 decision 3 (#419): the audio entry
+     path dropped librosa entirely (soundfile pure-C read + pure-C
+     resampler), so the old "Python librosa/soundfile" wording is stale. -->
+
+ffmpeg 仅作为可选回退方案：当 Python soundfile 无法解码某个格式时，Murmur 会尝试使用系统 ffmpeg。如需安装：
 
 - **macOS**: `brew install ffmpeg`
 - **Windows**: 从 [ffmpeg.org](https://ffmpeg.org/download.html) 下载，或使用 `winget install ffmpeg`
@@ -74,7 +85,11 @@ This is macOS's security prompt for unsigned apps. Murmur is free, open-source s
 
 ### First launch is slow — what's being downloaded?
 
-On first launch, Murmur downloads the FunASR speech recognition model (~1GB). Once downloaded, it's cached locally and won't need to be downloaded again.
+On first launch, Murmur downloads the speech recognition model (ONNX int8 quantized, ~671 MB). Once downloaded, it's cached locally and won't need to be downloaded again.
+
+Model storage location: `models/onnx-int8/` under the app data directory (macOS `~/Library/Application Support/murmur/models/onnx-int8/`; Windows `%APPDATA%/murmur/models/onnx-int8/`).
+
+Downloads use dual sources with automatic failover: ModelScope by default (fast in mainland China), falling back to the official GitHub Release mirror (verified against the same sha256 manifest, byte-identical). See the "Model Supply Chain" section of [`SECURITY.md`](../SECURITY.md) and [`docs/adr/017`](../docs/adr/017-self-export-model-trust-chain.md) for the full supply-chain policy (sources, pinning, integrity guarantees).
 
 ### How do I configure AI text optimization?
 
@@ -89,9 +104,9 @@ AI text optimization is **optional**. Voice recognition works without an API Key
 
 ### Does it need ffmpeg?
 
-**Usually not.** Since v1.0.0, Murmur uses Python librosa/soundfile for audio format conversion and no longer depends on system ffmpeg. Conversion (mp3, m4a, etc.) happens on the Python side.
+**Usually not.** Murmur uses Python soundfile for audio format conversion and no longer depends on system ffmpeg. Conversion (mp3, m4a, etc.) happens on the Python side.
 
-ffmpeg remains an optional fallback: when Python librosa is unavailable, Murmur tries system ffmpeg. If needed:
+ffmpeg remains an optional fallback: when Python soundfile cannot decode a format, Murmur tries system ffmpeg. If needed:
 
 - **macOS**: `brew install ffmpeg`
 - **Windows**: Download from [ffmpeg.org](https://ffmpeg.org/download.html) or use `winget install ffmpeg`

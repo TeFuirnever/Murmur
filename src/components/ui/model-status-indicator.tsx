@@ -174,7 +174,11 @@ export const ModelStatusIcon: React.FC<ModelStatusIconProps> = ({
       case "checking":
         return "🔍 正在检查语音模型状态...";
       case "need_download":
-        return "📥 需要下载语音识别模型（约1.1GB）";
+        // [20261006_Docs_423_T10] Size aligned to the shipped ONNX int8 pin
+        // (scripts/onnx-export/model-pin.json, all four models ≈671MB); the
+        // old figure was the fp32 torch generation's. Pinned by
+        // tests/unit/onnx-docs-sync.test.ts.
+        return "📥 需要下载语音识别模型（约671MB）";
       case "downloading":
         return `⬇️ 正在下载语音模型... ${modelStatus.downloadProgress || 0}%`;
       case "loading":
@@ -231,7 +235,10 @@ export const ModelDownloadProgress: React.FC<ModelDownloadProgressProps> = ({
                 需要下载语音识别模型
               </h3>
               <p className="text-xs text-orange-600 dark:text-orange-300">
-                首次使用需下载语音识别模型（核心约840MB，含标点约1.1GB）
+                {/* [20261006_Docs_423_T10] Same pin-aligned size as the
+                    tooltip above; the torch-era core/with-punc size split no
+                    longer describes the single-manifest download. */}
+                首次使用需下载语音识别模型（约671MB，支持断点续传）
               </p>
             </div>
           </div>
@@ -252,11 +259,17 @@ export const ModelDownloadProgress: React.FC<ModelDownloadProgressProps> = ({
   }
 
   if (modelStatus.stage === "downloading") {
+    // [20261006_Docs_423_T10] Per-model sizes aligned to the shipped ONNX
+    // int8 pin (scripts/onnx-export/model-pin.json; the v2 downloader emits
+    // progress keyed by these same four models). The old list showed the
+    // fp32 torch generation's payloads and only three of the four models.
+    // Pinned by tests/unit/onnx-docs-sync.test.ts.
     const models = modelStatus.modelProgress
       ? [
-          { key: "asr", label: "ASR 语音识别", size: "840MB" },
-          { key: "vad", label: "VAD 语音检测", size: "1.6MB" },
-          { key: "punc", label: "标点恢复", size: "278MB" },
+          { key: "asr", label: "ASR 语音识别", size: "370MB" },
+          { key: "vad", label: "VAD 语音检测", size: "0.5MB" },
+          { key: "punc", label: "标点恢复", size: "274MB" },
+          { key: "speaker", label: "说话人分离", size: "28MB" },
         ]
       : [];
 

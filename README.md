@@ -159,7 +159,10 @@ Download the latest build from [Releases](https://github.com/TeFuirnever/Murmur/
 
 ## ⚡ Quick Start
 
-1. Launch Murmur and wait for the model download (~1GB the first time, instant afterwards)
+<!-- [20261006_Docs_423_T10] spec #412 (T10): size aligned to the ONNX int8
+     model pin (scripts/onnx-export/model-pin.json; was ~1GB fp32 torch). -->
+
+1. Launch Murmur and wait for the model download (~671 MB the first time, instant afterwards)
 2. Press `Cmd+Shift+Space` (macOS) or `Ctrl+Shift+Space` (Windows) and start speaking
 3. Text appears at your cursor
 
@@ -204,11 +207,18 @@ pnpm install
 # Python setup (choose one)
 # Option A: uv (recommended, manages the virtualenv for you)
 curl -LsSf https://astral.sh/uv/install.sh | sh
-uv sync && uv run python download_models.py
+uv sync
 
 # Option B: system Python
-pip install funasr modelscope torch torchaudio librosa numpy
-python download_models.py
+# [20261006_Docs_423_T10] spec #412 (T10): install exactly what
+# pyproject.toml declares (modelscope arrives transitively via funasr).
+uv pip install -r pyproject.toml
+
+# [20261006_Docs_423_T10] spec #412 (T10): ONNX models need NO manual
+# download — the first `pnpm dev` fetches the pin-anchored onnx-int8 set
+# in-app (~671MB, resumable). `uv run python download_models.py` would only
+# pre-seed the LEGACY fp32 torch fallback cache, which the new engine never
+# reads; it stays available solely to seed that one-version-cycle rollback.
 
 pnpm dev
 ```
