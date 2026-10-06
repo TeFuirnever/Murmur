@@ -79,7 +79,15 @@ export declare interface CorpusManifest {
   version: number;
   name: string;
   description?: string;
-  domains: { id: string; label: string; description: string }[];
+  // [20261006_Feat_443_HotwordSubdomainGates] The hotword sub-domains carry
+  // a `language` annotation ("zh" / "en") that the compare gate's split
+  // keys off; other domains omit it.
+  domains: {
+    id: string;
+    label: string;
+    description: string;
+    language?: string;
+  }[];
   cases: CorpusCase[];
 }
 
@@ -156,6 +164,10 @@ export declare interface CompareResult {
     candidateMeanCer: number | null;
     cerDelta: number | null;
     passed: boolean;
+    // [20261006_Feat_443_HotwordSubdomainGates] True for the hotword-en
+    // sub-domain: numbers are reported but never gate the verdict
+    // (#412 owner verdict 2026-10-01).
+    observationOnly: boolean;
     note?: string;
   }[];
   hotword: {
@@ -180,6 +192,7 @@ export declare interface CompareResult {
     cerDeltaTolerance: number;
     repairRateMustNotRegress: boolean;
     timestampDeltaToleranceMs: number;
+    hotwordSubdomains: { zh: string; en: string };
   };
   passed: boolean;
 }
@@ -233,6 +246,10 @@ declare const asrAb: {
       punc?: PuncDiffResult;
     }[],
   ): Record<string, DomainAggregate>;
+  // [20261006_Feat_443_HotwordSubdomainGates] Legacy-report language
+  // fallback for the hotword zh/en sub-domain split: "en" when the case
+  // reference contains Latin letters, "zh" otherwise.
+  hotwordCaseLanguage(scoredCase: unknown): "zh" | "en";
   compareReports(baseline: unknown, candidate: unknown): CompareResult;
   loadCorpusManifest(
     corpusDir: string,

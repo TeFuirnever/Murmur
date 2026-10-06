@@ -176,3 +176,39 @@ p95 185ms / max 185ms 两侧相同）。逐边界（Δstart, Δend），**17/18 
 | ONNX 全语料机器可读报告（torch 基线的对照面） | `docs/research/2026-10-01-onnx-ab-run.json`                |
 | 四维门禁对比（机器可读）                      | `docs/research/2026-10-01-onnx-ab-compare.json`            |
 | torch 基线（T3 产出）                         | `docs/research/2026-10-01-asr-ab-torch-baseline.{md,json}` |
+
+## 议决记录（#412 owner 议决 2026-10-01 · #443 落地 2026-10-06）
+
+> 本节为 #443 追加记录；上文原始 T4 判决（NO-GO）及其全部数字保持原样、未做任何改动。
+
+**决策**：owner 于 [#412 评论（2026-10-01）](https://github.com/TeFuirnever/Murmur/issues/412#issuecomment-5930346248)议决「口径调整，判决翻 GO；并行启动根因诊断」：
+
+- 热词域逐域 CER 门禁拆分为 **hotword-zh / hotword-en 子域**：zh（5 例）保留 **delta ≤ +2pp 硬门禁**；en（`hw_jedediah` 1 例）**降为观察项**（显示数字、不判 FAIL）。
+- 热词**术语级修复率 ≥ torch 门禁保持全局不变**（T4 实测两侧 14.29% 一致——用户故事 9 的原始承诺指标本来就达标）。
+- 已知限制如实记录：T10 ADR 与 release note 注明「英文专名热词偏置在 ONNX int8 上不生效」；根因诊断并行于 #444（fp32 vs int8 对照），若发现低成本可修的导出问题另开后续工单。
+
+**依据**：修复率两侧一致 14.29%；torch 侧对 `hw_jedediah` 也从未修对（术语级两侧均 still-wrong），损失的是「部分拉回」而非「修好→修坏」；英文专名热词偏置非本版本目标。
+
+**门禁落地（#443，分支 `agent/onnx-443`）**：
+
+- 语料 domain 元数据标注语言：`scripts/asr-corpus/manifest.json` 的 hotword 域拆分为 `hotword-zh`（`language: "zh"`，5 例）/ `hotword-en`（`language: "en"`，1 例），生成器 `scripts/build-asr-corpus.py` 同步拆分；后续 run 原生按子域聚合。
+- `scripts/asr-ab-harness.js --compare`：`hotword-en` 观察项、`hotword-zh` 及其余域硬门禁；T3/T4 旧 run.json（合并 `hotword` 域）由 compare 按逐例参考文本自动拆分子域（`hotwordCaseLanguage`）；旧报告缺逐例数据时保守回退为合并域硬门禁；修复率门禁仍为全局口径。
+
+**用 T3/T4 已有 run.json 重跑 compare（总判决：GO / `VERDICT: PASS (all gates)`，exit 0）**：
+
+```
+node scripts/asr-ab-harness.js --compare docs/research/2026-10-01-asr-ab-torch-baseline.json \
+  docs/research/2026-10-01-onnx-ab-run.json \
+  --report docs/research/2026-10-06-onnx-ab-compare-t4a.json
+```
+
+热词 zh/en 分域数字表：
+
+| 子域       | n   | torch mean | ONNX mean | delta    | 门禁与判定                                     |
+| ---------- | --- | ---------- | --------- | -------- | ---------------------------------------------- |
+| hotword-zh | 5   | 7.06%      | 7.06%     | 0.00pp   | PASS（≤ +2pp 硬门禁，与 owner 议决时实测一致） |
+| hotword-en | 1   | 3.70%      | 22.22%    | +18.52pp | OBSERVE（观察项，不判 FAIL）                   |
+
+其余 6 域与 T4 逐数字一致（无回归）：real-clean 0.00pp / accent 0.00pp / noise +1.19pp / farfield 0.00pp / codeswitch −0.60pp / timestamp 0.00pp；热词修复率 14.29% = 14.29%（全局门禁 PASS）；timestamp meanAbsDev +1ms、punc 插 5 / 删 11 两侧一致。
+
+机器可读新产物：`docs/research/2026-10-06-onnx-ab-compare-t4a.json`（原始 T4 对比产物 `2026-10-01-onnx-ab-compare.json` 保留不动）。

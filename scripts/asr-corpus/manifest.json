@@ -29,9 +29,16 @@
       "description": "mixed zh/en dictation sentences (stitched bilingual TTS and whole-sentence zh TTS)"
     },
     {
-      "id": "hotword",
-      "label": "热词判别",
-      "description": "rare-noun sentences transcribed twice (hotword off/on) by the harness"
+      "id": "hotword-zh",
+      "label": "热词判别(中文)",
+      "description": "Chinese rare-noun sentences transcribed twice (hotword off/on) by the harness; hard CER gate",
+      "language": "zh"
+    },
+    {
+      "id": "hotword-en",
+      "label": "热词判别(英文)",
+      "description": "English proper-noun hotword case transcribed twice (hotword off/on); observation-only in the A/B compare gate (#412 owner verdict 2026-10-01)",
+      "language": "en"
     },
     {
       "id": "timestamp",
@@ -582,7 +589,7 @@
     {
       "id": "hw_zhanghanyue",
       "audio": "audio/hw_zhanghanyue.flac",
-      "domain": "hotword",
+      "domain": "hotword-zh",
       "provenance": "macOS say Tingting render (rare-noun hotword discrimination, SeACo spike class)",
       "source": null,
       "augmentation": null,
@@ -599,7 +606,7 @@
     {
       "id": "hw_gongshen",
       "audio": "audio/hw_gongshen.flac",
-      "domain": "hotword",
+      "domain": "hotword-zh",
       "provenance": "macOS say Tingting render (rare-noun hotword discrimination, SeACo spike class)",
       "source": null,
       "augmentation": null,
@@ -616,7 +623,7 @@
     {
       "id": "hw_jedediah",
       "audio": "audio/hw_jedediah.flac",
-      "domain": "hotword",
+      "domain": "hotword-en",
       "provenance": "macOS say Tingting render (rare-noun hotword discrimination, SeACo spike class)",
       "source": null,
       "augmentation": null,
@@ -633,7 +640,7 @@
     {
       "id": "hw_mishujuan",
       "audio": "audio/hw_mishujuan.flac",
-      "domain": "hotword",
+      "domain": "hotword-zh",
       "provenance": "macOS say Tingting render (rare-noun hotword discrimination, SeACo spike class)",
       "source": null,
       "augmentation": null,
@@ -650,7 +657,7 @@
     {
       "id": "hw_dazhiyuan",
       "audio": "audio/hw_dazhiyuan.flac",
-      "domain": "hotword",
+      "domain": "hotword-zh",
       "provenance": "macOS say Tingting render (rare-noun hotword discrimination, SeACo spike class)",
       "source": null,
       "augmentation": null,
@@ -667,7 +674,7 @@
     {
       "id": "hw_yunyunfei",
       "audio": "audio/hw_yunyunfei.flac",
-      "domain": "hotword",
+      "domain": "hotword-zh",
       "provenance": "macOS say Tingting render (rare-noun hotword discrimination, SeACo spike class)",
       "source": null,
       "augmentation": null,
