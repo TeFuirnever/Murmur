@@ -1,0 +1,109 @@
+{
+  "ticket": 444,
+  "arms": {
+    "int8": {
+      "variant": "int8",
+      "asr_dir": "/Users/guanxueliang/Desktop/oh-my-ai/Murmur/scripts/onnx-export/work/artifacts/asr-seaco-paraformer",
+      "asr_dir_bytes": 387556112,
+      "load_timings": {
+        "load_asr_s": 0.8,
+        "load_vad_punc_s": 0.14
+      },
+      "rss_peak_after_load_mb": 1761.2,
+      "rss_peak_after_inference_mb": 1768.3,
+      "inference_wall_total_s": 0.312,
+      "per_case": [
+        {
+          "id": "hw_zhanghanyue",
+          "duration_s": 3.465,
+          "asr_wall_s": 0.059,
+          "rtf": 0.017
+        },
+        {
+          "id": "hw_gongshen",
+          "duration_s": 3.195,
+          "asr_wall_s": 0.055,
+          "rtf": 0.0173
+        },
+        {
+          "id": "hw_jedediah",
+          "duration_s": 3.354,
+          "asr_wall_s": 0.047,
+          "rtf": 0.014
+        },
+        {
+          "id": "hw_mishujuan",
+          "duration_s": 3.46,
+          "asr_wall_s": 0.05,
+          "rtf": 0.0145
+        },
+        {
+          "id": "hw_dazhiyuan",
+          "duration_s": 3.522,
+          "asr_wall_s": 0.051,
+          "rtf": 0.0145
+        },
+        {
+          "id": "hw_yunyunfei",
+          "duration_s": 3.611,
+          "asr_wall_s": 0.049,
+          "rtf": 0.0137
+        }
+      ]
+    },
+    "fp32": {
+      "variant": "fp32",
+      "asr_dir": "/Users/guanxueliang/Desktop/oh-my-ai/Murmur/scripts/onnx-export/work/artifacts-fp32/asr-seaco-paraformer",
+      "asr_dir_bytes": 1000108809,
+      "load_timings": {
+        "load_asr_s": 1.03,
+        "load_vad_punc_s": 0.13
+      },
+      "rss_peak_after_load_mb": 2092.9,
+      "rss_peak_after_inference_mb": 2104.5,
+      "inference_wall_total_s": 0.326,
+      "per_case": [
+        {
+          "id": "hw_zhanghanyue",
+          "duration_s": 3.465,
+          "asr_wall_s": 0.057,
+          "rtf": 0.0165
+        },
+        {
+          "id": "hw_gongshen",
+          "duration_s": 3.195,
+          "asr_wall_s": 0.053,
+          "rtf": 0.0167
+        },
+        {
+          "id": "hw_jedediah",
+          "duration_s": 3.354,
+          "asr_wall_s": 0.056,
+          "rtf": 0.0166
+        },
+        {
+          "id": "hw_mishujuan",
+          "duration_s": 3.46,
+          "asr_wall_s": 0.054,
+          "rtf": 0.0155
+        },
+        {
+          "id": "hw_dazhiyuan",
+          "duration_s": 3.522,
+          "asr_wall_s": 0.053,
+          "rtf": 0.0149
+        },
+        {
+          "id": "hw_yunyunfei",
+          "duration_s": 3.611,
+          "asr_wall_s": 0.053,
+          "rtf": 0.0147
+        }
+      ]
+    }
+  },
+  "size_delta": {
+    "fp32_minus_int8_bytes": 612552697
+  },
+  "success": true
+}

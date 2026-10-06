@@ -1,0 +1,596 @@
+{
+  "ticket": 444,
+  "artifacts_dir": "/Users/guanxueliang/Desktop/oh-my-ai/Murmur/scripts/onnx-export/work/artifacts",
+  "fp32_artifacts_dir": "/Users/guanxueliang/Desktop/oh-my-ai/Murmur/scripts/onnx-export/work/artifacts-fp32",
+  "matrix": [
+    {
+      "id": "hw_zhanghanyue",
+      "duration_s": 3.465,
+      "arms": {
+        "int8": {
+          "off": {
+            "raw": "请 把 会 议 纪 要 发 给 张 含 月 和 刘 冲",
+            "punctured": "请把会议纪要发给张含月和刘冲。"
+          },
+          "on": {
+            "raw": "请 把 会 议 纪 要 发 给 张 晗 玥 和 刘 冲",
+            "punctured": "请把会议纪要发给张晗玥和刘冲。"
+          }
+        },
+        "fp32": {
+          "off": {
+            "raw": "请 把 会 议 纪 要 发 给 张 含 月 和 刘 冲",
+            "punctured": "请把会议纪要发给张含月和刘冲。"
+          },
+          "on": {
+            "raw": "请 把 会 议 纪 要 发 给 张 晗 玥 和 刘 冲",
+            "punctured": "请把会议纪要发给张晗玥和刘冲。"
+          }
+        }
+      }
+    },
+    {
+      "id": "hw_gongshen",
+      "duration_s": 3.195,
+      "arms": {
+        "int8": {
+          "off": {
+            "raw": "下 周 由 公 审 带 队 去 深 圳 湾 总 部",
+            "punctured": "下周由公审带队去深圳湾总部。"
+          },
+          "on": {
+            "raw": "下 周 由 龚 沈 带 队 去 深 圳 湾 总 部",
+            "punctured": "下周由龚沈带队去深圳湾总部。"
+          }
+        },
+        "fp32": {
+          "off": {
+            "raw": "下 周 由 公 审 带 队 去 深 圳 湾 总 部",
+            "punctured": "下周由公审带队去深圳湾总部。"
+          },
+          "on": {
+            "raw": "下 周 由 龚 沈 带 队 去 深 圳 湾 总 部",
+            "punctured": "下周由龚沈带队去深圳湾总部。"
+          }
+        }
+      }
+    },
+    {
+      "id": "hw_jedediah",
+      "duration_s": 3.354,
+      "arms": {
+        "int8": {
+          "off": {
+            "raw": "这 个 项 目 的 负 责 人 是 G D D A keler berg",
+            "punctured": "这个项目的负责人是G D D A keler berg。"
+          },
+          "on": {
+            "raw": "这 个 项 目 的 负 责 人 是 G D D A keler berg",
+            "punctured": "这个项目的负责人是G D D A keler berg。"
+          }
+        },
+        "fp32": {
+          "off": {
+            "raw": "这 个 项 目 的 负 责 人 是 G D D A keler berg",
+            "punctured": "这个项目的负责人是G D D A keler berg。"
+          },
+          "on": {
+            "raw": "这 个 项 目 的 负 责 人 是 G D D A keler berg",
+            "punctured": "这个项目的负责人是G D D A keler berg。"
+          }
+        }
+      }
+    },
+    {
+      "id": "hw_mishujuan",
+      "duration_s": 3.46,
+      "arms": {
+        "int8": {
+          "off": {
+            "raw": "把 蜜 书 娟 的 工 位 调 整 到 靠 窗 的 位 置",
+            "punctured": "把蜜书娟的工位调整到靠窗的位置。"
+          },
+          "on": {
+            "raw": "把 幂 淑 娟 的 工 位 调 整 到 靠 窗 的 位 置",
+            "punctured": "把幂淑娟的工位调整到靠窗的位置。"
+          }
+        },
+        "fp32": {
+          "off": {
+            "raw": "把 密 淑 娟 的 工 位 调 整 到 靠 窗 的 位 置",
+            "punctured": "把密淑娟的工位调整到靠窗的位置。"
+          },
+          "on": {
+            "raw": "把 幂 淑 娟 的 工 位 调 整 到 靠 窗 的 位 置",
+            "punctured": "把幂淑娟的工位调整到靠窗的位置。"
+          }
+        }
+      }
+    },
+    {
+      "id": "hw_dazhiyuan",
+      "duration_s": 3.522,
+      "arms": {
+        "int8": {
+          "off": {
+            "raw": "联 系 达 致 远 确 认 明 天 的 评 审 时 间",
+            "punctured": "联系达致远，确认明天的评审时间。"
+          },
+          "on": {
+            "raw": "联 系 达 志 远 确 认 明 天 的 评 审 时 间",
+            "punctured": "联系达志远，确认明天的评审时间。"
+          }
+        },
+        "fp32": {
+          "off": {
+            "raw": "联 系 达 致 远 确 认 明 天 的 评 审 时 间",
+            "punctured": "联系达致远，确认明天的评审时间。"
+          },
+          "on": {
+            "raw": "联 系 达 志 远 确 认 明 天 的 评 审 时 间",
+            "punctured": "联系达志远，确认明天的评审时间。"
+          }
+        }
+      }
+    },
+    {
+      "id": "hw_yunyunfei",
+      "duration_s": 3.611,
+      "arms": {
+        "int8": {
+          "off": {
+            "raw": "帮 我 把 袁 云 飞 的 行 程 改 到 周 四 下 午",
+            "punctured": "帮我把袁云飞的行程改到周四下午。"
+          },
+          "on": {
+            "raw": "帮 我 把 沅 云 飞 的 行 程 改 到 周 四 下 午",
+            "punctured": "帮我把沅云飞的行程改到周四下午。"
+          }
+        },
+        "fp32": {
+          "off": {
+            "raw": "帮 我 把 袁 云 飞 的 行 程 改 到 周 四 下 午",
+            "punctured": "帮我把袁云飞的行程改到周四下午。"
+          },
+          "on": {
+            "raw": "帮 我 把 沅 云 飞 的 行 程 改 到 周 四 下 午",
+            "punctured": "帮我把沅云飞的行程改到周四下午。"
+          }
+        }
+      }
+    }
+  ],
+  "token_audit": [
+    {
+      "hotword_string": "张晗玥 刘翀",
+      "per_word": [
+        {
+          "word": "张晗玥",
+          "chars": [
+            {
+              "char": "张",
+              "id": 1153,
+              "oov": false
+            },
+            {
+              "char": "晗",
+              "id": 4441,
+              "oov": false
+            },
+            {
+              "char": "玥",
+              "id": 7637,
+              "oov": false
+            }
+          ]
+        },
+        {
+          "word": "刘翀",
+          "chars": [
+            {
+              "char": "刘",
+              "id": 6536,
+              "oov": false
+            },
+            {
+              "char": "翀",
+              "id": 1755,
+              "oov": false
+            }
+          ]
+        }
+      ],
+      "oov_chars": [],
+      "padded_ids": [
+        [1153, 4441, 7637, 0, 0, 0, 0, 0, 0, 0],
+        [6536, 1755, 0, 0, 0, 0, 0, 0, 0, 0],
+        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+      ],
+      "lengths": [2, 1, 0]
+    },
+    {
+      "hotword_string": "龚燊",
+      "per_word": [
+        {
+          "word": "龚燊",
+          "chars": [
+            {
+              "char": "龚",
+              "id": 1165,
+              "oov": false
+            },
+            {
+              "char": "燊",
+              "id": 4945,
+              "oov": false
+            }
+          ]
+        }
+      ],
+      "oov_chars": [],
+      "padded_ids": [
+        [1165, 4945, 0, 0, 0, 0, 0, 0, 0, 0],
+        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+      ],
+      "lengths": [1, 0]
+    },
+    {
+      "hotword_string": "Jedediah Kellerberg",
+      "per_word": [
+        {
+          "word": "Jedediah",
+          "chars": [
+            {
+              "char": "J",
+              "id": 8403,
+              "oov": true
+            },
+            {
+              "char": "e",
+              "id": 5965,
+              "oov": false
+            },
+            {
+              "char": "d",
+              "id": 6237,
+              "oov": false
+            },
+            {
+              "char": "e",
+              "id": 5965,
+              "oov": false
+            },
+            {
+              "char": "d",
+              "id": 6237,
+              "oov": false
+            },
+            {
+              "char": "i",
+              "id": 929,
+              "oov": false
+            },
+            {
+              "char": "a",
+              "id": 1339,
+              "oov": false
+            },
+            {
+              "char": "h",
+              "id": 7706,
+              "oov": false
+            }
+          ]
+        },
+        {
+          "word": "Kellerberg",
+          "chars": [
+            {
+              "char": "K",
+              "id": 8403,
+              "oov": true
+            },
+            {
+              "char": "e",
+              "id": 5965,
+              "oov": false
+            },
+            {
+              "char": "l",
+              "id": 1892,
+              "oov": false
+            },
+            {
+              "char": "l",
+              "id": 1892,
+              "oov": false
+            },
+            {
+              "char": "e",
+              "id": 5965,
+              "oov": false
+            },
+            {
+              "char": "r",
+              "id": 788,
+              "oov": false
+            },
+            {
+              "char": "b",
+              "id": 3545,
+              "oov": false
+            },
+            {
+              "char": "e",
+              "id": 5965,
+              "oov": false
+            },
+            {
+              "char": "r",
+              "id": 788,
+              "oov": false
+            },
+            {
+              "char": "g",
+              "id": 2035,
+              "oov": false
+            }
+          ]
+        }
+      ],
+      "oov_chars": ["J", "K"],
+      "padded_ids": [
+        [8403, 5965, 6237, 5965, 6237, 929, 1339, 7706, 0, 0],
+        [8403, 5965, 1892, 1892, 5965, 788, 3545, 5965, 788, 2035],
+        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+      ],
+      "lengths": [7, 9, 0]
+    },
+    {
+      "hotword_string": "宓淑娟",
+      "per_word": [
+        {
+          "word": "宓淑娟",
+          "chars": [
+            {
+              "char": "宓",
+              "id": 1644,
+              "oov": false
+            },
+            {
+              "char": "淑",
+              "id": 2196,
+              "oov": false
+            },
+            {
+              "char": "娟",
+              "id": 621,
+              "oov": false
+            }
+          ]
+        }
+      ],
+      "oov_chars": [],
+      "padded_ids": [
+        [1644, 2196, 621, 0, 0, 0, 0, 0, 0, 0],
+        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+      ],
+      "lengths": [2, 0]
+    },
+    {
+      "hotword_string": "笪志远",
+      "per_word": [
+        {
+          "word": "笪志远",
+          "chars": [
+            {
+              "char": "笪",
+              "id": 2071,
+              "oov": false
+            },
+            {
+              "char": "志",
+              "id": 4843,
+              "oov": false
+            },
+            {
+              "char": "远",
+              "id": 891,
+              "oov": false
+            }
+          ]
+        }
+      ],
+      "oov_chars": [],
+      "padded_ids": [
+        [2071, 4843, 891, 0, 0, 0, 0, 0, 0, 0],
+        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+      ],
+      "lengths": [2, 0]
+    },
+    {
+      "hotword_string": "贠云飞",
+      "per_word": [
+        {
+          "word": "贠云飞",
+          "chars": [
+            {
+              "char": "贠",
+              "id": 8403,
+              "oov": true
+            },
+            {
+              "char": "云",
+              "id": 7228,
+              "oov": false
+            },
+            {
+              "char": "飞",
+              "id": 2119,
+              "oov": false
+            }
+          ]
+        }
+      ],
+      "oov_chars": ["贠"],
+      "padded_ids": [
+        [8403, 7228, 2119, 0, 0, 0, 0, 0, 0, 0],
+        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+      ],
+      "lengths": [2, 0]
+    },
+    {
+      "hotword_string": "张晗玥",
+      "per_word": [
+        {
+          "word": "张晗玥",
+          "chars": [
+            {
+              "char": "张",
+              "id": 1153,
+              "oov": false
+            },
+            {
+              "char": "晗",
+              "id": 4441,
+              "oov": false
+            },
+            {
+              "char": "玥",
+              "id": 7637,
+              "oov": false
+            }
+          ]
+        }
+      ],
+      "oov_chars": [],
+      "padded_ids": [
+        [1153, 4441, 7637, 0, 0, 0, 0, 0, 0, 0],
+        [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+      ],
+      "lengths": [2, 0]
+    }
+  ],
+  "eb_comparison": [
+    {
+      "hotword_string": "张晗玥 刘翀",
+      "cosine_int8_eb_vs_fp32_eb": 1.0,
+      "int8_eb_l2": 30.37493133544922,
+      "fp32_eb_l2": 30.37493133544922
+    },
+    {
+      "hotword_string": "龚燊",
+      "cosine_int8_eb_vs_fp32_eb": 1.0000000000000002,
+      "int8_eb_l2": 24.103668212890625,
+      "fp32_eb_l2": 24.103668212890625
+    },
+    {
+      "hotword_string": "Jedediah Kellerberg",
+      "cosine_int8_eb_vs_fp32_eb": 1.0000000000000002,
+      "int8_eb_l2": 31.4918212890625,
+      "fp32_eb_l2": 31.4918212890625
+    },
+    {
+      "hotword_string": "宓淑娟",
+      "cosine_int8_eb_vs_fp32_eb": 1.0,
+      "int8_eb_l2": 24.66454315185547,
+      "fp32_eb_l2": 24.66454315185547
+    },
+    {
+      "hotword_string": "笪志远",
+      "cosine_int8_eb_vs_fp32_eb": 1.0,
+      "int8_eb_l2": 23.59697151184082,
+      "fp32_eb_l2": 23.59697151184082
+    },
+    {
+      "hotword_string": "贠云飞",
+      "cosine_int8_eb_vs_fp32_eb": 1.0,
+      "int8_eb_l2": 24.00761604309082,
+      "fp32_eb_l2": 24.00761604309082
+    },
+    {
+      "hotword_string": "张晗玥",
+      "cosine_int8_eb_vs_fp32_eb": 1.0,
+      "int8_eb_l2": 24.646007537841797,
+      "fp32_eb_l2": 24.646007537841797
+    }
+  ],
+  "bb_bias_sensitivity": [
+    {
+      "case_id": "hw_zhanghanyue",
+      "bb_graph": "int8",
+      "own_hotword": "张晗玥 刘翀",
+      "other_hotword": "Jedediah Kellerberg",
+      "bias_decodes": {
+        "zeros": ["请 把 会 议 纪 要 发 给 张 含 月 和 刘 冲"],
+        "own_hotword": ["请 把 会 议 纪 要 发 给 张 晗 玥 和 刘 冲"],
+        "other_hotword": ["请 把 会 议 纪 要 发 给 张 含 月 和 刘 冲"]
+      },
+      "raw_tokens_by_bias": {
+        "zeros": ["请把会议纪要发给张含月和刘冲"],
+        "own_hotword": ["请把会议纪要发给张晗玥和刘冲"],
+        "other_hotword": ["请把会议纪要发给张含月和刘冲"]
+      },
+      "bias_invariant": false
+    },
+    {
+      "case_id": "hw_zhanghanyue",
+      "bb_graph": "fp32",
+      "own_hotword": "张晗玥 刘翀",
+      "other_hotword": "Jedediah Kellerberg",
+      "bias_decodes": {
+        "zeros": ["请 把 会 议 纪 要 发 给 张 含 月 和 刘 冲"],
+        "own_hotword": ["请 把 会 议 纪 要 发 给 张 晗 玥 和 刘 冲"],
+        "other_hotword": ["请 把 会 议 纪 要 发 给 张 含 月 和 刘 冲"]
+      },
+      "raw_tokens_by_bias": {
+        "zeros": ["请把会议纪要发给张含月和刘冲"],
+        "own_hotword": ["请把会议纪要发给张晗玥和刘冲"],
+        "other_hotword": ["请把会议纪要发给张含月和刘冲"]
+      },
+      "bias_invariant": false
+    },
+    {
+      "case_id": "hw_jedediah",
+      "bb_graph": "int8",
+      "own_hotword": "Jedediah Kellerberg",
+      "other_hotword": "张晗玥",
+      "bias_decodes": {
+        "zeros": ["这 个 项 目 的 负 责 人 是 G D D A keler berg"],
+        "own_hotword": ["这 个 项 目 的 负 责 人 是 G D D A keler berg"],
+        "other_hotword": ["这 个 项 目 的 负 责 人 是 G D D A keler berg"],
+        "lowercase_hotword": ["这 个 项 目 的 负 责 人 是 J E E D D E er R G"]
+      },
+      "raw_tokens_by_bias": {
+        "zeros": ["这个项目的负责人是gddak@@el@@erber@@g"],
+        "own_hotword": ["这个项目的负责人是gddak@@el@@erber@@g"],
+        "other_hotword": ["这个项目的负责人是gddak@@el@@erber@@g"],
+        "lowercase_hotword": ["这个项目的负责人是jeeddeerrg"]
+      },
+      "bias_invariant": true
+    },
+    {
+      "case_id": "hw_jedediah",
+      "bb_graph": "fp32",
+      "own_hotword": "Jedediah Kellerberg",
+      "other_hotword": "张晗玥",
+      "bias_decodes": {
+        "zeros": ["这 个 项 目 的 负 责 人 是 G D D A keler berg"],
+        "own_hotword": ["这 个 项 目 的 负 责 人 是 G D D A keler berg"],
+        "other_hotword": ["这 个 项 目 的 负 责 人 是 G D D A keler berg"],
+        "lowercase_hotword": ["这 个 项 目 的 负 责 人 是 J E E D D E E R G"]
+      },
+      "raw_tokens_by_bias": {
+        "zeros": ["这个项目的负责人是gddak@@el@@erber@@g"],
+        "own_hotword": ["这个项目的负责人是gddak@@el@@erber@@g"],
+        "other_hotword": ["这个项目的负责人是gddak@@el@@erber@@g"],
+        "lowercase_hotword": ["这个项目的负责人是jeeddeerg"]
+      },
+      "bias_invariant": true
+    }
+  ],
+  "notes": [
+    "matrix raw text is engine-only (no punc); 'punctured' adds the int8 punc model",
+    "bb_bias_sensitivity compares decodes of the SAME chunk under zero/own/control bias"
+  ]
+}
