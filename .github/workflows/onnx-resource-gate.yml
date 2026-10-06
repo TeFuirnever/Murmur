@@ -1,0 +1,93 @@
+# [20261006_Ci_421_ResourceGateWorkflow] Ticket #421 (spec #412 T7): the
+# resource acceptance gates as a repeatable CI evidence run — the release
+# evidence chain's resource items (long-audio RSS/RTF, mic+file concurrency,
+# cold-start p95) measured against the PRODUCTION funasr_server.py over the
+# stdin/stdout protocol.
+#
+# This is a manual/dispatch evidence gate, NOT a PR gate — the model stack
+# (~700MB) is far too heavy for per-PR CI (same policy as asr-ab.yml and
+# onnx-win-spike.yml). The always-on half of the family (gate-logic unit
+# tests + protocol schema regression) runs in the regular ci.yml python
+# suite; the resource arms there self-skip without models
+# (tests/python/test_resource_gates.py module docstring).
+#
+# Repeatable two ways:
+#   - workflow_dispatch (any branch that carries this file)
+#   - push to a branch matching agent/onnx-42* that touches this workflow or
+#     the gate scripts (follow-up iteration on the evidence itself)
+#
+# Model bytes come ONLY from the T1 self-export mirror: verify_artifacts.py
+# --from-release downloads our own GitHub Release assets and enforces the
+# per-file sha256 strict-set pin — community repos are never a download
+# source (spec decision 6).
+name: ONNX resource gates
+
+on:
+  workflow_dispatch:
+    inputs:
+      samples:
+        description: "Cold-start sample count (fresh process each)"
+        default: "5"
+        type: string
+  push:
+    branches:
+      - "agent/onnx-42*"
+    paths:
+      - ".github/workflows/onnx-resource-gate.yml"
+      - "scripts/onnx-resource-gate/**"
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  resource-gates:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install pinned ONNX runtime env (funasr-onnx stack, no torch)
+        run: python -m pip install -r scripts/onnx-resource-gate/requirements-runtime.txt
+
+      # T1 trust chain: download the SELF-EXPORTED release assets into the
+      # production T5 layout (<damo-root>/onnx-int8/<model-name>) and verify
+      # every file against model-pin.json's sha256 manifest.
+      - name: Download self-exported models and verify sha256 manifest
+        run: >-
+          python scripts/onnx-export/verify_artifacts.py --from-release
+          --download-dir scripts/onnx-resource-gate/work/userdata/models/onnx-int8
+
+      - name: Run resource gates (long audio / concurrency / cold start)
+        run: >-
+          python scripts/onnx-resource-gate/resource_gate.py run
+          --damo-root scripts/onnx-resource-gate/work/userdata/models
+          --wav scripts/onnx-spike/fixtures/onnx-spike-40s.wav
+          --samples ${{ inputs.samples || '5' }}
+          --out-json scripts/onnx-resource-gate/work/resource_gate_results.json
+          --out-md scripts/onnx-resource-gate/work/resource_gate_report.md
+
+      - name: Append resource gate report to job summary
+        if: always()
+        shell: pwsh
+        run: >-
+          if (Test-Path scripts/onnx-resource-gate/work/resource_gate_report.md) {
+            Get-Content scripts/onnx-resource-gate/work/resource_gate_report.md |
+              Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          }
+
+      - name: Upload resource gate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: onnx-resource-gate-evidence-${{ matrix.os }}
+          path: |
+            scripts/onnx-resource-gate/work/resource_gate_results.json
+            scripts/onnx-resource-gate/work/resource_gate_report.md
