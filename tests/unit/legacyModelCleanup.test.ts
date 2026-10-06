@@ -425,6 +425,40 @@ describe("[20261006_T12_LegacyCacheCleanup] deletion executor", () => {
     );
   });
 
+  it("reports a symlink entry's reclaimed bytes as the link size, never the target's", async () => {
+    // Review fix (T12): readdirSync walks THROUGH a top-level symlink, so
+    // sizing the entry via a directory walk attributed the TARGET's bytes
+    // (shared-cache data that is NOT reclaimed — possibly another tool's
+    // model) to the deletion log. What is actually reclaimed is the link
+    // inode itself.
+    if (process.platform === "win32") {
+      // Creating dir symlinks on Windows needs privileges; the guard is
+      // Unix-only behavior by design.
+      return;
+    }
+    const foreignTarget = dirWithPayload(
+      path.join(homeDir, "unrelated", "huge-foreign-model"),
+      "z".repeat(5000),
+    );
+    const linkPath = path.join(userDataModels, VAD_REPO);
+    fs.mkdirSync(userDataModels, { recursive: true });
+    fs.symlinkSync(foreignTarget, linkPath, "dir");
+    const linkSize = fs.lstatSync(linkPath).size;
+    expect(linkSize).toBeLessThan(5000);
+
+    const summary = await cleanupLegacyTorchCaches({ ...deps, logger });
+
+    const entry = summary.deleted.find((d) => d.path === linkPath);
+    expect(entry).toBeDefined();
+    expect(entry!.bytes).toBe(linkSize);
+    const logLine = logger.info.mock.calls
+      .map((call) => String(call.join(" ")))
+      .find((line) => line.includes(linkPath));
+    expect(logLine).toBeDefined();
+    expect(logLine).toContain(`释放 ${linkSize} 字节`);
+    expect(logLine).not.toContain("释放 5000 字节");
+  });
+
   it("keeps going on per-entry failure, reports it, and never throws", async () => {
     if (process.platform === "win32") {
       // POSIX permission bits are the failure injection; Unix-only.

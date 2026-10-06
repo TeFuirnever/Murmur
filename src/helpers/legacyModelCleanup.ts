@@ -255,10 +255,12 @@ export function collectLegacyTorchCacheDirs(
   return entries;
 }
 
-/** Recursive byte accounting for the deletion log. Never follows symlinks
- * (a link contributes its own size — the target may be shared with other
- * tools) and never throws: unreadable entries are skipped so one bad file
- * cannot hide the size of the rest. */
+/** Recursive byte accounting for a DIRECTORY entry (top-level symlinks are
+ * resolved by entryReclaimableBytes above — a plain readdirSync here would
+ * walk through one). Child-level links are safe: each child is lstat'ed, so
+ * a symlink child contributes its own size, never its target's (the target
+ * may be shared with other tools). Never throws: unreadable entries are
+ * skipped so one bad file cannot hide the size of the rest. */
 function directorySizeBytes(dirPath: string): number {
   let total = 0;
   const walk = (current: string): void => {
@@ -288,6 +290,23 @@ function directorySizeBytes(dirPath: string): number {
   return total;
 }
 
+/** Reclaimed-bytes probe for ONE manifest entry. A symlink entry
+ * contributes only its own lstat size: directorySizeBytes() walks with
+ * readdirSync, which follows a TOP-LEVEL symlink and would report the
+ * TARGET's bytes (shared-cache data that is NOT reclaimed — possibly
+ * another tool's model) in the deletion log. Review fix, T12. */
+function entryReclaimableBytes(entryPath: string): number {
+  let stats: fs.Stats;
+  try {
+    stats = fs.lstatSync(entryPath);
+  } catch {
+    // Vanished between collect and size probe: nothing to account.
+    return 0;
+  }
+  if (stats.isSymbolicLink()) return stats.size;
+  return directorySizeBytes(entryPath);
+}
+
 /** Reclaim the old torch model caches: collect the manifest, delete each
  * entry, log what was deleted and how big it was. Per-entry failures are
  * logged and reported in the summary — never thrown, so the cleanup cannot
@@ -299,7 +318,7 @@ export async function cleanupLegacyTorchCaches(
   const entries = collectLegacyTorchCacheDirs(deps);
   const summary: LegacyCleanupSummary = { deleted: [], failed: [] };
   for (const entry of entries) {
-    const bytes = directorySizeBytes(entry.path);
+    const bytes = entryReclaimableBytes(entry.path);
     try {
       // Async rm keeps the Electron main-process loop responsive while
       // multi-GB repo dirs are unlinked.
