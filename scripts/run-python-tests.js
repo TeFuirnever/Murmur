@@ -42,10 +42,11 @@ const COVERAGE_INCLUDE =
   "funasr_server.py,audio_preprocessing.py,download_models.py";
 
 function resolveInterpreter(deps = {}) {
-  // [20261006_T8_PackagingSlimdown] Ticket #422: the slimmed embedded env
-  // no longer carries dev-only tooling (coverage), so a candidate that
-  // cannot import coverage is SKIPPED and the next one is tried (CI equips
-  // the system python). spawnSync/existsSync are injectable for tests.
+  // [20261006_T8_PackagingSlimdown] Ticket #422: the embedded env ships
+  // coverage via the wheel lock (scripts/embedded-python/requirements.in),
+  // but a candidate that cannot import it (env built before that
+  // convention, or a bare system python) is SKIPPED and the next one is
+  // tried. spawnSync/existsSync are injectable for tests.
   const spawn = deps.spawnSync || spawnSync;
   const existsSync = deps.existsSync || fs.existsSync;
   const candidates =
