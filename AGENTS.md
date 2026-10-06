@@ -1,4 +1,4 @@
-<!-- Generated: 2026-04-13 | Updated: 2026-09-26 (merged with former CLAUDE.md content; CLAUDE.md removed — all tools read this file) -->
+<!-- Generated: 2026-04-13 | Updated: 2026-10-06 (added Branch CI validation pointer + cross-platform test-path rule) -->
 
 # AGENTS.md
 
@@ -93,7 +93,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 Murmur targets **Windows** and **macOS** (Apple Silicon). Code must work on both platforms.
 
-- **Platform checks**: `process.platform === "win32"` (not `os.platform()` or feature detection) — in the **main process and plain-Node code only**. Sandboxed renderer pages have no `process` global; a bare `process.platform` in renderer code survives the bundle and throws at render time (jsdom tests cannot catch it — Node provides `process`). Gate renderer UI on the preload bridge's `window.electronAPI.getPlatform()` instead. Add tests with `it.skipIf(process.platform === "win32")` for Unix-only behavior.
+- **Platform checks**: `process.platform === "win32"` (not `os.platform()` or feature detection) — in the **main process and plain-Node code only**. Sandboxed renderer pages have no `process` global; a bare `process.platform` in renderer code survives the bundle and throws at render time (jsdom tests cannot catch it — Node provides `process`). Gate renderer UI on the preload bridge's `window.electronAPI.getPlatform()` instead. Add tests with `it.skipIf(process.platform === "win32")` for Unix-only behavior. Test assertions construct expected paths with `path.join`; POSIX-literal paths (`"/ud/models"`) fail on win32.
 - **Python paths**: macOS uses `python/bin/python3.11` (embedded); Windows uses `python/python.exe` (embedded). `prepare-embedded-python.js` supports both via platform-aware getters.
 - **Process management**: `gracefulShutdown()` uses `taskkill /T /F /PID` on Windows, `proc.kill("SIGKILL")` on Unix — see `src/helpers/funasrServer.ts`.
 - **Path validation**: `audioPathValidator.ts` allows all `C:\` drive paths on Windows; UNC paths are rejected early. macOS uses realpath + `/Volumes/` prefix checks.
@@ -185,6 +185,10 @@ Domain context: see `docs/agents/domain.md`.
 ### Push gate
 
 Prefer `git push no-mistakes <branch>` for non-trivial deliveries — the local pipeline (AI review, tests, docs, lint) must be green before the branch reaches `origin`. Usage guide: `docs/agents/no-mistakes-gate.md`.
+
+### Branch CI validation
+
+Branch pushes produce no checks: `ci.yml` triggers on main push/PR + `workflow_dispatch` only, and push/PR event delivery is intermittently stalled (see `[20260916_Fix_373_CiDispatch]` in ci.yml). Validate a branch with `gh workflow run ci.yml --ref <branch>`. Merge-gating PRs need a PR-context run — dispatch-only runs never join the PR rollup — so force one with `gh pr update-branch <n>` or an empty-commit push. When a merge is refused, read the error and route: BEHIND → update-branch; DIRTY → resolve conflicts; no run → retrigger.
 
 ### Browser automation
 

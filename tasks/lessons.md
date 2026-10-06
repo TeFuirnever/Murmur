@@ -122,3 +122,11 @@ Three stacked root causes, each invisible to "did the build finish" checks:
 **Context:** agent 报告"prettier 通过"，本地 ci:check 的 format:check 却红。复盘：`npx prettier --check` 经 rtk hook 代理后打印成功文案但真实退出码为 1，上层 `&&` 链据此误判。同一会话更早还出现过 shell 管道 `| tail` 吞 `pnpm ci:check` 退出码（显示 exit 0 实际 2/12 失败）。
 
 **Rule:** 门禁类命令的成败判定必须用**原始二进制 + 显式退出码回显**：`./node_modules/.bin/prettier --check <files>; echo EXIT=$?`，或 `set -o pipefail` 守护带管道的长命令。凡"代理层/管道层打印成功"而未经退出码核验的通过声明，一律视为未验证。
+
+## 2026-10-06 · CI 分支验证通道：分支 push 无 checks 是常态，取证走 dispatch，合并要 PR 上下文 run
+
+**Date:** 2026-10-06 (ONNX 迁移工单梯 #413–#425 自动执行，16 PR 全程复盘)
+
+**Context:** 本仓 `ci.yml` 只在 push/PR → main + workflow_dispatch 触发，且 GitHub push/pull_request 事件投递自 2026-09-16 起时好时坏（`ci.yml` 内 `[20260916_Fix_373_CiDispatch]` 注释）。自动执行 16 张票时，≥10 个实施者各烧掉一整轮修复"从零发现"同一事实链；dispatch-only 的 checks 不进 PR statusCheckRollup，#457 连续四次合并被拒后才定位到这一层；main 被并行合并推进时，在飞 PR 转 BEHIND 又是一类独立失败。
+
+**Rule:** 分支 CI 取证的固定动作序：① `gh workflow run ci.yml --ref <branch>` 产生 checks（分支裸 push 不产生任何 run）；② 合并门禁需要 PR 上下文 run——`gh pr update-branch <n>`（同步 main 的同时制造 synchronize 事件，最可靠的强制通道）或空提交重推；③ PR rollup 显示 null 不代表分支没跑过 checks，用 `gh run list --branch <branch>` 按 headSha 查权威结论；④ 合并被拒不读原因就重试是浪费——BEHIND → update-branch，DIRTY → 解冲突（真冲突不绕），无 run → 重触发；⑤ 开 PR 前先 `gh pr list --head <branch>` 查已有 PR，撞车复用而非重开。
