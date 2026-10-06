@@ -487,8 +487,10 @@ describe("[20261007_Fix_CiCachePoison] build.yml python-cache gating", () => {
   });
 
   it("the gate-models download records its degraded outcome as a step output", () => {
-    // The failure branch of the soft download emits models-ok=false (the
-    // save gate reads it); both jobs.
+    // The soft download writes models-ok=false as a script-top default —
+    // overwritten to true only on verified success — so an early crash
+    // before the verification branch still records the degraded outcome
+    // the save gate reads; both jobs.
     expect(BUILD_YML.match(/models-ok=false/g)?.length).toBe(2);
     expect(BUILD_YML.match(/id: gate-models-dl/g)?.length).toBe(2);
   });

@@ -108,6 +108,17 @@ jobs:
           # must REPORT its outcome: the python-cache save step below
           # refuses to persist an env built without the models.
           # [20261007_Fix_CiCachePoison] models-ok output added.
+          # [20261007_Fix_CiCachePoisonEarlyExit] bash runs with -e: a
+          # failure before the if statement (e.g. pip install) aborts the
+          # script with NO output written, and the save step's != 'false'
+          # condition reads that empty output as "models present" — the
+          # incident run 37460146665 poison path with the fault moved from
+          # the mirror to pip. Record the degraded outcome first; verified
+          # success overwrites it below (the else branch no longer
+          # re-writes it). A skipped step on a gate-models cache hit still
+          # leaves the output empty, which the save condition
+          # intentionally treats as present.
+          echo "models-ok=false" >> "$GITHUB_OUTPUT"
           python -m pip install requests
           mkdir -p scripts/onnx-export/work/gate-models
           if python scripts/onnx-export/verify_artifacts.py --from-release \
@@ -116,8 +127,8 @@ jobs:
           else
             echo "::warning::gate model download failed — packaging continues with an unpruned env"
             rm -rf scripts/onnx-export/work/gate-models
-            echo "models-ok=false" >> "$GITHUB_OUTPUT"
           fi
+          # [20261007_Fix_CiCachePoisonEarlyExit] END
       # [20261007_Fix_CiCachePoison] Incident run 37460146665 attempts 1-3:
       # monolithic actions/cache saves in its post step unconditionally, so
       # the UNPRUNED env produced by a degraded gate-models download got
@@ -482,6 +493,11 @@ jobs:
           # Same contract as the mac job: soft-degrade on mirror outage, but
           # report the outcome — [20261007_Fix_CiCachePoison] models-ok gates
           # the python-cache save below.
+          # [20261007_Fix_CiCachePoisonEarlyExit] Same pessimistic default
+          # as the mac job: a -e abort before the if (e.g. pip install)
+          # must still record the degraded outcome instead of leaving the
+          # output empty, which the save gate reads as "models present".
+          echo "models-ok=false" >> "$GITHUB_OUTPUT"
           python -m pip install requests
           mkdir -p scripts/onnx-export/work/gate-models
           if python scripts/onnx-export/verify_artifacts.py --from-release \
@@ -490,8 +506,8 @@ jobs:
           else
             echo "::warning::gate model download failed — packaging continues with an unpruned env"
             rm -rf scripts/onnx-export/work/gate-models
-            echo "models-ok=false" >> "$GITHUB_OUTPUT"
           fi
+          # [20261007_Fix_CiCachePoisonEarlyExit] END
       # [20261007_Fix_CiCachePoison] Same restore/save split as the mac job:
       # never cache the env produced by a degraded (unpruned) prepare.
       - name: Restore embedded Python cache
