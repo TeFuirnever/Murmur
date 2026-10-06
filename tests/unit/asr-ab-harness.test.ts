@@ -15,6 +15,7 @@ const {
   timestampDeviation,
   aggregateByDomain,
   compareReports,
+  hotwordCaseLanguage,
   loadCorpusManifest,
   runCorpus,
   parseArgs,
@@ -578,6 +579,245 @@ describe("compareReports", () => {
     expect(cmp.passed).toBe(false);
     expect(cmp.perDomain.find((d) => d.domain === "noise")?.passed).toBe(false);
     expect(cmp.hotword.passed).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// compareReports hotword zh/en sub-domain gates — #443 (spec #412 T4a, owner
+// 议决 2026-10-01, https://github.com/TeFuirnever/Murmur/issues/412#issuecomment-5930346248)
+// ---------------------------------------------------------------------------
+describe("compareReports hotword zh/en sub-domain gates", () => {
+  // Legacy T3/T4 report shape: one combined `hotword` domain plus the
+  // per-case array. CERs mirror the real corpus numbers; hw_jedediah is the
+  // only English hotword case (Latin letters in the reference).
+  const ZH_CASES = [
+    {
+      id: "hw_zhanghanyue",
+      cer: 0.07142857142857142,
+      reference: "请把会议纪要发给张晗玥和刘翀。",
+      terms: ["张晗玥", "刘翀"],
+    },
+    {
+      id: "hw_gongshen",
+      cer: 0.07692307692307693,
+      reference: "下周由龚燊带队去深圳湾总部。",
+      terms: ["龚燊"],
+    },
+    {
+      id: "hw_mishujuan",
+      cer: 0.06666666666666667,
+      reference: "把宓淑娟的工位调整到靠窗的位置。",
+      terms: ["宓淑娟"],
+    },
+    {
+      id: "hw_dazhiyuan",
+      cer: 0.07142857142857142,
+      reference: "联系笪志远确认明天的评审时间。",
+      terms: ["笪志远"],
+    },
+    {
+      id: "hw_yunyunfei",
+      cer: 0.06666666666666667,
+      reference: "帮我把贠云飞的行程改到周四下午。",
+      terms: ["贠云飞"],
+    },
+  ];
+  const EN_CASE = {
+    id: "hw_jedediah",
+    cer: 0.037037037037037035,
+    reference: "这个项目的负责人是Jedediah Kellerberg。",
+    terms: ["Jedediah Kellerberg"],
+  };
+  const toScoredCases = (cases: typeof ZH_CASES, cerShift = 0) =>
+    cases.map((c) => ({
+      id: c.id,
+      domain: "hotword",
+      cer: c.cer + cerShift,
+      reference: c.reference,
+      hotword: { terms: c.terms.map((term) => ({ term })) },
+    }));
+
+  const mkLegacyReport = ({
+    engineName,
+    zhShift = 0,
+    enCer,
+  }: {
+    engineName: string;
+    zhShift?: number;
+    enCer: number;
+  }) => {
+    const allCases = [
+      ...toScoredCases(ZH_CASES, zhShift),
+      { ...toScoredCases([EN_CASE])[0], cer: enCer },
+    ];
+    // The combined aggregate mirrors what the harness would have written for
+    // these cases; under the split caliber it is re-derived from `cases`, so
+    // it only needs to be consistent, not exact.
+    const combinedMeanCer =
+      allCases.reduce((sum, c) => sum + c.cer, 0) / allCases.length;
+    return {
+      engine: { name: engineName },
+      domains: {
+        hotword: {
+          count: allCases.length,
+          meanCer: combinedMeanCer,
+          medianCer: combinedMeanCer,
+          maxCer: combinedMeanCer,
+          puncInsertions: 1,
+          puncDeletions: 0,
+        },
+      },
+      hotword: {
+        repairRate: 14.29 / 100,
+        counts: { repaired: 1, stillWrong: 6, alwaysRight: 0, regressed: 0 },
+      },
+      timestampSummary: {
+        meanAbsDevMs: 64,
+        medianAbsDevMs: 60,
+        p95AbsDevMs: 185,
+        maxAbsDevMs: 185,
+      },
+      cases: allCases,
+    };
+  };
+
+  it("splits a legacy combined hotword domain into hotword-zh / hotword-en rows", () => {
+    const cmp = compareReports(
+      mkLegacyReport({ engineName: "torch", enCer: EN_CASE.cer }),
+      mkLegacyReport({ engineName: "onnx", enCer: 0.2222222222222222 }),
+    );
+    const domains = cmp.perDomain.map((d) => d.domain);
+    expect(domains).toContain("hotword-zh");
+    expect(domains).toContain("hotword-en");
+    expect(domains).not.toContain("hotword");
+    const zh = cmp.perDomain.find((d) => d.domain === "hotword-zh");
+    expect(zh?.cerDelta).toBeCloseTo(0, 10);
+    expect(zh?.passed).toBe(true);
+    const en = cmp.perDomain.find((d) => d.domain === "hotword-en");
+    expect(en?.cerDelta).toBeCloseTo(0.2222222222222222 - EN_CASE.cer, 6);
+  });
+
+  it("downgrades the en sub-domain to observation-only (en regression never fails the verdict)", () => {
+    const cmp = compareReports(
+      mkLegacyReport({ engineName: "torch", enCer: EN_CASE.cer }),
+      mkLegacyReport({ engineName: "onnx", enCer: 0.2222222222222222 }),
+    );
+    const en = cmp.perDomain.find((d) => d.domain === "hotword-en");
+    expect(en?.observationOnly).toBe(true);
+    expect(en?.passed).toBe(true);
+    // T4 reality replay: the +3.09pp combined hotword delta came entirely
+    // from hw_jedediah — under the split caliber the whole verdict is GO.
+    expect(cmp.passed).toBe(true);
+  });
+
+  it("keeps the zh sub-domain hard-gated at +2pp", () => {
+    const cmp = compareReports(
+      mkLegacyReport({ engineName: "torch", enCer: EN_CASE.cer }),
+      mkLegacyReport({ engineName: "onnx", zhShift: 0.03, enCer: EN_CASE.cer }),
+    );
+    const zh = cmp.perDomain.find((d) => d.domain === "hotword-zh");
+    expect(zh?.observationOnly).toBe(false);
+    expect(zh?.passed).toBe(false);
+    expect(cmp.passed).toBe(false);
+  });
+
+  it("treats already-split hotword-zh/hotword-en domains natively (post-#443 reports)", () => {
+    const domainMap = (zhMean: number, enMean: number) => ({
+      "hotword-zh": {
+        count: 5,
+        meanCer: zhMean,
+        medianCer: zhMean,
+        maxCer: zhMean,
+        puncInsertions: 1,
+        puncDeletions: 0,
+      },
+      "hotword-en": {
+        count: 1,
+        meanCer: enMean,
+        medianCer: enMean,
+        maxCer: enMean,
+        puncInsertions: 0,
+        puncDeletions: 0,
+      },
+    });
+    const cmp = compareReports(
+      {
+        engine: { name: "torch" },
+        domains: domainMap(0.07062271062271062, EN_CASE.cer),
+        hotword: {
+          repairRate: 14.29 / 100,
+          counts: { repaired: 1, stillWrong: 6, alwaysRight: 0, regressed: 0 },
+        },
+        timestampSummary: { meanAbsDevMs: 64 },
+        cases: [],
+      },
+      {
+        engine: { name: "onnx" },
+        domains: domainMap(0.07062271062271062, 0.2222222222222222),
+        hotword: {
+          repairRate: 14.29 / 100,
+          counts: { repaired: 1, stillWrong: 6, alwaysRight: 0, regressed: 0 },
+        },
+        timestampSummary: { meanAbsDevMs: 64 },
+        cases: [],
+      },
+    );
+    expect(
+      cmp.perDomain.find((d) => d.domain === "hotword-en")?.observationOnly,
+    ).toBe(true);
+    expect(cmp.perDomain.find((d) => d.domain === "hotword-en")?.passed).toBe(
+      true,
+    );
+    expect(cmp.perDomain.find((d) => d.domain === "hotword-zh")?.passed).toBe(
+      true,
+    );
+    expect(cmp.passed).toBe(true);
+  });
+
+  it("falls back to hard-gating the combined hotword domain when per-case data is absent", () => {
+    const mkCombined = (engineName: string, meanCer: number) => ({
+      engine: { name: engineName },
+      domains: {
+        hotword: {
+          count: 6,
+          meanCer,
+          medianCer: meanCer,
+          maxCer: meanCer,
+          puncInsertions: 1,
+          puncDeletions: 0,
+        },
+      },
+      hotword: {
+        repairRate: 14.29 / 100,
+        counts: { repaired: 1, stillWrong: 6, alwaysRight: 0, regressed: 0 },
+      },
+      timestampSummary: { meanAbsDevMs: 64 },
+    });
+    const cmp = compareReports(
+      mkCombined("torch", 0.06502509835843169),
+      mkCombined("onnx", 0.09588929588929589),
+    );
+    const hw = cmp.perDomain.find((d) => d.domain === "hotword");
+    expect(hw?.observationOnly).toBe(false);
+    expect(hw?.passed).toBe(false);
+    expect(cmp.passed).toBe(false);
+  });
+});
+
+describe("hotwordCaseLanguage (legacy-report fallback)", () => {
+  it("marks Latin-letter references as en and pure-CJK material as zh", () => {
+    expect(
+      hotwordCaseLanguage({
+        reference: "这个项目的负责人是Jedediah Kellerberg。",
+        hotword: { terms: [{ term: "Jedediah Kellerberg" }] },
+      }),
+    ).toBe("en");
+    expect(
+      hotwordCaseLanguage({
+        reference: "请把会议纪要发给张晗玥和刘翀。",
+        hotword: { terms: [{ term: "张晗玥" }] },
+      }),
+    ).toBe("zh");
   });
 });
 

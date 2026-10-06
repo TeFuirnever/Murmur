@@ -27,10 +27,15 @@ BUILDER_PATH = os.path.join(REPO_ROOT, "scripts", "build-asr-corpus.py")
 TONE_HZ = 220.0
 TONE_AMPLITUDE = 0.3
 
+# [20261006_Feat_443_HotwordSubdomainGates] Ticket #443 (spec #412 T4a):
+# the builder's hotword domain is split by language — hotword-zh (5 cases,
+# hard CER gate) + hotword-en (hw_jedediah, observation-only in the A/B
+# compare gate, #412 owner verdict 2026-10-01).
 EXPECTED_TTS_ONLY_COUNTS = {
     "accent": 6,
     "codeswitch": 6,
-    "hotword": 6,
+    "hotword-zh": 5,
+    "hotword-en": 1,
     "timestamp": 3,
 }
 NETWORK_DOMAINS = ("real-clean", "noise", "farfield")

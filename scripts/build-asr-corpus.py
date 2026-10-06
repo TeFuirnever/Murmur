@@ -18,7 +18,9 @@ Composition (domains, all provenance-labeled in the manifest):
   codeswitch  mixed zh/en dictation-style sentences (stitched Tingting +
               Samantha renders, and whole-sentence Tingting renders)
   hotword     rare-noun sentences (张晗玥/龚燊/刘翀 class) — the A/B harness
-              transcribes each twice (hotword off/on) for the repair rate
+              transcribes each twice (hotword off/on) for the repair rate;
+              split by language into hotword-zh / hotword-en (#443, spec
+              #412 T4a verdict caliber)
   timestamp   multi-sentence clips with 900ms inter-sentence silence; golden
               boundaries are measured from the constructed waveform (energy
               threshold), independent of any ASR engine
@@ -35,6 +37,7 @@ Usage:
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -509,6 +512,13 @@ def build_cases(include_network=True):
         })
 
     # ---- 4. hotword --------------------------------------------------------
+    # [20261006_Feat_443_HotwordSubdomainGates] Ticket #443 (spec #412 T4a):
+    # the hotword domain is split by language — hotword-zh (hard CER gate)
+    # vs hotword-en (English proper-noun case, observation-only in the A/B
+    # compare gate per the #412 owner verdict 2026-10-01). Cases land in the
+    # sub-domain matching their material: Latin letters in the reference
+    # mean the en sub-domain, exactly like the harness's legacy-report
+    # fallback (asr-ab-harness.js hotwordCaseLanguage).
     for name, sentence, terms in HOTWORD_CASES:
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as t:
             w = t.name
@@ -516,10 +526,13 @@ def build_cases(include_network=True):
         data = load_audio(w)
         os.unlink(w)
         write_flac(name, data)
+        hotword_domain = (
+            "hotword-en" if re.search(r"[A-Za-z]", sentence) else "hotword-zh"
+        )
         add({
             "id": name,
             "audio": f"audio/{name}.flac",
-            "domain": "hotword",
+            "domain": hotword_domain,
             "provenance": "macOS say Tingting render (rare-noun hotword discrimination, SeACo spike class)",
             "source": None,
             "augmentation": None,
@@ -588,8 +601,14 @@ DOMAINS = [
      "description": "real speech + simulated room (synthetic RIR + LPF + attenuation + floor)"},
     {"id": "codeswitch", "label": "中英混说",
      "description": "mixed zh/en dictation sentences (stitched bilingual TTS and whole-sentence zh TTS)"},
-    {"id": "hotword", "label": "热词判别",
-     "description": "rare-noun sentences transcribed twice (hotword off/on) by the harness"},
+    # [20261006_Feat_443_HotwordSubdomainGates] hotword is split by language
+    # (hotword-zh hard-gated / hotword-en observation-only, #412 2026-10-01).
+    {"id": "hotword-zh", "label": "热词判别(中文)",
+     "description": "Chinese rare-noun sentences transcribed twice (hotword off/on) by the harness; hard CER gate",
+     "language": "zh"},
+    {"id": "hotword-en", "label": "热词判别(英文)",
+     "description": "English proper-noun hotword case transcribed twice (hotword off/on); observation-only in the A/B compare gate (#412 owner verdict 2026-10-01)",
+     "language": "en"},
     {"id": "timestamp", "label": "时间戳黄金集",
      "description": "multi-sentence clips with waveform-measured golden boundaries"},
 ]

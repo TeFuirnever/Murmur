@@ -16,13 +16,17 @@ const CORPUS_DIR = path.resolve(__dirname, "../../scripts/asr-corpus");
 // documented in docs/research/2026-10-01-asr-ab-corpus-torch-baseline.md.
 // Lowering these means the corpus no longer covers the spec #412 domains and
 // must be an explicit, documented decision.
+// [20261006_Feat_443_HotwordSubdomainGates] The hotword domain is split by
+// language (#412 owner verdict 2026-10-01): hotword-zh keeps the hard CER
+// gate, hotword-en (the English proper-noun case) is observation-only.
 const DOMAIN_MINIMUMS: Record<string, number> = {
   "real-clean": 6,
   accent: 4,
   noise: 6,
   farfield: 4,
   codeswitch: 4,
-  hotword: 5,
+  "hotword-zh": 5,
+  "hotword-en": 1,
   timestamp: 3,
 };
 
@@ -69,6 +73,26 @@ describe("committed A/B corpus (scripts/asr-corpus)", () => {
       for (const term of corpusCase.hotword?.terms ?? []) {
         expect(corpusCase.reference.text).toContain(term);
       }
+    }
+  });
+
+  // [20261006_Feat_443_HotwordSubdomainGates] The compare gate keys the
+  // zh/en split off these domain annotations — a missing annotation would
+  // silently drop a sub-domain back to unlabeled.
+  it("annotates the hotword sub-domains with their language (#443)", () => {
+    const { manifest } = loadCorpusManifest(CORPUS_DIR);
+    const languageByDomain = new Map(
+      manifest?.domains.map((domain) => [domain.id, domain.language]),
+    );
+    expect(languageByDomain.get("hotword-zh")).toBe("zh");
+    expect(languageByDomain.get("hotword-en")).toBe("en");
+    // cases must live in the sub-domain matching their material: the en
+    // sub-domain holds the Latin-letter references, zh the pure-CJK ones.
+    for (const corpusCase of manifest?.cases ?? []) {
+      if (!corpusCase.hotword) continue;
+      const hasLatin = /[A-Za-z]/.test(corpusCase.reference.text);
+      const expectedDomain = hasLatin ? "hotword-en" : "hotword-zh";
+      expect(corpusCase.domain).toBe(expectedDomain);
     }
   });
 
