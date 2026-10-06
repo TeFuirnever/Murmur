@@ -14,7 +14,52 @@ const tar = require("tar");
 // Platform-specific paths and env vars are resolved via getters below.
 // [20260802_Fix_WinEmbeddedPython] END
 
+// [20261006_T8_PackagingSlimdown] Ticket #422 (spec #412 decisions 1/3/5):
+// the embedded env is the funasr-onnx generation. The wheel set comes from
+// the committed sha256-pinned lock (SBOM discipline — every wheel hashed
+// for both shipping platforms), installed in ONE pip transaction with
+// --require-hashes. numba/llvmlite ride along only because librosa (a
+// funasr-onnx metadata dep) declares them; after install they are pruned
+// BEHIND the real-inference gate (scripts/embedded-python/import_gate.py
+// transcribes a non-wav fixture through the production adapters) — a gate
+// failure restores them (降级不裁) and the packaging-state marker records
+// what shipped.
 class EmbeddedPythonBuilder {
+  // [20261006_T8_PackagingSlimdown] Import names of the runtime stack the
+  // env must provide; the former ["numpy", "torch", "librosa", "funasr"]
+  // verified a stack the slimmed env deliberately no longer contains.
+  static CRITICAL_DEPS = ["numpy", "soundfile", "onnxruntime", "funasr_onnx"];
+  static PRUNE_PACKAGES = ["numba", "llvmlite"];
+  static RUNTIME_LOCK_PATH = path.join(
+    __dirname,
+    "embedded-python",
+    "requirements.lock",
+  );
+  static GATE_SCRIPT_PATH = path.join(
+    __dirname,
+    "embedded-python",
+    "import_gate.py",
+  );
+  static PACKAGING_STATE_FILENAME = ".murmur-packaging-state.json";
+
+  // [20261006_T8_PackagingSlimdown] Marker factory — the packaging-state
+  // file is import_gate.py --check-only's consistency input, so "pruned"
+  // must be true EXACTLY when the gate passed. Unknown outcomes throw:
+  // silently recording a pruned:false tree would flip the CI gate's
+  // verdict for a correctly pruned env (the bug class this guards).
+  static buildPackagingState(outcome, gatedAt) {
+    const prunedByOutcome = { "gate-passed": true };
+    if (!(outcome in prunedByOutcome) && !outcome.startsWith("gate-")) {
+      throw new Error(`unknown packaging outcome: ${outcome}`);
+    }
+    return {
+      pruned: prunedByOutcome[outcome] === true,
+      reason: outcome,
+      packages: EmbeddedPythonBuilder.PRUNE_PACKAGES,
+      gated_at: gatedAt,
+    };
+  }
+
   constructor() {
     this.pythonVersion = "3.11.6";
     this.buildDate = "20231002";
@@ -78,6 +123,11 @@ class EmbeddedPythonBuilder {
 
           if (isValid) {
             console.log("✅ 现有环境验证通过，跳过重新安装");
+            // [20261006_T8_PackagingSlimdown] The prune step is idempotent
+            // (marker short-circuit) and must also run on the skip path —
+            // an env installed before the gate existed (or a degraded
+            // marker) gets healed here instead of shipping unpruned.
+            await this.maybePruneNumbaLlvmite();
             return;
           } else {
             console.log("⚠️ 现有环境不完整，将重新安装...");
@@ -100,6 +150,11 @@ class EmbeddedPythonBuilder {
 
       // 5. 清理不必要文件
       await this.cleanupUnnecessaryFiles();
+
+      // [20260818_T3_PythonSelfCheckMilestone] (step 6 added by
+      // [20261006_T8_PackagingSlimdown]) Prune numba/llvmlite behind the
+      // real-inference gate — the installer-size payoff of the ONNX swap.
+      await this.maybePruneNumbaLlvmite();
 
       console.log("✅ 嵌入式Python环境准备完成！");
     } catch (error) {
@@ -208,11 +263,23 @@ class EmbeddedPythonBuilder {
   }
   // [20260802_Fix_WinEmbeddedPython] END
 
+  // [20261006_T8_PackagingSlimdown] One pip transaction from the hashed
+  // lock. The old per-dep loop (torch trio + librosa + funasr, unpinned
+  // transitive resolution, retry-with-deps fallback) is gone: hash
+  // verification is the SBOM discipline, so a mismatch fails the build
+  // instead of falling back to unverified bytes.
   async installDependencies() {
     const pythonPath = this.pythonBin;
     const sitePackagesPath = this.sitePackagesPath;
+    const lockPath = EmbeddedPythonBuilder.RUNTIME_LOCK_PATH;
+    const wheelsDir = path.join(__dirname, "embedded-python", "wheels");
 
-    console.log("📦 安装Python依赖...");
+    if (!fs.existsSync(lockPath)) {
+      throw new Error(`wheel lock missing: ${lockPath}`);
+    }
+
+    console.log("📦 安装Python依赖 (sha256 锁定清单)...");
+    console.log(`🧾 lock: ${lockPath}`);
 
     // 确保pip是最新的
     console.log("⬆️ 升级pip...");
@@ -225,48 +292,16 @@ class EmbeddedPythonBuilder {
       console.warn("⚠️ pip升级失败，继续安装依赖...");
     }
 
-    // 定义依赖列表 - 确保numpy等核心依赖被正确安装
-    const dependencies = [
-      "numpy<2", // 先安装numpy，作为其他库的基础依赖
-      "torch==2.0.1",
-      "torchaudio==2.0.2",
-      "torchvision==0.15.2",
-      "librosa>=0.11.0",
-      "funasr>=1.2.7",
-    ];
-
-    // 逐个安装依赖（包含所有子依赖）
-    for (const dep of dependencies) {
-      console.log(`📦 安装 ${dep}...`);
-      try {
-        execSync(
-          `"${pythonPath}" -m pip install --target "${sitePackagesPath}" --no-deps --force-reinstall "${dep}"`,
-          { stdio: "inherit", env: this.pythonEnv },
-        );
-
-        // 安装依赖的依赖
-        execSync(
-          `"${pythonPath}" -m pip install --target "${sitePackagesPath}" --only-binary=all "${dep}"`,
-          { stdio: "inherit", env: this.pythonEnv },
-        );
-
-        console.log(`✅ ${dep} 安装完成`);
-      } catch (error) {
-        console.error(`❌ ${dep} 安装失败:`, error.message);
-        // 尝试不使用 --no-deps 重新安装
-        try {
-          console.log(`🔄 重试安装 ${dep} (包含依赖)...`);
-          execSync(
-            `"${pythonPath}" -m pip install --target "${sitePackagesPath}" --force-reinstall "${dep}"`,
-            { stdio: "inherit", env: this.pythonEnv },
-          );
-          console.log(`✅ ${dep} 重试安装成功`);
-        } catch (retryError) {
-          console.error(`❌ ${dep} 重试安装也失败:`, retryError.message);
-          // 继续安装其他依赖
-        }
-      }
-    }
+    // Single transaction: pip verifies every downloaded wheel against the
+    // recorded sha256. --find-links supplies the committed local jieba
+    // wheel (upstream ships sdist only); everything else resolves from
+    // PyPI and must match a recorded hash to install at all.
+    execSync(
+      `"${pythonPath}" -m pip install --target "${sitePackagesPath}" ` +
+        `--require-hashes --only-binary=:all: --find-links "${wheelsDir}" ` +
+        `-r "${lockPath}"`,
+      { stdio: "inherit", env: this.pythonEnv },
+    );
 
     // 验证关键依赖
     await this.verifyDependencies();
@@ -275,9 +310,7 @@ class EmbeddedPythonBuilder {
   async verifyDependencies() {
     console.log("🔍 验证依赖安装...");
 
-    const criticalDeps = ["numpy", "torch", "librosa", "funasr"];
-
-    for (const dep of criticalDeps) {
+    for (const dep of EmbeddedPythonBuilder.CRITICAL_DEPS) {
       try {
         const result = execSync(
           `"${this.pythonBin}" -c "import ${dep}; print('${dep} OK')"`,
@@ -292,6 +325,131 @@ class EmbeddedPythonBuilder {
     }
   }
 
+  // [20261006_T8_PackagingSlimdown] Prune numba/llvmlite (~154MB unpacked)
+  // ONLY behind the real-inference gate. Flow: move the packages to a
+  // holding dir → run the gate (full mode: real transcription of a non-wav
+  // fixture on real self-exported model bytes, asserting the stack imports
+  // and transcribes without them) → pass = delete, fail = restore and
+  // record the degradation. Without gate models (MURMUR_ONNX_GATE_MODELS_DIR
+  // unset/empty) the prune is SKIPPED — an ungated prune is exactly the
+  // failure mode the gate exists to prevent.
+  async maybePruneNumbaLlvmite() {
+    const statePath = path.join(
+      this.pythonDir,
+      EmbeddedPythonBuilder.PACKAGING_STATE_FILENAME,
+    );
+    const sitePackages = this.sitePackagesPath;
+
+    const writeState = (outcome) => {
+      const state = EmbeddedPythonBuilder.buildPackagingState(
+        outcome,
+        new Date().toISOString(),
+      );
+      try {
+        fs.writeFileSync(statePath, JSON.stringify(state, null, 2) + "\n");
+      } catch (error) {
+        console.warn(`⚠️ 无法写入打包状态标记: ${error.message}`);
+      }
+    };
+
+    const modelsDir = process.env.MURMUR_ONNX_GATE_MODELS_DIR;
+    if (!modelsDir || !fs.existsSync(modelsDir)) {
+      console.warn(
+        "⚠️ 未提供门禁模型目录 (MURMUR_ONNX_GATE_MODELS_DIR)，跳过 numba/llvmlite 裁剪" +
+          "（安装包将偏大；CI 与发布构建应提供该目录）",
+      );
+      writeState("gate-models-missing");
+      return;
+    }
+
+    // Idempotency: an already-pruned, already-gated env needs no re-gate.
+    // [20261006_T8_PackagingSlimdown] The marker alone is NOT trusted: a
+    // later `pip install -r lock --target` re-run (lock refresh, manual
+    // repair) silently re-extracts the pruned packages, so "pruned" must
+    // also mean the dirs are actually ABSENT — otherwise the gate is
+    // skipped and the installer ships with 158MB of dead weight (observed
+    // locally: 225MB → 266MB dmg).
+    const pruneTargetsPresent = EmbeddedPythonBuilder.PRUNE_PACKAGES.some(
+      (pkg) => fs.existsSync(path.join(sitePackages, pkg)),
+    );
+    if (fs.existsSync(statePath) && !pruneTargetsPresent) {
+      try {
+        const prior = JSON.parse(fs.readFileSync(statePath, "utf8"));
+        if (prior.pruned === true) {
+          console.log("✅ 环境已裁剪并通过门禁，跳过重复裁剪");
+          return;
+        }
+      } catch {
+        // Unreadable marker → fall through and re-gate.
+      }
+    }
+
+    const holdingDir = path.join(this.pythonDir, ".prune-holding");
+    fs.rmSync(holdingDir, { recursive: true, force: true });
+    fs.mkdirSync(holdingDir, { recursive: true });
+    const moved = [];
+    for (const pkg of EmbeddedPythonBuilder.PRUNE_PACKAGES) {
+      const pkgDir = path.join(sitePackages, pkg);
+      if (fs.existsSync(pkgDir)) {
+        fs.renameSync(pkgDir, path.join(holdingDir, pkg));
+        moved.push(pkg);
+      }
+      // Dist-info dirs ride along by prefix so pip metadata stays honest.
+      const distInfos = fs
+        .readdirSync(sitePackages)
+        .filter((name) => name.toLowerCase().startsWith(`${pkg}-`))
+        .filter((name) => name.endsWith(".dist-info"));
+      for (const info of distInfos) {
+        fs.renameSync(
+          path.join(sitePackages, info),
+          path.join(holdingDir, info),
+        );
+        moved.push(info);
+      }
+    }
+
+    const restore = () => {
+      for (const name of moved) {
+        fs.renameSync(
+          path.join(holdingDir, name),
+          path.join(sitePackages, name),
+        );
+      }
+      fs.rmSync(holdingDir, { recursive: true, force: true });
+    };
+
+    console.log(
+      `✂️ 裁剪门禁: 移出 ${moved.join(", ")}，运行真转写门禁 (flac fixture)...`,
+    );
+    try {
+      const result = execSync(
+        `"${this.pythonBin}" "${EmbeddedPythonBuilder.GATE_SCRIPT_PATH}" ` +
+          `--models-dir "${modelsDir}" --assert-numba-absent ` +
+          `--fixture-wav "${path.join(
+            __dirname,
+            "onnx-spike",
+            "fixtures",
+            "onnx-spike-40s.wav",
+          )}"`,
+        { stdio: "pipe", env: this.pythonEnv, encoding: "utf8" },
+      );
+      console.log(result.toString().trim());
+      fs.rmSync(holdingDir, { recursive: true, force: true });
+      writeState("gate-passed");
+      console.log("✅ 裁剪生效 (numba/llvmlite 已移除，门禁全过)");
+    } catch (error) {
+      console.error("❌ 裁剪门禁失败，恢复 numba/llvmlite (降级不裁):");
+      console.error(
+        (error.stdout || "") + (error.stderr || error.message || ""),
+      );
+      restore();
+      writeState("gate-failed");
+      console.warn(
+        "⚠️ 裁剪已降级：环境保留 numba/llvmlite（安装包偏大但可用）",
+      );
+    }
+  }
+
   async validateExistingEnvironment() {
     console.log("🔍 验证现有环境完整性...");
 
@@ -303,9 +461,7 @@ class EmbeddedPythonBuilder {
       }
 
       // 检查关键依赖是否可用
-      const criticalDeps = ["numpy", "torch", "librosa", "funasr"];
-
-      for (const dep of criticalDeps) {
+      for (const dep of EmbeddedPythonBuilder.CRITICAL_DEPS) {
         try {
           execSync(
             `"${this.pythonBin}" -c "import ${dep}; print('${dep} OK')"`,

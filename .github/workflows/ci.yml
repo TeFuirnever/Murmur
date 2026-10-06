@@ -101,14 +101,14 @@ jobs:
           fail-on-severity: high
           # [20260930_Fix_413_DepReviewTorchAdvisories] Allow-list the three
           # torch 2.0.1 advisories flagged for scripts/onnx-export/
-          # requirements-export.txt. The export toolchain mirrors the app's
-          # existing embedded-Python stack, which already pins the same
-          # torch==2.0.1 (scripts/prepare-embedded-python.js:231) —
-          # dependency-review only reports the diff, so the pinned main
-          # stack was never flagged. The export venv runs offline, once,
-          # against official iic checkpoints, and ships nothing; product
-          # torch is removed entirely by #418 (engine switch) / #422
-          # (packaging slim-down). Input name verified against
+          # requirements-export.txt.
+          # [20261006_T8_PackagingSlimdown] Ticket #422: the product
+          # embedded-Python stack no longer contains torch (funasr-onnx
+          # generation, sha256-pinned lock — see
+          # scripts/embedded-python/requirements.lock), so the allow-list
+          # now covers ONLY the export toolchain: it runs offline, once,
+          # against official iic checkpoints, and ships nothing. Input name
+          # verified against
           # actions/dependency-review-action@v5 action.yml: it is
           # allow-ghsas (no exclude-ghsa input exists).
           allow-ghsas: GHSA-53q9-r3pm-6pq6,GHSA-pg7h-5qx3-wjr3,GHSA-5pcm-hx3q-hm94

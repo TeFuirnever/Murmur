@@ -14,6 +14,11 @@
 // visibility as the TS layer. The coverage module must be importable by
 // the resolved interpreter (project-local embedded envs: pip install
 // coverage; CI: added to the setup-python dependency step).
+// [20261006_T8_PackagingSlimdown] Ticket #422: coverage ships in the
+// embedded env via the wheel lock (scripts/embedded-python/requirements.in)
+// and resolution SKIPS any candidate that cannot import it — envs from
+// before that convention and bare system pythons fall through instead of
+// hard-failing the first candidate.
 const { spawnSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
@@ -36,24 +41,34 @@ const PYTHON_FAIL_UNDER = 46;
 const COVERAGE_INCLUDE =
   "funasr_server.py,audio_preprocessing.py,download_models.py";
 
-function resolveInterpreter() {
+function resolveInterpreter(deps = {}) {
+  // [20261006_T8_PackagingSlimdown] Ticket #422: the embedded env ships
+  // coverage via the wheel lock (scripts/embedded-python/requirements.in),
+  // but a candidate that cannot import it (env built before that
+  // convention, or a bare system python) is SKIPPED and the next one is
+  // tried. spawnSync/existsSync are injectable for tests.
+  const spawn = deps.spawnSync || spawnSync;
+  const existsSync = deps.existsSync || fs.existsSync;
   const candidates =
-    process.platform === "win32"
+    deps.candidates ||
+    (process.platform === "win32"
       ? [path.join(ROOT, "python", "python.exe"), "python"]
-      : [path.join(ROOT, "python", "bin", "python3.11"), "python3", "python"];
+      : [path.join(ROOT, "python", "bin", "python3.11"), "python3", "python"]);
   for (const candidate of candidates) {
     if (path.isAbsolute(candidate)) {
-      if (fs.existsSync(candidate)) return candidate;
+      if (!existsSync(candidate)) continue;
     } else {
-      const probe = spawnSync(candidate, ["--version"], { encoding: "utf8" });
-      if (!probe.error) return candidate;
+      const probe = spawn(candidate, ["--version"], { encoding: "utf8" });
+      if (probe.error) continue;
     }
+    if (hasCoverageModule(candidate, { spawnSync: spawn })) return candidate;
   }
   return null;
 }
 
-function hasCoverageModule(interpreter) {
-  const probe = spawnSync(interpreter, ["-m", "coverage", "--version"], {
+function hasCoverageModule(interpreter, deps = {}) {
+  const spawn = deps.spawnSync || spawnSync;
+  const probe = spawn(interpreter, ["-m", "coverage", "--version"], {
     encoding: "utf8",
   });
   return !probe.error && probe.status === 0;
@@ -128,7 +143,16 @@ function main() {
   }
   const interpreter = resolveInterpreter();
   if (!interpreter) {
-    console.error("run-python-tests: no python interpreter found");
+    // [20261006_T8_PackagingSlimdown] The embedded env SHIPS coverage via
+    // the wheel lock (scripts/embedded-python/requirements.in), so this
+    // branch means the env predates that convention or every candidate is
+    // a bare system python — install coverage into the interpreter that
+    // should run the suite.
+    console.error(
+      "run-python-tests: no python interpreter with the coverage module found " +
+        "(tried the embedded env, python3, python)",
+    );
+    console.error('  fix: "<interpreter> -m pip install coverage"');
     process.exit(1);
   }
   process.exit(run(interpreter));

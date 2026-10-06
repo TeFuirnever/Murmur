@@ -158,7 +158,7 @@ def fake_module(name, **attrs):
 @contextlib.contextmanager
 def forbid_librosa_load():
     """Fail the test if librosa.load is ever invoked. When librosa is not
-    importable (CI test env), the guard is vacuous by construction."""
+    importable (CI test env), the guard is vacuous by construction.
     # [20261006_Fix_443_LibrosaGuardNumbaTrim] The usability probe must cover
     # the attribute access too: with numba/llvmlite trimmed (spec #412
     # decision 3 / #419), bare `import librosa` succeeds because lazy_loader
@@ -166,6 +166,13 @@ def forbid_librosa_load():
     # ModuleNotFoundError (an ImportError subclass) OUTSIDE the guarded
     # statement — erroring the test instead of staying vacuous as this
     # docstring promises.
+    [20261006_T8_PackagingSlimdown] Ticket #422: the PRUNED packaged env
+    removes numba/llvmlite, and `import librosa` still SUCCEEDS there while
+    the attribute access `librosa.load` lazy-imports librosa.core.audio →
+    `from numba import jit` → ModuleNotFoundError. Reaching the attribute at
+    all is what became impossible, so a load call cannot happen either —
+    the guard is vacuous in exactly the same sense as the CI-env case.
+    """
     try:
         import librosa
 

@@ -1959,14 +1959,26 @@ class FunASRServer:
 
     def check_status(self):
         """检查FunASR状态"""
+        # [20261006_T8_PackagingSlimdown] Ticket #422 (spec #412 decision
+        # 14, list entry 1/5 — server-side status self-check import): the
+        # packaged runtime stack is the funasr-onnx generation; the slimmed
+        # embedded env no longer contains torch/funasr, so probing them
+        # would report a healthy ONNX-only install as "not installed". The
+        # response schema (success/installed/initialized/version/models) is
+        # unchanged — the version string now names both stack components so
+        # support logs identify the exact runtime generation.
         try:
-            import funasr
+            import funasr_onnx
+            import onnxruntime
 
             return {
                 "success": True,
                 "installed": True,
                 "initialized": self.initialized,
-                "version": getattr(funasr, "__version__", "unknown"),
+                "version": (
+                    f"funasr-onnx {getattr(funasr_onnx, '__version__', 'unknown')}"
+                    f" / onnxruntime {getattr(onnxruntime, '__version__', 'unknown')}"
+                ),
                 "models": {
                     "asr": self.asr_model is not None,
                     "vad": self.vad_model is not None,

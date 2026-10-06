@@ -604,6 +604,33 @@ describe("[20260906_Spec259_T2] pythonEnvironment branch close-out", () => {
       writeEmbeddedInterpreter();
     });
 
+    // [20261006_T8_PackagingSlimdown] Ticket #422 (spec #412 decision 14,
+    // list entry 2/5 — TS startup precheck): the boot self-check must probe
+    // the funasr-onnx runtime stack the slimmed embedded env actually
+    // ships. Probing the torch-era `import funasr` would report every
+    // post-swap install as broken (and a torch-probe hit would prove
+    // nothing — torch is gone from the packaged env). RED first: fails
+    // while the probe still runs `import funasr`.
+    it("probes the ONNX runtime stack, never the torch-era funasr import", async () => {
+      dispatchProbes({ output: "OK", code: 0 });
+
+      const env = new PythonEnvironment(makeLogger());
+      const result = await env.checkFunASRInstallation();
+      expect(result).toEqual({ installed: true, working: true });
+
+      const checkCall = spawnMock.mock.calls.find(
+        (call) => !(call[1] as string[]).includes("--version"),
+      );
+      expect(checkCall).toBeDefined();
+      const probe = (checkCall![1] as string[]).join(" ");
+      expect(probe).toContain("funasr_onnx");
+      expect(probe).toContain("onnxruntime");
+      expect(probe).toMatch(/import numpy, soundfile/);
+      // No bare-funasr / torch probe may survive anywhere in the command.
+      expect(probe).not.toMatch(/import funasr(?![_\w])/);
+      expect(probe).not.toMatch(/\btorch\b/);
+    });
+
     it("caches the first verdict and serves it on subsequent calls", async () => {
       dispatchProbes({ output: "OK", code: 0 });
 
@@ -765,17 +792,23 @@ describe("[20260906_Spec259_T2] pythonEnvironment branch close-out", () => {
       });
 
       expectPipCall(1, "-m", "pip", "install", "--upgrade", "pip");
-      expectPipCall(2, "-m", "pip", "install", "-U", "funasr");
-      expectPipCall(3, "-m", "pip", "install", "-U", "librosa");
+      // [20261006_T8_PackagingSlimdown] the installer targets the ONNX
+      // runtime stack in ONE pip call (soundfile/scipy/librosa ride along
+      // as funasr-onnx deps).
+      expectPipCall(
+        2,
+        "-m",
+        "pip",
+        "install",
+        "-U",
+        "funasr-onnx",
+        "onnxruntime",
+        "soundfile",
+      );
       const stages = cb.mock.calls.map(
         (c) => (c[0] as { stage: string }).stage,
       );
-      expect(stages).toEqual([
-        "升级 pip...",
-        "安装 FunASR...",
-        "安装 librosa...",
-        "安装完成！",
-      ]);
+      expect(stages).toEqual(["升级 pip...", "安装 FunASR...", "安装完成！"]);
     });
 
     it("completes without a progress callback", async () => {
@@ -824,9 +857,21 @@ describe("[20260906_Spec259_T2] pythonEnvironment branch close-out", () => {
         success: true,
         message: "FunASR 安装成功（用户模式）",
       });
-      // Call 2 was the failed non-user funasr attempt; user-mode follows.
-      expectPipCall(3, "-m", "pip", "install", "--user", "-U", "funasr");
-      expectPipCall(4, "-m", "pip", "install", "--user", "-U", "librosa");
+      // Call 2 was the failed non-user attempt; user-mode follows.
+      // [20261006_T8_PackagingSlimdown] the installer targets the ONNX
+      // runtime stack (funasr-onnx + onnxruntime + soundfile), not the
+      // torch-era funasr+librosa pair.
+      expectPipCall(
+        3,
+        "-m",
+        "pip",
+        "install",
+        "--user",
+        "-U",
+        "funasr-onnx",
+        "onnxruntime",
+        "soundfile",
+      );
       const stages = cb.mock.calls.map(
         (c) => (c[0] as { stage: string }).stage,
       );
@@ -849,7 +894,7 @@ describe("[20260906_Spec259_T2] pythonEnvironment branch close-out", () => {
     it("throws when the user-mode fallback also fails", async () => {
       setRunCommandBehavior(async (args) => {
         if (args.includes("--user")) throw new Error("disk full");
-        if (args.includes("funasr")) throw new Error("Permission denied");
+        if (args.includes("funasr-onnx")) throw new Error("Permission denied");
       });
       const env = new PythonEnvironment(makeLogger());
       await expect(env.installFunASR(null)).rejects.toThrow(

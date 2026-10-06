@@ -67,4 +67,61 @@ describe("[20260906_Spec259_T4] python coverage runner", () => {
     expect(runner.PYTHON_FAIL_UNDER).toBe(46);
     expect(runner.COVERAGE_INCLUDE).toContain("funasr_server.py");
   });
+
+  // [20261006_T8_PackagingSlimdown] Ticket #422: the embedded env SHIPS
+  // coverage via the wheel lock (scripts/embedded-python/requirements.in),
+  // but envs built before that convention — and bare system pythons — may
+  // lack it, so interpreter resolution must SKIP a coverage-less candidate
+  // and fall through to the next one. RED first: resolution returned the
+  // first existing interpreter and the runner hard-failed.
+  describe("resolveInterpreter coverage fall-through", () => {
+    function candidateScript(states: Record<string, number>) {
+      // spawnSync(cmd, args): --version probes the interpreter, the
+      // coverage --version probe decides the candidate's eligibility.
+      return (cmd: unknown, args: string[]) => {
+        const argv = args as string[];
+        if (argv.includes("-m") && argv.includes("coverage")) {
+          const key = String(cmd);
+          return { status: states[key] ?? 1, error: null };
+        }
+        return { status: 0, error: null };
+      };
+    }
+
+    it("skips an interpreter without the coverage module", () => {
+      const spawnSync = vi.fn(
+        candidateScript({ "/embedded/python": 1, "/system/python3": 0 }),
+      );
+      const found = runner.resolveInterpreter({
+        spawnSync,
+        existsSync: () => true,
+        candidates: ["/embedded/python", "/system/python3"],
+      });
+      expect(found).toBe("/system/python3");
+    });
+
+    it("returns null when no candidate carries coverage", () => {
+      const spawnSync = vi.fn(
+        candidateScript({ "/embedded/python": 1, "/system/python3": 1 }),
+      );
+      const found = runner.resolveInterpreter({
+        spawnSync,
+        existsSync: () => true,
+        candidates: ["/embedded/python", "/system/python3"],
+      });
+      expect(found).toBeNull();
+    });
+
+    it("takes the first coverage-capable candidate", () => {
+      const spawnSync = vi.fn(
+        candidateScript({ "/embedded/python": 0, "/system/python3": 0 }),
+      );
+      const found = runner.resolveInterpreter({
+        spawnSync,
+        existsSync: () => true,
+        candidates: ["/embedded/python", "/system/python3"],
+      });
+      expect(found).toBe("/embedded/python");
+    });
+  });
 });

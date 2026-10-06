@@ -6,6 +6,8 @@
 
 ## Done
 
+- [x] t422 - T8 打包瘦身 + gate 换血:安装包 ≤260MB 兑现 (#422) (done 2026-10-06)
+
 - [x] 414 - T3 A/B 真实语料 harness + torch 基线 (done 2026-10-01)
 
 - [x] research-docs-triage - 决定两份未跟踪研究文档的去留:ai-polish-capability-research.md 与 spec-193-adversarial-review.md(提交/并入 follow-ups/丢弃) (repo: murmur) (kind: docs) (priority: 4) (done 2026-09-07)
@@ -25,5 +27,3 @@
 - [x] history-clear-export - 历史窗补齐:清空全部按钮(CLEAR 链路全在,带确认)+ 导出全部支持多格式(UI 从硬编码 txt 改格式选择,handler 已支持)。证据:§1.4 缺口①②/§6-4 (repo: murmur) (kind: ship) (priority: 1) (done 2026-09-06)
 - [x] i18n-main-history-windows - i18n 补接:主窗 App.tsx 与历史窗 history.tsx 完全未接 useTranslation,切英文仅设置窗生效。证据:§3-H/§6-6 (repo: murmur) (kind: ship) (priority: 1) (done 2026-09-06)
 - [x] hotkey-settings-ui - 热键自定义断裂:App.tsx:289 toast 指向不存在的设置项。基础设施全就位(hotkey 键在 allowlist+fileConfig、HOTKEY.REGISTER IPC 在),补设置 UI+useHotkey 读设置;或先改文案。证据:§3-F/§6-2 (repo: murmur) (kind: ship) (priority: 1) (done 2026-09-06)
-- [x] funasr-output-swallow - 修复 funasr_server 协议输出被吞:\_output_worker 用 sys.stdout 动态查找,落入 suppress_stdout 窗口时 reload 进度消息被静默丢弃(#207 只修了崩溃形态)。方向:写协议输出改用启动时捕获的专用流引用;补协议测试(队列消息在抑制窗口不丢)。GitHub issue #208,关联 #197 follow-ups。证据:issue #208(源自 #207 code review 既有缺口) (repo: murmur) (kind: ship) (priority: 0) (done 2026-09-06)
-      GitHub issue #208。\_output_worker 从 response_queue 取消息后 print() 到 sys.stdout;当模型加载器处于 suppress_stdout() 窗口(reload_models → \_do_reload 入队进度后 initialize() 进加载器),output worker 若此时出队,消息写入抑制 sink 被静默丢弃,宿主丢失进度事件。修复方向:\_output_worker 写协议输出时使用启动时捕获的专用流引用,使协议通道对抑制窗口免疫。必须同步补协议测试:队列消息在抑制窗口期间不丢。遵循 MUST DO #3:先写失败测试再修。
