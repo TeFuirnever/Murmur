@@ -10,8 +10,14 @@
 | `murmur-intro-15s-poster.jpg` | 备用封面帧（f300，润色对比画面；README 现用 user-attachments 内嵌播放器，此图留作备用） |
 
 - 规格：15.0s / 1920×1080 / 30fps / H.264 + AAC
-- 制作工程（可编辑重渲）：`productions/intro-15s-remotion/`（Remotion，时间线事实源 `src/timeline.ts`）
-  重渲：`cd productions/intro-15s-remotion && npx remotion render src/index.ts MurmurIntro out/promo.mp4`
+<!-- [20261006_Docs_IntroVideoLocalOnly] State the repo status of the
+     production project explicitly: `productions/` is excluded by
+     .gitignore, so the Remotion project below lives only on the
+     maintainer's machine. Without this note a fresh clone would treat the
+     `cd productions/...` re-render command as an in-repo path and hit a
+     dead end. -->
+- 制作工程（可编辑重渲，**仅维护者本地产档，未入库**——`.gitignore` 排除 `productions/`）：`productions/intro-15s-remotion/`（Remotion，时间线事实源 `src/timeline.ts`）
+  重渲（维护者本机）：`cd productions/intro-15s-remotion && npx remotion render src/index.ts MurmurIntro out/promo.mp4`
 - 素材口径：界面为真实截图（演示语音经真实 FunASR 本地转写，内容为虚构演示文案），无任何真实用户数据
 
 ## 素材授权
