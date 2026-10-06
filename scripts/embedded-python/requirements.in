@@ -1,0 +1,37 @@
+# [20261006_T8_PackagingSlimdown] Ticket #422 (spec #412 decisions 1/5):
+# DIRECT runtime requirements for the embedded Python env after the torch →
+# funasr-onnx engine swap. The full transitive closure is resolved by
+# scripts/embedded-python/generate-wheel-manifest.js (pip download per
+# shipping platform) and pinned with per-wheel sha256 into
+# requirements.lock — this file is intent, the lock is the install truth.
+#
+# Versions mirror the established migration pins:
+#   - funasr-onnx 0.4.3 / onnxruntime 1.30.0 — the spike + T1 export pin
+#     (scripts/onnx-export/requirements-export.txt,
+#     scripts/onnx-spike/requirements-runtime.txt) so the shipped runtime
+#     executes the same graphs the artifacts were verified with.
+#   - numpy 1.26.4 — funasr-onnx declares numpy<=1.26.4.
+#   - librosa 0.11.0 — funasr-onnx metadata dep; the server never calls it
+#     (spec #412 decision 3, tests/python/test_no_librosa.py) and packaging
+#     prunes its numba/llvmlite tail behind the import gate.
+#   - scipy/sentencepiece — required by the server (resample_poly) and
+#     funasr-onnx; resolved by the generator, pinned in the lock.
+#   - jieba — funasr-onnx module-level hard dep; upstream publishes NO
+#     wheel (sdist only, dormant maintainer), so the py3-none-any wheel is
+#     built locally by the generator into wheels/ and consumed from there
+#     via --find-links (sha256 recorded in the lock like any other wheel).
+numpy==1.26.4
+funasr-onnx==0.4.3
+onnxruntime==1.30.0
+soundfile==0.14.0
+librosa==0.11.0
+PyYAML==6.0.3
+kaldi-native-fbank==1.22.3
+sentencepiece
+scipy
+# coverage — dev/test tooling that rides in the env BY CONVENTION
+# (run-python-tests.js measures the suite inside the resolved runtime env;
+# the repo's documented setup installs it into project-local embedded envs).
+# ~2MB unpacked; hash-pinned like every other wheel so the lock stays the
+# single install truth.
+coverage==7.16.2

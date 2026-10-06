@@ -78,7 +78,17 @@ class EmbeddedPythonTester {
   async testDependencies() {
     console.log("3️⃣ 检查关键依赖...");
 
-    const dependencies = ["sys", "os", "json", "numpy", "torch", "librosa"];
+    // [20261006_T8_PackagingSlimdown] Ticket #422: the embedded env is the
+    // funasr-onnx generation — torch/librosa probes would fail a healthy
+    // slimmed env (and a torch hit would prove nothing).
+    const dependencies = [
+      "sys",
+      "os",
+      "json",
+      "numpy",
+      "soundfile",
+      "onnxruntime",
+    ];
 
     for (const dep of dependencies) {
       try {
@@ -99,7 +109,7 @@ class EmbeddedPythonTester {
     try {
       const result = await this.runPythonCommand([
         "-c",
-        'import funasr; print("FunASR version:", getattr(funasr, "__version__", "unknown"))',
+        'import funasr_onnx; print("funasr-onnx version:", getattr(funasr_onnx, "__version__", "unknown"))',
       ]);
       console.log(`   ✅ FunASR导入成功: ${result.trim()}`);
     } catch (error) {
