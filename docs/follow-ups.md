@@ -95,12 +95,12 @@ dev:main 改用 `build:main && electron .`，dev/e2e/prod 加载同一 artifact�
 （`models-onnx-int8-1`）已落地，仓内 pin 为
 `scripts/onnx-export/model-pin.json`。后续 T 系列工单需要接住的事项：
 
-1. **下载器接线**：✅ 客户端已交付（#417，2026-10-01）：`src/helpers/modelDownloader.ts`（双源自动回退 ModelScope 主 → 自有 Release 镜像备 → OSS 第三源占位（`MURMUR_OSS_MIRROR_URL` 激活）、Range 断点续传跨源、组装后一次性全量 sha256 校验（无 skip-hash-on-retry 分支）、精确文件名就绪锚+双侧临时名排除）+ `modelManager` 的 `checkOnnxModels`/`downloadOnnxModels`/`getOnnxModelsRoot` 集成面 + `funasr_server.py` 两条隐式拉网路径封死（AutoModel 只收本地目录；ONNX 目录只认 `ONNX_PIN_FILE_SPECS` 精确集合）。**剩余接线**：v2 下载/就绪面尚未接入生产启动流（当前运行时仍为 torch，T4 判决 NO-GO 后待议决）——服务端 ONNX 工单把启动闸门与下载入口切到该面即可；ModelScope 镜像仓（`murmur-asr/murmur-models-onnx-int8`）尚未发布，发布前主源 404 自动落 GH 镜像。pin 的 schema_version=1 由 `tests/unit/onnx-model-pin.test.ts` 守门，pin↔Python 闸门一致性由 `tests/unit/onnx-pin-anchor-parity.test.ts` 守门。
+1. **下载器接线**：✅ 客户端已交付（#417，2026-10-01）：`src/helpers/modelDownloader.ts`（双源自动回退 ModelScope 主 → 自有 Release 镜像备 → OSS 第三源占位（`MURMUR_OSS_MIRROR_URL` 激活）、Range 断点续传跨源、组装后一次性全量 sha256 校验（无 skip-hash-on-retry 分支）、精确文件名就绪锚+双侧临时名排除）+ `modelManager` 的 `checkOnnxModels`/`downloadOnnxModels`/`getOnnxModelsRoot` 集成面 + `funasr_server.py` 两条隐式拉网路径封死（AutoModel 只收本地目录；ONNX 目录只认 `ONNX_PIN_FILE_SPECS` 精确集合）。**接线完成**：v2 下载/就绪面已接入生产启动流（#418 T6a 引擎切换 + #420 T9 升级迁移对话框 + #425 T12 启动门控接线，随 v1.6.0 发布）；ModelScope 镜像仓（`murmur-asr/murmur-models-onnx-int8`）尚未发布，发布前主源 404 自动落 GH 镜像。pin 的 schema_version=1 由 `tests/unit/onnx-model-pin.test.ts` 守门，pin↔Python 闸门一致性由 `tests/unit/onnx-pin-anchor-parity.test.ts` 守门。
 2. **funasr_onnx 返回键差异**：ONNX SeacoParaformer 返回 `preds`（空格拼接字序列）+ `timestamp`，无 torch AutoModel 的 `text` 键——服务端协议适配时不可按 `text` 取值（本次冒烟实证，`scripts/onnx-export/smoke_inference.py` 注释有记）。
 3. **campplus 无 v2.0.4 tag**：✅ 根治（#417，2026-10-01）：`_load_cam_model` 已改为先本地解析（`_resolve_repo_dir`）再把本地目录交给 AutoModel，不再携带 `model_revision` 请求上游 tag——上游静默回退路径随隐式拉网封印一并消失；未就绪时显式报错（说话人模型未就绪，请重新下载）。
 4. **CAMPPlus int8 体积收益≈0**（29MB vs 28MB，Conv1d 为主、MatMul-only 量化不缩卷积权重）：若 T 系列需要更小 speaker 模型，需评估含 Conv 的量化配方（精度代价另行实测；本次 fp32↔int8 embedding 余弦 1.0，无精度损失）。
-5. **campplus 生产 fbank 前端**：本次冒烟用 funasr torch 侧 `extract_feature`（torchaudio kaldi fbank + CMVN）；无 torch 运行时需用 kaldi-native-fbank 复刻同一前端语义（80 维、CMVN per-utterance mean）。
-6. **导出环境 SBOM**：`scripts/onnx-export/requirements-export.txt` 已锁版本（torch 2.0.1/funasr 1.3.1/onnx 1.23.1/ort 1.30.0），但 wheel sha256 尚未记录（嵌入式 Python 侧的 SBOM 纪律在 spec #412 决议 5，属 T2 环境换血工单）。
+5. ~~**campplus 生产 fbank 前端**~~ ✅ 已落地（#419 T6b）：ONNX 说话人前端已用 `kaldi_native_fbank` 复刻同一语义（见下节 T6b 登记第 2 条）。
+6. ~~**导出环境 SBOM**~~ ✅ 已落地（#422 T8）：嵌入式 Python 侧 wheel sha256 lock 已入库（`scripts/embedded-python/requirements.lock`，全项 sha256 pinned）。
 
 ## ONNX 服务端 T6b 交付后登记（#419，2026-10-02）
 
@@ -108,19 +108,8 @@ VAD 区域 ≤60s 子分块、CAM++ campplus ONNX diarize、ORT 线程注入、
 服务端去 librosa、启动看门狗心跳判活已落地（分支 `agent/onnx-419`）。
 后续需要接住的事项：
 
-1. **长音频残余内存热点在 DSP 全文件 FFT 高通**（非推理路径）：本机实测
-   612s 真实语音全管线——三模型常驻 ~1.9GB，21 个 ≤60s ASR 分块 + 全文
-   punc 对 RSS 高水位**零增量**（分块目标达成）；高水位 ~3.1GB 的主要
-   贡献是 `audio_preprocessing.highpass_filter` 对整条音频做 float64
-   `np.fft.rfft`（瞬态 ~1.5GB，随时长线性放大，小时级录音在 8GB 机器
-   有 OOM 风险）。建议后续把 HPF 换成分块流式 IIR（scipy `sosfilt`），
-   属 `audio_preprocessing.py` 独立工单。
-2. **嵌入式依赖清单换血时必须包含 kaldi-native-fbank**：diarize 的 ONNX
-   说话人前端已依赖 `kaldi_native_fbank`（本机嵌入式环境为 spike 期手动
-   安装的 1.22.3，纯 C wheel）；`prepare-embedded-python.js` 的依赖清单
-   换血（torch/funasr → onnxruntime 等，T2 环境工单）若遗漏它，
-   打包后 diarize 将在加载期回退 torch 并失败（fbank 导入被
-   `OnnxSpeakerAdapter.__init__` 提前校验，错误显式可诊断）。
+1. ~~**长音频残余内存热点在 DSP 全文件 FFT 高通**~~ ✅ 已落地（#421 T7）：HPF 已改为分块 OLA 滤波，全文件 FFT 热点根因治理完成（`audio_preprocessing.py` 标签 `[20261006_Fix_421_HpfBlockOla]`）。
+2. ~~**嵌入式依赖清单换血时必须包含 kaldi-native-fbank**~~ ✅ 已落地（#422 T8）：`scripts/embedded-python/requirements.lock` 已含 `kaldi_native_fbank==1.22.3`（全项 sha256 pinned）。
 3. **非 wav/flac 解码覆盖面变化**：`_convert_to_wav` 换 soundfile
    （libsndfile 1.2.2）后，mp3/ogg/flac/wav 原生支持，m4a/aac/wma 从
    "librosa+audioread 可能可用（依赖系统解码器）"变为**显式失败**（错误
