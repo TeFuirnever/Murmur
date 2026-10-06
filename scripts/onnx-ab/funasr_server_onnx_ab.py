@@ -56,10 +56,31 @@ for _path in (REPO_ROOT, EXPORT_SCRIPTS_DIR):
 # Reuse the production hotword sanitizer (tested contract in
 # tests/python/test_funasr_server_protocol.py) — zero drift by construction.
 from funasr_server import sanitize_hotword  # noqa: E402
-from onnx_export_common import MODEL_SPECS, check_manifest  # noqa: E402
+from onnx_export_common import (  # noqa: E402
+    FP32_ASR_RUNTIME_FILES,
+    MODEL_SPECS,
+    check_manifest,
+)
 
 DEFAULT_ARTIFACTS_DIR = os.path.join(EXPORT_SCRIPTS_DIR, "work", "artifacts")
 DEFAULT_PIN_PATH = os.path.join(EXPORT_SCRIPTS_DIR, "model-pin.json")
+
+# [20261006_Diag_444_Fp32AsrVariant] Ticket #444 (spec #412 T4b): the T4b
+# root-cause diagnosis drives the SAME verdict instrument against an
+# UNQUANTIZED ASR main graph (fp32 bb) to separate int8 quantization
+# sensitivity from an export-path problem on hw_jedediah. VAD/punc stay
+# int8 in both arms so the only variable is the ASR graph's precision.
+# The fp32 variant dir + its standalone strict manifest are produced by
+# scripts/onnx-export/stage_fp32_asr.py (work/ is gitignored). The harness
+# cannot forward extra argv to the server (spawn shape is fixed), so the
+# variant is ALSO selectable via env vars — env is the fallback, argv wins.
+# The fp32 runtime file set (FP32_ASR_RUNTIME_FILES) lives in
+# onnx_export_common, shared with the staging script.
+DEFAULT_FP32_ARTIFACTS_DIR = os.path.join(EXPORT_SCRIPTS_DIR, "work", "artifacts-fp32")
+DEFAULT_FP32_MANIFEST_PATH = os.path.join(DEFAULT_FP32_ARTIFACTS_DIR, "manifest.json")
+ENV_ASR_VARIANT = "MURMUR_ONNX_ASR_VARIANT"
+ENV_FP32_ARTIFACTS = "MURMUR_ONNX_FP32_ARTIFACTS"
+ENV_FP32_MANIFEST = "MURMUR_ONNX_FP32_MANIFEST"
 
 # The models this server loads. The speaker (campplus) model is NOT loaded:
 # diarization is out of scope for the four-dimension A/B verdict (CER / punc
@@ -93,6 +114,41 @@ logger = logging.getLogger("onnx_ab_server")
 def protocol_line(payload):
     """Serialize one protocol JSON line (shape mirrors _protocol_print)."""
     return json.dumps(payload, ensure_ascii=False) + "\n"
+
+
+# [20261006_Diag_444_Fp32AsrVariant] Variant resolution: argv wins over env,
+# env falls back to the staging defaults. Kept pure and injectable so the
+# unittest suite can pin the precedence without touching os.environ.
+def resolve_asr_variant(
+    argv_variant=None,
+    argv_fp32_artifacts=None,
+    argv_fp32_manifest=None,
+    env=None,
+):
+    if env is None:
+        env = os.environ
+    variant = argv_variant if argv_variant is not None else env.get(
+        ENV_ASR_VARIANT, "int8"
+    )
+    if variant not in ("int8", "fp32"):
+        raise ValueError(
+            f"unknown ASR variant {variant!r}: expected int8 or fp32"
+        )
+    fp32_artifacts_dir = (
+        argv_fp32_artifacts
+        if argv_fp32_artifacts is not None
+        else env.get(ENV_FP32_ARTIFACTS, DEFAULT_FP32_ARTIFACTS_DIR)
+    )
+    fp32_manifest_path = (
+        argv_fp32_manifest
+        if argv_fp32_manifest is not None
+        else env.get(ENV_FP32_MANIFEST, DEFAULT_FP32_MANIFEST_PATH)
+    )
+    return {
+        "variant": variant,
+        "fp32_artifacts_dir": fp32_artifacts_dir,
+        "fp32_manifest_path": fp32_manifest_path,
+    }
 
 
 def build_segments_from_timestamps(asr_text, asr_timestamps, time_offset_ms=0):
@@ -213,9 +269,21 @@ def merge_segments(raw_segments):
 class OnnxAbServer:
     """funasr-onnx engine speaking the production stdin/stdout protocol."""
 
-    def __init__(self, artifacts_dir, pin):
+    def __init__(
+        self,
+        artifacts_dir,
+        pin,
+        asr_variant="int8",
+        fp32_artifacts_dir=None,
+        fp32_manifest_path=None,
+    ):
         self.artifacts_dir = artifacts_dir
         self.pin = pin
+        # [20261006_Diag_444_Fp32AsrVariant] fp32 arm state (unused by the
+        # default int8 arm — T4 behavior is byte-identical when untouched).
+        self.asr_variant = asr_variant
+        self.fp32_artifacts_dir = fp32_artifacts_dir
+        self.fp32_manifest_path = fp32_manifest_path
         self.initialized = False
         self.asr_model = None
         self.vad_model = None
@@ -226,10 +294,16 @@ class OnnxAbServer:
     # ------------------------------------------------------------------
     def verify_pin(self):
         """Check asr/vad/punc artifact dirs against the pin's per-file
-        sha256 manifests. Returns a list of problems ([] == verified)."""
+        sha256 manifests. In fp32 mode the ASR dir is instead checked
+        against the fp32 variant's standalone strict manifest (the int8
+        pin does not describe those bytes); VAD/punc remain pin-gated.
+        Returns a list of problems ([] == verified)."""
         problems = []
         models = self.pin.get("models", {}) if isinstance(self.pin, dict) else {}
         for key in AB_MODEL_KEYS:
+            if key == "asr" and self.asr_variant == "fp32":
+                problems.extend(self.verify_fp32_asr())
+                continue
             model = models.get(key)
             if not model or not isinstance(model.get("files"), list):
                 problems.append(f"pin entry missing for model {key}")
@@ -237,6 +311,54 @@ class OnnxAbServer:
             model_dir = os.path.join(self.artifacts_dir, model.get("name", ""))
             problems.extend(check_manifest(model_dir, model["files"]))
         return problems
+
+    def verify_fp32_asr(self):
+        """[20261006_Diag_444_Fp32AsrVariant] Strict verification of the
+        fp32 ASR variant dir against its standalone manifest: exact file
+        set (drift vs the quantize=False runtime set fails even when disk
+        matches the manifest) + per-file sha256 + strict on-disk set."""
+        problems = []
+        manifest_path = self.fp32_manifest_path
+        if not manifest_path or not os.path.isfile(manifest_path):
+            return [
+                f"fp32 manifest not found: {manifest_path} "
+                "(run scripts/onnx-export/stage_fp32_asr.py first)"
+            ]
+        try:
+            with open(manifest_path, encoding="utf-8") as f:
+                manifest = json.load(f)
+        except (OSError, ValueError) as e:
+            return [f"fp32 manifest unreadable: {manifest_path}: {e}"]
+        entries = manifest.get("models", {}).get("asr", {}).get("files")
+        if not isinstance(entries, list):
+            return [f"fp32 manifest has no asr files list: {manifest_path}"]
+        model_dir = os.path.join(
+            self.fp32_artifacts_dir, MODEL_SPECS["asr"]["name"]
+        )
+        problems.extend(check_manifest(model_dir, entries))
+        listed = {entry.get("path") for entry in entries}
+        expected = set(FP32_ASR_RUNTIME_FILES)
+        if listed != expected:
+            problems.append(
+                f"fp32 manifest set drift: {sorted(listed)} != {sorted(expected)}"
+            )
+        return problems
+
+    def asr_model_spec(self):
+        """[20261006_Diag_444_Fp32AsrVariant] (dir, quantize) the ASR model
+        must be constructed with for the active variant. Kept separate from
+        initialize() so the wiring is unit-testable without funasr_onnx."""
+        if self.asr_variant == "fp32":
+            return (
+                os.path.join(
+                    self.fp32_artifacts_dir, MODEL_SPECS["asr"]["name"]
+                ),
+                False,
+            )
+        return (
+            os.path.join(self.artifacts_dir, MODEL_SPECS["asr"]["name"]),
+            True,
+        )
 
     def initialize(self):
         if self.initialized:
@@ -259,11 +381,15 @@ class OnnxAbServer:
                 with contextlib.redirect_stdout(devnull):
                     from funasr_onnx import CT_Transformer, Fsmn_vad, SeacoParaformer
 
+                    # [20261006_Diag_444_Fp32AsrVariant] The variant only
+                    # changes WHERE the ASR graph loads from and its
+                    # quantize flag (fp32 reads model.onnx/model_eb.onnx,
+                    # int8 reads model_quant.onnx/model_eb_quant.onnx —
+                    # funasr_onnx paraformer_bin.ContextualParaformer).
+                    asr_dir, asr_quantize = self.asr_model_spec()
                     self.asr_model = SeacoParaformer(
-                        os.path.join(
-                            self.artifacts_dir, MODEL_SPECS["asr"]["name"]
-                        ),
-                        quantize=True,
+                        asr_dir,
+                        quantize=asr_quantize,
                     )
                     self.vad_model = Fsmn_vad(
                         os.path.join(
@@ -295,7 +421,10 @@ class OnnxAbServer:
         self.initialized = True
         return {
             "success": True,
-            "message": "ONNX A/B 服务器模型初始化成功",
+            "message": (
+                "ONNX A/B 服务器模型初始化成功 "
+                f"(asr={self.asr_variant})"
+            ),
             "punc_loaded": self.punc_model is not None,
         }
 
@@ -512,15 +641,48 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--artifacts", default=DEFAULT_ARTIFACTS_DIR)
     parser.add_argument("--pin", default=DEFAULT_PIN_PATH)
+    # [20261006_Diag_444_Fp32AsrVariant] fp32 ASR variant (ticket #444):
+    # defaults come from env when the flag is absent — the A/B harness
+    # spawns the server with a fixed argv and can only pass env through.
+    parser.add_argument(
+        "--asr-variant",
+        default=None,
+        choices=("int8", "fp32"),
+        help="ASR graph precision arm (default: MURMUR_ONNX_ASR_VARIANT or int8)",
+    )
+    parser.add_argument(
+        "--fp32-artifacts",
+        default=None,
+        help="fp32 variant artifact root "
+        f"(default: {ENV_FP32_ARTIFACTS} or {DEFAULT_FP32_ARTIFACTS_DIR})",
+    )
+    parser.add_argument(
+        "--fp32-manifest",
+        default=None,
+        help="fp32 variant strict manifest "
+        f"(default: {ENV_FP32_MANIFEST} or {DEFAULT_FP32_MANIFEST_PATH})",
+    )
     # Accepted for argv compatibility with the harness (it forwards
     # --damo-root when DAMO_ROOT is set); the ONNX stack ignores it —
     # artifacts come exclusively from the pin at --artifacts.
     parser.add_argument("--damo-root", default=None, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
 
+    resolved = resolve_asr_variant(
+        argv_variant=args.asr_variant,
+        argv_fp32_artifacts=args.fp32_artifacts,
+        argv_fp32_manifest=args.fp32_manifest,
+    )
+
     with open(args.pin, encoding="utf-8") as f:
         pin = json.load(f)
-    server = OnnxAbServer(args.artifacts, pin)
+    server = OnnxAbServer(
+        args.artifacts,
+        pin,
+        asr_variant=resolved["variant"],
+        fp32_artifacts_dir=resolved["fp32_artifacts_dir"],
+        fp32_manifest_path=resolved["fp32_manifest_path"],
+    )
     return server.run()
 
 

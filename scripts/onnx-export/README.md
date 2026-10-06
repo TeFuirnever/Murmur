@@ -73,6 +73,15 @@ scripts/onnx-export/.venv/bin/python scripts/onnx-export/verify_artifacts.py \
 # 6. publish artifacts to the release mirror (idempotent, records the
 #    split-part layout into the pin):
 scripts/onnx-export/.venv/bin/python scripts/onnx-export/publish_assets.py
+
+# 7. [20261006_Diag_444_Fp32AsrVariant] DIAGNOSTIC (ticket #444, T4b): stage
+#    an fp32 variant of the ASR main graph via the same T1 export call and
+#    verify it with its own standalone manifest. Never touches the pinned
+#    int8 artifacts, the pin, or the release — work/artifacts-fp32/ only:
+scripts/onnx-export/.venv/bin/python scripts/onnx-export/stage_fp32_asr.py
+scripts/onnx-export/.venv/bin/python scripts/onnx-export/verify_artifacts.py \
+    --manifest scripts/onnx-export/work/artifacts-fp32/manifest.json \
+    --artifacts scripts/onnx-export/work/artifacts-fp32
 ```
 
 ## Pipeline guarantees (and how each is enforced)

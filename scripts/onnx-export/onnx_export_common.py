@@ -31,6 +31,11 @@ funasr-onnx 0.4.3 runtime file sets are source-verified:
   - CAMPPlus: funasr-onnx has NO speaker loader (verified 2026-09-30,
     wheel funasr_onnx-0.4.3); the future server loads the ONNX directly,
     so the artifact is the quantized graph + config.yaml.
+  - [20261006_Diag_444_Fp32AsrVariant] ticket #444 (T4b): FP32_ASR_RUNTIME_FILES
+    is the set ContextualParaformer.__init__ reads with quantize=False
+    (paraformer_bin.py: model.onnx + model_eb.onnx; every non-graph file
+    identical to the int8 set). Consumed by the fp32 staging script
+    (stage_fp32_asr.py) and the A/B server's fp32 pin gate.
 """
 
 import hashlib
@@ -39,6 +44,19 @@ import os
 
 PIN_SCHEMA_VERSION = 1
 ASSET_NAME_SEPARATOR = "__"
+
+# [20261006_Diag_444_Fp32AsrVariant] Ticket #444 (spec #412 T4b): exact
+# runtime file set of funasr_onnx 0.4.3 ContextualParaformer with
+# quantize=False — the diagnostic fp32 ASR variant shipped next to (not
+# instead of) the pinned int8 artifacts.
+FP32_ASR_RUNTIME_FILES = (
+    "model.onnx",
+    "model_eb.onnx",
+    "config.yaml",
+    "am.mvn",
+    "tokens.json",
+    "seg_dict",
+)
 
 MODEL_SPECS = {
     "asr": {

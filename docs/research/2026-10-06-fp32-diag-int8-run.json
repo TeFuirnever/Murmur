@@ -1,0 +1,1388 @@
+{
+  "generatedAt": "2026-10-06T02:28:29.366Z",
+  "engine": {
+    "name": "onnx",
+    "interpreter": "/Users/guanxueliang/Desktop/oh-my-ai/Murmur/scripts/onnx-export/.venv/bin/python",
+    "serverScript": "/Users/guanxueliang/Desktop/oh-my-ai/Murmur/scripts/onnx-ab/funasr_server_onnx_ab.py",
+    "protocol": "stdio-jsonl"
+  },
+  "corpus": {
+    "dir": "/Users/guanxueliang/Desktop/oh-my-ai/Murmur/scripts/asr-corpus",
+    "name": "murmur-asr-ab-corpus-v1",
+    "manifestVersion": 1,
+    "caseCount": 39
+  },
+  "cases": [
+    {
+      "id": "real_aishell_0000",
+      "domain": "real-clean",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test, row offset 0",
+      "reference": "甚至出现交易几乎停滞的情况",
+      "hypothesis": "甚至出现交易几乎停滞的情况。",
+      "hypothesisWithoutHotword": "",
+      "rawHypothesis": "甚 至 出 现 交 易 几 乎 停 滞 的 情 况",
+      "segments": [
+        {
+          "startMs": 470,
+          "endMs": 3805,
+          "text": "甚至出现交易几乎停滞的情况"
+        }
+      ],
+      "success": true,
+      "cer": 0,
+      "punc": null,
+      "hotword": null,
+      "timestamp": null,
+      "elapsedMs": 87
+    },
+    {
+      "id": "real_aishell_0500",
+      "domain": "real-clean",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test, row offset 500",
+      "reference": "中国游戏产品和美国产品极为不同",
+      "hypothesis": "中国游戏产品和美国产品极为不同。",
+      "hypothesisWithoutHotword": "",
+      "rawHypothesis": "中 国 游 戏 产 品 和 美 国 产 品 极 为 不 同",
+      "segments": [
+        {
+          "startMs": 480,
+          "endMs": 3955,
+          "text": "中国游戏产品和美国产品极为不同"
+        }
+      ],
+      "success": true,
+      "cer": 0,
+      "punc": null,
+      "hotword": null,
+      "timestamp": null,
+      "elapsedMs": 71
+    },
+    {
+      "id": "real_aishell_1000",
+      "domain": "real-clean",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test, row offset 1000",
+      "reference": "多了初为人母的幸福光彩",
+      "hypothesis": "多了初为人母的幸福光彩。",
+      "hypothesisWithoutHotword": "",
+      "rawHypothesis": "多 了 初 为 人 母 的 幸 福 光 彩",
+      "segments": [
+        {
+          "startMs": 480,
+          "endMs": 2985,
+          "text": "多了初为人母的幸福光彩"
+        }
+      ],
+      "success": true,
+      "cer": 0,
+      "punc": null,
+      "hotword": null,
+      "timestamp": null,
+      "elapsedMs": 62
+    },
+    {
+      "id": "real_aishell_1500",
+      "domain": "real-clean",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test, row offset 1500",
+      "reference": "投资者采取措施防范风险是成熟的表现",
+      "hypothesis": "投资者采取措施，防范风险是成熟的表现。",
+      "hypothesisWithoutHotword": "",
+      "rawHypothesis": "投 资 者 采 取 措 施 防 范 风 险 是 成 熟 的 表 现",
+      "segments": [
+        {
+          "startMs": 520,
+          "endMs": 5545,
+          "text": "投资者采取措施防范风险是成熟的表现"
+        }
+      ],
+      "success": true,
+      "cer": 0,
+      "punc": null,
+      "hotword": null,
+      "timestamp": null,
+      "elapsedMs": 91
+    },
+    {
+      "id": "real_aishell_2000",
+      "domain": "real-clean",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test, row offset 2000",
+      "reference": "婷婷就坦言靠传媒得知",
+      "hypothesis": "婷婷就坦言靠传媒得知。",
+      "hypothesisWithoutHotword": "",
+      "rawHypothesis": "婷 婷 就 坦 言 靠 传 媒 得 知",
+      "segments": [
+        {
+          "startMs": 560,
+          "endMs": 3675,
+          "text": "婷婷就坦言靠传媒得知"
+        }
+      ],
+      "success": true,
+      "cer": 0,
+      "punc": null,
+      "hotword": null,
+      "timestamp": null,
+      "elapsedMs": 66
+    },
+    {
+      "id": "real_aishell_2600",
+      "domain": "real-clean",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test, row offset 2600",
+      "reference": "紫光集团系清华控股旗下最主要的资产",
+      "hypothesis": "紫光集团系清华控股旗下最主要的资产。",
+      "hypothesisWithoutHotword": "",
+      "rawHypothesis": "紫 光 集 团 系 清 华 控 股 旗 下 最 主 要 的 资 产",
+      "segments": [
+        {
+          "startMs": 450,
+          "endMs": 4825,
+          "text": "紫光集团系清华控股旗下最主要的资产"
+        }
+      ],
+      "success": true,
+      "cer": 0,
+      "punc": null,
+      "hotword": null,
+      "timestamp": null,
+      "elapsedMs": 80
+    },
+    {
+      "id": "real_aishell_3200",
+      "domain": "real-clean",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test, row offset 3200",
+      "reference": "加快发展生物育种战略性新兴产业",
+      "hypothesis": "加快发展生物育种战略性新兴产业。",
+      "hypothesisWithoutHotword": "",
+      "rawHypothesis": "加 快 发 展 生 物 育 种 战 略 性 新 兴 产 业",
+      "segments": [
+        {
+          "startMs": 470,
+          "endMs": 4405,
+          "text": "加快发展生物育种战略性新兴产业"
+        }
+      ],
+      "success": true,
+      "cer": 0,
+      "punc": null,
+      "hotword": null,
+      "timestamp": null,
+      "elapsedMs": 76
+    },
+    {
+      "id": "real_aishell_3800",
+      "domain": "real-clean",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test, row offset 3800",
+      "reference": "并在铁塔上借助自拍杆合影",
+      "hypothesis": "并在铁塔上借助自拍杆合影。",
+      "hypothesisWithoutHotword": "",
+      "rawHypothesis": "并 在 铁 塔 上 借 助 自 拍 杆 合 影",
+      "segments": [
+        {
+          "startMs": 420,
+          "endMs": 2975,
+          "text": "并在铁塔上借助自拍杆合影"
+        }
+      ],
+      "success": true,
+      "cer": 0,
+      "punc": null,
+      "hotword": null,
+      "timestamp": null,
+      "elapsedMs": 64
+    },
+    {
+      "id": "noise_babble_snr05_4400",
+      "domain": "noise",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test row 4400 + babble noise @5dB SNR",
+      "reference": "比赛开始后仅仅十馀秒",
+      "hypothesis": "比赛开始后仅仅十余秒。",
+      "hypothesisWithoutHotword": "",
+      "rawHypothesis": "比 赛 开 始 后 仅 仅 十 余 秒",
+      "segments": [
+        {
+          "startMs": 510,
+          "endMs": 3035,
+          "text": "比赛开始后仅仅十余秒"
+        }
+      ],
+      "success": true,
+      "cer": 0.1,
+      "punc": null,
+      "hotword": null,
+      "timestamp": null,
+      "elapsedMs": 57
+    },
+    {
+      "id": "noise_pink_snr10_4900",
+      "domain": "noise",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test row 4900 + pink noise @10dB SNR",
+      "reference": "链家地产市场研究部张旭表示",
+      "hypothesis": "链家地产市场研究部张旭表示。",
+      "hypothesisWithoutHotword": "",
+      "rawHypothesis": "链 家 地 产 市 场 研 究 部 张 旭 表 示",
+      "segments": [
+        {
+          "startMs": 620,
+          "endMs": 5405,
+          "text": "链家地产市场研究部张旭表示"
+        }
+      ],
+      "success": true,
+      "cer": 0,
+      "punc": null,
+      "hotword": null,
+      "timestamp": null,
+      "elapsedMs": 80
+    },
+    {
+      "id": "noise_babble_snr05_5400",
+      "domain": "noise",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test row 5400 + babble noise @5dB SNR",
+      "reference": "冰壶项目在水立方进行",
+      "hypothesis": "冰壶项目在水立方进行。",
+      "hypothesisWithoutHotword": "",
+      "rawHypothesis": "冰 壶 项 目 在 水 立 方 进 行",
+      "segments": [
+        {
+          "startMs": 580,
+          "endMs": 3155,
+          "text": "冰壶项目在水立方进行"
+        }
+      ],
+      "success": true,
+      "cer": 0,
+      "punc": null,
+      "hotword": null,
+      "timestamp": null,
+      "elapsedMs": 65
+    },
+    {
+      "id": "noise_pink_snr10_5700",
+      "domain": "noise",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test row 5700 + pink noise @10dB SNR",
+      "reference": "美的将美芝压缩机威灵电机合并",
+      "hypothesis": "美的将每只压缩机微流电机混并。",
+      "hypothesisWithoutHotword": "",
+      "rawHypothesis": "美 的 将 每 只 压 缩 机 微 流 电 机 混 并",
+      "segments": [
+        {
+          "startMs": 450,
+          "endMs": 4855,
+          "text": "美的将每只压缩机微流电机混并"
+        }
+      ],
+      "success": true,
+      "cer": 0.35714285714285715,
+      "punc": null,
+      "hotword": null,
+      "timestamp": null,
+      "elapsedMs": 87
+    },
+    {
+      "id": "noise_babble_snr05_5900",
+      "domain": "noise",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test row 5900 + babble noise @5dB SNR",
+      "reference": "七月份各线城市房价分化仍然明显",
+      "hypothesis": "七月份，小朋友们在楼下的院子里，跳绳分化仍然明显。",
+      "hypothesisWithoutHotword": "",
+      "rawHypothesis": "七 月 份 小 朋 友 们 在 楼 下 的 院 子 里 跳 绳 分 化 仍 然 明 显",
+      "segments": [
+        {
+          "startMs": 450,
+          "endMs": 5830,
+          "text": "七月份小朋友们在楼下的院子里跳绳分化仍然"
+        },
+        {
+          "startMs": 5830,
+          "endMs": 6475,
+          "text": "明显"
+        }
+      ],
+      "success": true,
+      "cer": 0.8666666666666667,
+      "punc": null,
+      "hotword": null,
+      "timestamp": null,
+      "elapsedMs": 97
+    },
+    {
+      "id": "noise_pink_snr10_6300",
+      "domain": "noise",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test row 6300 + pink noise @10dB SNR",
+      "reference": "国务院已经批准信贷资产证券化继续扩大试点",
+      "hypothesis": "国务院已经批准信贷资产证券化继续扩大试点。",
+      "hypothesisWithoutHotword": "",
+      "rawHypothesis": "国 务 院 已 经 批 准 信 贷 资 产 证 券 化 继 续 扩 大试 点",
+      "segments": [
+        {
+          "startMs": 470,
+          "endMs": 5375,
+          "text": "国务院已经批准信贷资产证券化继续扩大"
+        },
+        {
+          "startMs": 8390,
+          "endMs": 9055,
+          "text": "试点"
+        }
+      ],
+      "success": true,
+      "cer": 0,
+      "punc": null,
+      "hotword": null,
+      "timestamp": null,
+      "elapsedMs": 125
+    },
+    {
+      "id": "farfield_sim_6600",
+      "domain": "farfield",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test row 6600 + simulated far-field (synthetic RIR T60≈0.35s, LPF 6500Hz, -12dB, noise floor @25dB SNR)",
+      "reference": "许多企业都把取得顾客个人资料当作资本",
+      "hypothesis": "许多企业都把许多顾客个人资料当作资本。",
+      "hypothesisWithoutHotword": "",
+      "rawHypothesis": "许 多 企 业 都 把 许 多 顾 客 个 人 资 料 当 作 资 本",
+      "segments": [
+        {
+          "startMs": 370,
+          "endMs": 5125,
+          "text": "许多企业都把许多顾客个人资料当作资本"
+        }
+      ],
+      "success": true,
+      "cer": 0.1111111111111111,
+      "punc": null,
+      "hotword": null,
+      "timestamp": null,
+      "elapsedMs": 85
+    },
+    {
+      "id": "farfield_sim_6750",
+      "domain": "farfield",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test row 6750 + simulated far-field (synthetic RIR T60≈0.35s, LPF 6500Hz, -12dB, noise floor @25dB SNR)",
+      "reference": "如何借力拥抱互联网加这一全新变量",
+      "hypothesis": "如何借力拥抱互联网加这一全新变量？",
+      "hypothesisWithoutHotword": "",
+      "rawHypothesis": "如 何 借 力 拥 抱 互 联 网 加 这 一 全 新 变 量",
+      "segments": [
+        {
+          "startMs": 250,
+          "endMs": 4105,
+          "text": "如何借力拥抱互联网加这一全新变量"
+        }
+      ],
+      "success": true,
+      "cer": 0,
+      "punc": null,
+      "hotword": null,
+      "timestamp": null,
+      "elapsedMs": 74
+    },
+    {
+      "id": "farfield_sim_6820",
+      "domain": "farfield",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test row 6820 + simulated far-field (synthetic RIR T60≈0.35s, LPF 6500Hz, -12dB, noise floor @25dB SNR)",
+      "reference": "拿下全场最高分的朱婷赛后表示",
+      "hypothesis": "拿下全场最高分的朱婷赛后表示。",
+      "hypothesisWithoutHotword": "",
+      "rawHypothesis": "拿 下 全 场 最 高 分 的 朱 婷 赛 后 表 示",
+      "segments": [
+        {
+          "startMs": 430,
+          "endMs": 3865,
+          "text": "拿下全场最高分的朱婷赛后表示"
+        }
+      ],
+      "success": true,
+      "cer": 0,
+      "punc": null,
+      "hotword": null,
+      "timestamp": null,
+      "elapsedMs": 76
+    },
+    {
+      "id": "farfield_sim_6850",
+      "domain": "farfield",
+      "provenance": "AISHELL-1 test split (Apache-2.0), fetched from HF mirror AudioLLMs/aishell_1_zh_test row 6850 + simulated far-field (synthetic RIR T60≈0.35s, LPF 6500Hz, -12dB, noise floor @25dB SNR)",
+      "reference": "她突然就干呕",
+      "hypothesis": "他突然就干呕。",
+      "hypothesisWithoutHotword": "",
+      "rawHypothesis": "他 突 然 就 干 呕",
+      "segments": [
+        {
+          "startMs": 370,
+          "endMs": 2005,
+          "text": "他突然就干呕"
+        }
+      ],
+      "success": true,
+      "cer": 0.16666666666666666,
+      "punc": null,
+      "hotword": null,
+      "timestamp": null,
+      "elapsedMs": 50
+    },
+    {
+      "id": "accent_zh_tw_00",
+      "domain": "accent",
+      "provenance": "macOS say voice Meijia (zh-TW) — Taiwan-accented Mandarin TTS",
+      "reference": "我们这一季度的重点，是把会议记录的整理时间缩短一半。",
+      "hypothesis": "我们这一季度的重点是把会议记录的整理时间缩短一半。",
+      "hypothesisWithoutHotword": "",
+      "rawHypothesis": "我 们 这 一 季 度 的 重 点 是 把 会 议 记 录 的 整 理 时 间 缩 短 一 半",
+      "segments": [
+        {
+          "startMs": 50,
+          "endMs": 4210,
+          "text": "我们这一季度的重点是把会议记录的整理时间"
+        },
+        {
+          "startMs": 4210,
+          "endMs": 5125,
+          "text": "缩短一半"
+        }
+      ],
+      "success": true,
+      "cer": 0,
+      "punc": {
+        "insertions": 0,
+        "deletions": 1,
+        "matched": 1
+      },
+      "hotword": null,
+      "timestamp": null,
+      "elapsedMs": 81
+    },
+    {
+      "id": "accent_zh_tw_01",
+      "domain": "accent",
+      "provenance": "macOS say voice Meijia (zh-TW) — Taiwan-accented Mandarin TTS",
+      "reference": "这份名单里面有好几个名字，我从来没有见过。",
+      "hypothesis": "这份名单里面有好几个名字，我从来没有见过。",
+      "hypothesisWithoutHotword": "",
+      "rawHypothesis": "这 份 名 单 里 面 有 好 几 个 名 字 我 从 来 没 有 见 过",
+      "segments": [
+        {
+          "startMs": 50,
+          "endMs": 4195,
+          "text": "这份名单里面有好几个名字我从来没有见过"
+        }
+      ],
+      "success": true,
+      "cer": 0,
+      "punc": {
+        "insertions": 0,
+        "deletions": 0,
+        "matched": 2
+      },
+      "hotword": null,
+      "timestamp": null,
+      "elapsedMs": 76
+    },
+    {
+      "id": "accent_zh_tw_02",
+      "domain": "accent",
+      "provenance": "macOS say voice Meijia (zh-TW) — Taiwan-accented Mandarin TTS",
+      "reference": "下一版产品要在移动端支持离线转写，对吧？",
+      "hypothesis": "下一版产品要在移动端支持离线转写，对吧？",
+      "hypothesisWithoutHotword": "",
+      "rawHypothesis": "下 一 版 产 品 要 在 移 动 端 支 持 离 线 转 写 对 吧",
+      "segments": [
+        {
+          "startMs": 110,
+          "endMs": 4375,
+          "text": "下一版产品要在移动端支持离线转写对吧"
+        }
+      ],
+      "success": true,
+      "cer": 0,
+      "punc": {
+        "insertions": 0,
+        "deletions": 0,
+        "matched": 2
+      },
+      "hotword": null,
+      "timestamp": null,
+      "elapsedMs": 74
+    },
+    {
+      "id": "accent_zh_hk_00",
+      "domain": "accent",
+      "provenance": "macOS say voice Sinji (zh-HK) — Hong Kong-accented Mandarin TTS",
+      "reference": "我们这一季度的重点，是把会议记录的整理时间缩短一半。",
+      "hypothesis": "我们这一轨度的重点是把会已记录的整理时间缩短一半。",
+      "hypothesisWithoutHotword": "",
+      "rawHypothesis": "我 们 这 一 轨 度 的 重 点 是 把 会 已 记 录 的 整 理 时 间 缩 短 一 半",
+      "segments": [
+        {
+          "startMs": 50,
+          "endMs": 4850,
+          "text": "我们这一轨度的重点是把会已记录的整理时间"
+        },
+        {
+          "startMs": 4850,
+          "endMs": 5815,
+          "text": "缩短一半"
+        }
+      ],
+      "success": true,
+      "cer": 0.08333333333333333,
+      "punc": {
+        "insertions": 0,
+        "deletions": 1,
+        "matched": 1
+      },
+      "hotword": null,
+      "timestamp": null,
+      "elapsedMs": 111
+    },
+    {
+      "id": "accent_zh_hk_01",
+      "domain": "accent",
+      "provenance": "macOS say voice Sinji (zh-HK) — Hong Kong-accented Mandarin TTS",
+      "reference": "这份名单里面有好几个名字，我从来没有见过。",
+      "hypothesis": "这份名单里面有好几个名字，我从来没有见过。",
+      "hypothesisWithoutHotword": "",
+      "rawHypothesis": "这 份 名 单 里 面 有 好 几 个 名 字 我 从 来 没 有 见 过",
+      "segments": [
+        {
+          "startMs": 70,
+          "endMs": 4465,
+          "text": "这份名单里面有好几个名字我从来没有见过"
+        }
+      ],
+      "success": true,
+      "cer": 0,
+      "punc": {
+        "insertions": 0,
+        "deletions": 0,
+        "matched": 2
+      },
+      "hotword": null,
+      "timestamp": null,
+      "elapsedMs": 76
+    },
+    {
+      "id": "accent_zh_hk_02",
+      "domain": "accent",
+      "provenance": "macOS say voice Sinji (zh-HK) — Hong Kong-accented Mandarin TTS",
+      "reference": "下一版产品要在移动端支持离线转写，对吧？",
+      "hypothesis": "下一版产品要在移动端支持离线撰写，对吧？",
+      "hypothesisWithoutHotword": "",
+      "rawHypothesis": "下 一 版 产 品 要 在 移 动 端 支 持 离 线 撰 写 对 吧",
+      "segments": [
+        {
+          "startMs": 70,
+          "endMs": 4375,
+          "text": "下一版产品要在移动端支持离线撰写对吧"
+        }
+      ],
+      "success": true,
+      "cer": 0.05555555555555555,
+      "punc": {
+        "insertions": 0,
+        "deletions": 0,
+        "matched": 2
+      },
+      "hotword": null,
+      "timestamp": null,
+      "elapsedMs": 77
+    },
+    {
+      "id": "cs_stitch_00",
+      "domain": "codeswitch",
+      "provenance": "macOS say stitched render (Tingting zh + Samantha en), 250ms phrase gaps",
+      "reference": "我们先把demo跑一遍，再讨论API的兼容性问题。",
+      "hypothesis": "我们先把demo泡一遍，再讨论兼容性的问题。",
+      "hypothesisWithoutHotword": "",
+      "rawHypothesis": "我 们 先 把 demo 泡 一 遍 再 讨 论 兼 容 性 的 问 题",
+      "segments": [
+        {
+          "startMs": 50,
+          "endMs": 5155,
+          "text": "我们先把demo泡一遍再讨论兼容性"
+        }
+      ],
+      "success": true,
+      "cer": 0.2608695652173913,
+      "punc": {
+        "insertions": 0,
+        "deletions": 0,
+        "matched": 2
+      },
+      "hotword": null,
+      "timestamp": null,
+      "elapsedMs": 88
+    },
+    {
+      "id": "cs_stitch_01",
+      "domain": "codeswitch",
+      "provenance": "macOS say stitched render (Tingting zh + Samantha en), 250ms phrase gaps",
+      "reference": "这份PRD里，deadline定在下周五，owner是小王。",
+      "hypothesis": "这份文档里deadline定在下周五负责人是小王。",
+      "hypothesisWithoutHotword": "",
+      "rawHypothesis": "这 份 文 档 里 deadline 定 在 下 周 五 负 责 人 是 小 王",
+      "segments": [
+        {
+          "startMs": 50,
+          "endMs": 5455,
+          "text": "这份文档里deadline定在下周"
+        }
+      ],
+      "success": true,
+      "cer": 0.2962962962962963,
+      "punc": {
+        "insertions": 0,
+        "deletions": 2,
+        "matched": 1
+      },
+      "hotword": null,
+      "timestamp": null,
+      "elapsedMs": 89
+    },
+    {
+      "id": "cs_stitch_02",
+      "domain": "codeswitch",
+      "provenance": "macOS say stitched render (Tingting zh + Samantha en), 250ms phrase gaps",
+      "reference": "帮我查一下OKR的进度，顺便预约一个one-on-one。",
+      "hypothesis": "帮我查一下进度，顺便预约一个one on one会议。",
+      "hypothesisWithoutHotword": "",
+      "rawHypothesis": "帮 我 查 一 下 进 度 顺 便 预 约 一 个 one on one 会 议",
+      "segments": [
+        {
+          "startMs": 50,
+          "endMs": 5185,
+          "text": "帮我查一下进度顺便预约一个oneon"
+        }
+      ],
+      "success": true,
+      "cer": 0.24,
+      "punc": {
+        "insertions": 1,
+        "deletions": 3,
+        "matched": 1
+      },
+      "hotword": null,
+      "timestamp": null,
+      "elapsedMs": 83
+    },
+    {
+      "id": "cs_tts_00",
+      "domain": "codeswitch",
+      "provenance": "macOS say whole-sentence Tingting render (zh speaker reading English words)",
+      "reference": "客户的feedback说要支持dark mode，优先级是P1。",
+      "hypothesis": "客户的feedback说要支持dark mode，优先级是t一。",
+      "hypothesisWithoutHotword": "",
+      "rawHypothesis": "客 户 的 feedback 说 要 支 持 dark mode 优 先 级 是 t 一",
+      "segments": [
+        {
+          "startMs": 70,
+          "endMs": 4915,
+          "text": "客户的feedback说要支持d"
+        }
+      ],
+      "success": true,
+      "cer": 0.06896551724137931,
+      "punc": {
+        "insertions": 0,
+        "deletions": 0,
+        "matched": 2
+      },
+      "hotword": null,
+      "timestamp": null,
+      "elapsedMs": 82
+    },
+    {
+      "id": "cs_tts_01",
+      "domain": "codeswitch",
+      "provenance": "macOS say whole-sentence Tingting render (zh speaker reading English words)",
+      "reference": "把这段meeting notes翻译成英文，发给整个team。",
+      "hypothesis": "把这段meteam notes翻译成英文发给整个team。",
+      "hypothesisWithoutHotword": "",
+      "rawHypothesis": "把 这 段 meteam notes 翻 译 成 英 文 发 给 整 个 team",
+      "segments": [
+        {
+          "startMs": 50,
+          "endMs": 4285,
+          "text": "把这段meteamnotes翻"
+        }
+      ],
+      "success": true,
+      "cer": 0.14285714285714285,
+      "punc": {
+        "insertions": 0,
+        "deletions": 1,
+        "matched": 1
+      },
+      "hotword": null,
+      "timestamp": null,
+      "elapsedMs": 76
+    },
+    {
+      "id": "cs_tts_02",
+      "domain": "codeswitch",
+      "provenance": "macOS say whole-sentence Tingting render (zh speaker reading English words)",
+      "reference": "下次standup的时候，同步一下release plan的进展。",
+      "hypothesis": "下次stand up的时候，同步一下release plan的进展。",
+      "hypothesisWithoutHotword": "",
+      "rawHypothesis": "下 次 stand up 的 时 候 同 步 一 下 release plan 的 进 展",
+      "segments": [
+        {
+          "startMs": 110,
+          "endMs": 4345,
+          "text": "下次standup的时候同步一下"
+        }
+      ],
+      "success": true,
+      "cer": 0,
+      "punc": {
+        "insertions": 0,
+        "deletions": 0,
+        "matched": 2
+      },
+      "hotword": null,
+      "timestamp": null,
+      "elapsedMs": 81
+    },
+    {
+      "id": "hw_zhanghanyue",
+      "domain": "hotword",
+      "provenance": "macOS say Tingting render (rare-noun hotword discrimination, SeACo spike class)",
+      "reference": "请把会议纪要发给张晗玥和刘翀。",
+      "hypothesis": "请把会议纪要发给张晗玥和刘冲。",
+      "hypothesisWithoutHotword": "请把会议纪要发给张含月和刘冲。",
+      "rawHypothesis": "请 把 会 议 纪 要 发 给 张 晗 玥 和 刘 冲",
+      "segments": [
+        {
+          "startMs": 70,
+          "endMs": 3205,
+          "text": "请把会议纪要发给张晗玥和刘冲"
+        }
+      ],
+      "success": true,
+      "cer": 0.07142857142857142,
+      "punc": {
+        "insertions": 0,
+        "deletions": 0,
+        "matched": 1
+      },
+      "hotword": {
+        "reference": "请把会议纪要发给张晗玥和刘翀。",
+        "terms": [
+          {
+            "term": "张晗玥",
+            "withoutHotwordCorrect": false,
+            "withHotwordCorrect": true,
+            "verdict": "repaired"
+          },
+          {
+            "term": "刘翀",
+            "withoutHotwordCorrect": false,
+            "withHotwordCorrect": false,
+            "verdict": "still-wrong"
+          }
+        ],
+        "counts": {
+          "repaired": 1,
+          "stillWrong": 1,
+          "alwaysRight": 0,
+          "regressed": 0
+        },
+        "repairRate": 0.5
+      },
+      "timestamp": null,
+      "cerNoHotword": 0.21428571428571427,
+      "elapsedMs": 65
+    },
+    {
+      "id": "hw_gongshen",
+      "domain": "hotword",
+      "provenance": "macOS say Tingting render (rare-noun hotword discrimination, SeACo spike class)",
+      "reference": "下周由龚燊带队去深圳湾总部。",
+      "hypothesis": "下周由龚沈带队去深圳湾总部。",
+      "hypothesisWithoutHotword": "下周由公审带队去深圳湾总部。",
+      "rawHypothesis": "下 周 由 龚 沈 带 队 去 深 圳 湾 总 部",
+      "segments": [
+        {
+          "startMs": 110,
+          "endMs": 2995,
+          "text": "下周由龚沈带队去深圳湾总部"
+        }
+      ],
+      "success": true,
+      "cer": 0.07692307692307693,
+      "punc": {
+        "insertions": 0,
+        "deletions": 0,
+        "matched": 1
+      },
+      "hotword": {
+        "reference": "下周由龚燊带队去深圳湾总部。",
+        "terms": [
+          {
+            "term": "龚燊",
+            "withoutHotwordCorrect": false,
+            "withHotwordCorrect": false,
+            "verdict": "still-wrong"
+          }
+        ],
+        "counts": {
+          "repaired": 0,
+          "stillWrong": 1,
+          "alwaysRight": 0,
+          "regressed": 0
+        },
+        "repairRate": 0
+      },
+      "timestamp": null,
+      "cerNoHotword": 0.15384615384615385,
+      "elapsedMs": 61
+    },
+    {
+      "id": "hw_jedediah",
+      "domain": "hotword",
+      "provenance": "macOS say Tingting render (rare-noun hotword discrimination, SeACo spike class)",
+      "reference": "这个项目的负责人是Jedediah Kellerberg。",
+      "hypothesis": "这个项目的负责人是G D D A keler berg。",
+      "hypothesisWithoutHotword": "这个项目的负责人是G D D A keler berg。",
+      "rawHypothesis": "这 个 项 目 的 负 责 人 是 G D D A keler berg",
+      "segments": [
+        {
+          "startMs": 70,
+          "endMs": 3145,
+          "text": "这个项目的负责人是GDD"
+        }
+      ],
+      "success": true,
+      "cer": 0.2222222222222222,
+      "punc": {
+        "insertions": 0,
+        "deletions": 0,
+        "matched": 1
+      },
+      "hotword": {
+        "reference": "这个项目的负责人是Jedediah Kellerberg。",
+        "terms": [
+          {
+            "term": "Jedediah Kellerberg",
+            "withoutHotwordCorrect": false,
+            "withHotwordCorrect": false,
+            "verdict": "still-wrong"
+          }
+        ],
+        "counts": {
+          "repaired": 0,
+          "stillWrong": 1,
+          "alwaysRight": 0,
+          "regressed": 0
+        },
+        "repairRate": 0
+      },
+      "timestamp": null,
+      "cerNoHotword": 0.2222222222222222,
+      "elapsedMs": 59
+    },
+    {
+      "id": "hw_mishujuan",
+      "domain": "hotword",
+      "provenance": "macOS say Tingting render (rare-noun hotword discrimination, SeACo spike class)",
+      "reference": "把宓淑娟的工位调整到靠窗的位置。",
+      "hypothesis": "把幂淑娟的工位调整到靠窗的位置。",
+      "hypothesisWithoutHotword": "把蜜书娟的工位调整到靠窗的位置。",
+      "rawHypothesis": "把 幂 淑 娟 的 工 位 调 整 到 靠 窗 的 位 置",
+      "segments": [
+        {
+          "startMs": 50,
+          "endMs": 3295,
+          "text": "把幂淑娟的工位调整到靠窗的位置"
+        }
+      ],
+      "success": true,
+      "cer": 0.06666666666666667,
+      "punc": {
+        "insertions": 0,
+        "deletions": 0,
+        "matched": 1
+      },
+      "hotword": {
+        "reference": "把宓淑娟的工位调整到靠窗的位置。",
+        "terms": [
+          {
+            "term": "宓淑娟",
+            "withoutHotwordCorrect": false,
+            "withHotwordCorrect": false,
+            "verdict": "still-wrong"
+          }
+        ],
+        "counts": {
+          "repaired": 0,
+          "stillWrong": 1,
+          "alwaysRight": 0,
+          "regressed": 0
+        },
+        "repairRate": 0
+      },
+      "timestamp": null,
+      "cerNoHotword": 0.13333333333333333,
+      "elapsedMs": 64
+    },
+    {
+      "id": "hw_dazhiyuan",
+      "domain": "hotword",
+      "provenance": "macOS say Tingting render (rare-noun hotword discrimination, SeACo spike class)",
+      "reference": "联系笪志远确认明天的评审时间。",
+      "hypothesis": "联系达志远，确认明天的评审时间。",
+      "hypothesisWithoutHotword": "联系达致远，确认明天的评审时间。",
+      "rawHypothesis": "联 系 达 志 远 确 认 明 天 的 评 审 时 间",
+      "segments": [
+        {
+          "startMs": 70,
+          "endMs": 3295,
+          "text": "联系达志远确认明天的评审时间"
+        }
+      ],
+      "success": true,
+      "cer": 0.07142857142857142,
+      "punc": {
+        "insertions": 1,
+        "deletions": 0,
+        "matched": 1
+      },
+      "hotword": {
+        "reference": "联系笪志远确认明天的评审时间。",
+        "terms": [
+          {
+            "term": "笪志远",
+            "withoutHotwordCorrect": false,
+            "withHotwordCorrect": false,
+            "verdict": "still-wrong"
+          }
+        ],
+        "counts": {
+          "repaired": 0,
+          "stillWrong": 1,
+          "alwaysRight": 0,
+          "regressed": 0
+        },
+        "repairRate": 0
+      },
+      "timestamp": null,
+      "cerNoHotword": 0.14285714285714285,
+      "elapsedMs": 60
+    },
+    {
+      "id": "hw_yunyunfei",
+      "domain": "hotword",
+      "provenance": "macOS say Tingting render (rare-noun hotword discrimination, SeACo spike class)",
+      "reference": "帮我把贠云飞的行程改到周四下午。",
+      "hypothesis": "帮我把沅云飞的行程改到周四下午。",
+      "hypothesisWithoutHotword": "帮我把袁云飞的行程改到周四下午。",
+      "rawHypothesis": "帮 我 把 沅 云 飞 的 行 程 改 到 周 四 下 午",
+      "segments": [
+        {
+          "startMs": 50,
+          "endMs": 3385,
+          "text": "帮我把沅云飞的行程改到周四下午"
+        }
+      ],
+      "success": true,
+      "cer": 0.06666666666666667,
+      "punc": {
+        "insertions": 0,
+        "deletions": 0,
+        "matched": 1
+      },
+      "hotword": {
+        "reference": "帮我把贠云飞的行程改到周四下午。",
+        "terms": [
+          {
+            "term": "贠云飞",
+            "withoutHotwordCorrect": false,
+            "withHotwordCorrect": false,
+            "verdict": "still-wrong"
+          }
+        ],
+        "counts": {
+          "repaired": 0,
+          "stillWrong": 1,
+          "alwaysRight": 0,
+          "regressed": 0
+        },
+        "repairRate": 0
+      },
+      "timestamp": null,
+      "cerNoHotword": 0.06666666666666667,
+      "elapsedMs": 64
+    },
+    {
+      "id": "ts_roadmap",
+      "domain": "timestamp",
+      "provenance": "macOS say Tingting multi-sentence render, 900ms inter-sentence silence; golden boundaries measured from the waveform (energy threshold)",
+      "reference": "今天我们讨论第三季度的产品路线图。会议纪要需要在周五之前发给所有参会人员。下周一上午十点在三号会议室进行评审。",
+      "hypothesis": "今天我们讨论第三季度的产品路线图。会议纪要需要在周五之前发给所有参会人员。下周一上午十点，在三号会议室进行评审。",
+      "hypothesisWithoutHotword": "",
+      "rawHypothesis": "今 天 我 们 讨 论 第 三 季 度 的 产 品 路 线 图会 议 纪 要 需 要 在 周 五 之 前 发 给 所 有 参 会 人 员下 周 一 上 午 十 点 在 三 号 会 议 室 进 行 评 审",
+      "segments": [
+        {
+          "startMs": 230,
+          "endMs": 3745,
+          "text": "今天我们讨论第三季度的产品路线图"
+        },
+        {
+          "startMs": 4730,
+          "endMs": 9165,
+          "text": "会议纪要需要在周五之前发给所有参会人员"
+        },
+        {
+          "startMs": 10240,
+          "endMs": 14295,
+          "text": "下周一上午十点在三号会议室进行评审"
+        }
+      ],
+      "success": true,
+      "cer": 0,
+      "punc": {
+        "insertions": 1,
+        "deletions": 0,
+        "matched": 3
+      },
+      "hotword": null,
+      "timestamp": {
+        "matched": [
+          {
+            "expectedIndex": 0,
+            "actualIndex": 0,
+            "overlapRatio": 1,
+            "dStartMs": 10,
+            "dEndMs": 65
+          },
+          {
+            "expectedIndex": 1,
+            "actualIndex": 1,
+            "overlapRatio": 1,
+            "dStartMs": -70,
+            "dEndMs": 65
+          },
+          {
+            "expectedIndex": 2,
+            "actualIndex": 2,
+            "overlapRatio": 1,
+            "dStartMs": 20,
+            "dEndMs": 75
+          }
+        ],
+        "missingExpected": [],
+        "extraActual": [],
+        "meanAbsDevMs": 50.833333333333336,
+        "medianAbsDevMs": 65,
+        "p95AbsDevMs": 75,
+        "maxAbsDevMs": 75
+      },
+      "elapsedMs": 241
+    },
+    {
+      "id": "ts_budget",
+      "domain": "timestamp",
+      "provenance": "macOS say Tingting multi-sentence render, 900ms inter-sentence silence; golden boundaries measured from the waveform (energy threshold)",
+      "reference": "语音识别的准确率直接影响用户体验。这个方案的预算超出了原定计划的百分之十五。客户端支持视窗和苹果双平台运行。",
+      "hypothesis": "语音识别的准确率直接影响用户体验这个方案的预算，超出了原定计划的百分之十五。客户端支持视窗和苹果双平台运行。",
+      "hypothesisWithoutHotword": "",
+      "rawHypothesis": "语 音 识 别 的 准 确 率 直 接 影 响 用 户 体 验这 个 方 案 的 预 算 超 出 了 原 定 计 划 的 百 分 之 十 五客 户 端 支 持 视 窗 和 苹 果 双 平 台 运 行",
+      "segments": [
+        {
+          "startMs": 190,
+          "endMs": 4045,
+          "text": "语音识别的准确率直接影响用户体验"
+        },
+        {
+          "startMs": 5030,
+          "endMs": 9315,
+          "text": "这个方案的预算超出了原定计划的百分之十五"
+        },
+        {
+          "startMs": 10240,
+          "endMs": 14055,
+          "text": "客户端支持视窗和苹果双平台运行"
+        }
+      ],
+      "success": true,
+      "cer": 0,
+      "punc": {
+        "insertions": 1,
+        "deletions": 1,
+        "matched": 2
+      },
+      "hotword": null,
+      "timestamp": {
+        "matched": [
+          {
+            "expectedIndex": 0,
+            "actualIndex": 0,
+            "overlapRatio": 1,
+            "dStartMs": -10,
+            "dEndMs": 145
+          },
+          {
+            "expectedIndex": 1,
+            "actualIndex": 1,
+            "overlapRatio": 1,
+            "dStartMs": 30,
+            "dEndMs": 135
+          },
+          {
+            "expectedIndex": 2,
+            "actualIndex": 2,
+            "overlapRatio": 1,
+            "dStartMs": -20,
+            "dEndMs": 15
+          }
+        ],
+        "missingExpected": [],
+        "extraActual": [],
+        "meanAbsDevMs": 59.166666666666664,
+        "medianAbsDevMs": 20,
+        "p95AbsDevMs": 145,
+        "maxAbsDevMs": 145
+      },
+      "elapsedMs": 235
+    },
+    {
+      "id": "ts_daily",
+      "domain": "timestamp",
+      "provenance": "macOS say Tingting multi-sentence render, 900ms inter-sentence silence; golden boundaries measured from the waveform (energy threshold)",
+      "reference": "晚上的航班大概十点半落地。记得提醒我给客户回电话。报告的最后一段还需要润色。",
+      "hypothesis": "晚上的航班大概十点半落地，记得提醒我给客户回电话报告的最后一段还需要润色。",
+      "hypothesisWithoutHotword": "",
+      "rawHypothesis": "晚 上 的 航 班 大 概 十 点 半 落 地记 得 提 醒 我 给 客 户 回 电 话报 告 的 最 后 一 段 还 需 要 润 色",
+      "segments": [
+        {
+          "startMs": 190,
+          "endMs": 3025,
+          "text": "晚上的航班大概十点半落地"
+        },
+        {
+          "startMs": 3910,
+          "endMs": 6575,
+          "text": "记得提醒我给客户回电话"
+        },
+        {
+          "startMs": 7480,
+          "endMs": 10175,
+          "text": "报告的最后一段还需要润色"
+        }
+      ],
+      "success": true,
+      "cer": 0,
+      "punc": {
+        "insertions": 1,
+        "deletions": 2,
+        "matched": 1
+      },
+      "hotword": null,
+      "timestamp": {
+        "matched": [
+          {
+            "expectedIndex": 0,
+            "actualIndex": 0,
+            "overlapRatio": 1,
+            "dStartMs": -10,
+            "dEndMs": 165
+          },
+          {
+            "expectedIndex": 1,
+            "actualIndex": 1,
+            "overlapRatio": 1,
+            "dStartMs": -50,
+            "dEndMs": 155
+          },
+          {
+            "expectedIndex": 2,
+            "actualIndex": 2,
+            "overlapRatio": 1,
+            "dStartMs": -40,
+            "dEndMs": 75
+          }
+        ],
+        "missingExpected": [],
+        "extraActual": [],
+        "meanAbsDevMs": 82.5,
+        "medianAbsDevMs": 50,
+        "p95AbsDevMs": 165,
+        "maxAbsDevMs": 165
+      },
+      "elapsedMs": 193
+    }
+  ],
+  "domains": {
+    "real-clean": {
+      "count": 8,
+      "meanCer": 0,
+      "medianCer": 0,
+      "maxCer": 0,
+      "puncInsertions": 0,
+      "puncDeletions": 0
+    },
+    "noise": {
+      "count": 6,
+      "meanCer": 0.22063492063492066,
+      "medianCer": 0.05,
+      "maxCer": 0.8666666666666667,
+      "puncInsertions": 0,
+      "puncDeletions": 0
+    },
+    "farfield": {
+      "count": 4,
+      "meanCer": 0.06944444444444445,
+      "medianCer": 0.05555555555555555,
+      "maxCer": 0.16666666666666666,
+      "puncInsertions": 0,
+      "puncDeletions": 0
+    },
+    "accent": {
+      "count": 6,
+      "meanCer": 0.02314814814814815,
+      "medianCer": 0,
+      "maxCer": 0.08333333333333333,
+      "puncInsertions": 0,
+      "puncDeletions": 2
+    },
+    "codeswitch": {
+      "count": 6,
+      "meanCer": 0.16816475360203498,
+      "medianCer": 0.19142857142857142,
+      "maxCer": 0.2962962962962963,
+      "puncInsertions": 1,
+      "puncDeletions": 6
+    },
+    "hotword": {
+      "count": 6,
+      "meanCer": 0.09588929588929589,
+      "medianCer": 0.07142857142857142,
+      "maxCer": 0.2222222222222222,
+      "puncInsertions": 1,
+      "puncDeletions": 0
+    },
+    "timestamp": {
+      "count": 3,
+      "meanCer": 0,
+      "medianCer": 0,
+      "maxCer": 0,
+      "puncInsertions": 3,
+      "puncDeletions": 3
+    }
+  },
+  "hotword": {
+    "counts": {
+      "repaired": 1,
+      "stillWrong": 6,
+      "alwaysRight": 0,
+      "regressed": 0
+    },
+    "repairRate": 0.14285714285714285,
+    "cases": [
+      {
+        "id": "hw_zhanghanyue",
+        "reference": "请把会议纪要发给张晗玥和刘翀。",
+        "hypothesisWithoutHotword": "请把会议纪要发给张含月和刘冲。",
+        "hypothesisWithHotword": "请把会议纪要发给张晗玥和刘冲。",
+        "terms": [
+          {
+            "term": "张晗玥",
+            "withoutHotwordCorrect": false,
+            "withHotwordCorrect": true,
+            "verdict": "repaired"
+          },
+          {
+            "term": "刘翀",
+            "withoutHotwordCorrect": false,
+            "withHotwordCorrect": false,
+            "verdict": "still-wrong"
+          }
+        ]
+      },
+      {
+        "id": "hw_gongshen",
+        "reference": "下周由龚燊带队去深圳湾总部。",
+        "hypothesisWithoutHotword": "下周由公审带队去深圳湾总部。",
+        "hypothesisWithHotword": "下周由龚沈带队去深圳湾总部。",
+        "terms": [
+          {
+            "term": "龚燊",
+            "withoutHotwordCorrect": false,
+            "withHotwordCorrect": false,
+            "verdict": "still-wrong"
+          }
+        ]
+      },
+      {
+        "id": "hw_jedediah",
+        "reference": "这个项目的负责人是Jedediah Kellerberg。",
+        "hypothesisWithoutHotword": "这个项目的负责人是G D D A keler berg。",
+        "hypothesisWithHotword": "这个项目的负责人是G D D A keler berg。",
+        "terms": [
+          {
+            "term": "Jedediah Kellerberg",
+            "withoutHotwordCorrect": false,
+            "withHotwordCorrect": false,
+            "verdict": "still-wrong"
+          }
+        ]
+      },
+      {
+        "id": "hw_mishujuan",
+        "reference": "把宓淑娟的工位调整到靠窗的位置。",
+        "hypothesisWithoutHotword": "把蜜书娟的工位调整到靠窗的位置。",
+        "hypothesisWithHotword": "把幂淑娟的工位调整到靠窗的位置。",
+        "terms": [
+          {
+            "term": "宓淑娟",
+            "withoutHotwordCorrect": false,
+            "withHotwordCorrect": false,
+            "verdict": "still-wrong"
+          }
+        ]
+      },
+      {
+        "id": "hw_dazhiyuan",
+        "reference": "联系笪志远确认明天的评审时间。",
+        "hypothesisWithoutHotword": "联系达致远，确认明天的评审时间。",
+        "hypothesisWithHotword": "联系达志远，确认明天的评审时间。",
+        "terms": [
+          {
+            "term": "笪志远",
+            "withoutHotwordCorrect": false,
+            "withHotwordCorrect": false,
+            "verdict": "still-wrong"
+          }
+        ]
+      },
+      {
+        "id": "hw_yunyunfei",
+        "reference": "帮我把贠云飞的行程改到周四下午。",
+        "hypothesisWithoutHotword": "帮我把袁云飞的行程改到周四下午。",
+        "hypothesisWithHotword": "帮我把沅云飞的行程改到周四下午。",
+        "terms": [
+          {
+            "term": "贠云飞",
+            "withoutHotwordCorrect": false,
+            "withHotwordCorrect": false,
+            "verdict": "still-wrong"
+          }
+        ]
+      }
+    ]
+  },
+  "timestampSummary": {
+    "pooledBoundaryCount": 18,
+    "meanAbsDevMs": 64.16666666666667,
+    "medianAbsDevMs": 57.5,
+    "p95AbsDevMs": 165,
+    "maxAbsDevMs": 165,
+    "missingSegmentCount": 0,
+    "extraSegmentCount": 0
+  },
+  "summary": {
+    "caseCount": 39,
+    "failedCount": 0,
+    "meanCer": 0.08525129454933787
+  },
+  "elapsedMs": 5276,
+  "reportPath": "/Users/guanxueliang/Desktop/oh-my-ai/Murmur/scripts/onnx-ab/work/int8-anchor-444.json"
+}

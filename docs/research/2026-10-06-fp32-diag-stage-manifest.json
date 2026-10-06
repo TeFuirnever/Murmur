@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "generated_utc": "2026-10-06T02:25:23+00:00",
+  "variant": "fp32",
+  "models": {
+    "asr": {
+      "name": "asr-seaco-paraformer",
+      "modelscope_repo": "iic/speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+      "model_revision": "v2.0.4",
+      "checkpoint_commit": "71684869ca6d8bfa59057d8a367b3fb7345a0c02",
+      "export": {
+        "funasr": "1.3.1",
+        "torch": "2.0.1",
+        "onnx": "1.23.1",
+        "onnxruntime": "1.30.0"
+      },
+      "export_determinism": {
+        "pinned_int8_graph_present": true,
+        "identical": true
+      },
+      "files": [
+        {
+          "path": "am.mvn",
+          "sha256": "29b3c740a2c0cfc6b308126d31d7f265fa2be74f3bb095cd2f143ea970896ae5",
+          "size_bytes": 11203
+        },
+        {
+          "path": "config.yaml",
+          "sha256": "f4cb124f0abaff662e9e8b80e5ce54e873932d988c608dc08b344c3a71455458",
+          "size_bytes": 3420
+        },
+        {
+          "path": "model.onnx",
+          "sha256": "3305c3bbc6372fd428b9957c11dd12ff4070ed52b7c606059bf48af7fd803781",
+          "size_bytes": 957686606
+        },
+        {
+          "path": "model_eb.onnx",
+          "sha256": "a1989f73c03068d56d6cbe84accc00913e99a6e5332ebb0e587fd620c9f9eb96",
+          "size_bytes": 34026070
+        },
+        {
+          "path": "seg_dict",
+          "sha256": "59a2ef803a3f1648ad03a2e1480db1c1ee0c0d7dc4ef4dbd16cea33944329022",
+          "size_bytes": 8287834
+        },
+        {
+          "path": "tokens.json",
+          "sha256": "2b20c2b12572d682afff84ce1c8d560f67b8b32a4c1f21567411d141ed352127",
+          "size_bytes": 93676
+        }
+      ]
+    }
+  }
+}
