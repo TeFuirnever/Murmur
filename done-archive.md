@@ -18,4 +18,5 @@
       GitHub issue #208。\_output_worker 从 response_queue 取消息后 print() 到 sys.stdout;当模型加载器处于 suppress_stdout() 窗口(reload_models → \_do_reload 入队进度后 initialize() 进加载器),output worker 若此时出队,消息写入抑制 sink 被静默丢弃,宿主丢失进度事件。修复方向:\_output_worker 写协议输出时使用启动时捕获的专用流引用,使协议通道对抑制窗口免疫。必须同步补协议测试:队列消息在抑制窗口期间不丢。遵循 MUST DO #3:先写失败测试再修。
 
 ## Archived 2026-10-07
+
 - [x] hotkey-settings-ui - 热键自定义断裂:App.tsx:289 toast 指向不存在的设置项。基础设施全就位(hotkey 键在 allowlist+fileConfig、HOTKEY.REGISTER IPC 在),补设置 UI+useHotkey 读设置;或先改文案。证据:§3-F/§6-2 (repo: murmur) (kind: ship) (priority: 1) (done 2026-09-06)
