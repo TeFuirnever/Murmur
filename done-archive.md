@@ -20,3 +20,7 @@
 ## Archived 2026-10-07
 
 - [x] hotkey-settings-ui - 热键自定义断裂:App.tsx:289 toast 指向不存在的设置项。基础设施全就位(hotkey 键在 allowlist+fileConfig、HOTKEY.REGISTER IPC 在),补设置 UI+useHotkey 读设置;或先改文案。证据:§3-F/§6-2 (repo: murmur) (kind: ship) (priority: 1) (done 2026-09-06)
+
+## Archived 2026-10-12
+
+- [x] i18n-main-history-windows - i18n 补接:主窗 App.tsx 与历史窗 history.tsx 完全未接 useTranslation,切英文仅设置窗生效。证据:§3-H/§6-6 (repo: murmur) (kind: ship) (priority: 1) (done 2026-09-06)

@@ -2,11 +2,11 @@
 
 ## In flight
 
-- [ ] followup-flaky-userecording - test: useRecording.test.tsx:1737 flaky——waitFor 超时 error 停留 null（v1.6.0 tag run attempt2 实证，同 commit 3 绿 1 红） (since 2026-10-06)
-
 ## Queued
 
 ## Done
+
+- [x] followup-flaky-userecording - test: useRecording.test.tsx:1737 flaky——waitFor 超时 error 停留 null（v1.6.0 tag run attempt2 实证，同 commit 3 绿 1 红） https://github.com/TeFuirnever/Murmur/pull/469 (merged 2026-10-12)
 
 - [x] followup-ci-cache-poison - CI: gate-models 软降级 + python 缓存固化复合故障——镜像 500 时未裁剪环境入库，同 key 重跑永久红；建议下载失败 attempt 不保存 python 缓存或改硬失败 https://github.com/TeFuirnever/Murmur/pull/466 (merged 2026-10-07)
 
@@ -29,4 +29,3 @@
 
 - [x] default-mode-cleanup - default_mode 死设置:读端在(useRecording/useFileTranscription)写端无(不在 ALLOWED_SETTING_KEYS)。补 UI+allowlist 或删读端。证据:§3-G/§6-5 (repo: murmur) (kind: ship) (priority: 1) (done 2026-09-06)
 - [x] history-clear-export - 历史窗补齐:清空全部按钮(CLEAR 链路全在,带确认)+ 导出全部支持多格式(UI 从硬编码 txt 改格式选择,handler 已支持)。证据:§1.4 缺口①②/§6-4 (repo: murmur) (kind: ship) (priority: 1) (done 2026-09-06)
-- [x] i18n-main-history-windows - i18n 补接:主窗 App.tsx 与历史窗 history.tsx 完全未接 useTranslation,切英文仅设置窗生效。证据:§3-H/§6-6 (repo: murmur) (kind: ship) (priority: 1) (done 2026-09-06)
