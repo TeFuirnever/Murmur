@@ -1711,36 +1711,54 @@ describe("[20260816_Test_BranchPush] useRecording — branch arcs", () => {
     expect(result.current.error).toBeNull();
   });
 
-  it("surfaces a processing error when the bridge disappears before the timeout fires", async () => {
-    const saveTranscription = vi
-      .fn()
-      .mockResolvedValue({ success: true, lastInsertRowid: 19 });
-    const updateTranscription = vi.fn().mockResolvedValue({ success: true });
-    setElectronAPI({
-      transcribeAudio: vi.fn().mockResolvedValue({
-        success: true,
-        text: "超时前消失",
-        confidence: 1,
-        duration: 1,
-      }),
-      getSetting: vi.fn().mockResolvedValue("off"),
-      saveTranscription,
-      updateTranscription,
-      log: vi.fn().mockResolvedValue(undefined),
-    });
+  // [20261011_Fix_FlakyBridgeWaitForDeadline] The processing error is set
+  // from the 100ms-deferred optimization callback, so the waitFor below
+  // races that real timer. Under CI event-loop inflation (v1.6.0 tag run
+  // attempt 2: the suite ran ~10x slower than local, and the 100ms timer
+  // executed past RTL's default 1000ms waitFor deadline, which rejected
+  // while error was still null) the default budget is too tight. Give the
+  // deadline explicit headroom and raise the vitest test timeout so the
+  // inflated transcription chain pre-cost does not trip the 5000ms default
+  // either.
+  it(
+    "surfaces a processing error when the bridge disappears before the timeout fires",
+    { timeout: 20000 },
+    async () => {
+      const saveTranscription = vi
+        .fn()
+        .mockResolvedValue({ success: true, lastInsertRowid: 19 });
+      const updateTranscription = vi.fn().mockResolvedValue({ success: true });
+      setElectronAPI({
+        transcribeAudio: vi.fn().mockResolvedValue({
+          success: true,
+          text: "超时前消失",
+          confidence: 1,
+          duration: 1,
+        }),
+        getSetting: vi.fn().mockResolvedValue("off"),
+        saveTranscription,
+        updateTranscription,
+        log: vi.fn().mockResolvedValue(undefined),
+      });
 
-    const { result } = renderHook(() => useRecording());
-    await startAndStop(result);
-    await waitFor(() => expect(result.current.isOptimizing).toBe(true));
+      const { result } = renderHook(() => useRecording());
+      await startAndStop(result);
+      await waitFor(() => expect(result.current.isOptimizing).toBe(true));
 
-    setElectronAPI(undefined);
-    await waitFor(() => expect(result.current.error).toContain("转录处理失败"));
-    await waitFor(() => expect(result.current.isOptimizing).toBe(false));
-    // The raw INSERT survived (it fired at transcription completion); the
-    // vanished bridge must not trigger a second save or a partial UPDATE.
-    expect(saveTranscription).toHaveBeenCalledTimes(1);
-    expect(updateTranscription).not.toHaveBeenCalled();
-  });
+      setElectronAPI(undefined);
+      await waitFor(
+        () => expect(result.current.error).toContain("转录处理失败"),
+        { timeout: 5000 },
+      );
+      await waitFor(() => expect(result.current.isOptimizing).toBe(false), {
+        timeout: 5000,
+      });
+      // The raw INSERT survived (it fired at transcription completion); the
+      // vanished bridge must not trigger a second save or a partial UPDATE.
+      expect(saveTranscription).toHaveBeenCalledTimes(1);
+      expect(updateTranscription).not.toHaveBeenCalled();
+    },
+  );
 
   it("clears an armed optimization timeout when cancelRecording runs during optimization", async () => {
     const saveTranscription = vi
