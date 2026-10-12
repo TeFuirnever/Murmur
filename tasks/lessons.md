@@ -130,3 +130,11 @@ Three stacked root causes, each invisible to "did the build finish" checks:
 **Context:** 本仓 `ci.yml` 只在 push/PR → main + workflow_dispatch 触发，且 GitHub push/pull_request 事件投递自 2026-09-16 起时好时坏（`ci.yml` 内 `[20260916_Fix_373_CiDispatch]` 注释）。自动执行 16 张票时，≥10 个实施者各烧掉一整轮修复"从零发现"同一事实链；dispatch-only 的 checks 不进 PR statusCheckRollup，#457 连续四次合并被拒后才定位到这一层；main 被并行合并推进时，在飞 PR 转 BEHIND 又是一类独立失败。
 
 **Rule:** 分支 CI 取证的固定动作序：① `gh workflow run ci.yml --ref <branch>` 产生 checks（分支裸 push 不产生任何 run）；② 合并门禁需要 PR 上下文 run——`gh pr update-branch <n>`（同步 main 的同时制造 synchronize 事件，最可靠的强制通道）或空提交重推；③ PR rollup 显示 null 不代表分支没跑过 checks，用 `gh run list --branch <branch>` 按 headSha 查权威结论；④ 合并被拒不读原因就重试是浪费——BEHIND → update-branch，DIRTY → 解冲突（真冲突不绕），无 run → 重触发；⑤ 开 PR 前先 `gh pr list --head <branch>` 查已有 PR，撞车复用而非重开。
+
+## 2026-10-11 · CI 独有定时器 flake 的本地复现配方:QoS 降级 × CPU 抢占,红身份必须对照 CI 日志核验
+
+**Date:** 2026-10-11 (followup-flaky-userecording,useRecording.test.tsx:1737,PR #469)
+
+**Context:** v1.6.0 tag run attempt2 才现形的 flake(waitFor 默认 1000ms 死线 vs hook 100ms 延迟优化回调,CI 事件循环通胀 ~10x:该文件 88s vs 本地 9s)本地空闲 30/30 绿。裸 CPU hogs(10 核 + 10 hogs)与 utility QoS 单独均不足;`taskpolicy -c background` + 10 hogs 复现出与 CI 逐字一致的红(同一 AssertionError "null and string" @:1737:54)。途中踩了三类假红:单文件 `--coverage` 撞全局覆盖率阈值红、极端饥饿下 vitest worker 启动超时红(未跑任何测试)、grep 碎片跨失败块拼接误读。
+
+**Rule:** CI-only flake 的复现环 = 事件循环通胀两要素同时成立:低调度优先级(`taskpolicy -c background`)+ CPU 争抢(hogs 数量决定通胀倍数,过度则产出"失败动物园"——连带失败淹没目标,不可用作验证环)。验证环必须先在修复前红出**与 CI 日志逐字一致的症状**再谈修复;红的身份按 AssertionError 内容 + 失败文件:行号核验,不认裸退出码。单文件带 `--coverage` 的红是阈值假红。修 RTL waitFor 竞速真实定时器链(本仓 hook 的 100ms 优化回调)时,显式超时(仓内先例 3000-5000ms)+ 测试级 timeout 兜底,默认 1000ms 只适用于微任务级状态。
